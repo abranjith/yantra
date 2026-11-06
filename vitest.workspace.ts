@@ -5,6 +5,7 @@ export default defineWorkspace([
   'packages/core',
   'packages/agent',
   'packages/test-helpers',
+  'packages/ui',
   'apps/cli',
   'e2e',
 ]);

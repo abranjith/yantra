@@ -54,19 +54,32 @@ The brainstorm's OKLCH values were run through the WCAG 2.x contrast formula. Th
 
 ### Deviations (awaiting confirmation)
 
-- **DEVIATION D1 (Ion light fill).** The brainstorm requires the light Ion fill with white text to pass 4.5:1 in CI, but its own value gives 4.39:1. **Proposal:** lower the light fill's lightness from 0.55 to 0.54 (`0.54 0.14 218`), the largest value in 0.005 steps that passes, and keep hue and chroma. The dark fill is unchanged. Awaiting confirmation.
+- **DEVIATION D1 (Ion light fill).** The brainstorm requires the light Ion fill with white text to pass 4.5:1 in CI, but its own value gives 4.39:1. **Proposal:** lower the light fill's lightness from 0.55 to 0.54 (`0.54 0.14 218`), the largest value in 0.005 steps that passes, and keep hue and chroma. The dark fill is unchanged. **Confirmed by the user 2026-11-04.**
 - **DEVIATION D2 (Jade and Amber as text in light theme).** Light Jade (3.91–4.42) and light Amber (3.28–3.71) fail 4.5:1 as text on the light surfaces. **Proposal:** split each signal into two tokens, the same approach that gives Ion two fills:
   - `signal-<name>` is the **graphic** token, for glyphs, fills and rings, and must reach 3:1 non-text contrast. It keeps the brainstorm value.
   - `signal-<name>-ink` is the **text** token and must reach 4.5:1. In the light theme it lowers lightness to the largest passing value against fog-10, the worst case: Jade ink `0.51 0.13 162`, Amber ink `0.54 0.15 65`. Crimson and Rani ink equal their graphic values in light, and every dark ink equals its graphic value.
 
-  Awaiting confirmation.
+  **Confirmed by the user 2026-11-04.**
 
 - **DEVIATION D3 (where the gallery lives).** The plan calls the gallery an in-app `/gallery` route, but `apps/web` is created by FEAT-065, and FEAT-061 must be able to start first (§8 Sequencing item 1). **Proposal:**
   - The gallery is a React component exported from `@yantra/ui/gallery`.
   - A small standalone Vite page inside `packages/ui` serves it for development and for the harness, built into `packages/ui/dist/gallery/`.
   - FEAT-065 mounts the same component at `/gallery` in development builds of `apps/web`.
 
-  The route still exists in development builds only, as §6 requires, and no Storybook is added. Awaiting confirmation.
+  The route still exists in development builds only, as §6 requires, and no Storybook is added. **Confirmed by the user 2026-11-04.**
+
+- **DEVIATION D4 (light signals are out of the sRGB gamut; found at implementation).** The pre-check clipped OKLCH to gamut, but §2 makes an out-of-gamut token a generator error. Six light tokens are outside sRGB at their brainstorm chroma (Ion fill's red channel is −0.06). On a wide-gamut display Chrome would render the unclipped color, which the gate never measured. **Decision (user, 2026-11-04):** keep the gamut error, and store each of these tokens at its lightness and hue with the largest in-gamut chroma, floored to 0.001. Lightness and hue are unchanged, so D1 and D2 stand. Every pairing still passes:
+
+  | Token (light)          | Brainstorm chroma | In-gamut chroma | Check          | Clipped | Shipped |
+  | ---------------------- | ----------------- | --------------- | -------------- | ------- | ------- |
+  | `ion-fill` (0.54, 218) | 0.14              | 0.097           | white on fill  | 4.56    | 4.89    |
+  | `accent-ink` (0.50)    | 0.12              | 0.089           | text on fog-10 | 4.80    | 5.06    |
+  | `jade` (0.55, 162)     | 0.13              | 0.120           | 3:1 on fog-10  | 3.91    | 3.97    |
+  | `jade-ink` (0.51)      | 0.13              | 0.111           | text on fog-10 | 4.58    | 4.72    |
+  | `amber` (0.62, 65)     | 0.15              | 0.139           | 3:1 on fog-10  | 3.28    | 3.28    |
+  | `amber-ink` (0.54)     | 0.15              | 0.121           | text on fog-10 | 4.55    | 4.55    |
+
+  The dark theme, Crimson and Rani are already in gamut. When a token is out of gamut, the generator still measures its contrast on the clipped color, so one `TokenContractError` lists the gamut failure and any contrast failure together.
 
 ### Spec decisions
 
@@ -79,13 +92,60 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 | S3  | **The glass model.** The composite is source-over in gamma-encoded sRGB, which is how Chrome composites. The backdrop is any color in the sRGB cube: relative luminance is monotonic in each channel, so black and white are the two extremes, and blur and `saturate()` keep colors inside the cube.<br>• The **floor** is the smallest α, in 0.005 steps rounded up, at which every token in the theme's `GLASS_TEXT_TOKENS` reaches 4.5:1 over both black and white. The worst-case noise layer is applied too: the composite is shifted toward black and toward white by `--glass-noise-alpha`.<br>• The tint opacity used is `max(recipe, floor)`, where the recipe is 0.66 light and 0.72 dark.<br>• `GLASS_TEXT_TOKENS` is `ink` and `ink-2` in both themes. A token may join the set only if its computed floor, with noise, stays at or below 0.85 in **both** themes; the generator enforces this cap. `ink-3` and `accent-ink` are never glass text. On glass, Ion appears only as a graphic (the focus ring, icons and fills), never as text. | "Sampling is regression evidence only" (§12). The pre-check shows that `ink-3`, and light `accent-ink`, would need an almost opaque tint, which would no longer be glass.                                     |
 | S4  | Signals have a graphic token and a text token (DEVIATION D2). `Aborted` has no signal token: it uses `ink-2` with the ban glyph, as the brainstorm says.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Status is never shown by color alone (banned patterns), and text must reach 4.5:1.                                                                                                                            |
 | S5  | **The gallery is a component plus a dev page** (DEVIATION D3). The page's state comes from the query string: `?entry=<id>&theme=light\|dark\|system&surfaces=glass\|solid`. A gallery completeness test fails if any export of `src/primitives/index.ts` has no gallery entry.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | The completeness test is what keeps the "every primitive renders in the gallery" acceptance true as the catalogue grows.                                                                                      |
-| S6  | **Visual baselines are per platform; only Linux is required.** Baselines live in `e2e/drshya/baselines/<process.platform>/<entry>--<theme>--<surfaces>.png`.<br>• **Linux** (CI `ubuntu-latest`): a missing or mismatched baseline fails.<br>• **Windows and macOS:** the harness compares when a baseline exists, and otherwise skips the pixel step with an explicit `ctx.skip` reason. axe, CSP, origin and focus checks still run on every OS.<br>• `UPDATE_DRSHYA_BASELINES=1` writes baselines.<br>• On failure, CI uploads `e2e/drshya/.out/` (actual and diff PNGs), so a Linux baseline can be committed from a Windows machine.                                                                                                                                                                                                                                                                                                                                                                                                                 | This resolves plan §15 "per-OS or Linux-only in CI" without tripling maintenance: font rasterization differs per OS. **Awaiting confirmation.**                                                               |
+| S6  | **Visual baselines are per platform; only Linux is required.** Baselines live in `e2e/drshya/baselines/<process.platform>/<entry>--<theme>--<surfaces>.png`.<br>• **Linux** (CI `ubuntu-latest`): a missing or mismatched baseline fails.<br>• **Windows and macOS:** the harness compares when a baseline exists, and otherwise skips the pixel step with an explicit `ctx.skip` reason. axe, CSP, origin and focus checks still run on every OS.<br>• `UPDATE_DRSHYA_BASELINES=1` writes baselines.<br>• On failure, CI uploads `e2e/drshya/.out/` (actual and diff PNGs), so a Linux baseline can be committed from a Windows machine.                                                                                                                                                                                                                                                                                                                                                                                                                 | This resolves plan §15 "per-OS or Linux-only in CI" without tripling maintenance: font rasterization differs per OS. **Confirmed by the user 2026-11-04.**                                                    |
 | S7  | **Appearance is a data contract, not a store.** `Appearance = {theme: 'system'\|'light'\|'dark', surfaces: 'glass'\|'solid'}` maps to `data-theme` and `data-surfaces` on the root element. `theme: 'system'` removes `data-theme`. FEAT-061 provides the mapping and `applyAppearance`. FEAT-065 reads the `ui.theme` and `ui.surfaces` preferences and calls it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | The preferences are FEAT-065 scope (§12 FEAT-065 "Preferences"). The gallery needs the same contract now.                                                                                                     |
 | S8  | **The toast queue belongs to the app.** `createToastQueue()` returns an instance, which `<ToastProvider queue>` supplies. There is no module-level queue.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | No hidden singletons (memory → Architecture; plan §9).                                                                                                                                                        |
 | S9  | **`Link` treats every URL as untrusted.**<br>• An absolute `http:`/`https:` URL opens in a new browsing context, always with `rel="noopener noreferrer"`, and shows the `action.openExternal` icon plus visually hidden "(opens in a new tab)".<br>• An app-relative path stays in the app.<br>• Any other scheme (`javascript:`, `data:`, `file:`, `blob:`, unparsable) renders as inert text, never as a link.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Plan §7: page-derived URLs are untrusted, and external links carry `rel="noopener noreferrer"`. A primitive that cannot emit a `javascript:` link removes the bug class for every later surface.              |
 | S10 | **Dependency gate.** TASK-001 presents §3's packages to the user, with the exact current stable versions read from the registry at that time, and pins them **exactly** (no `^`) only after approval. Two additions go beyond §3 and need explicit approval:<br>• `@testing-library/dom`, the required peer of `@testing-library/react`;<br>• `@testing-library/user-event`, because React Aria's press and keyboard handling is driven by pointer and keyboard event sequences that `fireEvent` does not produce. If it is declined, the tests use `fireEvent` with React Aria's documented pointer-event sequence.<br>The e2e workspace reuses the root's `puppeteer-core` version (`25.10.0`, the same as core). The gallery's `vite` is the current stable major at or above 6.4.4 (TODO: the Vitest 4 migration lists the vite 5 advisory).                                                                                                                                                                                                          | Memory → Dependencies: check with the user before pinning a new dependency. Plan §3: specs pin exact versions.                                                                                                |
 | S11 | **No Compact density.** The spacing base stays Tailwind's `--spacing` (0.25rem, the brainstorm's 4 px base), so Phase 2 can scale one variable.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `ui.density` is not added until Phase 2 (§6, §13).                                                                                                                                                            |
 | S12 | **CSP-safe assets.** The gallery's Vite build sets `build.assetsInlineLimit: 0`, so fonts and the glass noise texture are emitted as files, never `data:` URIs, which `default-src 'self'` would block. The harness serves the gallery under exactly §7's policy. FEAT-065 must keep the same Vite setting for `apps/web`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | §7: strict `default-src 'self'`, and no third-party requests.                                                                                                                                                 |
+
+**S10 pinned versions (approved by the user 2026-11-04, read from the npm registry that day).**
+
+- `packages/ui` dependencies: `react` and `react-dom` 19.3.1, `react-aria-components` 1.22.1, `tailwind-variants` 4.0.1, `tailwind-merge` 3.7.0, `lucide-react` 1.68.0, `@fontsource-variable/archivo` 5.3.0, `@fontsource-variable/martian-mono` 5.3.0.
+- `packages/ui` dev dependencies: `tailwindcss` and `@tailwindcss/vite` 4.3.4, `tailwindcss-react-aria-components` 2.2.0, `vite` 8.3.5, `@vitejs/plugin-react` 6.2.1, `@types/react` and `@types/react-dom` 19.3.0, `@testing-library/react` 16.3.3, `@testing-library/dom` 10.4.2, `@testing-library/user-event` 14.6.8 (both S10 additions approved), `jsdom` `^26.0.0` (core's range), `tsx` 4.23.15.
+- `e2e` dev dependencies: `axe-core` 4.14.0, `pixelmatch` 8.0.0, `pngjs` 7.0.0, `@types/pngjs` 6.0.5, `puppeteer-core` 25.10.0.
+- Peer check: `@tailwindcss/vite` accepts vite `^8`; `@vitejs/plugin-react` 6 requires vite `^8`.
+
+**Implementation notes (recorded during Implement).**
+
+- **Gallery output directories.** `tsc` emits `src/gallery/` to `dist/gallery/`, so `@yantra/ui/gallery` resolves to `dist/gallery/index.{js,d.ts}`, and the standalone page builds to `dist/gallery-site/` (not `dist/gallery-module` and `dist/gallery` as §3 and TASK-003 said). The harness serves `dist/gallery-site`.
+- **axe injection.** `page.addScriptTag({ path })` adds an inline `<script>`, which `default-src 'self'` blocks. The harness evaluates axe's source with `page.evaluate` (`Runtime.evaluate`), which CSP does not govern, after it has collected the CSP evidence.
+- **Theme selectors.** The explicit theme blocks are `[data-theme="dark"]` and `[data-theme="light"]` rather than `:root[...]`, so any subtree can carry the appearance. The gallery wrapper needs this. The OS block stays `:root:not([data-theme="light"])`.
+- **Linux baselines are bootstrapped by CI.** The baselines could not be produced on the implementing Windows machine. The first Linux CI run fails the pixel step and uploads `e2e/drshya/.out/`, and those images are committed as `e2e/drshya/baselines/linux/` (S6 flow).
+- **Glass numbers after D4.** The shipped `--glass-alpha` is 0.775 (light) and 0.8 (dark), set by `ink-2`, as the pre-check predicted. D4 lowered `accent-ink`'s chroma, which moves its light glass floor from 0.945 to 0.925. That is still above the 0.85 cap, so it stays off glass, and TASK-004's test asserts 0.925.
+- **Glass verification without disabling noise.** The noise tile is exactly half black and half white with a 64 px period, so any 64×64 window averages to `base + noise·(0.5 − base)`. The harness checks that mean against the S3 model to ±3/255 over black and white in both themes. `prefers-reduced-transparency` is emulated through CDP `Emulation.setEmulatedMedia`, because puppeteer's `emulateMediaFeatures` rejects that feature.
+- **Gallery fixtures stylesheet.** The black, white and stripe backdrops live in `src/gallery/gallery.css`, exported as `@yantra/ui/gallery.css`. FEAT-065 imports it next to `drshya.css` wherever it mounts the gallery.
+- **Glyphs are path data.** Each `src/icons/glyphs/*.ts` file exports only its geometry (`GlyphNode`). `registry.tsx`, the only file allowed to import `lucide-react`, wraps each one with Lucide's own `createLucideIcon`, so glyphs get Lucide's exact SVG contract by construction. Lucide's half-filled circle is named `Contrast` in 1.68.0, and it backs `outcome.partial`.
+- **React Aria under the strict CSP.** React Aria's `usePress` injects `<style id="react-aria-pressable-style">`, which `default-src 'self'` blocks; the harness caught it on the first primitive. Drshya ships that `touch-action` rule in `drshya.css` (`@layer base`). `prepareStrictCsp(document)` from `@yantra/ui` places a `<meta>` with that id, so React Aria skips the injection. **FEAT-065 must call `prepareStrictCsp` before its first render.** `usePreventScroll` has a second injection, but only on iOS Safari's scroll path. A unit test pins the id against the installed React Aria source.
+- **Focus ring.** The focus ring is `outline-hidden focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent`. Tailwind v4's `outline-none` also sets `--tw-outline-style: none`, which would leave the ring invisible. Buttons transition only `color`, `background-color` and `border-color`, so the ring appears at once. The harness focus walk measures two animation frames after each Tab.
+- **Pairing added.** `on-accent` on `accent-ink` is in the gate, because `accent-ink` is the primary button's hover and pressed fill.
+- **Primitive families.** A primitive can span several exports (`Tabs`, `TabList`, `Tab`, `TabPanel`), so `src/primitives/families.ts` maps each family to its exports. `GalleryEntry.primitive` names the family. The completeness test checks both directions: every barrel export belongs to exactly one family, and every family has exactly one gallery entry. This is what makes TASK-014's "all 16 primitives" countable.
+- **Pinned React Aria API status (1.22.1).** Toast is still exported as `UNSTABLE_ToastRegion`, `UNSTABLE_ToastQueue` and `UNSTABLE_Toast`. `TableLoadMoreItem` and `SubmenuTrigger` exist. jsdom needs a `CSS.escape` polyfill (`tests/support/css-escape.ts`) for React Aria collections.
+- **Toast decisions (TASK-010).**
+  - React Aria marks toast content `role="alert"`, which is assertive. Drshya overrides it with `role="status"` and `aria-live="polite"` to meet plan §9's polite announcements.
+  - The tone word ("Failed", "Needs you") is `ink-2` text, not the signal's `-ink` color. Toasts are glass, and S3 allows only `ink` and `ink-2` as glass text. The tone is carried by the registry icon in the graphic signal color plus the word, never by color alone.
+  - React Aria portals the toast region into `document.body`, so there is no inline placement. `createToastQueue({ autoDismiss: false })` keeps the gallery deterministic. The `UNSTABLE_*` names stay inside `Toast.tsx`.
+- **Overlay entries.** `GalleryEntry.overlays: true` marks entries whose React Aria overlays portal outside the entry section. Toast does now; Popover, Select, ComboBox, Dialog and Menu will in M4. For those entries, the harness screenshots the full page and scopes axe and the focus walk to the whole document.
+- **Table decisions (TASK-011).**
+  - The row-header guard throws `TableContractError` in every build, not only in development. `packages/ui` has no build-mode flag in browser code, and an unnamed row is a developer error either way.
+  - React Aria's load-more sentinel shows its content only while `isLoading`, so the error row reuses that slot with no `onLoadMore`, and an error never auto-retries.
+  - jsdom tests size elements (`tests/support/layout.ts`) and install a controllable `IntersectionObserver`. Without layout, the virtualizer renders all 10,000 rows and the worker runs out of heap.
+- **Focus indicator for native-input controls.** Checkbox and Switch focus React Aria's visually hidden `<input>`; the Ion ring is drawn on the visible box or track (`group-focus-visible:`), which carries `data-focus-indicator`. The harness focus walk measures that indicator when the focused element is a hidden input inside a `<label>`.
+- **Field anatomy exports.** `FieldLabel`, `FieldDescription`, `FieldErrorText` and `fieldInputStyles` are exported from the package root, not the primitives barrel. They are building blocks, not one of the 16 primitive families.
+- **Overlay decisions (TASK-013).**
+  - In React Aria 1.22, ComboBox has no `isOpen` or `defaultOpen`. Its gallery entry renders closed, and a harness test types into it to open the list, runs axe on the open listbox, and checks "No matches", in all four states.
+  - The React Aria plugin's focus variant is `focus:` (`data-focused`); `focused:` does not exist. Option rows use `focus:`.
+  - Overlay-scoped axe runs disable only `region`. React Aria's overlay root portals beside `<main>`, and landmark structure belongs to the app shell (FEAT-065).
+  - The focus walk skips programmatic focus targets (`tabIndex` −1), such as an opened dialog container. They are not Tab stops.
+  - Popover is a family of `Popover` (the glass surface Select, ComboBox and Menu share), `PopoverTrigger` and `PopoverDialog`. `Option` and the style recipes are exported from the package root.
+- **Dialog and Menu decisions (TASK-014).**
+  - A destructive menu item keeps `ink` text, not `signal-failed-ink` (the same glass rule as Toast). Its required icon is drawn in the `signal-failed` graphic color, and the item carries `data-tone="destructive"`.
+  - `Menu` defaults `autoFocus` to `'first'`. Otherwise React Aria focuses the menu container, which shows no focus indicator; the harness focus walk found this.
+  - `SubmenuTrigger` exists in 1.22.1 and is supported.
+  - The dialog scrim is the component token `--dialog-scrim` (`bg` at 0.72 alpha), declared with each theme.
+  - The AlertDialog gallery entry is a second Dialog entry (`primitive: null`). The families total 16: 7 M1 and 9 M4.
+- **Lint-staged.** The ESLint command in `lint-staged` gained `--no-warn-ignored`. Without it, committing a new `_lint-fixtures` file fails `--max-warnings=0` with "File ignored" warnings.
 
 ## 2. Data Model (Granular)
 
@@ -108,26 +168,26 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
   - **Mapping:** `SEMANTIC_COLORS: Record<SemanticColor, { light: PrimitiveName; dark: PrimitiveName }>`.
   - **Initial mapping.** The brainstorm leaves the dark `ink`, dark `rule` and dark `sunken` roles open; this spec fills them.
 
-    | Semantic                    | Light                                  | Dark                     |
-    | --------------------------- | -------------------------------------- | ------------------------ |
-    | `bg`                        | fog-05                                 | fog-99                   |
-    | `surface`                   | fog-00                                 | fog-95                   |
-    | `sunken`                    | fog-10                                 | fog-99                   |
-    | `ink`                       | fog-95                                 | fog-05                   |
-    | `ink-2`                     | fog-70                                 | fog-40                   |
-    | `ink-3`                     | fog-60                                 | fog-50                   |
-    | `rule`                      | fog-20                                 | fog-90                   |
-    | `rule-strong`               | fog-30                                 | fog-80                   |
-    | `field-edge`                | fog-60                                 | fog-50                   |
-    | `accent`                    | ion-fill `0.54 0.14 218` (D1)          | ion-fill `0.80 0.14 218` |
-    | `on-accent`                 | white `1 0 0`                          | `0.18 0.03 230`          |
-    | `accent-ink`                | `0.50 0.12 218`                        | `0.82 0.12 218`          |
-    | `signal-fulfilled` / `-ink` | `0.55 0.13 162` / `0.51 0.13 162` (D2) | `0.76 0.14 162` / same   |
-    | `signal-partial` / `-ink`   | `0.62 0.15 65` / `0.54 0.15 65` (D2)   | `0.80 0.14 65` / same    |
-    | `signal-failed` / `-ink`    | `0.55 0.20 25` / same                  | `0.70 0.18 25` / same    |
-    | `signal-needs-you` / `-ink` | `0.55 0.22 352` / same                 | `0.72 0.20 352` / same   |
-    | `glass-tint`                | fog-00                                 | fog-95                   |
-    | `glass-edge`, `glass-spec`  | fog-20, fog-00                         | fog-80, fog-40           |
+    | Semantic                    | Light                                       | Dark                     |
+    | --------------------------- | ------------------------------------------- | ------------------------ |
+    | `bg`                        | fog-05                                      | fog-99                   |
+    | `surface`                   | fog-00                                      | fog-95                   |
+    | `sunken`                    | fog-10                                      | fog-99                   |
+    | `ink`                       | fog-95                                      | fog-05                   |
+    | `ink-2`                     | fog-70                                      | fog-40                   |
+    | `ink-3`                     | fog-60                                      | fog-50                   |
+    | `rule`                      | fog-20                                      | fog-90                   |
+    | `rule-strong`               | fog-30                                      | fog-80                   |
+    | `field-edge`                | fog-60                                      | fog-50                   |
+    | `accent`                    | ion-fill `0.54 0.097 218` (D1, D4)          | ion-fill `0.80 0.14 218` |
+    | `on-accent`                 | white `1 0 0`                               | `0.18 0.03 230`          |
+    | `accent-ink`                | `0.50 0.089 218` (D4)                       | `0.82 0.12 218`          |
+    | `signal-fulfilled` / `-ink` | `0.55 0.12 162` / `0.51 0.111 162` (D2, D4) | `0.76 0.14 162` / same   |
+    | `signal-partial` / `-ink`   | `0.62 0.139 65` / `0.54 0.121 65` (D2, D4)  | `0.80 0.14 65` / same    |
+    | `signal-failed` / `-ink`    | `0.55 0.20 25` / same                       | `0.70 0.18 25` / same    |
+    | `signal-needs-you` / `-ink` | `0.55 0.22 352` / same                      | `0.72 0.20 352` / same   |
+    | `glass-tint`                | fog-00                                      | fog-95                   |
+    | `glass-edge`, `glass-spec`  | fog-20, fog-00                              | fog-80, fog-40           |
 
 - **`ContrastPairing`** (`src/tokens/pairings.ts`):
   - `fg` (`SemanticColor`) — the text or graphic color.
@@ -799,19 +859,19 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 
 ## 8. State Tracking
 
-- [ ] TASK-001: `@yantra/ui` package, dependency gate, workspace wiring, import-boundary lint
-- [ ] TASK-002: Color tokens from one TS source, light/dark themes, contrast gate (D1, D2)
-- [ ] TASK-003: Gallery, appearance contract, real-Chrome screenshot/axe/CSP/origin harness (D3, S6)
-- [ ] TASK-004: Glass with computed scrim floor; Solid mode by attribute and OS setting
-- [ ] TASK-005: Type, space, radius, motion tokens; self-hosted fonts; reduced motion
-- [ ] TASK-006: Raw-color, inline-style and `dangerouslySetInnerHTML` lint rules
-- [ ] TASK-007: Semantic icon registry, six glyphs, Lucide import lint
-- [ ] TASK-008: Button, Link (URL safety), focus ring, gallery completeness test
-- [ ] TASK-009: Tabs, Tooltip, Disclosure
-- [ ] TASK-010: Toast (app-owned queue, polite, no focus theft)
-- [ ] TASK-011: Table (virtualized, cursor-paged) — M1 subset complete
-- [ ] TASK-012 (M4): TextField, NumberField, Checkbox, Switch
-- [ ] TASK-013 (M4): Popover, Select, ComboBox
-- [ ] TASK-014 (M4): Dialog, Menu
+- [x] TASK-001: `@yantra/ui` package, dependency gate, workspace wiring, import-boundary lint
+- [x] TASK-002: Color tokens from one TS source, light/dark themes, contrast gate (D1, D2)
+- [x] TASK-003: Gallery, appearance contract, real-Chrome screenshot/axe/CSP/origin harness (D3, S6)
+- [x] TASK-004: Glass with computed scrim floor; Solid mode by attribute and OS setting
+- [x] TASK-005: Type, space, radius, motion tokens; self-hosted fonts; reduced motion
+- [x] TASK-006: Raw-color, inline-style and `dangerouslySetInnerHTML` lint rules
+- [x] TASK-007: Semantic icon registry, six glyphs, Lucide import lint
+- [x] TASK-008: Button, Link (URL safety), focus ring, gallery completeness test
+- [x] TASK-009: Tabs, Tooltip, Disclosure
+- [x] TASK-010: Toast (app-owned queue, polite, no focus theft)
+- [x] TASK-011: Table (virtualized, cursor-paged) — M1 subset complete
+- [x] TASK-012 (M4): TextField, NumberField, Checkbox, Switch
+- [x] TASK-013 (M4): Popover, Select, ComboBox
+- [x] TASK-014 (M4): Dialog, Menu
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

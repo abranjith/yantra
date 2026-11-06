@@ -1,0 +1,741 @@
+{
+  "vcs": "git",
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": ".gitignore",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": ".prettierignore",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "docs/architecture.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/drshya-design-system.md",
+      "status": "U",
+      "role": "implement"
+    },
+    {
+      "path": "e2e/drshya-gallery.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "e2e/drshya/browser.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "e2e/drshya/capture.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "e2e/drshya/gallery-server.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "e2e/drshya/gallery-server.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "e2e/drshya/visual.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "e2e/drshya/visual.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "e2e/package.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/tsconfig.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "eslint.config.js",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "package.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/ui/gallery/gallery.css",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/gallery/index.html",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/gallery/main.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/gallery/vite.config.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/package.json",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/ui/scripts/emit-tokens.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/src/_lint-fixtures/arbitrary-color.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/ui/src/_lint-fixtures/clean.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/ui/src/_lint-fixtures/color-literal.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/ui/src/_lint-fixtures/imports-core.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/ui/src/_lint-fixtures/imports-node-builtin.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/ui/src/_lint-fixtures/imports-protocol-type.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/ui/src/_lint-fixtures/imports-protocol-value.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/ui/src/_lint-fixtures/inline-style.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/ui/src/_lint-fixtures/inner-html.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/ui/src/_lint-fixtures/lucide-direct.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/ui/src/_lint-fixtures/raw-palette.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/ui/src/_lint-fixtures/registry-like.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/ui/src/_lint-fixtures/site-name.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/ui/src/appearance.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/src/csp.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/ui/src/gallery/assets/backdrop-stripes.png",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/ui/src/gallery/classes.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/src/gallery/entries.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/src/gallery/fixtures.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "packages/ui/src/gallery/gallery.css",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/ui/src/gallery/Gallery.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/src/gallery/index.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/src/icons/glyphs/bindu.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/ui/src/icons/glyphs/capture.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/ui/src/icons/glyphs/contract.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/ui/src/icons/glyphs/glyph.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/ui/src/icons/glyphs/handoff.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/ui/src/icons/glyphs/protected.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/ui/src/icons/glyphs/provenance.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/ui/src/icons/Icon.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/ui/src/icons/registry.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/ui/src/index.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/ui/src/lib/cn.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/ui/src/primitives/Button.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/ui/src/primitives/Checkbox.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "packages/ui/src/primitives/ComboBox.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "packages/ui/src/primitives/Dialog.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-014"
+    },
+    {
+      "path": "packages/ui/src/primitives/Disclosure.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/ui/src/primitives/families.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/ui/src/primitives/field.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "packages/ui/src/primitives/index.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/ui/src/primitives/Link.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/ui/src/primitives/Menu.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-014"
+    },
+    {
+      "path": "packages/ui/src/primitives/NumberField.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "packages/ui/src/primitives/Popover.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "packages/ui/src/primitives/Select.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "packages/ui/src/primitives/Switch.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "packages/ui/src/primitives/Table.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "packages/ui/src/primitives/Tabs.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/ui/src/primitives/TextField.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "packages/ui/src/primitives/Toast.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "packages/ui/src/primitives/Tooltip.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/ui/src/styles/assets/glass-noise.png",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/ui/src/styles/drshya.css",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/src/styles/theme.generated.css",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/src/tokens/color-math.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/src/tokens/emit.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/src/tokens/errors.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/src/tokens/glass.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/ui/src/tokens/pairings.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/src/tokens/palette.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/src/tokens/scale.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/ui/src/tokens/semantic.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/tests/appearance.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/tests/boundary-rules.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/ui/tests/csp.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/ui/tests/gallery/completeness.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/ui/tests/gallery/gallery.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/tests/icons/icon.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/ui/tests/lib/cn.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/ui/tests/primitives/button.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/ui/tests/primitives/dialog-menu.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-014"
+    },
+    {
+      "path": "packages/ui/tests/primitives/fields.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "packages/ui/tests/primitives/link.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/ui/tests/primitives/overlays.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "packages/ui/tests/primitives/table.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "packages/ui/tests/primitives/tabs-tooltip-disclosure.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/ui/tests/primitives/toast.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "packages/ui/tests/setup.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/ui/tests/support/css-escape.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/ui/tests/support/intersection-observer.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "packages/ui/tests/support/layout.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "packages/ui/tests/support/match-media.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/ui/tests/tokens/color-math.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/tests/tokens/contrast-gate.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/tests/tokens/css-blocks.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/tests/tokens/generated-drift.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/tests/tokens/glass.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/ui/tests/tokens/scale.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/ui/tests/tokens/theme-css.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/tests/toolchain.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/ui/tsconfig.build.json",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/ui/tsconfig.json",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/ui/tsconfig.tests.json",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/ui/vitest.config.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "README.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "tsconfig.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "vitest.workspace.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    }
+  ],
+  "excluded": [
+    ".spec-lite/feature-summary.md",
+    ".spec-lite/features/FEAT-061-drshya_foundations/changeset.json",
+    ".spec-lite/features/FEAT-061-drshya_foundations/spec.md",
+    ".spec-lite/features/FEAT-063-unified_run_event_stream/spec.md",
+    ".spec-lite/features/FEAT-064-run_ownership_channel_reconciliation/spec.md",
+    ".spec-lite/features/FEAT-065-app_host_yantra_ui/spec.md",
+    ".spec-lite/features/FEAT-066-run_results_audit/spec.md",
+    ".spec-lite/plan_ui.md"
+  ],
+  "baseline": {
+    "sha": "360d97deb275e87872587c7ea772e6a3af2dde26",
+    "capturedAt": "2026-11-05T01:50:37.712Z",
+    "dirtyAtBaseline": [],
+    "dirtyBlobHashes": {},
+    "workflow": "ft/feat-061-drshya-foundations@360d97deb275e87872587c7ea772e6a3af2dde26"
+  },
+  "featureId": "FEAT-061"
+}

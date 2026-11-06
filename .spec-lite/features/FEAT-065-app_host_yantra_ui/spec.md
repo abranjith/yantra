@@ -365,15 +365,9 @@ If FEAT-061 already scaffolded `apps/web` for `/gallery`, extend it; otherwise c
       (403 otherwise);
     - caps request bodies at 1 MiB (413);
     - sends no CORS headers, ever.
-  - **Security headers on every response:**
-    - `Content-Security-Policy`: `default-src 'self'; script-src 'self'; style-src 'self';
+  - **Security headers on every response:** - `Content-Security-Policy`: `default-src 'self'; script-src 'self'; style-src 'self';
 img-src 'self' blob:; font-src 'self'; connect-src 'self' ws://127.0.0.1:<port>;
-frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'`;
-    - `X-Content-Type-Options: nosniff`;
-    - `Referrer-Policy: no-referrer`;
-    - `X-Frame-Options: DENY`;
-    - `Cross-Origin-Opener-Policy: same-origin`;
-    - `Cross-Origin-Resource-Policy: same-origin`.
+frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'`; - `X-Content-Type-Options: nosniff`; - `Referrer-Policy: no-referrer`; - `X-Frame-Options: DENY`; - `Cross-Origin-Opener-Policy: same-origin`; - `Cross-Origin-Resource-Policy: same-origin`.
   - **`static-assets.ts`** serves `GET /`, `/index.html` and files under `dist/web/assets/`:
     - content-hashed files with `Cache-Control: public, max-age=31536000, immutable`;
     - `index.html` with `no-store`;
@@ -541,8 +535,7 @@ url, port, hostPid, reused}`.
   - **The launcher.** `apps/cli/src/ui/window-launcher.ts` uses that result, falling back to the
     resolved Yantra browser last (`LocalBrowserResolver`). It spawns, detached, shell-free and
     `unref()`'d, the arguments `[--app=<url>, --user-data-dir=<uiChromeProfilePath()>,
---no-first-run, --no-default-browser-check]`.
-    - It never uses `--remote-debugging-*`, `--enable-automation` or an automation profile (§7).
+--no-first-run, --no-default-browser-check]`. - It never uses `--remote-debugging-*`, `--enable-automation` or an automation profile (§7).
   - **No Chromium found.** `yantra ui` exits 3 with remediation `yantra browser install` **and**
     prints the URL (D10). With `--json`, the URL is still printed to stdout and the error goes on
     stderr.
@@ -567,12 +560,10 @@ url, port, hostPid, reused}`.
 - [ ] **Implementation**:
   - **`ReadCatalog`** (`apps/cli/src/ui/host/reads.ts`) maps each FEAT-062 `read`-class registry
     path to an in-process reader. The RPC method is `read.<path joined by '.'>`, with params `{args?,
-options?, cursor?, limit?}`.
-    - Each reader calls the **same function** that the command's `--json` path uses. For `list`,
-      extract `buildListJson()` from `commands/list.ts`, so a shape cannot drift.
-    - Results are validated against the registry's `--json` schema when one exists. When the
-      registry records `json.schema: null`, the result is returned with `schema: null`, matching the
-      existing TODO "JSON output schemas for `read`-class commands".
+options?, cursor?, limit?}`. - Each reader calls the **same function** that the command's `--json` path uses. For `list`,
+    extract `buildListJson()` from `commands/list.ts`, so a shape cannot drift. - Results are validated against the registry's `--json` schema when one exists. When the
+    registry records `json.schema: null`, the result is returned with `schema: null`, matching the
+    existing TODO "JSON output schemas for `read`-class commands".
   - **M1 readers:** `list`, `show`, `audit`, `report`, `prefs list`, `prefs get` and `daemon status`
     (through `FileDaemonLock.probe()`, D1).
     - Every other `read` path goes on a **dated allowlist** (`UNMAPPED_READS`, dated 2026-11-03),
@@ -748,9 +739,7 @@ tests/commands/prefs*.spec.ts tests/key-ownership.spec.ts` (after `npx turbo run
   - **Ordering.** `apps/cli/package.json` lists `@yantra/web` as a `workspace:*` dev dependency, so
     Turbo's `^build` builds `apps/web` first.
   - **Embedding.** The `build` script becomes `tsc -b tsconfig.build.json && node
-scripts/embed-web.mjs`. The embed script:
-    - copies `../web/dist` to `dist/web` after clearing the old copy;
-    - fails the build if `index.html` or `build-id.json` is missing.
+scripts/embed-web.mjs`. The embed script: - copies `../web/dist` to `dist/web` after clearing the old copy; - fails the build if `index.html` or `build-id.json` is missing.
   - **Serving.** The host resolves the asset root as `new URL('./web/', import.meta.url)` relative to
     `dist/ui-host.js`, and reads `build_id` from `build-id.json` into `HostLockRecord.build_id` and
     `host.hello`.
@@ -786,11 +775,7 @@ scripts/embed-web.mjs`. The embed script:
   - **Run-socket gap.** An unauthenticated run socket is FEAT-064's acceptance; this suite re-runs
     that assertion against a host-spawned worker once TASK-015 lands.
   - **E2E.** `e2e/app-host.spec.ts` uses puppeteer-core and the built CLI. It runs `yantra ui
---print`, opens the URL, waits for `connected`, and:
-    - asserts that **no request leaves `127.0.0.1:<port>`** (request interception records every URL);
-    - asserts that **no CSP violation** is reported (`securitypolicyviolation` listener);
-    - asserts that the URL fragment is gone;
-    - runs `axe-core` on the shell, with no violations.
+--print`, opens the URL, waits for `connected`, and: - asserts that **no request leaves `127.0.0.1:<port>`** (request interception records every URL); - asserts that **no CSP violation** is reported (`securitypolicyviolation` listener); - asserts that the URL fragment is gone; - runs `axe-core` on the shell, with no violations.
   - **Merge gate.** Tag the suite so CI runs it on Windows, macOS and Linux.
 - [ ] **Unit Tests**: This task is the test suite. Each case above is one named `it` with AAA
       structure.
@@ -846,20 +831,12 @@ tests/app-host/invocation-recovery.spec.ts`.
 ### TASK-015: Supervisor: `command.invoke`, the queue, worker spawn, cancel and results (M2)
 
 - [ ] **Implementation**:
-  - **`command.invoke {invocation, displayed_effective}`** (`supervisor.ts`):
-    1. Parse `invocation` through FEAT-062 (registry path, argv validity). The `cwd` must be
-       absolute.
-    2. Resolve the execution class for these options. Refusals use `not_allowed`, with the reason
-       and the right surface:
-       - `read`: use `read.<name>`;
-       - `in-process-secure`: use `secret.*` (FEAT-071);
-       - `adapter`: no adapter registered yet;
-       - `exemption`: for example `ui` or `config data-dir`, refused with the written D15 steps.
-    3. Create the record (`queued`), then try `reserve`. On success: `markSpawning`, then spawn
-       through the FEAT-064 spawn helper (detached, shell-free, `[execPath, dist/worker.js,
+  - **`command.invoke {invocation, displayed_effective}`** (`supervisor.ts`): 1. Parse `invocation` through FEAT-062 (registry path, argv validity). The `cwd` must be
+    absolute. 2. Resolve the execution class for these options. Refusals use `not_allowed`, with the reason
+    and the right surface: - `read`: use `read.<name>`; - `in-process-secure`: use `secret.*` (FEAT-071); - `adapter`: no adapter registered yet; - `exemption`: for example `ui` or `config data-dir`, refused with the written D15 steps. 3. Create the record (`queued`), then try `reserve`. On success: `markSpawning`, then spawn
+    through the FEAT-064 spawn helper (detached, shell-free, `[execPath, dist/worker.js,
 '--invocation-id', id]`, the `cwd` from the invocation, the host's environment captured at
-       start (D13), no inherited stdio, `windowsHide`).
-    4. Return `{invocation_id, state, position?, run_id?}`.
+    start (D13), no inherited stdio, `windowsHide`). 4. Return `{invocation_id, state, position?, run_id?}`.
   - **Repeated submissions.** The same `invocation_id` returns the current record's state and never
     spawns.
   - **Worker side** (`apps/cli/src/ui/worker-claim.ts`, called by the FEAT-064 worker entry when
@@ -912,12 +889,8 @@ tests/app-host/invocation-recovery.spec.ts`.
     3. scan `runs/*/lease.json` for live, identity-verified owners;
     4. resume the dequeue loop.
   - **`run-relay.ts`** attaches lazily to a run's socket when the first window calls `run.subscribe
-{run_id, from_seq}`:
-    - authenticates with the lease's run token;
-    - sends `hello {channel_version, capabilities}`;
-    - on an incompatible version, marks the run `live_unavailable`, sends `run.channel {run_id,
-state: 'live_unavailable', worker_version}`, and **never aborts the worker** (D17);
-    - otherwise sends `subscribe {from_seq: min over windows}` and forwards `run.event {run_id, seq,
+{run_id, from_seq}`: - authenticates with the lease's run token; - sends `hello {channel_version, capabilities}`; - on an incompatible version, marks the run `live_unavailable`, sends `run.channel {run_id,
+state: 'live_unavailable', worker_version}`, and **never aborts the worker** (D17); - otherwise sends `subscribe {from_seq: min over windows}` and forwards `run.event {run_id, seq,
 event}` to each window from its own `from_seq`, deduplicating by `seq`.
   - **Detach.** The relay detaches when the last window unsubscribes. A worker without a socket
     (finished) is served from `run-events.jsonl` replay only.

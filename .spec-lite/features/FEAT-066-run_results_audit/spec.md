@@ -425,17 +425,12 @@ symlink escapes, is unreachable.
 
     `runsRoot` always comes from `paths.ts` (memory → Project Structure).
 
-  - **Host** (FEAT-065 handlers):
-    - `artifact.url {run_id, path}` calls the gate **before** signing.
-    - `GET /a/<signed>` re-runs the gate **at serve time**, because the file may have changed since
-      signing.
-    - Responses send `Content-Type: entry.media_type` and `X-Content-Type-Options: nosniff`.
-      `download` exposure (including every HTML file) adds `Content-Disposition: attachment;
-filename="<basename>"`.
-    - A file over `inline_cap_bytes` is still downloadable when its exposure allows, and it streams
-      (never buffered).
-    - Rejections return a uniform 404 with no reason in the body. The host log counts them by
-      error code only (plan §11: no signed URLs or tokens).
+  - **Host** (FEAT-065 handlers): - `artifact.url {run_id, path}` calls the gate **before** signing. - `GET /a/<signed>` re-runs the gate **at serve time**, because the file may have changed since
+    signing. - Responses send `Content-Type: entry.media_type` and `X-Content-Type-Options: nosniff`.
+    `download` exposure (including every HTML file) adds `Content-Disposition: attachment;
+filename="<basename>"`. - A file over `inline_cap_bytes` is still downloadable when its exposure allows, and it streams
+    (never buffered). - Rejections return a uniform 404 with no reason in the body. The host log counts them by
+    error code only (plan §11: no signed URLs or tokens).
 
 - [ ] **Unit Tests**:
   - Protocol: a table test classifies every §2 path, including `lease.json`, `decisions/x.json`,
@@ -478,18 +473,14 @@ One core function pages runs by keyset and filters them. Both `yantra list` and 
     - fetches `limit + 1` rows to compute `next_cursor`;
     - always parameterized SQL.
   - **Core `run-view/ledger.ts` `queryRunLedger(query, deps)`**, with `deps = {historyStore |
-null, runStore, activeRuns?: () => Promise<ActiveRun[]>}`:
-    - **Index path:** `HistoryStore.page`.
-    - **File-scan fallback** (index unavailable or rebuilding): list run directory names, sort them
-      descending (run ids are lexically start-ordered, per `formatRunId`), apply the keyset on
-      `(started_at, run_id)` and read manifests only for candidate entries. A scan stops after
-      2,000 directories per call and sets `scan_truncated`.
-    - **Active region:** non-terminal runs (manifest `running`, or a live lease) are not in the
-      index. They come from `activeRuns` (FEAT-065 invocations plus FEAT-064 leases) and, on the
-      first page only, from a bounded scan of the newest 200 run directories for `running`
-      manifests. Active runs are returned separately in `active` and are never paginated.
-    - **Cursors:** `encodeLedgerCursor` and `decodeLedgerCursor`, versioned and validated. A bad
-      cursor throws `LedgerCursorError`.
+null, runStore, activeRuns?: () => Promise<ActiveRun[]>}`: - **Index path:** `HistoryStore.page`. - **File-scan fallback** (index unavailable or rebuilding): list run directory names, sort them
+    descending (run ids are lexically start-ordered, per `formatRunId`), apply the keyset on
+    `(started_at, run_id)` and read manifests only for candidate entries. A scan stops after
+    2,000 directories per call and sets `scan_truncated`. - **Active region:** non-terminal runs (manifest `running`, or a live lease) are not in the
+    index. They come from `activeRuns` (FEAT-065 invocations plus FEAT-064 leases) and, on the
+    first page only, from a bounded scan of the newest 200 run directories for `running`
+    manifests. Active runs are returned separately in `active` and are never paginated. - **Cursors:** `encodeLedgerCursor` and `decodeLedgerCursor`, versioned and validated. A bad
+    cursor throws `LedgerCursorError`.
   - **CLI `list`:** `listRuns` builds its items from `queryRunLedger({limit, workflow, status})`.
     - It keeps today's merge semantics: index and file runs de-duplicated by run id, the index
       winning, sorted by `startedAt` descending, the 500 cap, and the stderr "history index
@@ -534,15 +525,12 @@ URL state, shows active runs with their §8 displayed states, and updates when r
 a reload.
 
 - [ ] **Implementation**:
-  - **`packages/ui` `OutcomeBadge`:**
-    - It renders the protocol words verbatim: `TaskOutcome` (`fulfilled | partial | handoff |
+  - **`packages/ui` `OutcomeBadge`:** - It renders the protocol words verbatim: `TaskOutcome` (`fulfilled | partial | handoff |
 failed | aborted`), the status word when no outcome exists, and `interrupted` as a separate
-      execution-state chip.
-    - Signal tokens: fulfilled is Jade, partial and handoff are Amber, failed is Crimson, and
-      aborted is neutral, each paired with a semantic icon and text. Color is never the only
-      signal.
-    - Displayed states (§8): queued, starting, running, waiting for you, needs review, start
-      outcome unknown, worker not responding.
+    execution-state chip. - Signal tokens: fulfilled is Jade, partial and handoff are Amber, failed is Crimson, and
+    aborted is neutral, each paired with a semantic icon and text. Color is never the only
+    signal. - Displayed states (§8): queued, starting, running, waiting for you, needs review, start
+    outcome unknown, worker not responding.
   - **`apps/web/src/data/runs.ts`:**
     - `useRunLedger(filters)` is an infinite query over `read.list`, paging by `next_cursor`.
     - `useRunsChangeInvalidation()` subscribes to `runs.subscribe`. On a hint it invalidates page
@@ -590,27 +578,14 @@ independent slot, so one bad file never fails the page.
   - **Core** `run-view/bounded-read.ts`: `readCapped` (stat first; over the cap means `too_large`
     with no read) and `readTail` (the last N bytes, aligned to a line boundary). Neither calls
     `readFile` on an unbounded file.
-  - **Core** `run-view/run-result.ts` `readRunResult(runId, deps)`:
-    1. Validate `RunId`. Resolve the run directory through `LocalRunStore.getRun`. Absent means
-       `RunNotFoundError`.
-    2. **Reconcile:** if FEAT-064 is present, call its reconcile-if-dead hook first, mirroring
-       `yantra list`.
-    3. **Manifest:** read and normalize both manifest shapes (the ask, research and do pipeline,
-       and the workflow `RunManifest`) into the mode, title, times, status, `taskOutcome`,
-       `terminationReason` and `execution_state`. A corrupt manifest still yields a view: `mode:
-unknown`, the title is the run id, and the other slots are still read.
-    4. **Document:**
-       - `brief.json` → `Brief.safeParse`: success is `ok`; a `schema_version` other than `0.2` is
-         `unsupported`; any other failure is `corrupt`.
-       - Otherwise `document.json` → `TemplatedReport`, with the same rules.
-       - Otherwise `{kind: 'none'}`.
-    5. **Outputs:** for workflow runs, `outputs.json`, capped at 256 KiB.
-    6. **`run_health`:** `RunHealth.safeParse`.
-    7. **Report:** `report` exists, with its size.
-    8. **Inventory:** `listRunArtifacts` (TASK-001 registry; denied files omitted).
-    9. **Terminal reason:** `run-view/terminal-reason.ts` (step 10 order).
-    10. **Live flag:** from the FEAT-064 lease probe (`running` or `waiting_for_you`). A manifest
-        that says running but whose owner cannot be verified becomes `unknown_owner`, never "dead".
+  - **Core** `run-view/run-result.ts` `readRunResult(runId, deps)`: 1. Validate `RunId`. Resolve the run directory through `LocalRunStore.getRun`. Absent means
+    `RunNotFoundError`. 2. **Reconcile:** if FEAT-064 is present, call its reconcile-if-dead hook first, mirroring
+    `yantra list`. 3. **Manifest:** read and normalize both manifest shapes (the ask, research and do pipeline,
+    and the workflow `RunManifest`) into the mode, title, times, status, `taskOutcome`,
+    `terminationReason` and `execution_state`. A corrupt manifest still yields a view: `mode:
+unknown`, the title is the run id, and the other slots are still read. 4. **Document:** - `brief.json` → `Brief.safeParse`: success is `ok`; a `schema_version` other than `0.2` is
+    `unsupported`; any other failure is `corrupt`. - Otherwise `document.json` → `TemplatedReport`, with the same rules. - Otherwise `{kind: 'none'}`. 5. **Outputs:** for workflow runs, `outputs.json`, capped at 256 KiB. 6. **`run_health`:** `RunHealth.safeParse`. 7. **Report:** `report` exists, with its size. 8. **Inventory:** `listRunArtifacts` (TASK-001 registry; denied files omitted). 9. **Terminal reason:** `run-view/terminal-reason.ts` (step 10 order). 10. **Live flag:** from the FEAT-064 lease probe (`running` or `waiting_for_you`). A manifest
+    that says running but whose owner cannot be verified becomes `unknown_owner`, never "dead".
   - **Terminal reason fallback order** (`readTail` throughout, at most 256 KiB):
     1. the last `run_outcome` in `run-events.jsonl` (FEAT-063);
     2. the manifest's `terminationReason`, `failureClass` and `agentError`;
@@ -779,21 +754,14 @@ a complete result page.
   - **Host `read.report {run_id}`:** `readCapped(report.md, 512 KiB)`. Over the cap, it returns the
     first 512 KiB, cut at a line boundary, with `truncated: true` and `bytes`. The CLI `report
 --json` envelope is unchanged.
-  - **`apps/web` `NoDocumentResult`**, used when `document.kind === 'none'`:
-    1. **Outcome summary:** OutcomeBadge, `termination_reason` and `execution_state`.
-       `interrupted` reads "The run's owner stopped before it finished" with the evidence-based
-       outcome (D7).
-    2. **Terminal reason panel:** failure class, message, blocker and safest next action, with the
-       reader `source` shown as provenance.
-    3. **Outputs:** a JSON viewer (TASK-008 `JsonViewer`) over `outputs`, or its slot state.
-    4. **Run health:** counts only, rendered from `RunHealth` (searches, fetches, per-site failures
-       by stage, exhausted budgets, tool failures by code), using the same labels as the `## Run
-Health` section of `report.md`.
-    5. **Notices:** from `run_health` when `notices_source` is `run_health`, otherwise an explicit
-       "No notices recorded".
-    6. **`report.md`:** lazily loaded through `read.report` and rendered with SafeMarkdown, with a
-       truncation banner and "Show in folder" when truncated.
-    7. **Artifacts:** the inventory list with viewer links.
+  - **`apps/web` `NoDocumentResult`**, used when `document.kind === 'none'`: 1. **Outcome summary:** OutcomeBadge, `termination_reason` and `execution_state`.
+    `interrupted` reads "The run's owner stopped before it finished" with the evidence-based
+    outcome (D7). 2. **Terminal reason panel:** failure class, message, blocker and safest next action, with the
+    reader `source` shown as provenance. 3. **Outputs:** a JSON viewer (TASK-008 `JsonViewer`) over `outputs`, or its slot state. 4. **Run health:** counts only, rendered from `RunHealth` (searches, fetches, per-site failures
+    by stage, exhausted budgets, tool failures by code), using the same labels as the `## Run
+Health` section of `report.md`. 5. **Notices:** from `run_health` when `notices_source` is `run_health`, otherwise an explicit
+    "No notices recorded". 6. **`report.md`:** lazily loaded through `read.report` and rendered with SafeMarkdown, with a
+    truncation banner and "Show in folder" when truncated. 7. **Artifacts:** the inventory list with viewer links.
   - **A run that says running with no verifiable owner** (`live.state: unknown_owner`): show
     "Status unknown — the owner of this run can't be verified" and never "running" (memory →
     Architecture).
@@ -891,15 +859,11 @@ runs stay within message limits.
   - **Protocol:** `AuditReport` (a Zod mirror of `AuditRenderReport`, field for field, with
     `.describe` text) and `AuditPage`. In `apps/cli/src/render/types.ts`, `AuditRenderReport =
 AuditReport` (type-only change).
-  - **`audit-builder.ts`:**
-    - Replace `readFile` plus `split` in `readJsonl` with a line stream (`readline` over
-      `createReadStream`) that skips corrupt lines exactly as today, so a multi-hundred-MB
-      `tool-calls.jsonl` never becomes one string.
-    - Add an optional `window: {toolCalls?: {offset, limit}, captures?: {offset, limit}}`
-      parameter. Totals are computed over the full stream and only the window is materialized.
-    - Add `createAuditCache()` for the host: memoize per `(runDir, sizes and mtimes of the input
-files)`, with an LRU of 8 entries.
-    - The CLI path passes no window and no cache, so its output is byte-identical.
+  - **`audit-builder.ts`:** - Replace `readFile` plus `split` in `readJsonl` with a line stream (`readline` over
+    `createReadStream`) that skips corrupt lines exactly as today, so a multi-hundred-MB
+    `tool-calls.jsonl` never becomes one string. - Add an optional `window: {toolCalls?: {offset, limit}, captures?: {offset, limit}}`
+    parameter. Totals are computed over the full stream and only the window is materialized. - Add `createAuditCache()` for the host: memoize per `(runDir, sizes and mtimes of the input
+files)`, with an LRU of 8 entries. - The CLI path passes no window and no cache, so its output is byte-identical.
   - **Host `read.audit {run_id, tool_calls_cursor?, captures_cursor?}`:** windows of 500 rows,
     returning `AuditPage`. `kind: 'missing'` maps to not-found, and `corrupt` to an RPC error with
     a safe message.

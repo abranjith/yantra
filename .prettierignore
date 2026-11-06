@@ -8,6 +8,10 @@ pnpm-lock.yaml
 # compares byte-for-byte, so external reformatting breaks the build.
 packages/protocol/generated/
 
+# Generated Drshya theme — emit-tokens output is canonical; a drift test
+# compares it byte-for-byte with a fresh emit.
+packages/ui/src/styles/theme.generated.css
+
 # Intentionally malformed fixtures for extraction tests.
 packages/core/tests/extraction/__fixtures__/malformed.html
 
