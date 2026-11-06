@@ -20,6 +20,16 @@
       "task": "TASK-002"
     },
     {
+      "path": "docs/architecture.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/drshya-design-system.md",
+      "status": "U",
+      "role": "implement"
+    },
+    {
       "path": "e2e/drshya-gallery.spec.ts",
       "status": "A",
       "role": "implement",
@@ -339,7 +349,7 @@
     },
     {
       "path": "packages/ui/src/primitives/Dialog.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-014"
     },
@@ -375,7 +385,7 @@
     },
     {
       "path": "packages/ui/src/primitives/Menu.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-014"
     },
@@ -549,7 +559,7 @@
     },
     {
       "path": "packages/ui/tests/primitives/dialog-menu.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-014"
     },
@@ -714,6 +724,10 @@
     ".spec-lite/feature-summary.md",
     ".spec-lite/features/FEAT-061-drshya_foundations/changeset.json",
     ".spec-lite/features/FEAT-061-drshya_foundations/spec.md",
+    ".spec-lite/features/FEAT-063-unified_run_event_stream/spec.md",
+    ".spec-lite/features/FEAT-064-run_ownership_channel_reconciliation/spec.md",
+    ".spec-lite/features/FEAT-065-app_host_yantra_ui/spec.md",
+    ".spec-lite/features/FEAT-066-run_results_audit/spec.md",
     ".spec-lite/plan_ui.md"
   ],
   "baseline": {

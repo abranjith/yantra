@@ -37,6 +37,11 @@ A screenshot the user asks for as a deliverable is a different capability: `brow
 a clean PNG under the run directory and returns only its path and size, so its pixels never reach
 a model provider and it needs no stored grant.
 
+The workspace also contains `@yantra/ui` (Drshya), a browser-only design-system library for a
+future local web app. No shipped command renders it yet, and the web app that will consume it
+(`apps/web`) does not exist, so it sits outside the runtime context below; its only consumers today
+are its own gallery and the end-to-end harness.
+
 ```mermaid
 flowchart LR
   User[User or local script] --> CLI[yantra CLI]
@@ -56,7 +61,8 @@ flowchart LR
 The production code is a strict TypeScript, ESM-only pnpm workspace. Rather than showing every
 workspace import, the component view below shows the dependency layers: arrows point toward the
 lower-level dependency. TypeScript project references build protocol first, then core, agent, and
-CLI.
+CLI. The browser-only design system, `packages/ui`, is a separate branch of the graph: it may take
+protocol types and nothing else from the workspace, and no engine package or the CLI imports it.
 
 ```mermaid
 flowchart TD
@@ -64,14 +70,18 @@ flowchart TD
   Agent[packages/agent<br/>live agent orchestration]
   Core[packages/core<br/>browser, deterministic engines,<br/>policy, persistence]
   Protocol[packages/protocol<br/>Zod contracts and validation]
+  UI[packages/ui<br/>Drshya design system,<br/>browser-only]
 
   CLI --> Agent --> Core --> Protocol
+  UI -.->|import type only, permitted| Protocol
 ```
 
 The CLI is the composition root, so it also imports core and protocol for deterministic commands
 and shared validation; those direct imports are intentionally omitted from the diagram. They still
-point downward. `@yantra/test-helpers` provides fixtures, while workspace and end-to-end tests
-verify the production packages without participating in their runtime dependency graph.
+point downward. The dashed edge is a permitted direction rather than a current import: no
+`packages/ui` source imports protocol yet, and its manifest does not declare it.
+`@yantra/test-helpers` provides fixtures, while workspace and end-to-end tests verify the
+production packages without participating in their runtime dependency graph.
 
 ### Provider integration boundary
 
@@ -2323,6 +2333,91 @@ The principal execution surfaces are:
 | `run`, `resume`                 | Core `RunOrchestrator`                 | Validated, finite workflow-to-plan replay; optional output synthesis cannot steer execution.                         |
 | `daemon`                        | Core `SchedulerDaemon` plus CLI wiring | Polls local schedules and invokes the same workflow orchestrator with a fail-closed unattended confirmation gateway. |
 
+### `packages/ui` (Drshya)
+
+`@yantra/ui` is Drshya, the design system that the future web app's screens are to be built from.
+It is a React 19 library compiled with the DOM lib and no Node types, and it runs no process of its
+own. Its public surface is four package exports: the root module (tokens, color math, appearance
+contract, CSP helper, icon registry, primitives, and field building blocks), `./drshya.css` (the
+entry stylesheet an app imports once), `./gallery` (the gallery component and its entry list), and
+`./gallery.css` (the gallery's backdrop fixtures).
+
+**Import boundary.** Drshya is browser code. It may import `@yantra/protocol` with `import type`
+only and never imports `@yantra/core`, `@yantra/agent`, `@yantra/cli`, the provider SDK
+(`@earendil-works/*`), or a Node built-in. `eslint.config.js` enforces this for
+`packages/ui/src/**` and, in advance of the app, `apps/web/src/**`: `import/no-nodejs-modules`
+plus `@typescript-eslint/no-restricted-imports` with the shared `UI_IMPORT_RESTRICTIONS` patterns.
+`packages/ui/tests/boundary-rules.spec.ts` lints deliberately violating files under
+`src/_lint-fixtures/` (excluded from the build) to prove each rule fires, including on `apps/web`
+paths, and adds source scans that fail if production source under `packages/ui/src` imports Node,
+core, or agent, or imports `lucide-react` outside the registry. The same lint blocks forbid raw
+Tailwind palette utilities, color literals, arbitrary color values, inline styles other than custom
+properties, and `dangerouslySetInnerHTML`; the token data directory is exempt from the color rules
+only, and the site-name rule still applies throughout.
+
+**Token pipeline.** Every color, glass, type, and scale value lives once in TypeScript under
+`src/tokens/`, as OKLCH in three tiers. Primitive ramps are emitted as plain `--drshya-*` custom
+properties, the semantic tier is declared in a Tailwind v4 `@theme` block (so it becomes utilities
+such as `bg-surface` and `text-ink-2`), and component knobs stay plain properties. The generated
+`@theme` also clears Tailwind's default color, font, text, radius, shadow, and animation
+namespaces, so a palette utility such as `bg-red-500` produces no CSS at all and lint is a second
+wall rather than the only one.
+
+```mermaid
+flowchart LR
+  Tokens[src/tokens/*.ts<br/>palette, semantic, pairings,<br/>glass, scale] --> Emit[scripts/emit-tokens.ts]
+  Emit --> Gate{validateTokens}
+  Gate -->|any failure| Error[TokenContractError<br/>lists every failure]
+  Gate -->|pass| Generated[src/styles/theme.generated.css]
+  Generated --> Entry[src/styles/drshya.css]
+  Entry --> Consumers[Primitives, gallery,<br/>future apps/web]
+  Generated -.->|byte compare, CRLF normalized| Drift[generated-drift.spec.ts]
+```
+
+`emitThemeCss()` validates before it writes. `validateTokens()` collects every out-of-gamut
+primitive, dangling semantic-to-primitive reference, declared WCAG pairing below its minimum
+(4.5:1 for text, 3:1 for graphics), and glass text token whose computed scrim floor exceeds the
+0.85 cap, and `TokenContractError` reports them all at once. `emit-tokens.ts` regenerates the file;
+with `--check` it only validates and compares, exiting 1 on a contract failure or a missing or
+stale file. The package `build` script runs the `--check` form first, which makes the contrast gate
+a build failure, and the drift test keeps the committed CSS identical to a fresh emit. The generated
+file is listed in `.prettierignore`.
+
+**Appearance.** Light and dark follow `prefers-color-scheme`, or an explicit `data-theme` on any
+subtree (the selectors are `[data-theme="…"]`, not `:root[…]`, so a gallery wrapper can carry its
+own appearance). Glass surfaces use a computed scrim floor so glass text stays legible over a black
+or white backdrop; Solid mode (`data-surfaces="solid"` on an ancestor, or the OS
+`prefers-reduced-transparency` setting) makes them opaque. `Appearance` (`theme`, `surfaces`) maps
+to those attributes through `appearanceAttributes` and `applyAppearance`; Drshya holds no
+appearance store, and reading preferences is left to the consuming app.
+
+**Primitives and icons.** Sixteen primitive families sit on React Aria Components, styled with
+`tailwind-variants` and the `tailwindcss-react-aria-components` state variants: Button, Link, Tabs,
+Tooltip, Disclosure, Toast, Table, TextField, NumberField, Checkbox, Switch, Popover, Select,
+ComboBox, Dialog (including its `alertdialog` role), and Menu. `src/primitives/families.ts` maps each family to its
+exports. Design rules that make later misuse impossible live in the primitives: `Link` renders any
+URL other than `http(s)` or an app path as inert text, the toast queue is an instance created by
+the app (`createToastQueue()`) rather than a module singleton, and `Table` throws
+`TableContractError` when a row has no row header. Icons come only from the semantic registry in
+`src/icons/registry.tsx` (`<Icon name="outcome.fulfilled">`), the single file allowed to import
+`lucide-react`; it wraps Lucide icons and six custom path-data glyphs with Lucide's own
+`createLucideIcon`, so every icon shares one SVG contract.
+
+**Strict CSP.** The target app policy is `default-src 'self'` with no nonce. React Aria's `usePress`
+injects an inline `<style id="react-aria-pressable-style">`, which that policy blocks, so Drshya
+ships the same `touch-action` rule in `drshya.css` and `prepareStrictCsp(document)` places a marker
+element with that id before the first render, which makes React Aria skip the injection. Fonts
+(Archivo and Martian Mono) are self-hosted through `@fontsource-variable` packages, and the gallery
+build sets `assetsInlineLimit: 0` so fonts and textures ship as files rather than blocked `data:`
+URIs.
+
+**Gallery.** `@yantra/ui/gallery` exports the gallery component and `GALLERY_ENTRIES`; a completeness
+test requires every exported primitive to belong to exactly one family and every family to have
+exactly one entry. The same component is mounted by a standalone Vite page (`gallery/`), served by
+`pnpm --filter @yantra/ui gallery` in development and built to `packages/ui/dist/gallery-site/`
+(separate from `dist/gallery/`, where `tsc` emits the module). Its state comes from the query
+string: `?entry=<id>&theme=light|dark|system&surfaces=glass|solid`.
+
 ### Test-only workspaces
 
 `@yantra/test-helpers` supplies shared fixtures and no-LLM/provider tag plumbing. `e2e/` depends on
@@ -2401,6 +2496,41 @@ implementations restored. Runner tests pin rung ordering, cap admission, shared 
 cleanup, fast failure on an injected clock, and the discriminated wire keys. The old nullable
 success-code shape remains only a reader-compatibility input and is normalized without rewriting
 the source artifact.
+
+#### Drshya gallery harness
+
+`e2e/drshya-gallery.spec.ts` (`@no-llm`) is the real-browser gate for `@yantra/ui`. It imports the
+package's exported tokens and `GALLERY_ENTRIES`, and `e2e/drshya/gallery-server.ts` serves the
+built `packages/ui/dist/gallery-site/` from a loopback, ephemeral-port static server that sends
+`Content-Security-Policy: default-src 'self'`, `X-Content-Type-Options: nosniff`, and
+`Cache-Control: no-store`, allowlists file types, and confines every path with `realpath`.
+`e2e/drshya/browser.ts` launches headless system Chrome found by core's `detectChrome` at a fixed
+viewport with an sRGB color profile; like the other real-browser suites it is ungated, so a missing
+Chrome fails with a remediation instead of skipping.
+
+Every gallery entry is opened in light and dark, Glass and Solid. In each state the harness fails
+on any CSP violation, page error, or request to another origin, and on any axe-core violation; axe
+is evaluated through CDP after CSP evidence is collected, because an injected inline script would
+itself be blocked. Interactive entries also get a keyboard focus walk that requires a 2 px Ion ring
+on every stop. Further suites check glass compositing against the token model over black and white
+backdrops, Solid mode under emulated reduced transparency, self-hosted font loading, reduced
+motion, an opened ComboBox, the bounded DOM of a large virtualized table, and the system theme.
+Screenshots are compared with per-platform baselines under `e2e/drshya/baselines/<platform>/`
+(`e2e/drshya/visual.ts`): the comparison is required on Linux and runs elsewhere only where a
+baseline exists, `UPDATE_DRSHYA_BASELINES=1` writes baselines, and actual and diff images go to the
+gitignored `e2e/drshya/.out/`. No baselines are committed yet; the Linux set
+is bootstrapped from the first CI run's uploaded images.
+
+```mermaid
+flowchart LR
+  UIBuild["@yantra/ui build"] --> Site[dist/gallery-site]
+  Site --> Server[Loopback gallery server<br/>default-src 'self']
+  Server --> Chrome[Headless system Chrome]
+  Chrome --> States[Each entry x light/dark x Glass/Solid]
+  States --> Checks[CSP, origin, page error,<br/>axe, focus ring]
+  States --> Pixels[Visual baseline compare]
+  Pixels --> Out[e2e/drshya/.out actual and diff PNGs]
+```
 
 #### Task-fidelity harness
 
@@ -3107,6 +3237,20 @@ platform supports them, and ephemeral browser profiles are cleaned up on close o
 - **Layered dependency direction.** Core cannot import agent, and provider SDK types cannot cross
   the agent provider seam. The adapter confinement makes provider-specific change local and keeps
   deterministic execution independent of model availability.
+- **The design system is browser code with a lint-enforced boundary.** `@yantra/ui` may take
+  protocol types and nothing else from the workspace, and the same import and styling rules
+  already cover `apps/web/src`, so the boundary exists before the app does. The cost is that UI
+  code cannot reuse engine helpers; any shared value logic has to live in protocol.
+- **Design tokens are TypeScript data and the CSS is generated behind a gate.** Contrast, gamut,
+  and glass-floor checks compute from exactly the values the CSS ships, and Tailwind's default
+  palette and radius namespaces are cleared so disallowed utilities do not exist. This mirrors the
+  protocol's generated-artifact pattern and adds a regeneration step, a drift test, and a build that
+  fails on any accessibility regression in the token data.
+- **Semantic icons and strict-CSP-safe primitives.** Components request icons by meaning through
+  one registry, so the icon set changes in one file. Primitives sit on React Aria Components for
+  keyboard and assistive-technology behavior, and Drshya neutralizes React Aria's one inline-style
+  injection (`prepareStrictCsp`) so the app can run under `default-src 'self'` without a nonce; a
+  React Aria upgrade that renames that hook is caught by the gallery harness's CSP check.
 - **Pin the driver; prove behavior against a separate browser fixture.** Core uses exactly
   `puppeteer-core@25.10.0`, while a fixed Chrome for Testing executable is provisioned only for the
   cross-platform migration suites. This makes driver API drift and actual Chromium behavior visible
@@ -3436,7 +3580,11 @@ type-check, lint, and clean tasks. The `build` task depends on dependency builds
 `dist/**` plus TypeScript build metadata; tests depend on builds. Protocol build first emits
 generated contracts; core builds injected browser/locator assets and emits the managed-install
 helper in its normal TypeScript `dist/browser/` layout; the agent and CLI compile against project
-references.
+references. `@yantra/ui` has no workspace build dependency: its `build` runs
+`emit-tokens.ts --check` (the token contract and drift gate), then `tsc -b` to `dist/`, then the
+gallery's Vite build to `dist/gallery-site/`. The `e2e` workspace depends on `@yantra/ui`, so Turbo
+builds it before the gallery harness runs. Drshya adds no runtime process; it is a library and a
+static gallery page.
 
 At runtime there are three process shapes:
 
@@ -3467,7 +3615,12 @@ deterministic/browser release gate. The task-fidelity deterministic tier and its
 are `@no-llm` e2e specs and gate the same way; the agentic tier, `pnpm eval:tasks`, is not a
 `*.spec.ts`, spends real model tokens, and is never run by CI. Boundary tests and the static checker enforce Pi
 SDK confinement, the core-to-agent prohibition, sanitized model sends, a dependency-light JSON
-render path, and exclusion of local index stores from prompt-assembly import graphs.
+render path, and exclusion of local index stores from prompt-assembly import graphs; lint and
+`packages/ui/tests/boundary-rules.spec.ts` enforce the Drshya browser-code boundary. The Drshya
+gallery harness is an ordinary `@no-llm` e2e spec in the same matrix. Its visual baselines are
+required only on Linux, and when a Linux job fails, CI uploads `e2e/drshya/.out/` as a
+`drshya-gallery-<os>-<provider>` artifact so a baseline can be reviewed and committed from any
+machine.
 
 A required `browser-migration` job runs separately with `LLM_PROVIDER=none` on Ubuntu, macOS, and
 Windows. It builds both the core locator bundle and recorder overlay, provisions Chrome for Testing

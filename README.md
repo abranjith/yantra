@@ -109,6 +109,7 @@ Yantra honors robots policy, blocklists, rate limits, CAPTCHAs, and bot walls; i
 - [Puppeteer 25.10 API Migration](docs/features/puppeteer-api-migration.md) — preserved browser behavior, explicit resource ownership, and migration-test coverage.
 - [Widget Gauntlet and Interaction Message Catalog](docs/features/widget-gauntlet-harness.md) — generic widget regression fixtures, operation accounting, real-browser tool testing, and catalog contracts.
 - [Task-Fidelity Harness](docs/features/task-fidelity-harness.md) — whole-run outcome scoring against generic fixture sites, a CI-gating scripted tier, the never-gating `pnpm eval:tasks` agentic scorecard, and offline `pnpm eval:benchmark` comparisons.
+- [Drshya Design System](docs/features/drshya-design-system.md) — the `@yantra/ui` package for the coming app: OKLCH tokens with build-time contrast checks, the semantic icon registry, 16 accessible primitive families, and the real-Chrome gallery harness.
 - [Safety and Privacy](docs/features/safety-and-privacy.md) — masking, consent, secrets, policy, and audit boundaries.
 
 ### Generated reference

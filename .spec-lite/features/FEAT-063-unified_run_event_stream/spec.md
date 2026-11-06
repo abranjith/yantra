@@ -554,7 +554,7 @@ The live **events** listed above are the ones rendered from the union.
       `packages/core/src/run-events/`. It emits `receipt_written` with path
       `execution-receipt.json`. - If FEAT-072's receipt writer exists when this task runs, call the helper right after the
       receipt is atomically written, in every run kind (CLI, worker, daemon). - If it does not, ship the helper and its test, and add `STUB: receipt writer pending
-      FEAT-072` to this spec's State Tracking. The FEAT-072 implementer then calls the helper.
+FEAT-072` to this spec's State Tracking. The FEAT-072 implementer then calls the helper.
 - [ ] **Unit Tests**: `packages/core/tests/run-events/receipt-written.spec.ts`: - the helper emits a schema-valid event, and a non-hex or wrong-length digest is rejected
       before emission; - when wired, an integration test confirms the event follows the receipt file's existence
       and its digest matches the file bytes.
