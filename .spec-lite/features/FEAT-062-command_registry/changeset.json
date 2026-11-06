@@ -2145,7 +2145,7 @@
     },
     {
       "path": "apps/cli/tests/registry/completeness.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
@@ -2154,6 +2154,18 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "apps/cli/tests/registry/option-consumers.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/cli/tests/registry/option-consumers.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "apps/cli/tests/registry/precedence.spec.ts",

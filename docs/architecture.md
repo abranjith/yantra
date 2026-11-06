@@ -2450,6 +2450,21 @@ handler table (`templateHandlers`, …), adapted by `fromAction` from commander'
 `confirm` is `mutate` with the `confirm-inbox` adapter (D12), `open` uses `open-result-view`, and
 `daemon start|stop` use `daemon-control`, executing as `mutate`.
 
+Three integrity rules keep the data honest. `tests/registry/option-consumers.spec.ts` requires a
+consumer for every registered option, found with the TypeScript compiler API in the handler's
+module or a module it imports directly: an inline option must be read (`options.x`, `opts.x`,
+`options['x']` or destructured), and a group option needs its resolver called and its marker
+read (`resolveAgentInvocation` plus `.model`/`.auth` for `agent-model`, `.budgets` for
+`agent-budget`, `.screenshots` for `screenshots`, `resolveBrowserSelectionOverride` for
+`browser-selection`). Verified dead controls sit in its dated `KNOWN_DEAD_OPTIONS` list (today the
+`run`/`resume` budget flags and `--no-screenshots`, `run --template`, which is read only to refuse,
+and `confirm --debug`), mirrored in `.spec-lite/TODO.md`. The list may only shrink: an entry whose
+option gains a consumer fails the suite, as does a refused option whose refusal text disappears.
+In protocol, a lexical guard requires `danger: confirm` on every `rm`, `remove`, `unset`,
+`unschedule` and `stop` leaf and every `--force`, `--reset` and `--forget` option, and a spelling
+rule requires group flags to be used through their group reference; `init --provider` and
+`model add --provider` are the documented exceptions, being different ideas under the same word.
+
 To add or change a command: edit its entry first (the agreement test keeps data and tree honest),
 put the action body in an exported handler in the command's module, and bind it in
 `buildHandlers`. A factory that other code still composes (for example `makeListCommand` or

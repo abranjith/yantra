@@ -280,6 +280,94 @@ describe('@no-llm remaining families', () => {
   });
 });
 
+describe('@no-llm registry integrity: lexical danger guard', () => {
+  const DANGEROUS_LEAVES = new Set(['rm', 'remove', 'unset', 'unschedule', 'stop']);
+  const DANGEROUS_OPTIONS = new Set(['--force', '--reset', '--forget']);
+  /** `<entry id>` or `<entry id> <long>` → why it may skip confirmation. None today. */
+  const EXCEPTIONS: Readonly<Record<string, string>> = {};
+
+  it('requires confirmation for every removal, stop, --force, --reset and --forget', () => {
+    const missing: string[] = [];
+    for (const entry of COMMAND_REGISTRY.commands) {
+      if (entry.kind !== 'leaf') continue;
+      if (
+        DANGEROUS_LEAVES.has(entry.path.at(-1)!) &&
+        entry.danger.level !== 'confirm' &&
+        !(entry.id in EXCEPTIONS)
+      ) {
+        missing.push(entry.id);
+      }
+      for (const option of expandOptions(entry, COMMAND_REGISTRY.option_groups)) {
+        const key = `${entry.id} ${option.long}`;
+        if (
+          DANGEROUS_OPTIONS.has(option.long) &&
+          option.danger?.level !== 'confirm' &&
+          !(key in EXCEPTIONS)
+        ) {
+          missing.push(key);
+        }
+      }
+    }
+    expect(missing).toEqual([]);
+  });
+
+  it('keeps every exception justified in writing', () => {
+    for (const reason of Object.values(EXCEPTIONS)) expect(reason.trim().length).toBeGreaterThan(0);
+  });
+});
+
+describe('@no-llm registry integrity: group spelling', () => {
+  /**
+   * Inline options that share a group's long flag on purpose. Each is a
+   * different idea under the same word, not a re-spelling of the group option.
+   */
+  const SPELLING_EXCEPTIONS: Readonly<Record<string, string>> = {
+    'init --provider':
+      "selects the installation's default provider from a closed set, not the per-run agent provider",
+    'model.add --provider':
+      'names the provider of the model being registered; it is mandatory and spelled <provider>',
+  };
+
+  it('uses every group flag through its group reference, never inline', () => {
+    const groupLongs = new Set(
+      COMMAND_REGISTRY.option_groups.flatMap((group) => group.options.map((option) => option.long)),
+    );
+    const inline: string[] = [];
+    for (const entry of COMMAND_REGISTRY.commands) {
+      if (entry.kind !== 'leaf') continue;
+      for (const ref of entry.options) {
+        if ('group' in ref || !groupLongs.has(ref.long)) continue;
+        const key = `${entry.id} ${ref.long}`;
+        if (!(key in SPELLING_EXCEPTIONS)) inline.push(key);
+      }
+    }
+    expect(inline).toEqual([]);
+  });
+
+  it('lists only exceptions that exist, each with a reason', () => {
+    for (const [key, reason] of Object.entries(SPELLING_EXCEPTIONS)) {
+      const [id, long] = key.split(' ');
+      const entry = findLeaf(id!.split('.'))!;
+      expect(entry.options.some((ref) => !('group' in ref) && ref.long === long)).toBe(true);
+      expect(reason.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('spells each group option identically on every command that references it', () => {
+    const spellings = new Map<string, Set<string>>();
+    for (const entry of COMMAND_REGISTRY.commands) {
+      if (entry.kind !== 'leaf') continue;
+      for (const option of expandOptions(entry, COMMAND_REGISTRY.option_groups)) {
+        if (option.group === undefined) continue;
+        const seen = spellings.get(option.long) ?? new Set<string>();
+        seen.add(`${option.flags}|${option.description}`);
+        spellings.set(option.long, seen);
+      }
+    }
+    for (const seen of spellings.values()) expect(seen.size).toBe(1);
+  });
+});
+
 describe('@no-llm findCommand', () => {
   it('finds groups and leaves by canonical path', () => {
     expect(findCommand(['config'])?.kind).toBe('group');
