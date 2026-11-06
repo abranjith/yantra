@@ -106,6 +106,19 @@ semantic validators, and its build emits JSON Schema under `packages/protocol/ge
 the generated protocol reference. This lets CLI, agent, core, stored workflows, and artifacts
 share one validation vocabulary.
 
+The command registry (FEAT-062) lives in `src/commands/` and is also published as the subpath
+`@yantra/protocol/commands`. Its schemas (`schema.ts`) describe every command as data: path,
+arguments, options with input kinds, commander defaults, precedence chains and applicability, an
+option-dependent execution class, effect, danger, relations, exit codes and the `--json` result.
+`validateCommandRegistry()` applies the Zod shape and then the cross-entry rules the shape cannot
+express, throwing `CommandRegistryError` with the entry id and the named rule. `flags.ts` holds
+commander's flag grammar, so each option's `long`, `short`, `value`, `negatable` and `attribute`
+are checked against its help-visible `flags` string. `executionClassFor()` evaluates the ordered
+execution rules (first match wins) and falls back to the default. The directory imports nothing but
+`zod` and `src/utils/`, and a boundary test walks the built module graph, so browser bundles can
+load the registry without filesystem code. `command-registry.json` is emitted with the other JSON
+Schemas.
+
 ### `packages/core`
 
 `@yantra/core` contains provider-independent domain and infrastructure services:

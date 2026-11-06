@@ -15,6 +15,16 @@ Example:
 "<value>"
 ```
 
+## AdapterId
+
+Identifier of an app-side adapter for an exceptional command.
+
+Example:
+
+```json
+"init-onboarding"
+```
+
 ## AgentManifestSection
 
 Stable agent metadata embedded in manifest.json for one run-local session.
@@ -108,6 +118,32 @@ Example:
   "input_tokens": "<input_tokens>",
   "output_tokens": "<output_tokens>",
   "cost_usd": "<cost_usd>"
+}
+```
+
+## ArgumentSpec
+
+One positional argument.
+
+| Field       | Description                                                      |
+| ----------- | ---------------------------------------------------------------- |
+| name        | Argument name as commander shows it, e.g. "run-id".              |
+| description | Help-visible description (may be empty).                         |
+| required    | "<x>" when true, "[x]" when false.                               |
+| variadic    | Whether it collects all remaining operands.                      |
+| default     | Commander parse default for an optional argument, shown in help. |
+| input       | How a generated form collects this value.                        |
+
+Example:
+
+```json
+{
+  "name": "<name>",
+  "description": "<description>",
+  "required": "<required>",
+  "variadic": "<variadic>",
+  "default": "<default>",
+  "input": "<input>"
 }
 ```
 
@@ -729,6 +765,48 @@ Example:
 }
 ```
 
+## CommandEntry
+
+A group or an executable leaf.
+
+Example:
+
+```json
+"<value>"
+```
+
+## CommandRegistry
+
+The complete Yantra command surface.
+
+| Field            | Description                                                                 |
+| ---------------- | --------------------------------------------------------------------------- |
+| registry_version | Bumped on any breaking shape change.                                        |
+| program          | Root command metadata. The version string stays runtime-derived in the CLI. |
+| option_groups    | Named option groups.                                                        |
+| commands         | Entries in root-help order: each group is followed by its subcommands.      |
+
+Example:
+
+```json
+{
+  "registry_version": "<registry_version>",
+  "program": "<program>",
+  "option_groups": "<option_groups>",
+  "commands": "<commands>"
+}
+```
+
+## Condition
+
+A predicate over one parsed invocation.
+
+Example:
+
+```json
+"<value>"
+```
+
 ## ConfirmationDecidedBy
 
 Who or what resolved the confirmation — no agent variant exists.
@@ -821,6 +899,16 @@ Example:
   "id": "<id>",
   "declared_in": "<declared_in>"
 }
+```
+
+## DangerSpec
+
+Whether a generated surface must ask for explicit confirmation first.
+
+Example:
+
+```json
+"<value>"
 ```
 
 ## DeliverableCaptureCapability
@@ -1061,6 +1149,84 @@ Example:
 }
 ```
 
+## ExecutionClass
+
+How a surface executes the command: run (detached worker, slot counted), read (host, in-process), mutate (short-lived worker under locks), exclusive (blocks run starts), in-process-secure (value never in argv), adapter (an app-side adapter replaces the generated surface), exemption (a reviewed decision keeps it terminal-only).
+
+Example:
+
+```json
+"run"
+```
+
+## ExecutionRule
+
+When `when` holds, the command executes as `class`. The first matching rule wins.
+
+| Field | Description                                                                                                                                                                                                                                                                                                                              |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| when  | A predicate over one parsed invocation.                                                                                                                                                                                                                                                                                                  |
+| class | How a surface executes the command: run (detached worker, slot counted), read (host, in-process), mutate (short-lived worker under locks), exclusive (blocks run starts), in-process-secure (value never in argv), adapter (an app-side adapter replaces the generated surface), exemption (a reviewed decision keeps it terminal-only). |
+
+Example:
+
+```json
+{
+  "when": "<when>",
+  "class": "<class>"
+}
+```
+
+## ExecutionSpec
+
+The execution class, possibly option-dependent.
+
+| Field     | Description                                     |
+| --------- | ----------------------------------------------- |
+| default   | Class when no rule matches.                     |
+| rules     | Ordered rules; the first match wins.            |
+| adapter   | Required when any reachable class is adapter.   |
+| exemption | Required when any reachable class is exemption. |
+
+Example:
+
+```json
+{
+  "default": "<default>",
+  "rules": "<rules>",
+  "adapter": "<adapter>",
+  "exemption": "<exemption>"
+}
+```
+
+## ExitCode
+
+No description provided.
+
+Example:
+
+```json
+"<value>"
+```
+
+## ExitCodeSpec
+
+One exit code the command can return.
+
+| Field   | Description                                                          |
+| ------- | -------------------------------------------------------------------- |
+| code    | 0 success, 1 validation, 2 execution, 3 environment, 4 user handoff. |
+| meaning | What this code means for this command.                               |
+
+Example:
+
+```json
+{
+  "code": "<code>",
+  "meaning": "<meaning>"
+}
+```
+
 ## ExpectedCost
 
 Best-effort cost estimate for the action being confirmed.
@@ -1275,6 +1441,32 @@ Example:
 }
 ```
 
+## GroupEntry
+
+A command with subcommands and no action.
+
+| Field        | Description                                                                                                                                              |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| kind         |                                                                                                                                                          |
+| id           | Dotted path, e.g. "config.data-dir". Equals path.join(".").                                                                                              |
+| path         | Command tokens from the root.                                                                                                                            |
+| description  | Help-visible description.                                                                                                                                |
+| help_after   | Text added with addHelpText('after', …).                                                                                                                 |
+| registration | subcommand: created with parent.command() and inherits parent settings such as showHelpAfterError; added: new Command() plus addCommand, which does not. |
+
+Example:
+
+```json
+{
+  "kind": "<kind>",
+  "id": "<id>",
+  "path": "<path>",
+  "description": "<description>",
+  "help_after": "<help_after>",
+  "registration": "<registration>"
+}
+```
+
 ## HandoffReason
 
 Reason human intervention is required.
@@ -1283,6 +1475,16 @@ Example:
 
 ```json
 "captcha"
+```
+
+## InputKind
+
+How a generated form collects this value.
+
+Example:
+
+```json
+"<value>"
 ```
 
 ## InputTypeHintSchema
@@ -1315,6 +1517,36 @@ Example:
   "kind": "<kind>",
   "disabled": "<disabled>"
 }
+```
+
+## JsonResultSpec
+
+What the command emits under --json.
+
+| Field  | Description                                                                  |
+| ------ | ---------------------------------------------------------------------------- |
+| flag   | "--json" when the command registers it.                                      |
+| shape  | One JSON document, newline-delimited events, an envelope, or no JSON output. |
+| schema | Exported protocol schema name, or null when not yet described.               |
+
+Example:
+
+```json
+{
+  "flag": "<flag>",
+  "shape": "<shape>",
+  "schema": "<schema>"
+}
+```
+
+## JsonValue
+
+Any JSON value.
+
+Example:
+
+```json
+"<value>"
 ```
 
 ## KeyFinding
@@ -1368,6 +1600,50 @@ Example:
   "input": "<input>",
   "prompt": "<prompt>",
   "output_as": "<output_as>"
+}
+```
+
+## LeafEntry
+
+An executable command.
+
+| Field        | Description                                                                                                                                              |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| kind         |                                                                                                                                                          |
+| id           | Dotted path, e.g. "config.data-dir". Equals path.join(".").                                                                                              |
+| path         | Command tokens from the root.                                                                                                                            |
+| description  | Help-visible description.                                                                                                                                |
+| help_after   | Text added with addHelpText('after', …).                                                                                                                 |
+| registration | subcommand: created with parent.command() and inherits parent settings such as showHelpAfterError; added: new Command() plus addCommand, which does not. |
+| aliases      | Alternative names, e.g. "discover".                                                                                                                      |
+| arguments    | Ordered positionals.                                                                                                                                     |
+| options      | Ordered options and group references.                                                                                                                    |
+| execution    | The execution class, possibly option-dependent.                                                                                                          |
+| effect       | Maximum effect: none (read only), local (writes Yantra-owned state), external (contacts websites, providers or download servers).                        |
+| danger       | Whether a generated surface must ask for explicit confirmation first.                                                                                    |
+| relations    |                                                                                                                                                          |
+| exit_codes   | Exit codes the command can return.                                                                                                                       |
+| json         | What the command emits under --json.                                                                                                                     |
+
+Example:
+
+```json
+{
+  "kind": "<kind>",
+  "id": "<id>",
+  "path": "<path>",
+  "description": "<description>",
+  "help_after": "<help_after>",
+  "registration": "<registration>",
+  "aliases": "<aliases>",
+  "arguments": "<arguments>",
+  "options": "<options>",
+  "execution": "<execution>",
+  "effect": "<effect>",
+  "danger": "<danger>",
+  "relations": "<relations>",
+  "exit_codes": "<exit_codes>",
+  "json": "<json>"
 }
 ```
 
@@ -1505,6 +1781,88 @@ Example:
 }
 ```
 
+## OptionGroup
+
+A named, reusable option set.
+
+| Field   | Description                                   |
+| ------- | --------------------------------------------- |
+| id      | Identifier of a named, reusable option group. |
+| options | Options in registration order.                |
+
+Example:
+
+```json
+{
+  "id": "<id>",
+  "options": "<options>"
+}
+```
+
+## OptionGroupId
+
+Identifier of a named, reusable option group.
+
+Example:
+
+```json
+"agent-model"
+```
+
+## OptionRef
+
+A reference to an option group, or an inline option.
+
+Example:
+
+```json
+"<value>"
+```
+
+## OptionSpec
+
+One command-line option.
+
+| Field         | Description                                                                                                                      |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| flags         | The exact commander flags string, e.g. "-p, --params <key=value...>".                                                            |
+| long          | Long flag, e.g. "--params".                                                                                                      |
+| short         | Short flag, e.g. "-p".                                                                                                           |
+| attribute     | Commander attribute name ("params"; "llm" for "--no-llm").                                                                       |
+| value         | Whether the option takes no value, a required value or an optional value.                                                        |
+| variadic      | Whether one occurrence takes several values.                                                                                     |
+| negatable     | Whether this is a "--no-x" negation.                                                                                             |
+| repeatable    | Whether repeated occurrences accumulate (the CLI attaches its collect parser).                                                   |
+| description   | Help-visible description.                                                                                                        |
+| default       | Commander parse default that help shows as "(default: …)". Absent means none. The effective default is the last precedence step. |
+| mandatory     | Registered with requiredOption.                                                                                                  |
+| input         | How a generated form collects this value.                                                                                        |
+| precedence    | How the effective value resolves, in order.                                                                                      |
+| applicability | When the option has an effect; all conditions must hold.                                                                         |
+| danger        | Option-level danger, e.g. --force.                                                                                               |
+
+Example:
+
+```json
+{
+  "flags": "<flags>",
+  "long": "<long>",
+  "short": "<short>",
+  "attribute": "<attribute>",
+  "value": "<value>",
+  "variadic": "<variadic>",
+  "negatable": "<negatable>",
+  "repeatable": "<repeatable>",
+  "description": "<description>",
+  "default": "<default>",
+  "mandatory": "<mandatory>",
+  "input": "<input>",
+  "precedence": "<precedence>",
+  "applicability": "<applicability>",
+  "danger": "<danger>"
+}
+```
+
 ## OutputBinding
 
 Named output mapping from a capture reference.
@@ -1585,6 +1943,16 @@ Example:
   "steps": "<steps>",
   "outputs": "<outputs>"
 }
+```
+
+## PrecedenceStep
+
+One step of the effective-value resolution chain.
+
+Example:
+
+```json
+"<value>"
 ```
 
 ## RankedCandidateSchema
@@ -1688,6 +2056,28 @@ Example:
 {
   "pattern": "<pattern>",
   "flags": "<flags>"
+}
+```
+
+## Relation
+
+A requires/conflicts relation the CLI already enforces.
+
+| Field  | Description                                             |
+| ------ | ------------------------------------------------------- |
+| kind   |                                                         |
+| option | Long flag the relation constrains.                      |
+| with   | Long flags it requires or conflicts with.               |
+| note   | The precise enforced rule, when narrower than the kind. |
+
+Example:
+
+```json
+{
+  "kind": "<kind>",
+  "option": "<option>",
+  "with": "<with>",
+  "note": "<note>"
 }
 ```
 

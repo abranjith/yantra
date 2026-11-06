@@ -247,4 +247,6 @@ export type { WorkflowFile as WorkflowFileType } from './schemas/workflow.js';
 // Compatibility export used by FEAT-001 scaffold smoke tests.
 export const PROTOCOL_VERSION = '0.0.1' as const;
 export { ActionId, BriefAction } from './schemas/action-evidence.js';
+// FEAT-062: the command registry, also published as `@yantra/protocol/commands`.
+export * from './commands/index.js';
 export type ProtocolVersion = typeof PROTOCOL_VERSION;

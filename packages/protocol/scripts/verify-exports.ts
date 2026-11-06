@@ -14,6 +14,13 @@ const ALLOWLIST: Record<string, string> = {
   TOOL_CATALOG: 'FEAT-011',
   // FEAT-001 compatibility: type-level alias for scaffold smoke tests.
   ProtocolVersion: 'FEAT-001',
+  // FEAT-062 command registry: the CLI generates its tree from the registry but
+  // does not parse or format invocations itself. The host's read RPCs and launch
+  // path (FEAT-065) and the palette and Copy-as-command (FEAT-070) consume these.
+  parseInvocation: 'FEAT-065',
+  createInvocationId: 'FEAT-065',
+  formatInvocation: 'FEAT-070',
+  defaultShellFor: 'FEAT-070',
 };
 
 const listFilesRecursively = async (directory: string): Promise<string[]> => {
