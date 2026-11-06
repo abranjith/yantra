@@ -14,6 +14,48 @@
       "task": "TASK-001"
     },
     {
+      "path": "apps/cli/src/commands/audit.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "apps/cli/src/commands/list.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "apps/cli/src/commands/profile.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "apps/cli/src/commands/report.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "apps/cli/src/commands/schedule.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "apps/cli/src/commands/show.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "apps/cli/src/commands/usage.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "apps/cli/src/index.ts",
       "status": "M",
       "role": "implement",
@@ -24,6 +66,30 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "apps/cli/src/registry/build-command-tree.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "apps/cli/src/registry/handler.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "apps/cli/src/registry/handlers.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "apps/cli/src/registry/unmigrated.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
     },
     {
       "path": "apps/cli/tests/fixtures/cli-surface/errors/ask.excess-arguments.json",
@@ -1923,7 +1989,7 @@
     },
     {
       "path": "apps/cli/tests/registry/agreement.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -1934,6 +2000,12 @@
       "task": "TASK-001"
     },
     {
+      "path": "apps/cli/tests/registry/generator.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "apps/cli/tests/registry/surface.ts",
       "status": "A",
       "role": "implement",
@@ -1941,9 +2013,15 @@
     },
     {
       "path": "apps/cli/tests/registry/tree-agreement.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "apps/cli/tests/registry/unmigrated.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
     },
     {
       "path": "apps/cli/tests/registry/walk-tree.ts",
@@ -1989,49 +2067,49 @@
     },
     {
       "path": "packages/protocol/src/commands/entries/browser.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/protocol/src/commands/entries/builders.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/protocol/src/commands/entries/daemon.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/protocol/src/commands/entries/doctor.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/protocol/src/commands/entries/runs.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/protocol/src/commands/entries/settings.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/protocol/src/commands/entries/template.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/protocol/src/commands/entries/workflow.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -2061,7 +2139,7 @@
     },
     {
       "path": "packages/protocol/src/commands/groups.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -2073,7 +2151,7 @@
     },
     {
       "path": "packages/protocol/src/commands/registry.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -2121,7 +2199,7 @@
     },
     {
       "path": "packages/protocol/tests/commands/registry.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },

@@ -13,11 +13,14 @@
 
 import { FileWorkflowStore, workflowsRoot, type HistoryEntry, type Logger } from '@yantra/core';
 import { LocalRunStore, type RunSummary } from '@yantra/core/workflow/replay';
-import { Command } from 'commander';
+import { COMMAND_REGISTRY } from '@yantra/protocol';
+import type { Command } from 'commander';
 
 import { CLIConnectorIO, buildRenderOpts } from '../connector-io.js';
 import { readGlobalFlags } from '../global-flags.js';
 import { openHistory } from '../history.js';
+import { createRegisteredCommand } from '../registry/build-command-tree.js';
+import { handler, type HandlerArgs } from '../registry/handler.js';
 import { JSONRenderer } from '../render/json.js';
 import { TerminalRenderer } from '../render/terminal.js';
 import type { ListItem } from '../render/types.js';
@@ -31,66 +34,59 @@ interface ListOptions {
   readonly debug?: boolean;
 }
 
+/** The `list` command generated from its registry entry, for direct composition. */
 export function makeListCommand(): Command {
-  const cmd = new Command('list');
+  return createRegisteredCommand('list', { list: handler(listHandler) }, COMMAND_REGISTRY);
+}
 
-  cmd
-    .description('List saved workflows or recent runs')
-    .argument('[target]', 'workflows | runs', 'runs')
-    .option('--limit <n>', 'maximum number of entries to show', '20')
-    .option('--workflow <name>', 'filter runs by workflow name')
-    .option('--status <s>', 'filter runs by status (running|completed|failed|aborted|paused)')
-    .option('--json', 'emit JSON instead of a terminal table', false)
-    .option('--debug', 'verbose logging on stderr', false)
-    .action(async (target: string, options: ListOptions) => {
-      const flags = readGlobalFlags({
-        argv: process.argv,
-        env: process.env,
-        isTty: process.stdout.isTTY ?? false,
-      });
-      const renderer =
-        options.json === true || flags.json ? new JSONRenderer() : new TerminalRenderer();
-      const connector = new CLIConnectorIO(renderer);
-      const logger: Logger = makeStderrLogger(options.debug === true);
-      const renderOpts = buildRenderOpts({
-        ...flags,
-        json: options.json === true || flags.json,
-      });
+/** `yantra list [target]`: bound to the `list` registry entry. */
+export async function listHandler(args: HandlerArgs, options: ListOptions): Promise<void> {
+  const [target] = args as readonly [string];
+  const flags = readGlobalFlags({
+    argv: process.argv,
+    env: process.env,
+    isTty: process.stdout.isTTY ?? false,
+  });
+  const renderer =
+    options.json === true || flags.json ? new JSONRenderer() : new TerminalRenderer();
+  const connector = new CLIConnectorIO(renderer);
+  const logger: Logger = makeStderrLogger(options.debug === true);
+  const renderOpts = buildRenderOpts({
+    ...flags,
+    json: options.json === true || flags.json,
+  });
 
-      try {
-        if (target !== 'workflows' && target !== 'runs') {
-          process.stderr.write(`Unknown target "${target}" (expected: workflows | runs)\n`);
-          process.exit(1);
-        }
+  try {
+    if (target !== 'workflows' && target !== 'runs') {
+      process.stderr.write(`Unknown target "${target}" (expected: workflows | runs)\n`);
+      process.exit(1);
+    }
 
-        const limit = parseLimit(options.limit);
+    const limit = parseLimit(options.limit);
 
-        if (target === 'workflows') {
-          const store = new FileWorkflowStore(workflowsRoot());
-          const workflows = await store.list();
-          const items: ListItem[] = workflows.slice(0, limit).map((w) => ({
-            kind: 'workflow',
-            name: w.name,
-            stepCount: w.step_count,
-            securityClass: w.security_class,
-            modifiedAt: w.last_modified.toISOString(),
-          }));
-          connector.renderResult({ kind: 'list', items }, renderOpts);
-          process.exit(0);
-        }
+    if (target === 'workflows') {
+      const store = new FileWorkflowStore(workflowsRoot());
+      const workflows = await store.list();
+      const items: ListItem[] = workflows.slice(0, limit).map((w) => ({
+        kind: 'workflow',
+        name: w.name,
+        stepCount: w.step_count,
+        securityClass: w.security_class,
+        modifiedAt: w.last_modified.toISOString(),
+      }));
+      connector.renderResult({ kind: 'list', items }, renderOpts);
+      process.exit(0);
+    }
 
-        const items = await listRuns(limit, options, logger);
-        connector.renderResult({ kind: 'list', items }, renderOpts);
-        process.exit(0);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        logger.error({ err: message }, 'list failed');
-        process.stderr.write(`Error: ${message}\n`);
-        process.exit(1);
-      }
-    });
-
-  return cmd;
+    const items = await listRuns(limit, options, logger);
+    connector.renderResult({ kind: 'list', items }, renderOpts);
+    process.exit(0);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error({ err: message }, 'list failed');
+    process.stderr.write(`Error: ${message}\n`);
+    process.exit(1);
+  }
 }
 
 /**

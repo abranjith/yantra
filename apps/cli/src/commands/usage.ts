@@ -13,9 +13,9 @@
  */
 
 import type { TaskType, UsageRollupFilter, UsageRollupRow } from '@yantra/core';
-import { Command } from 'commander';
 
 import { openHistory } from '../history.js';
+import type { HandlerArgs } from '../registry/handler.js';
 import { CLI_JSON_SCHEMA_VERSION } from '../render/json.js';
 import { makeStderrLogger } from '../runtime.js';
 
@@ -28,59 +28,46 @@ interface UsageOptions {
 
 const TASK_TYPES = new Set<TaskType>(['ask', 'research', 'run', 'do']);
 
-export function makeUsageCommand(): Command {
-  const cmd = new Command('usage');
+/** `yantra usage`: bound to the `usage` registry entry. */
+export async function usageHandler(_args: HandlerArgs, options: UsageOptions): Promise<void> {
+  const logger = makeStderrLogger(options.debug === true);
 
-  cmd
-    .description('Summarize task volume and cost from the history index')
-    .option('--type <type>', 'filter by task type (ask|research|run|do)')
-    .option('--since <when>', 'only tasks since a date (YYYY-MM-DD) or age (e.g. 7d, 24h)')
-    .option('--json', 'emit JSON instead of a table', false)
-    .option('--debug', 'verbose logging on stderr', false)
-    .action(async (options: UsageOptions) => {
-      const logger = makeStderrLogger(options.debug === true);
+  const filter: UsageRollupFilter = {};
+  if (options.type !== undefined) {
+    if (!TASK_TYPES.has(options.type as TaskType)) {
+      process.stderr.write(`Unknown task type "${options.type}" (expected: ask|research|run|do)\n`);
+      process.exit(1);
+    }
+    (filter as { taskType?: TaskType }).taskType = options.type as TaskType;
+  }
+  if (options.since !== undefined) {
+    const since = parseSince(options.since);
+    if (since === null) {
+      process.stderr.write(
+        `Invalid --since value "${options.since}" (use YYYY-MM-DD, 7d, or 24h)\n`,
+      );
+      process.exit(1);
+    }
+    (filter as { since?: string }).since = since;
+  }
 
-      const filter: UsageRollupFilter = {};
-      if (options.type !== undefined) {
-        if (!TASK_TYPES.has(options.type as TaskType)) {
-          process.stderr.write(
-            `Unknown task type "${options.type}" (expected: ask|research|run|do)\n`,
-          );
-          process.exit(1);
-        }
-        (filter as { taskType?: TaskType }).taskType = options.type as TaskType;
-      }
-      if (options.since !== undefined) {
-        const since = parseSince(options.since);
-        if (since === null) {
-          process.stderr.write(
-            `Invalid --since value "${options.since}" (use YYYY-MM-DD, 7d, or 24h)\n`,
-          );
-          process.exit(1);
-        }
-        (filter as { since?: string }).since = since;
-      }
+  const history = await openHistory(logger);
+  if (history === null) {
+    emitEmpty(options, 'history index unavailable — run `yantra doctor` to rebuild it');
+    process.exit(0);
+  }
 
-      const history = await openHistory(logger);
-      if (history === null) {
-        emitEmpty(options, 'history index unavailable — run `yantra doctor` to rebuild it');
-        process.exit(0);
-      }
-
-      try {
-        const result = await history.store.usageRollup(filter);
-        if (!result.isOk) {
-          process.stderr.write(`Error: ${result.error.message}\n`);
-          process.exit(1);
-        }
-        render(result.value, options);
-        process.exit(0);
-      } finally {
-        history.close();
-      }
-    });
-
-  return cmd;
+  try {
+    const result = await history.store.usageRollup(filter);
+    if (!result.isOk) {
+      process.stderr.write(`Error: ${result.error.message}\n`);
+      process.exit(1);
+    }
+    render(result.value, options);
+    process.exit(0);
+  } finally {
+    history.close();
+  }
 }
 
 /** Resolves a `--since` value to an ISO-8601 cutoff, or null when invalid. */

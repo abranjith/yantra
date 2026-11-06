@@ -22,6 +22,7 @@ import { workflowsRoot, FileWorkflowStore, nextFireIso, type NotifyTarget } from
 import type { ParamArg } from '@yantra/core/workflow/replay';
 import { Command } from 'commander';
 
+import type { HandlerArgs } from '../registry/handler.js';
 import { makeStderrLogger } from '../runtime.js';
 import { openScheduleStore } from '../schedule-store.js';
 
@@ -174,67 +175,58 @@ export function makeScheduleCommand(): Command {
   return cmd;
 }
 
-/** `yantra schedules [--json]` — list registered schedules with next fires. */
-export function makeSchedulesCommand(): Command {
-  const cmd = new Command('schedules');
+/** `yantra schedules [--json]` — list registered schedules with next fires (registry entry `schedules`). */
+export async function schedulesHandler(
+  _args: HandlerArgs,
+  options: SchedulesOptions,
+): Promise<void> {
+  const logger = makeStderrLogger(options.debug === true);
 
-  cmd
-    .description('List registered schedules')
-    .option('--json', 'Emit JSON array to stdout', false)
-    .option('--debug', 'Verbose logging to stderr', false)
-    .action(async (options: SchedulesOptions) => {
-      const logger = makeStderrLogger(options.debug === true);
+  const handle = await openScheduleStore(logger);
+  if (handle === null) {
+    if (options.json === true) {
+      process.stdout.write('[]\n');
+      process.exit(0);
+    }
+    process.stderr.write('note: the local index is unavailable — no schedules to show.\n');
+    process.exit(0);
+    return;
+  }
 
-      const handle = await openScheduleStore(logger);
-      if (handle === null) {
-        if (options.json === true) {
-          process.stdout.write('[]\n');
-          process.exit(0);
-        }
-        process.stderr.write('note: the local index is unavailable — no schedules to show.\n');
-        process.exit(0);
-        return;
-      }
+  try {
+    const listed = await handle.store.list();
+    if (!listed.isOk) {
+      process.stderr.write(`Error: ${listed.error.message}\n`);
+      process.exit(2);
+      return;
+    }
 
-      try {
-        const listed = await handle.store.list();
-        if (!listed.isOk) {
-          process.stderr.write(`Error: ${listed.error.message}\n`);
-          process.exit(2);
-          return;
-        }
+    // Recompute the authoritative next fire for display (the stored
+    // next_fire_at is an advisory cache).
+    const now = new Date();
+    const rows = listed.value.map((s) => ({
+      ...s,
+      nextFireAt: s.enabled ? nextFireIso(s.cronExpr, now) : null,
+      pendingConfirmation: s.lastStatus === 'pending-confirmation',
+    }));
 
-        // Recompute the authoritative next fire for display (the stored
-        // next_fire_at is an advisory cache).
-        const now = new Date();
-        const rows = listed.value.map((s) => ({
-          ...s,
-          nextFireAt: s.enabled ? nextFireIso(s.cronExpr, now) : null,
-          pendingConfirmation: s.lastStatus === 'pending-confirmation',
-        }));
+    if (options.json === true) {
+      process.stdout.write(`${JSON.stringify(rows, null, 2)}\n`);
+      process.exit(0);
+      return;
+    }
 
-        if (options.json === true) {
-          process.stdout.write(`${JSON.stringify(rows, null, 2)}\n`);
-          process.exit(0);
-          return;
-        }
+    if (rows.length === 0) {
+      process.stdout.write('No schedules registered. Use `yantra schedule <workflow> --cron`.\n');
+      process.exit(0);
+      return;
+    }
 
-        if (rows.length === 0) {
-          process.stdout.write(
-            'No schedules registered. Use `yantra schedule <workflow> --cron`.\n',
-          );
-          process.exit(0);
-          return;
-        }
-
-        process.stdout.write(renderSchedulesTable(rows));
-        process.exit(0);
-      } finally {
-        handle.close();
-      }
-    });
-
-  return cmd;
+    process.stdout.write(renderSchedulesTable(rows));
+    process.exit(0);
+  } finally {
+    handle.close();
+  }
 }
 
 /** `yantra unschedule <id>` — remove a schedule by id. */

@@ -2389,6 +2389,26 @@ present, which makes it `run`. `tests/registry/tree-agreement.spec.ts` keeps the
 comparing every entry with the live command at its path: kind, description, aliases, arguments,
 option flags in order, descriptions, commander defaults, parser choices, mandatory and repeatable.
 
+`buildProgram` generates the tree with `buildCommandTree` (`src/registry/build-command-tree.ts`).
+For each top-level family, a family on `UNMIGRATED_COMMANDS` (`src/registry/unmigrated.ts`, a dated
+allowlist owned by FEAT-070) is registered by its legacy factory; every other family is generated
+from its registry entry. Generation reproduces the hand-written registration exactly: `new Option`
+with the flags and description, `.default()` only when a commander default is declared,
+`.choices()` only for parser-enforced enums, the shared `collect` parser for repeatable options,
+`makeOptionMandatory()`, aliases, `addHelpText('after', …)`, and the registration style. Leaves are
+bound by id to the handler table from `buildHandlers()` (`src/registry/handlers.ts`), whose
+`satisfies Record<LeafCommandId, …>` makes an unbound leaf a typecheck error; a generated leaf
+without a function binding throws `CommandRegistryError` (`missing-handler`) at startup. A handler
+is commander-shaped, `(args, options, command)`, so FEAT-072 can swap the binding for terminal and
+worker adapters without touching the generator. `buildProgram(options, handlers)` accepts a
+substitute table, which the parse-parity tests use for recording stubs.
+
+To migrate a family: add its entries (TASK order: data first, kept honest by the agreement test),
+move each action body unchanged into an exported handler in the same module, bind it in
+`buildHandlers`, delete the inline commander calls, and remove the family from
+`UNMIGRATED_COMMANDS`. A factory that other code still composes (for example `makeListCommand`)
+stays as a one-line wrapper around `createRegisteredCommand`, so it is generated as well.
+
 ### `packages/ui` (Drshya)
 
 `@yantra/ui` is Drshya, the design system that the future web app's screens are to be built from.
