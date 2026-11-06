@@ -19,6 +19,8 @@ export const PRIMITIVE_FAMILIES = {
   Popover: ['Popover', 'PopoverTrigger', 'PopoverDialog'],
   Select: ['Select'],
   ComboBox: ['ComboBox'],
+  Dialog: ['Dialog', 'DialogTrigger'],
+  Menu: ['Menu', 'MenuTrigger', 'MenuItem', 'MenuSection', 'MenuSeparator', 'SubmenuTrigger'],
 } as const satisfies Readonly<Record<string, readonly string[]>>;
 
 export type PrimitiveFamily = keyof typeof PRIMITIVE_FAMILIES;

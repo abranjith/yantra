@@ -139,6 +139,12 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
   - Overlay-scoped axe runs disable only `region`. React Aria's overlay root portals beside `<main>`, and landmark structure belongs to the app shell (FEAT-065).
   - The focus walk skips programmatic focus targets (`tabIndex` −1), such as an opened dialog container. They are not Tab stops.
   - Popover is a family of `Popover` (the glass surface Select, ComboBox and Menu share), `PopoverTrigger` and `PopoverDialog`. `Option` and the style recipes are exported from the package root.
+- **Dialog and Menu decisions (TASK-014).**
+  - A destructive menu item keeps `ink` text, not `signal-failed-ink` (the same glass rule as Toast). Its required icon is drawn in the `signal-failed` graphic color, and the item carries `data-tone="destructive"`.
+  - `Menu` defaults `autoFocus` to `'first'`. Otherwise React Aria focuses the menu container, which shows no focus indicator; the harness focus walk found this.
+  - `SubmenuTrigger` exists in 1.22.1 and is supported.
+  - The dialog scrim is the component token `--dialog-scrim` (`bg` at 0.72 alpha), declared with each theme.
+  - The AlertDialog gallery entry is a second Dialog entry (`primitive: null`). The families total 16: 7 M1 and 9 M4.
 - **Lint-staged.** The ESLint command in `lint-staged` gained `--no-warn-ignored`. Without it, committing a new `_lint-fixtures` file fails `--max-warnings=0` with "File ignored" warnings.
 
 ## 2. Data Model (Granular)
@@ -866,6 +872,6 @@ The plan leaves these details open. Each is the smallest rule that makes the pla
 - [x] TASK-011: Table (virtualized, cursor-paged) — M1 subset complete
 - [x] TASK-012 (M4): TextField, NumberField, Checkbox, Switch
 - [x] TASK-013 (M4): Popover, Select, ComboBox
-- [ ] TASK-014 (M4): Dialog, Menu
+- [x] TASK-014 (M4): Dialog, Menu
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

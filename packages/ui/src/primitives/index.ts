@@ -34,6 +34,16 @@ export type { OptionProps, PopoverDialogProps, PopoverProps } from './Popover.js
 export { Select } from './Select.js';
 export type { ListOption, SelectProps } from './Select.js';
 export { ComboBox } from './ComboBox.js';
+export { Dialog, DialogTrigger } from './Dialog.js';
+export type { DialogProps, DialogTriggerProps } from './Dialog.js';
+export { Menu, MenuItem, MenuSection, MenuSeparator, MenuTrigger, SubmenuTrigger } from './Menu.js';
+export type {
+  DestructiveMenuItemProps,
+  MenuItemProps,
+  MenuProps,
+  MenuSectionProps,
+  StandardMenuItemProps,
+} from './Menu.js';
 export type { ComboBoxProps } from './ComboBox.js';
 export type { SwitchProps } from './Switch.js';
 export type { TableColumn, TableLoadState, TableProps } from './Table.js';

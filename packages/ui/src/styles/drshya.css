@@ -26,6 +26,15 @@
   }
 }
 
+/*
+ * Component tier: the dialog scrim is the page background at reduced opacity.
+ * Declared wherever a theme is, so it follows the resolved theme.
+ */
+:root,
+[data-theme] {
+  --dialog-scrim: oklch(from var(--color-bg) l c h / 0.72);
+}
+
 /* A pending indicator spins; reduced motion (below) stops it after one frame. */
 @utility pending-indicator {
   animation: drshya-pending 1s linear infinite;

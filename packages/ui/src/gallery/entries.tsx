@@ -12,9 +12,18 @@ import { ICON_NAMES, type IconName } from '../icons/registry.js';
 import { Button } from '../primitives/Button.js';
 import { Checkbox } from '../primitives/Checkbox.js';
 import { ComboBox } from '../primitives/ComboBox.js';
+import { Dialog, DialogTrigger } from '../primitives/Dialog.js';
 import { Disclosure, DisclosurePanel, DisclosureTrigger } from '../primitives/Disclosure.js';
 import type { PrimitiveFamily } from '../primitives/families.js';
 import { Link } from '../primitives/Link.js';
+import {
+  Menu,
+  MenuItem,
+  MenuSection,
+  MenuSeparator,
+  MenuTrigger,
+  SubmenuTrigger,
+} from '../primitives/Menu.js';
 import { NumberField } from '../primitives/NumberField.js';
 import { Popover, PopoverDialog, PopoverTrigger } from '../primitives/Popover.js';
 import { Select, type ListOption } from '../primitives/Select.js';
@@ -579,6 +588,94 @@ function ComboBoxSheet(): ReactNode {
   );
 }
 
+function DialogSheet(): ReactNode {
+  return (
+    <DialogTrigger defaultOpen>
+      <Button variant="secondary">Rename workflow</Button>
+      <Dialog title="Rename workflow">
+        {({ close }) => (
+          <>
+            <TextField label="Workflow name" defaultValue="compare-returns" voice="engine" />
+            <div className="flex justify-end gap-2">
+              <Button variant="quiet" onPress={close}>
+                Cancel
+              </Button>
+              <Button variant="primary" onPress={close}>
+                Rename
+              </Button>
+            </div>
+          </>
+        )}
+      </Dialog>
+    </DialogTrigger>
+  );
+}
+
+function AlertDialogSheet(): ReactNode {
+  return (
+    <DialogTrigger defaultOpen>
+      <Button variant="secondary">Delete run</Button>
+      <Dialog title="Delete this run?" role="alertdialog">
+        {({ close }) => (
+          <>
+            <p className="text-ink-2">
+              The run directory, its captures and its Brief are removed. This cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onPress={close}>
+                Keep run
+              </Button>
+              <Button variant="primary" icon="outcome.failed" onPress={close}>
+                Delete run
+              </Button>
+            </div>
+          </>
+        )}
+      </Dialog>
+    </DialogTrigger>
+  );
+}
+
+function MenuSheet(): ReactNode {
+  return (
+    <OverlayStage>
+      <MenuTrigger defaultOpen>
+        <Button variant="secondary" icon="nav.chevronDown">
+          Run actions
+        </Button>
+        <Menu aria-label="Run actions">
+          <MenuSection title="Run">
+            <MenuItem id="resume" icon="action.retry">
+              Resume
+            </MenuItem>
+            <MenuItem id="copy" icon="action.copy">
+              Copy CLI command
+            </MenuItem>
+            <SubmenuTrigger>
+              <MenuItem id="export" icon="glyph.capture">
+                Export
+              </MenuItem>
+              <Menu aria-label="Export formats" placement="end top">
+                <MenuItem id="md">Markdown</MenuItem>
+                <MenuItem id="json">JSON</MenuItem>
+              </Menu>
+            </SubmenuTrigger>
+            <MenuItem id="schedule" icon="status.info" isDisabled>
+              Schedule (daemon offline)
+            </MenuItem>
+          </MenuSection>
+          <MenuSeparator />
+          <MenuSection title="Danger">
+            <MenuItem id="delete" tone="destructive" icon="outcome.failed">
+              Delete run
+            </MenuItem>
+          </MenuSection>
+        </Menu>
+      </MenuTrigger>
+    </OverlayStage>
+  );
+}
+
 const GLASS_BACKDROPS = [
   { id: 'black', label: 'Over black', className: 'gallery-backdrop-black' },
   { id: 'white', label: 'Over white', className: 'gallery-backdrop-white' },
@@ -752,6 +849,30 @@ export const GALLERY_ENTRIES: readonly GalleryEntry[] = [
     title: 'ComboBox',
     primitive: 'ComboBox',
     render: () => <ComboBoxSheet />,
+    interactive: true,
+    overlays: true,
+  },
+  {
+    id: 'dialog',
+    title: 'Dialog',
+    primitive: 'Dialog',
+    render: () => <DialogSheet />,
+    interactive: true,
+    overlays: true,
+  },
+  {
+    id: 'alert-dialog',
+    title: 'AlertDialog',
+    primitive: null,
+    render: () => <AlertDialogSheet />,
+    interactive: true,
+    overlays: true,
+  },
+  {
+    id: 'menu',
+    title: 'Menu',
+    primitive: 'Menu',
+    render: () => <MenuSheet />,
     interactive: true,
     overlays: true,
   },

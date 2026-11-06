@@ -14,6 +14,10 @@ describe('@no-llm Drshya gallery completeness', () => {
     expect(new Set(familyMembers).size).toBe(familyMembers.length);
   });
 
+  it('covers all 16 primitive families of the M1 and M4 catalogue', () => {
+    expect(Object.keys(PRIMITIVE_FAMILIES)).toHaveLength(16);
+  });
+
   it('has exactly one gallery entry per primitive family', () => {
     const covered = GALLERY_ENTRIES.flatMap((entry) =>
       entry.primitive === null ? [] : [entry.primitive],
