@@ -2157,15 +2157,21 @@
     },
     {
       "path": "apps/cli/tests/registry/option-consumers.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
     {
       "path": "apps/cli/tests/registry/option-consumers.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
+    },
+    {
+      "path": "apps/cli/tests/registry/parse-parity.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
     },
     {
       "path": "apps/cli/tests/registry/precedence.spec.ts",
@@ -2220,6 +2226,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/protocol/generated/json-schema/command-invocation.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
     },
     {
       "path": "packages/protocol/generated/json-schema/command-registry.json",
@@ -2330,6 +2342,12 @@
       "task": "TASK-002"
     },
     {
+      "path": "packages/protocol/src/commands/invocation.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
       "path": "packages/protocol/src/commands/registry.ts",
       "status": "A",
       "role": "implement",
@@ -2360,6 +2378,12 @@
       "task": "TASK-002"
     },
     {
+      "path": "packages/protocol/tests/commands/argv-arbitraries.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
       "path": "packages/protocol/tests/commands/boundary.spec.ts",
       "status": "A",
       "role": "implement",
@@ -2376,6 +2400,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/tests/commands/invocation.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
     },
     {
       "path": "packages/protocol/tests/commands/registry.spec.ts",

@@ -1,0 +1,44 @@
+{
+  "$ref": "#/definitions/CommandInvocation",
+  "definitions": {
+    "CommandInvocation": {
+      "type": "object",
+      "properties": {
+        "invocation_id": {
+          "type": "string",
+          "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
+          "description": "Client-generated ULID; the idempotency key for launching (D11)."
+        },
+        "path": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "description": "Canonical command path, aliases resolved (e.g. [\"do\"] for \"discover\")."
+        },
+        "argv": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Tokens after the path, exactly as given, in order."
+        },
+        "cwd": {
+          "type": "string",
+          "description": "Absolute working directory the invocation was requested from."
+        }
+      },
+      "required": [
+        "invocation_id",
+        "path",
+        "argv",
+        "cwd"
+      ],
+      "additionalProperties": false,
+      "description": "A requested command invocation."
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

@@ -938,7 +938,7 @@ tests/commands/format.property.spec.ts` is green with every leaf covered. The te
 - [x] TASK-006: Settings families: `config`, `prefs`, `secret`, `model`, `sites`, `init`
 - [x] TASK-007: Remaining families and registry completeness
 - [x] TASK-008: Registry integrity: option consumers, danger guard, group spelling
-- [ ] TASK-009: `CommandInvocation` and `parseInvocation`
+- [x] TASK-009: `CommandInvocation` and `parseInvocation`
 - [ ] TASK-010: Shell-aware `formatInvocation` and round-trip for every command
 - [ ] TASK-011: Copied commands execute correctly in real bash, PowerShell 5.1 and cmd
 

@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
+import { CommandInvocation } from '../commands/invocation.js';
 import { CommandRegistry } from '../commands/schema.js';
 import { Brief } from '../schemas/brief.js';
 import { ConfirmationDecision, ConfirmationRequest } from '../schemas/confirmation.js';
@@ -43,6 +44,7 @@ export const JSON_SCHEMA_ARTIFACTS: Record<string, { schema: z.ZodType<unknown>;
   'run-health.json': { schema: RunHealth, name: 'RunHealth' },
   'task-contract.json': { schema: TaskContractRecord, name: 'TaskContractRecord' },
   'command-registry.json': { schema: CommandRegistry, name: 'CommandRegistry' },
+  'command-invocation.json': { schema: CommandInvocation, name: 'CommandInvocation' },
 } as const;
 
 export type JsonSchemaArtifactName = keyof typeof JSON_SCHEMA_ARTIFACTS;

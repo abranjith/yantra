@@ -119,6 +119,24 @@ execution rules (first match wins) and falls back to the default. The directory 
 load the registry without filesystem code. `command-registry.json` is emitted with the other JSON
 Schemas.
 
+`CommandInvocation` (`invocation.ts`, emitted as `command-invocation.json`) is what was requested:
+a ULID `invocation_id` (the launch idempotency key), the canonical `path` with aliases resolved,
+the `argv` tokens after the path exactly as given, and an absolute `cwd` (checked syntactically for
+POSIX, drive-letter and UNC forms, without `node:path`). `parseInvocation(argv, { cwd })` parses
+the tokens after the program name exactly as the generated commander tree would, and returns a
+`Result`: on success the leaf entry, arguments by name, options by attribute with commander
+defaults applied (as `opts()` returns them), the attributes the user actually set (`explicit`)
+and the execution class; on failure a typed `ParseError` with commander's own message, the
+offending token's index and, for unknown commands and options, a close suggestion. It mirrors
+commander 14's two-level algorithm rather than approximating it: the root sees every token first
+(so `-V` anywhere before `--` is a version request), an unknown option switches the remaining
+tokens to the subcommand for re-parsing, a variadic option keeps consuming operands until the next
+option, negative numbers are operands only in leaves, and errors are raised in commander's order
+(missing values and invalid choices while parsing, then help, mandatory options, unknown options,
+arguments). A root-level `--` before the path is kept at the front of `argv`, so the invocation
+re-parses identically. `apps/cli/tests/registry/parse-parity.spec.ts` checks agreement with the
+real tree for every leaf, 200 fast-check runs each over valid and near-valid argv.
+
 ### `packages/core`
 
 `@yantra/core` contains provider-independent domain and infrastructure services:

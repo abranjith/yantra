@@ -41,6 +41,16 @@ export { validateCommandRegistry } from './validate.js';
 export { conditionHolds, executionClassFor, jsonEqual, type InvocationFacts } from './execution.js';
 export { OPTION_GROUP_INPUTS } from './groups.js';
 export {
+  CommandInvocation,
+  ParseErrorCode,
+  createInvocationId,
+  isAbsoluteCwd,
+  parseInvocation,
+  type ParseContext,
+  type ParseError,
+  type ParsedInvocation,
+} from './invocation.js';
+export {
   COMMAND_REGISTRY,
   COMMAND_REGISTRY_INPUT,
   LEAF_COMMAND_IDS,
