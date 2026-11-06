@@ -23,10 +23,12 @@ import {
   type Logger,
   type PreferenceStore,
 } from '@yantra/core';
-import { Command } from 'commander';
+import { type Command } from 'commander';
 
 import { keyOwner } from '../key-ownership.js';
 import { openPreferences } from '../preferences.js';
+import { createRegisteredCommand } from '../registry/build-command-tree.js';
+import { handler, type HandlerArgs } from '../registry/handler.js';
 import { CLI_JSON_SCHEMA_VERSION } from '../render/json.js';
 import { makeStderrLogger } from '../runtime.js';
 
@@ -50,55 +52,43 @@ export interface ScreenshotPreferenceWrite {
 }
 
 export function makePrefsCommand(): Command {
-  const cmd = new Command('prefs');
+  return createRegisteredCommand('prefs', { prefs: handler(prefsHandler) });
+}
 
-  cmd
-    .description('Manage personalization preferences (machine layer + merged view)')
-    .argument('[action]', 'get | set | list | approve')
-    .argument('[key]', 'dotted preference key (e.g. defaults.detail)')
-    .argument('[value]', 'value (for set)')
-    .option('--json', 'emit JSON', false)
-    .option('--debug', 'verbose logging on stderr', false)
-    .option('--forget <key>', 'delete a preference value (privacy control)')
-    .action(
-      async (
-        action: string | undefined,
-        key: string | undefined,
-        value: string | undefined,
-        options: PrefsOptions,
-      ) => {
-        const logger = makeStderrLogger(options.debug === true);
+/** `yantra prefs [action] [key] [value]`: bound to the `prefs` registry entry. */
+export async function prefsHandler(args: HandlerArgs, options: PrefsOptions): Promise<void> {
+  const [action, key, value] = args as readonly [
+    string | undefined,
+    string | undefined,
+    string | undefined,
+  ];
 
-        // `--forget` is an action modifier usable without a positional action.
-        if (options.forget !== undefined) {
-          await runForget(options.forget, options, logger);
-          return;
-        }
+  const logger = makeStderrLogger(options.debug === true);
 
-        switch (action) {
-          case undefined:
-          case 'list':
-            await runList(options, logger);
-            return;
-          case 'get':
-            await runGet(key, options, logger);
-            return;
-          case 'set':
-            await runSet(key, value, options, logger);
-            return;
-          case 'approve':
-            await runApprove(key, options, logger);
-            return;
-          default:
-            process.stderr.write(
-              `Unknown action "${action}" (expected: get | set | list | approve)\n`,
-            );
-            process.exit(1);
-        }
-      },
-    );
+  // `--forget` is an action modifier usable without a positional action.
+  if (options.forget !== undefined) {
+    await runForget(options.forget, options, logger);
+    return;
+  }
 
-  return cmd;
+  switch (action) {
+    case undefined:
+    case 'list':
+      await runList(options, logger);
+      return;
+    case 'get':
+      await runGet(key, options, logger);
+      return;
+    case 'set':
+      await runSet(key, value, options, logger);
+      return;
+    case 'approve':
+      await runApprove(key, options, logger);
+      return;
+    default:
+      process.stderr.write(`Unknown action "${action}" (expected: get | set | list | approve)\n`);
+      process.exit(1);
+  }
 }
 
 async function withStore<T>(

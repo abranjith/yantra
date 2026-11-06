@@ -2424,6 +2424,18 @@ Applicability is declared too: model, budget and turn options apply only in `llm
 than `system`, `--template` with `--no-llm` (on `ask` and `research`) and `report --open` with
 `--json`.
 
+The settings families carry the classes that are not plain workers. `secret set|list|rm` are
+`in-process-secure`: the host performs them itself so a value never travels in argv, and
+`secret set [value]` has input kind `secret-input`, which the formatter refuses to render. Two
+commands are `adapter` class, meaning an app-side adapter replaces the generated form:
+`config edit` (`config-edit-yaml`, a raw-YAML editor with validation instead of `$EDITOR`) and
+`init` (`init-onboarding`, executing as `mutate` over the shared init service). `config data-dir`
+is an `exemption` under plan decision D15: relocation moves the directory holding the host's own
+lock, queue and sockets, so the app shows the steps instead of running it. `prefs` is the
+option-dependent case: `read` by default, `mutate` when the action is `set` or `approve` or when
+`--forget` is present. Removals (`config unset`, `secret rm`, `model rm`, `sites remove`), `--force`,
+`--reset`, `--forget` and `config data-dir --no-move` carry `danger: confirm`.
+
 To migrate a family: add its entries (TASK order: data first, kept honest by the agreement test),
 move each action body unchanged into an exported handler in the same module, bind it in
 `buildHandlers`, delete the inline commander calls, and remove the family from

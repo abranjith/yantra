@@ -23,10 +23,12 @@ import {
   workflowsRoot,
   yantraHome,
 } from '@yantra/core';
-import { Command, CommanderError } from 'commander';
+import { type Command, CommanderError } from 'commander';
 import { parse as parseYaml, stringify } from 'yaml';
 
 import { keyOwner } from '../key-ownership.js';
+import { createRegisteredCommand } from '../registry/build-command-tree.js';
+import { handler } from '../registry/handler.js';
 import { CLI_JSON_SCHEMA_VERSION } from '../render/json.js';
 
 interface ConfigOptions {
@@ -85,50 +87,25 @@ export interface MoveDirectoryDependencies {
 const MOVE_DIRECTORY_FS: MoveDirectoryDependencies = { stat, mkdir, rename, cp, rm };
 
 export function makeConfigCommand(deps: DataDirDependencies = DATA_DIR_DEPENDENCIES): Command {
-  const command = new Command('config').description(
-    'Inspect and update installation configuration',
-  );
-  command
-    .command('path')
-    .option('--json', 'emit JSON', false)
-    .action((options: ConfigOptions) => runPath(options));
-  command
-    .command('list')
-    .option('--json', 'emit JSON', false)
-    .action((options: ConfigOptions) => runList(options));
-  command
-    .command('get')
-    .argument('<key>')
-    .option('--json', 'emit JSON', false)
-    .action((key: string, options: ConfigOptions) => runGet(key, options));
-  command
-    .command('set')
-    .argument('<key>')
-    .argument('<value>')
-    .option('--json', 'emit JSON', false)
-    .action((key: string, value: string, options: ConfigOptions) => runSet(key, value, options));
-  command
-    .command('unset')
-    .argument('<key>')
-    .option('--json', 'emit JSON', false)
-    .action((key: string, options: ConfigOptions) => runUnset(key, options));
-  command
-    .command('edit')
-    .option('--json', 'emit JSON', false)
-    .action((options: ConfigOptions) => runEdit(options));
-  command
-    .command('validate')
-    .option('--json', 'emit JSON', false)
-    .action((options: ConfigOptions) => runValidate(options));
-  command
-    .command('data-dir')
-    .argument('[path]')
-    .option('--force', 'allow a non-empty target', false)
-    .option('--no-move', 'write the setting without moving content')
-    .option('--dry-run', 'print the relocation plan without changing anything', false)
-    .option('--json', 'emit JSON', false)
-    .action((path: string | undefined, options: DataDirOptions) => runDataDir(path, options, deps));
-  return command;
+  return createRegisteredCommand('config', configHandlers(deps));
+}
+
+/** Handlers for the `config` family, bound by registry id. */
+export function configHandlers(deps: DataDirDependencies = DATA_DIR_DEPENDENCIES) {
+  return {
+    'config.path': handler((_args, options: ConfigOptions) => runPath(options)),
+    'config.list': handler((_args, options: ConfigOptions) => runList(options)),
+    'config.get': handler((args, options: ConfigOptions) => runGet(args[0] as string, options)),
+    'config.set': handler((args, options: ConfigOptions) =>
+      runSet(args[0] as string, args[1] as string, options),
+    ),
+    'config.unset': handler((args, options: ConfigOptions) => runUnset(args[0] as string, options)),
+    'config.edit': handler((_args, options: ConfigOptions) => runEdit(options)),
+    'config.validate': handler((_args, options: ConfigOptions) => runValidate(options)),
+    'config.data-dir': handler((args, options: DataDirOptions) =>
+      runDataDir(args[0] as string | undefined, options, deps),
+    ),
+  } as const;
 }
 
 function emit(kind: string, body: Record<string, unknown>): void {

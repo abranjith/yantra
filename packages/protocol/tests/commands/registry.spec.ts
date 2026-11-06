@@ -171,6 +171,52 @@ describe('@no-llm run-class entries', () => {
   });
 });
 
+describe('@no-llm settings entries', () => {
+  const prefs = findLeaf(['prefs'])!;
+  const classOf = (args: Record<string, string>, options: Record<string, unknown> = {}) =>
+    executionClassFor(prefs, { options, arguments: args, explicit: Object.keys(options) });
+
+  it.each([
+    [{ action: 'set', key: 'defaults.detail', value: 'full' }, 'mutate'],
+    [{ action: 'approve', key: 'defaults.detail' }, 'mutate'],
+    [{ action: 'get', key: 'defaults.detail' }, 'read'],
+    [{ action: 'list' }, 'read'],
+    [{}, 'read'],
+  ] as const)('classifies prefs %j as %s', (args, expected) => {
+    expect(classOf(args)).toBe(expected);
+  });
+
+  it('classifies prefs --forget as mutate whatever the action', () => {
+    expect(classOf({}, { forget: 'defaults.detail' })).toBe('mutate');
+    expect(classOf({ action: 'list' }, { forget: 'defaults.detail' })).toBe('mutate');
+  });
+
+  it('keeps every secret command in-process and never renders a value', () => {
+    for (const id of ['set', 'list', 'rm']) {
+      expect(findLeaf(['secret', id])!.execution.default).toBe('in-process-secure');
+    }
+    expect(findLeaf(['secret', 'set'])!.arguments[1]?.input).toEqual({ kind: 'secret-input' });
+  });
+
+  it('routes config edit and init through adapters, and config data-dir through D15', () => {
+    expect(findLeaf(['config', 'edit'])!.execution.adapter?.id).toBe('config-edit-yaml');
+    const init = findLeaf(['init'])!.execution;
+    expect(init.adapter).toMatchObject({ id: 'init-onboarding', executes_as: 'mutate' });
+    const dataDir = findLeaf(['config', 'data-dir'])!;
+    expect(dataDir.execution.default).toBe('exemption');
+    expect(dataDir.execution.exemption?.decision).toBe('D15');
+    expect(dataDir.danger.level).toBe('confirm');
+  });
+
+  it('makes model add --provider mandatory', () => {
+    const add = findLeaf(['model', 'add'])!;
+    const provider = expandOptions(add, COMMAND_REGISTRY.option_groups).find(
+      (option) => option.long === '--provider',
+    );
+    expect(provider?.mandatory).toBe(true);
+  });
+});
+
 describe('@no-llm findCommand', () => {
   it('finds groups and leaves by canonical path', () => {
     expect(findCommand(['config'])?.kind).toBe('group');

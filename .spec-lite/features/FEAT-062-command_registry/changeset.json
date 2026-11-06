@@ -32,6 +32,12 @@
       "task": "TASK-004"
     },
     {
+      "path": "apps/cli/src/commands/config.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
       "path": "apps/cli/src/commands/do.ts",
       "status": "M",
       "role": "implement",
@@ -44,10 +50,28 @@
       "task": "TASK-005"
     },
     {
+      "path": "apps/cli/src/commands/init.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
       "path": "apps/cli/src/commands/list.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "apps/cli/src/commands/model.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/commands/prefs.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
     },
     {
       "path": "apps/cli/src/commands/profile.ts",
@@ -86,10 +110,22 @@
       "task": "TASK-004"
     },
     {
+      "path": "apps/cli/src/commands/secret.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
       "path": "apps/cli/src/commands/show.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "apps/cli/src/commands/sites.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
     },
     {
       "path": "apps/cli/src/commands/usage.ts",
@@ -2067,7 +2103,7 @@
     },
     {
       "path": "apps/cli/tests/registry/precedence.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
@@ -2139,7 +2175,7 @@
     },
     {
       "path": "packages/protocol/src/commands/entries/agentic.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },

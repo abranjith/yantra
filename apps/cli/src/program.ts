@@ -3,19 +3,14 @@ import { Command } from 'commander';
 
 import type { AskRuntime } from './commands/ask.js';
 import { makeBrowserCommand } from './commands/browser.js';
-import { makeConfigCommand } from './commands/config.js';
 import { makeConfirmCommand } from './commands/confirm.js';
 import { makeDaemonCommand } from './commands/daemon.js';
 import type { DoRuntime } from './commands/do.js';
-import { makeInitCommand } from './commands/init.js';
 import { makeLintCommand } from './commands/lint.js';
-import { makeModelCommand } from './commands/model.js';
 import { makeOpenCommand } from './commands/open.js';
-import { makePrefsCommand } from './commands/prefs.js';
 import type { ResearchRuntime } from './commands/research.js';
 import { makeScheduleCommand, makeUnscheduleCommand } from './commands/schedule.js';
-import { makeSecretCommand } from './commands/secret.js';
-import { makeSitesCommand, type SitesRuntime } from './commands/sites.js';
+import type { SitesRuntime } from './commands/sites.js';
 import { makeTemplateCommand, type TemplateCommandRuntime } from './commands/template.js';
 import {
   buildCommandTree,
@@ -50,8 +45,8 @@ function legacyCommands(options: CliRunOptions): readonly LegacyCommand[] {
     { name: 'do' },
     { name: 'run' },
     { name: 'confirm', register: added(makeConfirmCommand) },
-    { name: 'config', register: added(makeConfigCommand) },
-    { name: 'secret', register: added(makeSecretCommand) },
+    { name: 'config' },
+    { name: 'secret' },
     { name: 'resume' },
     { name: 'schedule', register: added(makeScheduleCommand) },
     { name: 'schedules' },
@@ -59,18 +54,18 @@ function legacyCommands(options: CliRunOptions): readonly LegacyCommand[] {
     { name: 'daemon', register: added(makeDaemonCommand) },
     { name: 'lint', register: added(makeLintCommand) },
     { name: 'list' },
-    { name: 'model', register: added(makeModelCommand) },
+    { name: 'model' },
     { name: 'open', register: added(makeOpenCommand) },
     { name: 'show' },
     { name: 'usage' },
     { name: 'profile' },
-    { name: 'prefs', register: added(makePrefsCommand) },
-    { name: 'sites', register: added(() => makeSitesCommand(options.sitesRuntime)) },
+    { name: 'prefs' },
+    { name: 'sites' },
     { name: 'template', register: added(() => makeTemplateCommand(options.templateRuntime)) },
     { name: 'doctor' },
     { name: 'audit' },
     { name: 'report' },
-    { name: 'init', register: added(makeInitCommand) },
+    { name: 'init' },
     { name: 'browser', register: added(makeBrowserCommand) },
   ];
 }

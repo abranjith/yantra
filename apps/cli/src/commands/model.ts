@@ -9,8 +9,10 @@ import {
   YANTRA_KEYCHAIN_SERVICE,
   type ModelConfig,
 } from '@yantra/core';
-import { Command, CommanderError } from 'commander';
+import { type Command, CommanderError } from 'commander';
 
+import { createRegisteredCommand } from '../registry/build-command-tree.js';
+import { handler } from '../registry/handler.js';
 import { CLI_JSON_SCHEMA_VERSION } from '../render/json.js';
 
 interface ModelOptions {
@@ -23,33 +25,19 @@ interface ModelOptions {
 }
 
 export function makeModelCommand(): Command {
-  const command = new Command('model').description('Manage the installed model registry');
-  command
-    .command('list')
-    .option('--json', 'emit JSON', false)
-    .action((options: ModelOptions) => runList(options));
-  command
-    .command('add')
-    .argument('<id>')
-    .requiredOption('--provider <provider>')
-    .option('--base-url <url>')
-    .option('--api-key-ref <reference>')
-    .option('--input <kinds>', 'comma-separated: text,image', 'text')
-    .option('--force', 'replace an existing provider/id pair', false)
-    .option('--json', 'emit JSON', false)
-    .action((id: string, options: ModelOptions) => runAdd(id, options));
-  command
-    .command('rm')
-    .argument('<id>')
-    .option('--force', 'remove even when selected as default', false)
-    .option('--json', 'emit JSON', false)
-    .action((id: string, options: ModelOptions) => runRemove(id, options));
-  command
-    .command('default')
-    .argument('<id>')
-    .option('--json', 'emit JSON', false)
-    .action((id: string, options: ModelOptions) => runDefault(id, options));
-  return command;
+  return createRegisteredCommand('model', modelHandlers());
+}
+
+/** Handlers for the `model` family, bound by registry id. */
+export function modelHandlers() {
+  return {
+    'model.list': handler((_args, options: ModelOptions) => runList(options)),
+    'model.add': handler((args, options: ModelOptions) => runAdd(args[0] as string, options)),
+    'model.rm': handler((args, options: ModelOptions) => runRemove(args[0] as string, options)),
+    'model.default': handler((args, options: ModelOptions) =>
+      runDefault(args[0] as string, options),
+    ),
+  } as const;
 }
 
 async function config() {

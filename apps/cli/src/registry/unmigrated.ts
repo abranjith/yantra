@@ -19,17 +19,11 @@ const PENDING = 'registry entry and handler extraction scheduled for a later FEA
 
 export const UNMIGRATED_COMMANDS: readonly UnmigratedCommand[] = [
   { path: 'confirm', since: '2026-11-05', reason: PENDING, owner: 'FEAT-070' },
-  { path: 'config', since: '2026-11-05', reason: PENDING, owner: 'FEAT-070' },
-  { path: 'secret', since: '2026-11-05', reason: PENDING, owner: 'FEAT-070' },
   { path: 'schedule', since: '2026-11-05', reason: PENDING, owner: 'FEAT-070' },
   { path: 'unschedule', since: '2026-11-05', reason: PENDING, owner: 'FEAT-070' },
   { path: 'daemon', since: '2026-11-05', reason: PENDING, owner: 'FEAT-070' },
   { path: 'lint', since: '2026-11-05', reason: PENDING, owner: 'FEAT-070' },
-  { path: 'model', since: '2026-11-05', reason: PENDING, owner: 'FEAT-070' },
   { path: 'open', since: '2026-11-05', reason: PENDING, owner: 'FEAT-070' },
-  { path: 'prefs', since: '2026-11-05', reason: PENDING, owner: 'FEAT-070' },
-  { path: 'sites', since: '2026-11-05', reason: PENDING, owner: 'FEAT-070' },
   { path: 'template', since: '2026-11-05', reason: PENDING, owner: 'FEAT-070' },
-  { path: 'init', since: '2026-11-05', reason: PENDING, owner: 'FEAT-070' },
   { path: 'browser', since: '2026-11-05', reason: PENDING, owner: 'FEAT-070' },
 ];
