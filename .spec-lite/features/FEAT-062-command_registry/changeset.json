@@ -1922,6 +1922,12 @@
       "task": "TASK-001"
     },
     {
+      "path": "apps/cli/tests/registry/agreement.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
       "path": "apps/cli/tests/registry/cli-surface.spec.ts",
       "status": "A",
       "role": "implement",
@@ -1932,6 +1938,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "apps/cli/tests/registry/tree-agreement.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
     },
     {
       "path": "apps/cli/tests/registry/walk-tree.ts",
@@ -1959,7 +1971,7 @@
     },
     {
       "path": "packages/protocol/generated/json-schema/command-registry.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
@@ -1976,44 +1988,104 @@
       "task": "TASK-002"
     },
     {
-      "path": "packages/protocol/src/commands/errors.ts",
+      "path": "packages/protocol/src/commands/entries/browser.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/protocol/src/commands/entries/builders.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/protocol/src/commands/entries/daemon.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/protocol/src/commands/entries/doctor.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/protocol/src/commands/entries/runs.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/protocol/src/commands/entries/settings.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/protocol/src/commands/entries/template.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/protocol/src/commands/entries/workflow.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/protocol/src/commands/errors.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "packages/protocol/src/commands/execution.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "packages/protocol/src/commands/expand.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "packages/protocol/src/commands/flags.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/src/commands/groups.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
     },
     {
       "path": "packages/protocol/src/commands/index.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
-      "path": "packages/protocol/src/commands/schema.ts",
+      "path": "packages/protocol/src/commands/registry.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/protocol/src/commands/schema.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "packages/protocol/src/commands/validate.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
@@ -2031,25 +2103,31 @@
     },
     {
       "path": "packages/protocol/tests/commands/boundary.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "packages/protocol/tests/commands/execution.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "packages/protocol/tests/commands/factories.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
-      "path": "packages/protocol/tests/commands/schema.spec.ts",
+      "path": "packages/protocol/tests/commands/registry.spec.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/protocol/tests/commands/schema.spec.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     }

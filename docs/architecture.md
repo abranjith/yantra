@@ -2373,6 +2373,22 @@ cleanly is recorded as `action-invoked` instead of running a command. The golden
 listed in `.prettierignore`. `tests/registry/walk-tree.ts` enumerates the tree through commander's
 public API only: 59 command paths, 7 groups and 52 leaves.
 
+The registry data lives in `packages/protocol/src/commands/`: `groups.ts` holds the six named
+option groups (`agent-model`, `agent-budget`, `agent-turn`, `no-llm`, `screenshots`,
+`browser-selection`) with the old registrars' exact flags, descriptions and order, each option
+carrying its precedence chain (for example `--model`: flag → `YANTRA_AGENT_MODEL` → preference
+`agent.model` → `claude-haiku-4-5`; `--browser`: flag → config `browser.source` → `auto`).
+`entries/*.ts` hold the commands by family, authored through `entries/builders.ts`, which derives
+what commander derives (long, short, attribute, value kind, path) so a data file states only
+human decisions. `registry.ts` assembles them in root-help order as `COMMAND_REGISTRY` and exports
+`LeafCommandId`, `findCommand` (alias-aware) and `findLeaf`. Each leaf has an execution class:
+read-class commands (`list`, `show`, `audit`, `report`, `usage`, `schedules`, `profile`,
+`config path|list|get|validate`, `model list`, `sites list`, `template list|show`,
+`daemon status`, `browser list`) resolve to `read`; `doctor` is `read` unless `--agent-smoke` is
+present, which makes it `run`. `tests/registry/tree-agreement.spec.ts` keeps the data truthful by
+comparing every entry with the live command at its path: kind, description, aliases, arguments,
+option flags in order, descriptions, commander defaults, parser choices, mandatory and repeatable.
+
 ### `packages/ui` (Drshya)
 
 `@yantra/ui` is Drshya, the design system that the future web app's screens are to be built from.

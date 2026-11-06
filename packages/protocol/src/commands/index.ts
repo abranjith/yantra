@@ -31,6 +31,7 @@ export {
   Relation,
   type CommandEntryInput,
   type CommandRegistryInput,
+  type OptionGroupInput,
   type OptionSpecInput,
 } from './schema.js';
 export { CommandRegistryError, type CommandRegistryRule } from './errors.js';
@@ -38,3 +39,13 @@ export { expandOptions, type ExpandedOption } from './expand.js';
 export { attributeForLong, parseOptionFlags, type ParsedOptionFlags } from './flags.js';
 export { validateCommandRegistry } from './validate.js';
 export { conditionHolds, executionClassFor, jsonEqual, type InvocationFacts } from './execution.js';
+export { OPTION_GROUP_INPUTS } from './groups.js';
+export {
+  COMMAND_REGISTRY,
+  COMMAND_REGISTRY_INPUT,
+  LEAF_COMMAND_IDS,
+  findCommand,
+  findLeaf,
+  type CommandId,
+  type LeafCommandId,
+} from './registry.js';

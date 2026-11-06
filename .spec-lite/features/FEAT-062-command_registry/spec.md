@@ -930,7 +930,7 @@ tests/commands/format.property.spec.ts` is green with every leaf covered. The te
 
 - [x] TASK-001: Program builder seam and CLI surface characterization goldens
 - [x] TASK-002: Registry schema, validation and execution-class resolution in protocol
-- [ ] TASK-003: Option groups and read-class registry entries (M1), checked against the live tree
+- [x] TASK-003: Option groups and read-class registry entries (M1), checked against the live tree
 - [ ] TASK-004: Commander generator with path-bound handlers; migrate the wholly read-only families
       (M1)
 - [ ] TASK-005: Run-class entries with precedence and applicability; migrate `ask`, `research`,

@@ -268,6 +268,7 @@ export const OptionGroup = z
   .strict()
   .describe('A named, reusable option set.');
 export type OptionGroup = z.infer<typeof OptionGroup>;
+export type OptionGroupInput = z.input<typeof OptionGroup>;
 
 /** A group reference or an inline option, in registration (help) order. */
 export const OptionRef = z
