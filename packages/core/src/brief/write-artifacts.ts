@@ -14,11 +14,13 @@
  * failure the `.tmp` files this call created are cleaned up.
  */
 
-import { mkdir, rename, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, open, rename, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { Brief, Result } from '@yantra/protocol';
 import { err, ok } from '@yantra/protocol';
+
+import { uniqueTempPath } from '../fs/atomic-write.js';
 
 import { briefToHtml } from './to-html.js';
 import { briefToMarkdown } from './to-markdown.js';
@@ -71,19 +73,34 @@ export async function writeBriefArtifacts(
     { path: join(runDir, 'brief.md'), content: `${briefToMarkdown(brief)}\n` },
     { path: join(runDir, 'brief.html'), content: briefToHtml(brief) },
   ] as const;
-  const tmpFor = (path: string): string => `${path}.tmp`;
+  const staged = targets.map((target) => ({ ...target, temporary: uniqueTempPath(target.path) }));
+  const owned = new Set<string>();
 
   try {
     await mkdir(runDir, { recursive: true });
 
     // Stage every artifact to its .tmp sibling first; a failure here leaves no
     // final file visible (renames below never run).
-    await Promise.all(
-      targets.map((target) => writeFile(tmpFor(target.path), target.content, 'utf8')),
+    const writes = await Promise.allSettled(
+      staged.map(async (target) => {
+        const file = await open(target.temporary, 'wx', 0o600);
+        owned.add(target.temporary);
+        try {
+          await file.writeFile(target.content, 'utf8');
+        } finally {
+          await file.close();
+        }
+      }),
     );
+    const writeFailure = writes.find((result) => result.status === 'rejected');
+    if (writeFailure?.status === 'rejected') throw writeFailure.reason;
 
     // Promote the staged files into place.
-    await Promise.all(targets.map((target) => rename(tmpFor(target.path), target.path)));
+    const renames = await Promise.allSettled(
+      staged.map((target) => rename(target.temporary, target.path)),
+    );
+    const renameFailure = renames.find((result) => result.status === 'rejected');
+    if (renameFailure?.status === 'rejected') throw renameFailure.reason;
 
     return ok({
       jsonPath: targets[0].path,
@@ -91,7 +108,7 @@ export async function writeBriefArtifacts(
       htmlPath: targets[2].path,
     });
   } catch (cause) {
-    await Promise.all(targets.map((target) => unlink(tmpFor(target.path)).catch(() => undefined)));
+    await Promise.all([...owned].map((path) => unlink(path).catch(() => undefined)));
     return err(
       new BriefArtifactWriteError(`failed to write brief artifacts to ${runDir}`, {
         runDir,

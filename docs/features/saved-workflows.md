@@ -38,6 +38,16 @@ No workflow step captures a screenshot, so a met screenshot requirement has noth
 
 Saving is best-effort. An existing workflow name is not overwritten, an empty or unconvertible trace is not saved, and lint or filesystem failures are reported in the published outcome without changing the `do` run's outcome. A partial run is reported the same way, as `⚠ Could not save workflow "<name>": Not saved: the run was partial (<met> of <total> requirements met). Only a fulfilled run is saved as a workflow.`, or `(no task contract was declared)` in place of the count.
 
+### Concurrent saves and recording writes
+
+Yantra's workflow store serializes saves and deletions for the same workflow name across processes. It checks for an existing name while holding that lock: if two saves compete for an unused name without `force`, exactly one succeeds and the other receives `WorkflowCollisionError`. Workflows are not merged. The core store permits an explicit `force: true` overwrite, but `do --save-as` does not expose that option.
+
+Each saved file uses a unique sibling staging file (`<file>.<pid>.<random>.tmp`) before rename, so concurrent writers do not share a temporary file. Workflow listings ignore lock directories, lock-owner sidecars, and leftover staging files. These protections cover writes through Yantra's store; direct edits in an external editor do not acquire its lock.
+
+The core recording store also serializes writes for each recording. Appending an action reloads the latest partial draft from disk while holding the lock, then adds the action and writes it atomically. Separate store instances can append without losing each other's actions. This does not add a public recorder command.
+
+File writers wait for a held lock for about five seconds before core raises a typed `ResourceBusyError`, with holder information when available and advice to retry when it finishes. CLI handling depends on the command; workflow promotion remains best-effort as described above. `schedule` holds a shared schedule-registry lock through workflow validation and registration, and `unschedule` uses that same lock for removal. Those two commands report exhausted lock contention as `busy` with exit `3`; see [Scheduling and the Local Daemon](scheduling.md).
+
 ### Deterministic execution
 
 The executor supports `navigate`, `click`, `fill`, `fill_element`, `extract`, `wait_for`, `assert`, `branch`, `loop`, and `llm_summarize`. It resolves named UI targets through each locator's ordered candidate chain, auto-waits for the actionability level the step needs, and settles the page after navigation and interactions and before reads. Scope rules are checked before ordinary execution, retries are bounded, total step executions are capped, and a checkpoint is written after every completed step.

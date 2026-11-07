@@ -93,6 +93,19 @@ export const SITE_SPECIFIC_SELECTORS = [
   },
 ];
 
+/** Core writers must stage to a unique sibling even when no RMW lock is needed. */
+export const FIXED_TEMP_SELECTORS = [
+  {
+    selector:
+      'TemplateLiteral[expressions.length=1] > TemplateElement[tail=true][value.raw=/^\\.[\\w.-]*tmp$/]',
+    message: 'Fixed temporary names are forbidden: use uniqueTempPath or writeFileAtomic.',
+  },
+  {
+    selector: "BinaryExpression[operator='+'][right.type='Literal'][right.value=/\\.tmp$/]",
+    message: 'Fixed temporary names are forbidden: use uniqueTempPath or writeFileAtomic.',
+  },
+];
+
 const DRSHYA_RULE = 'See plan_ui.md §9 and .spec-lite/memory.md -> General (Drshya).';
 
 /**
@@ -329,6 +342,18 @@ export default tseslint.config(
     rules: {
       'no-restricted-syntax': ['error', ...SITE_SPECIFIC_SELECTORS],
     },
+  },
+
+  {
+    files: ['packages/core/src/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-syntax': ['error', ...SITE_SPECIFIC_SELECTORS, ...FIXED_TEMP_SELECTORS],
+    },
+  },
+  {
+    // Tests may name sites as evidence, as before; staging names still must be unique.
+    files: ['packages/core/tests/**/*.{ts,tsx}'],
+    rules: { 'no-restricted-syntax': ['error', ...FIXED_TEMP_SELECTORS] },
   },
 
   // Drshya styling (plan_ui.md §9; memory -> General): components style only

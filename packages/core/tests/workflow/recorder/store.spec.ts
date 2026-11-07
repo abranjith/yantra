@@ -160,6 +160,22 @@ describe('@no-llm FileSystemRecordingStore', () => {
     await expect(stat(dir)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
+  it('retains actions appended concurrently through separate store instances', async () => {
+    await store.create('REC009', 'wf');
+    const other = new FileSystemRecordingStore(tmpRoot);
+    await Promise.all([
+      store.appendAction('REC009', { ...makeClickAction(), url_before: 'https://first.example' }),
+      other.appendAction('REC009', { ...makeClickAction(), url_before: 'https://second.example' }),
+    ]);
+    const raw = JSON.parse(
+      await readFile(join(store.recordingDir('REC009'), 'draft.partial.json'), 'utf8'),
+    ) as { actions: CapturedAction[] };
+    expect(raw.actions.map((action) => action.url_before).sort()).toEqual([
+      'https://first.example',
+      'https://second.example',
+    ]);
+  });
+
   it('destroy with keepProfile=true preserves the profile subdir', async () => {
     const { profileDir } = await store.create('REC007', 'wf');
     await store.destroy('REC007', { keepProfile: true });

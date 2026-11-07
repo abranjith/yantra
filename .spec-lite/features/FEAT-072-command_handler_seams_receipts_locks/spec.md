@@ -493,7 +493,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
 
 ### TASK-004: Workflow, template and schedule-registry locks; core fixed-temp lint rule
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - `FileWorkflowStore.save/delete` and the recorder store run under `{kind:'workflow', name}` with
     `uniqueTempPath`. The collision check (`exists`) moves **inside** the lock so two
     `do --save-as same-name` cannot both pass it.
@@ -513,7 +513,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
     Merge them with the shared site-token selectors in the same block, and add the
     `_lint-fixtures/fixed-temp-name.ts` fixture.
 
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Two concurrent `save(name)` calls without `force`: exactly one succeeds and the other gets
     `WorkflowCollisionError` (not a silent overwrite). The same holds for templates.
   - Listings skip lock directories and temp leftovers.
@@ -521,7 +521,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
   - `boundary-rules.spec.ts`: the fixture yields the fixed-temp lint message, the site-token fixture
     still yields its message (the merge did not drop it), and no file under `packages/core/src` (outside
     fixtures) violates the rule.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/saved-workflows.md`
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/saved-workflows.md`
       and `docs/features/report-templates.md` (concurrent saves are refused, not merged).
 - **Verify**:
   - `npx eslint packages/core` is clean.
@@ -943,7 +943,7 @@ tests/setup` passes; `init.ts`, `init-wizard.ts` and `init-context-prompts.ts` a
 - [x] TASK-001: Characterization harness and pre-migration terminal baselines
 - [x] TASK-002: Core resource-lock helper, unique temp files and locked `config.yaml` writes
 - [x] TASK-003: Locked `profile.yaml` writes and the concurrent-writer evidence (I1)
-- [ ] TASK-004: Workflow, template and schedule-registry locks; core fixed-temp lint rule
+- [x] TASK-004: Workflow, template and schedule-registry locks; core fixed-temp lint rule
 - [ ] TASK-005: Persistent browser-profile exclusivity
 - [ ] TASK-006: Command context, terminal adapter and purity lint; migrate `research`
 - [ ] TASK-007: Worker adapter, result transport and `research` parity

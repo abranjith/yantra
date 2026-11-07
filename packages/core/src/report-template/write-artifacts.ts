@@ -7,11 +7,13 @@
  * files on any failure.
  */
 
-import { mkdir, rename, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, open, rename, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { Result, TemplatedReport } from '@yantra/protocol';
 import { err, ok } from '@yantra/protocol';
+
+import { uniqueTempPath } from '../fs/atomic-write.js';
 
 import { templatedReportToHtml } from './to-html.js';
 
@@ -54,16 +56,31 @@ export async function writeReportArtifacts(
     { path: join(runDir, 'document.md'), content: `${report.rendered_md}\n` },
     { path: join(runDir, 'document.html'), content: templatedReportToHtml(report) },
   ] as const;
-  const tmpFor = (path: string): string => `${path}.tmp`;
+  const staged = targets.map((target) => ({ ...target, temporary: uniqueTempPath(target.path) }));
+  const owned = new Set<string>();
   try {
     await mkdir(runDir, { recursive: true });
-    await Promise.all(
-      targets.map((target) => writeFile(tmpFor(target.path), target.content, 'utf8')),
+    const writes = await Promise.allSettled(
+      staged.map(async (target) => {
+        const file = await open(target.temporary, 'wx', 0o600);
+        owned.add(target.temporary);
+        try {
+          await file.writeFile(target.content, 'utf8');
+        } finally {
+          await file.close();
+        }
+      }),
     );
-    await Promise.all(targets.map((target) => rename(tmpFor(target.path), target.path)));
+    const writeFailure = writes.find((result) => result.status === 'rejected');
+    if (writeFailure?.status === 'rejected') throw writeFailure.reason;
+    const renames = await Promise.allSettled(
+      staged.map((target) => rename(target.temporary, target.path)),
+    );
+    const renameFailure = renames.find((result) => result.status === 'rejected');
+    if (renameFailure?.status === 'rejected') throw renameFailure.reason;
     return ok({ jsonPath: targets[0].path, mdPath: targets[1].path, htmlPath: targets[2].path });
   } catch (cause) {
-    await Promise.all(targets.map((target) => unlink(tmpFor(target.path)).catch(() => undefined)));
+    await Promise.all([...owned].map((path) => unlink(path).catch(() => undefined)));
     return err(
       new ReportArtifactWriteError(`failed to write report artifacts to ${runDir}`, {
         runDir,

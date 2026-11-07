@@ -3,6 +3,7 @@ import { dirname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { ESLint } from 'eslint';
+import tseslint from 'typescript-eslint';
 import { describe, expect, it } from 'vitest';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -22,6 +23,29 @@ const lintMessagesFor = async (filePath: string) => {
 };
 
 describe('@no-llm lint boundary rules', () => {
+  it('forbids fixed temporary names while retaining the site-token restriction', async () => {
+    const messages = await lintMessagesFor('packages/core/src/_lint-fixtures/fixed-temp-name.ts');
+    expect(
+      messages.filter((message) => message.message.includes('Fixed temporary names')),
+    ).toHaveLength(3);
+    expect(
+      messages.some((message) => message.message.includes('Website-specific logic is forbidden')),
+    ).toBe(true);
+  });
+
+  it('contains no fixed-temp writer in production core source', async () => {
+    // This is an AST-only restriction; the repository gate checks types separately.
+    const results = await new ESLint({
+      cwd: repoRoot,
+      overrideConfig: tseslint.configs.disableTypeChecked,
+    }).lintFiles(['packages/core/src/**/*.ts']);
+    const violations = results.flatMap((result) =>
+      result.messages
+        .filter((message) => message.message.includes('Fixed temporary names'))
+        .map((message) => ({ file: result.filePath, line: message.line })),
+    );
+    expect(violations).toEqual([]);
+  }, 30_000);
   it('never reads layout ground truth from production source', () => {
     const violations = globSync('packages/*/src/**/*.ts', { cwd: repoRoot }).filter(
       (path) =>

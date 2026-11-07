@@ -1,5 +1,5 @@
 // @no-llm
-import { mkdtemp, rm, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -59,6 +59,29 @@ describe('FileWorkflowStore', () => {
       await store.save(workflow);
 
       await expect(store.save(workflow)).rejects.toBeInstanceOf(WorkflowCollisionError);
+    });
+
+    it('admits exactly one concurrent save without force', async () => {
+      const store = new FileWorkflowStore(tmpDir);
+      const outcomes = await Promise.allSettled([
+        store.save(makeWorkflow('contended', { description: 'first' })),
+        store.save(makeWorkflow('contended', { description: 'second' })),
+      ]);
+      expect(outcomes.filter((outcome) => outcome.status === 'fulfilled')).toHaveLength(1);
+      const rejected = outcomes.find((outcome) => outcome.status === 'rejected');
+      expect(rejected?.status === 'rejected' && rejected.reason).toBeInstanceOf(
+        WorkflowCollisionError,
+      );
+    });
+
+    it('ignores lock directories, owner sidecars and abandoned unique staging files', async () => {
+      const store = new FileWorkflowStore(tmpDir);
+      await store.save(makeWorkflow('visible'));
+      await mkdir(join(tmpDir, 'hidden.yaml.lock'));
+      await writeFile(join(tmpDir, 'hidden.yaml.lock.owner.json'), '{}');
+      await writeFile(join(tmpDir, 'hidden.yaml.1234.abcd1234.tmp'), 'incomplete');
+      expect((await store.list()).map((entry) => entry.name)).toEqual(['visible']);
+      expect((await store.listCatalog()).map((entry) => entry.name)).toEqual(['visible']);
     });
 
     it('overwrites when force:true', async () => {

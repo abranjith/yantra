@@ -244,6 +244,17 @@ describe('@no-llm LocalProfileStore', () => {
   });
 
   describe('listWorkflowProfiles', () => {
+    it('ignores lock directories, owner sidecars and staging leftovers', async () => {
+      mockReaddir.mockResolvedValue([
+        'visible',
+        'visible.lock',
+        'visible.lock.owner.json',
+        'abandoned.tmp',
+      ] as unknown as Awaited<ReturnType<typeof readdir>>);
+      mockStat.mockResolvedValue(makeDirStat(new Date('2024-03-01')));
+      const result = await new LocalProfileStore().listWorkflowProfiles();
+      expect(result.map((entry) => entry.workflowName)).toEqual(['visible']);
+    });
     it('returns profiles sorted by lastModified desc', async () => {
       const profiles = ['wf-a', 'wf-b', 'wf-c'];
       mockReaddir.mockResolvedValue(profiles as unknown as Awaited<ReturnType<typeof readdir>>);

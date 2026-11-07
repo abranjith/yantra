@@ -1,12 +1,69 @@
-import type { LintReport } from '@yantra/core';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { openIndexDb, probeResourceLock, SqliteScheduleStore, type LintReport } from '@yantra/core';
 import type { WorkflowFile, WorkflowStep, Result } from '@yantra/protocol';
 import { ok, err } from '@yantra/protocol';
 import { describe, expect, it } from 'vitest';
 
 import {
   validateRegistration,
+  withValidatedRegistration,
+  withScheduleRegistryLock,
   type WorkflowLoader,
 } from '../../src/commands/schedule-registration.js';
+
+describe('@no-llm schedule registration critical section', () => {
+  it('holds the registry lock through validation and coordinates a racing removal', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'yantra-schedule-registration-'));
+    const opened = await openIndexDb({ path: join(root, 'index.db') });
+    const store = new SqliteScheduleStore({ db: opened.db, idGen: () => 'fixture-id' });
+    const lockOptions = { targetPath: join(root, 'schedules') };
+    let onValidation: (() => void) | undefined;
+    let continueValidation: (() => void) | undefined;
+    const entered = new Promise<void>((resolve) => {
+      onValidation = resolve;
+    });
+    const proceed = new Promise<void>((resolve) => {
+      continueValidation = resolve;
+    });
+    const registered = withValidatedRegistration(
+      {
+        workflowName: 'demo',
+        cronExpr: '0 * * * *',
+        params: [],
+        notifyTarget: 'none',
+      },
+      {
+        load: async () => {
+          onValidation?.();
+          expect(await probeResourceLock({ kind: 'schedules' }, lockOptions)).not.toBeNull();
+          await proceed;
+          return ok(makeWorkflow());
+        },
+      },
+      (registration) => store.register(registration),
+      lockOptions,
+    );
+    try {
+      await entered;
+      const removed = withScheduleRegistryLock(() => store.remove('fixture-id'), lockOptions);
+      continueValidation?.();
+      const registration = await registered;
+      expect(registration.ok && registration.value.isOk).toBe(true);
+      const removal = await removed;
+      expect(removal.isOk && removal.value).toBe(true);
+      const listed = await store.list();
+      expect(listed.isOk && listed.value).toEqual([]);
+    } finally {
+      continueValidation?.();
+      await Promise.allSettled([registered]);
+      opened.db.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
 
 /** Builds a fully-typed navigate WorkflowStep (all optional fields present). */
 function navigate(id: string, url: string): WorkflowStep {

@@ -13,7 +13,14 @@
  * without a live commander program.
  */
 
-import { lint, validateCron, nextFireIso, type NotifyTarget } from '@yantra/core';
+import {
+  lint,
+  validateCron,
+  nextFireIso,
+  withResourceLock,
+  type ResourceLockOptions,
+  type NotifyTarget,
+} from '@yantra/core';
 import type { FileWorkflowStore } from '@yantra/core';
 import { resolveParams, type ParamArg } from '@yantra/core/workflow/replay';
 
@@ -48,6 +55,30 @@ export interface RegistrationInput {
 export type RegistrationResult =
   | { readonly ok: true; readonly registration: ValidatedRegistration }
   | { readonly ok: false; readonly reason: string };
+
+/** Serialize the complete validation and registration, rather than one SQL call. */
+export async function withValidatedRegistration<T>(
+  input: RegistrationInput,
+  workflowStore: WorkflowLoader,
+  register: (registration: ValidatedRegistration) => Promise<T>,
+  options: ResourceLockOptions = {},
+): Promise<
+  { readonly ok: false; readonly reason: string } | { readonly ok: true; readonly value: T }
+> {
+  return await withScheduleRegistryLock(async () => {
+    const validated = await validateRegistration(input, workflowStore);
+    if (!validated.ok) return validated;
+    return { ok: true, value: await register(validated.registration) };
+  }, options);
+}
+
+/** The same writer domain covers removal and future enable/disable operations. */
+export async function withScheduleRegistryLock<T>(
+  operation: () => T | Promise<T>,
+  options: ResourceLockOptions = {},
+): Promise<T> {
+  return await withResourceLock({ kind: 'schedules' }, operation, options);
+}
 
 /**
  * Validates a schedule registration end-to-end.

@@ -149,6 +149,8 @@ export class LocalProfileStore implements ProfileStore {
 
     const results: WorkflowProfileEntry[] = [];
     for (const name of entries) {
+      if (name.endsWith('.lock') || name.endsWith('.lock.owner.json') || name.endsWith('.tmp'))
+        continue;
       try {
         const p = join(root, name);
         const info = await stat(p);

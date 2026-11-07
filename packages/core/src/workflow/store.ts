@@ -1,8 +1,11 @@
-import { writeFile, rename, readdir, stat, unlink, mkdir } from 'node:fs/promises';
+import { readdir, stat, unlink } from 'node:fs/promises';
 import { join, basename } from 'node:path';
 
 import type { WorkflowFile } from '@yantra/protocol';
 import type { Result } from '@yantra/protocol';
+
+import { writeFileAtomic } from '../fs/atomic-write.js';
+import { withResourceLock } from '../locks/resource-lock.js';
 
 import { projectCatalogEntry, type WorkflowCatalogEntry } from './catalog.js';
 import type { LintReport } from './lint/index.js';
@@ -41,10 +44,6 @@ export class FileWorkflowStore implements WorkflowStore {
     return join(this.workflowsDir, `${name}.yaml`);
   }
 
-  private tmpPath(name: string): string {
-    return join(this.workflowsDir, `${name}.yaml.tmp`);
-  }
-
   async load(name: string): Promise<Result<WorkflowFile, LintReport>> {
     try {
       return await loadWorkflow(this.filePath(name));
@@ -55,39 +54,36 @@ export class FileWorkflowStore implements WorkflowStore {
 
   async save(workflow: WorkflowFile, opts?: SaveOptions): Promise<void> {
     const name = workflow.name;
-    const force = opts?.force ?? false;
+    await withResourceLock(
+      { kind: 'workflow', name },
+      async () => {
+        const force = opts?.force ?? false;
 
-    if (!force && (await this.exists(name))) {
-      throw new WorkflowCollisionError(name);
-    }
+        if (!force && (await this.exists(name))) {
+          throw new WorkflowCollisionError(name);
+        }
 
-    const { yaml: yamlStr, sidecarJson } = emitWorkflow(workflow, {
-      sidecarThreshold: this.sidecarThreshold,
-    });
+        const { yaml: yamlStr, sidecarJson } = emitWorkflow(workflow, {
+          sidecarThreshold: this.sidecarThreshold,
+        });
 
-    const tmpPath = this.tmpPath(name);
-    const finalPath = this.filePath(name);
+        const finalPath = this.filePath(name);
 
-    try {
-      // Ensure the workflows directory exists — a fresh install (or a promotion
-      // via `yantra do --save-as`) may be the first write to this location.
-      await mkdir(this.workflowsDir, { recursive: true });
-      await writeFile(tmpPath, yamlStr, 'utf-8');
-      await rename(tmpPath, finalPath);
+        try {
+          // Ensure the workflows directory exists — a fresh install (or a promotion
+          // via `yantra do --save-as`) may be the first write to this location.
+          await writeFileAtomic(finalPath, yamlStr);
 
-      if (sidecarJson !== null) {
-        const sidecarPath = join(this.workflowsDir, `${name}.locators.json`);
-        await writeFile(sidecarPath, sidecarJson, 'utf-8');
-      }
-    } catch (e) {
-      // Clean up tmp file on failure
-      try {
-        await unlink(tmpPath);
-      } catch {
-        // Ignore cleanup errors
-      }
-      throw new WorkflowStoreError('save', name, e);
-    }
+          if (sidecarJson !== null) {
+            const sidecarPath = join(this.workflowsDir, `${name}.locators.json`);
+            await writeFileAtomic(sidecarPath, sidecarJson);
+          }
+        } catch (e) {
+          throw new WorkflowStoreError('save', name, e);
+        }
+      },
+      { targetPath: this.filePath(name) },
+    );
   }
 
   async list(): Promise<WorkflowSummary[]> {
@@ -165,11 +161,17 @@ export class FileWorkflowStore implements WorkflowStore {
   }
 
   async delete(name: string): Promise<void> {
-    try {
-      await unlink(this.filePath(name));
-    } catch (e) {
-      throw new WorkflowStoreError('delete', name, e);
-    }
+    await withResourceLock(
+      { kind: 'workflow', name },
+      async () => {
+        try {
+          await unlink(this.filePath(name));
+        } catch (e) {
+          throw new WorkflowStoreError('delete', name, e);
+        }
+      },
+      { targetPath: this.filePath(name) },
+    );
   }
 
   async exists(name: string): Promise<boolean> {

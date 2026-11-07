@@ -1,14 +1,16 @@
-import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { SCHEMA_VERSION } from '@yantra/protocol';
+
+import { writeFileAtomic } from '../fs/atomic-write.js';
 
 import type { Checkpoint, CheckpointStore, CheckpointSummary } from './types.js';
 
 /**
  * Filesystem-backed checkpoint store.
  *
- * Each checkpoint is written atomically: first to `<step-id>.json.tmp`,
+ * Each checkpoint is written atomically to a unique `<step-id>.json.<pid>.<random>.tmp`,
  * then renamed to `<step-id>.json`. On POSIX and NTFS (same volume), rename
  * is atomic so a crash mid-write never leaves a partial file visible.
  */
@@ -18,17 +20,9 @@ export class FilesystemCheckpointStore implements CheckpointStore {
   async save(checkpoint: Checkpoint): Promise<void> {
     await mkdir(this.dir, { recursive: true });
     const filename = `${checkpoint.after_step_id}.json`;
-    const tmpPath = join(this.dir, `${filename}.tmp`);
     const finalPath = join(this.dir, filename);
     const content = JSON.stringify({ ...checkpoint, schema_version: SCHEMA_VERSION }, null, 2);
-    await writeFile(tmpPath, content, 'utf8');
-    try {
-      await rename(tmpPath, finalPath);
-    } catch (err) {
-      // Best-effort cleanup of the .tmp on rename failure
-      await writeFile(tmpPath + '.dead', '', 'utf8').catch(() => undefined);
-      throw err;
-    }
+    await writeFileAtomic(finalPath, content);
   }
 
   async load(stepId: string): Promise<Checkpoint | null> {

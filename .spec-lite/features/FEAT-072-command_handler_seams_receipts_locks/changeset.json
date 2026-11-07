@@ -32,6 +32,18 @@
       "task": "TASK-003"
     },
     {
+      "path": "apps/cli/src/commands/schedule-registration.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "apps/cli/src/commands/schedule.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "apps/cli/src/resource-busy.ts",
       "status": "A",
       "role": "implement",
@@ -728,6 +740,12 @@
       "task": "TASK-002"
     },
     {
+      "path": "apps/cli/tests/commands/schedule-registration.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "apps/cli/tests/resource-busy.spec.ts",
       "status": "A",
       "role": "implement",
@@ -746,16 +764,64 @@
       "task": "TASK-002"
     },
     {
+      "path": "docs/features/report-templates.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "docs/features/saved-workflows.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "eslint.config.js",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/_lint-fixtures/fixed-temp-name.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/audit/usage-writer.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/brief/write-artifacts.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "packages/core/src/browser/paths.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-002"
     },
     {
+      "path": "packages/core/src/browser/profile-store.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "packages/core/src/config/write.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/src/executor/checkpoint-store.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
     },
     {
       "path": "packages/core/src/fs/atomic-write.ts",
@@ -794,6 +860,60 @@
       "task": "TASK-003"
     },
     {
+      "path": "packages/core/src/report-template/store.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/report-template/write-artifacts.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/research/research-loop.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/workflow/recorder/store.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/workflow/replay/manifest-writer.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/workflow/store.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/boundary-rules.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/brief/write-artifacts.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/browser/profile-store.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "packages/core/tests/fs/atomic-write.spec.ts",
       "status": "A",
       "role": "implement",
@@ -801,7 +921,7 @@
     },
     {
       "path": "packages/core/tests/locks/concurrent-writers.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -816,6 +936,30 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/report-template/render.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/report-template/store.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/workflow/recorder/store.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/workflow/store.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
     },
     {
       "path": "packages/protocol/src/commands/entries/browser.ts",

@@ -25,10 +25,11 @@ import { type Command } from 'commander';
 import { createRegisteredCommand } from '../registry/build-command-tree.js';
 import { fromAction } from '../registry/handler.js';
 import type { HandlerArgs } from '../registry/handler.js';
+import { throwIfResourceBusy } from '../resource-busy.js';
 import { makeStderrLogger } from '../runtime.js';
 import { openScheduleStore } from '../schedule-store.js';
 
-import { validateRegistration } from './schedule-registration.js';
+import { withValidatedRegistration, withScheduleRegistryLock } from './schedule-registration.js';
 
 const NOTIFY_TARGETS: readonly NotifyTarget[] = ['desktop', 'file', 'none'];
 
@@ -103,7 +104,7 @@ export function scheduleHandlers() {
       }
 
       const workflowStore = new FileWorkflowStore(workflowsRoot());
-      const validated = await validateRegistration(
+      const validated = await withValidatedRegistration(
         {
           workflowName,
           cronExpr: options.cron!,
@@ -112,7 +113,19 @@ export function scheduleHandlers() {
           notifyTarget: notify as NotifyTarget,
         },
         workflowStore,
-      );
+        async (registration) => {
+          const handle = await openScheduleStore(logger);
+          if (handle === null) return null;
+          try {
+            return await handle.store.register(registration);
+          } finally {
+            handle.close();
+          }
+        },
+      ).catch((error: unknown) => {
+        throwIfResourceBusy(error, 'schedule', options.json === true, process);
+        throw error;
+      });
 
       if (!validated.ok) {
         process.stderr.write(`${validated.reason}\n`);
@@ -120,8 +133,8 @@ export function scheduleHandlers() {
         return;
       }
 
-      const handle = await openScheduleStore(logger);
-      if (handle === null) {
+      const registered = validated.value;
+      if (registered === null) {
         process.stderr.write(
           'Error: the local index (index.db) is unavailable — cannot register a schedule.\n',
         );
@@ -129,30 +142,25 @@ export function scheduleHandlers() {
         return;
       }
 
-      try {
-        const registered = await handle.store.register(validated.registration);
-        if (!registered.isOk) {
-          process.stderr.write(`Error: ${registered.error.message}\n`);
-          process.exit(2);
-          return;
-        }
-        const schedule = registered.value;
-
-        if (options.json === true) {
-          process.stdout.write(`${JSON.stringify(schedule, null, 2)}\n`);
-        } else {
-          process.stdout.write(
-            `✓ Scheduled "${schedule.workflowName}" (${schedule.id})\n` +
-              `  cron:   ${schedule.cronExpr}\n` +
-              `  next:   ${schedule.nextFireAt ?? '—'}\n` +
-              `  notify: ${schedule.notifyTarget}\n` +
-              `\nStart the daemon to run it: yantra daemon start\n`,
-          );
-        }
-        process.exit(0);
-      } finally {
-        handle.close();
+      if (!registered.isOk) {
+        process.stderr.write(`Error: ${registered.error.message}\n`);
+        process.exit(2);
+        return;
       }
+      const schedule = registered.value;
+
+      if (options.json === true) {
+        process.stdout.write(`${JSON.stringify(schedule, null, 2)}\n`);
+      } else {
+        process.stdout.write(
+          `✓ Scheduled "${schedule.workflowName}" (${schedule.id})\n` +
+            `  cron:   ${schedule.cronExpr}\n` +
+            `  next:   ${schedule.nextFireAt ?? '—'}\n` +
+            `  notify: ${schedule.notifyTarget}\n` +
+            `\nStart the daemon to run it: yantra daemon start\n`,
+        );
+      }
+      process.exit(0);
     }),
   };
 }
@@ -230,7 +238,12 @@ export function unscheduleHandlers() {
       }
 
       try {
-        const removed = await handle.store.remove(id);
+        const removed = await withScheduleRegistryLock(() => handle.store.remove(id)).catch(
+          (error: unknown) => {
+            throwIfResourceBusy(error, 'unschedule', options.json === true, process);
+            throw error;
+          },
+        );
         if (!removed.isOk) {
           process.stderr.write(`Error: ${removed.error.message}\n`);
           process.exit(2);

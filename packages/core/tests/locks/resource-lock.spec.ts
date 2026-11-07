@@ -165,6 +165,13 @@ describe('@no-llm process-safe resource locks', () => {
     expect(await probeResourceLock({ kind: 'config' }, options)).toBeNull();
   });
 
+  it('validates resource keys even when an injected store overrides its target', async () => {
+    await expect(
+      acquireResourceLease({ kind: 'workflow', name: '../escape' }, options),
+    ).rejects.toThrow('Invalid workflow lock name');
+    expect(await readdir(root)).toEqual([]);
+  });
+
   it('reads the parsed config only after acquiring the lock', async () => {
     await writeConfigDocument('version: 1\nretention:\n  runs_days: 30\n', target);
     const lease = await hold();

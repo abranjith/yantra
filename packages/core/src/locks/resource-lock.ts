@@ -74,6 +74,7 @@ function resourceLabel(resource: LockedResource): string {
 
 /** Resolve only validated names; a resource key cannot escape its store. */
 export function resourceLockTarget(resource: LockedResource): string {
+  validateResourceKey(resource);
   switch (resource.kind) {
     case 'config':
       return configPath();
@@ -82,17 +83,26 @@ export function resourceLockTarget(resource: LockedResource): string {
     case 'schedules':
       return scheduleRegistryLockTarget();
     case 'browser-profile':
-      if (!isAbsolute(resource.path)) throw new Error('Browser profile lock path must be absolute');
       return resolve(resource.path);
     case 'workflow':
     case 'template': {
-      if (!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(resource.name))
-        throw new Error(`Invalid ${resource.kind} lock name`);
       return resource.kind === 'workflow'
         ? join(workflowsRoot(), `${resource.name}.yaml`)
         : join(templatesRoot(), `${resource.name}.md`);
     }
   }
+}
+
+function validateResourceKey(resource: LockedResource): void {
+  if ('name' in resource && !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(resource.name))
+    throw new Error(`Invalid ${resource.kind} lock name`);
+  if (resource.kind === 'browser-profile' && !isAbsolute(resource.path))
+    throw new Error('Browser profile lock path must be absolute');
+}
+
+function targetFor(resource: LockedResource, options: ResourceLockOptions): string {
+  validateResourceKey(resource);
+  return resolve(options.targetPath ?? resourceLockTarget(resource));
 }
 
 async function readOwner(target: string): Promise<ResourceLockOwner | null> {
@@ -112,7 +122,7 @@ export async function probeResourceLock(
   resource: LockedResource,
   options: ResourceLockOptions = {},
 ): Promise<ResourceLockOwner | null> {
-  const target = resolve(options.targetPath ?? resourceLockTarget(resource));
+  const target = targetFor(resource, options);
   const held = await lockfile.check(target, {
     realpath: false,
     lockfilePath: `${target}.lock`,
@@ -126,7 +136,7 @@ export async function acquireResourceLease(
   resource: LockedResource,
   options: ResourceLockOptions = {},
 ): Promise<ResourceLease> {
-  const target = resolve(options.targetPath ?? resourceLockTarget(resource));
+  const target = targetFor(resource, options);
   await mkdir(dirname(target), { recursive: true, mode: 0o700 });
   const owner = OwnerSchema.parse(
     options.owner ?? {
