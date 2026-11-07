@@ -2210,6 +2210,11 @@
       "task": "TASK-001"
     },
     {
+      "path": "docs/features/command-registry.md",
+      "status": "U",
+      "role": "implement"
+    },
+    {
       "path": "docs/protocol-spec.md",
       "status": "M",
       "role": "implement",
@@ -2217,13 +2222,13 @@
     },
     {
       "path": "e2e/command-format-shells.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
     {
       "path": "e2e/fixtures/argv-echo/argv-echo.mjs",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
@@ -2454,11 +2459,18 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-010"
+    },
+    {
+      "path": "README.md",
+      "status": "M",
+      "role": "implement"
     }
   ],
   "excluded": [
+    ".spec-lite/feature-summary.md",
     ".spec-lite/features/FEAT-062-command_registry/changeset.json",
     ".spec-lite/features/FEAT-062-command_registry/spec.md",
+    ".spec-lite/memory.md",
     ".spec-lite/plan_ui.md"
   ],
   "baseline": {
