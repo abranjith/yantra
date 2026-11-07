@@ -13,7 +13,10 @@
  */
 
 import type { TaskType, UsageRollupFilter, UsageRollupRow } from '@yantra/core';
+import type { Command } from 'commander';
 
+import { createTerminalContext } from '../adapters/terminal/terminal-adapter.js';
+import { CommandFailure, type CommandContext } from '../context/command-context.js';
 import { openHistory } from '../history.js';
 import type { HandlerArgs } from '../registry/handler.js';
 import { CLI_JSON_SCHEMA_VERSION } from '../render/json.js';
@@ -29,42 +32,49 @@ interface UsageOptions {
 const TASK_TYPES = new Set<TaskType>(['ask', 'research', 'run', 'do']);
 
 /** `yantra usage`: bound to the `usage` registry entry. */
-export async function usageHandler(_args: HandlerArgs, options: UsageOptions): Promise<void> {
-  const logger = makeStderrLogger(options.debug === true, process.stderr);
+export async function usageHandler(
+  _args: HandlerArgs,
+  options: UsageOptions,
+  _command?: Command,
+  context: CommandContext = createTerminalContext(),
+): Promise<void> {
+  const logger = makeStderrLogger(options.debug === true, context.output.stderr);
 
   const filter: UsageRollupFilter = {};
   if (options.type !== undefined) {
     if (!TASK_TYPES.has(options.type as TaskType)) {
-      process.stderr.write(`Unknown task type "${options.type}" (expected: ask|research|run|do)\n`);
-      process.exit(1);
+      context.output.stderr.write(
+        `Unknown task type "${options.type}" (expected: ask|research|run|do)\n`,
+      );
+      throw new CommandFailure(1, 'yantra.usage.failed', '', null, true);
     }
     (filter as { taskType?: TaskType }).taskType = options.type as TaskType;
   }
   if (options.since !== undefined) {
     const since = parseSince(options.since);
     if (since === null) {
-      process.stderr.write(
+      context.output.stderr.write(
         `Invalid --since value "${options.since}" (use YYYY-MM-DD, 7d, or 24h)\n`,
       );
-      process.exit(1);
+      throw new CommandFailure(1, 'yantra.usage.failed', '', null, true);
     }
     (filter as { since?: string }).since = since;
   }
 
   const history = await openHistory(logger);
   if (history === null) {
-    emitEmpty(options, 'history index unavailable — run `yantra doctor` to rebuild it');
-    process.exit(0);
+    emitEmpty(context, options, 'history index unavailable — run `yantra doctor` to rebuild it');
+    return;
   }
 
   try {
     const result = await history.store.usageRollup(filter);
     if (!result.isOk) {
-      process.stderr.write(`Error: ${result.error.message}\n`);
-      process.exit(1);
+      context.output.stderr.write(`Error: ${result.error.message}\n`);
+      throw new CommandFailure(1, 'yantra.usage.failed', '', null, true);
     }
-    render(result.value, options);
-    process.exit(0);
+    render(context, result.value, options);
+    return;
   } finally {
     history.close();
   }
@@ -85,7 +95,11 @@ export function parseSince(raw: string, now: Date = new Date()): string | null {
   return null;
 }
 
-function render(rows: readonly UsageRollupRow[], options: UsageOptions): void {
+function render(
+  context: CommandContext,
+  rows: readonly UsageRollupRow[],
+  options: UsageOptions,
+): void {
   const totals = rows.reduce(
     (acc, row) => ({
       taskCount: acc.taskCount + row.taskCount,
@@ -95,51 +109,47 @@ function render(rows: readonly UsageRollupRow[], options: UsageOptions): void {
   );
 
   if (options.json === true) {
-    process.stdout.write(
-      `${JSON.stringify({
-        schemaVersion: CLI_JSON_SCHEMA_VERSION,
-        kind: 'usage',
-        rows,
-        totals,
-      })}\n`,
-    );
+    context.output.json({
+      schemaVersion: CLI_JSON_SCHEMA_VERSION,
+      kind: 'usage',
+      rows,
+      totals,
+    });
     return;
   }
 
   if (rows.length === 0) {
-    process.stdout.write('No usage recorded yet.\n');
+    context.output.stdout.write('No usage recorded yet.\n');
     return;
   }
 
-  process.stdout.write('Day         Provider        Tasks    Cost (USD)\n');
-  process.stdout.write('----------  --------------  -------  ----------\n');
+  context.output.stdout.write('Day         Provider        Tasks    Cost (USD)\n');
+  context.output.stdout.write('----------  --------------  -------  ----------\n');
   for (const row of rows) {
-    process.stdout.write(
+    context.output.stdout.write(
       `${row.day.padEnd(10)}  ${(row.provider ?? '—').padEnd(14)}  ` +
         `${String(row.taskCount).padStart(7)}  ${formatCost(row.totalCostUsd).padStart(10)}\n`,
     );
   }
-  process.stdout.write('----------  --------------  -------  ----------\n');
-  process.stdout.write(
+  context.output.stdout.write('----------  --------------  -------  ----------\n');
+  context.output.stdout.write(
     `${'Total'.padEnd(10)}  ${''.padEnd(14)}  ${String(totals.taskCount).padStart(7)}  ` +
       `${formatCost(totals.totalCostUsd).padStart(10)}\n`,
   );
 }
 
-function emitEmpty(options: UsageOptions, note: string): void {
+function emitEmpty(context: CommandContext, options: UsageOptions, note: string): void {
   if (options.json === true) {
-    process.stdout.write(
-      `${JSON.stringify({
-        schemaVersion: CLI_JSON_SCHEMA_VERSION,
-        kind: 'usage',
-        rows: [],
-        totals: { taskCount: 0, totalCostUsd: 0 },
-        note,
-      })}\n`,
-    );
+    context.output.json({
+      schemaVersion: CLI_JSON_SCHEMA_VERSION,
+      kind: 'usage',
+      rows: [],
+      totals: { taskCount: 0, totalCostUsd: 0 },
+      note,
+    });
     return;
   }
-  process.stdout.write(`${note}\n`);
+  context.output.stdout.write(`${note}\n`);
 }
 
 function formatCost(cost: number): string {

@@ -3,6 +3,7 @@ import { cp, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:
 import { dirname, isAbsolute, join, relative, resolve, sep, win32 } from 'node:path';
 
 import {
+  ResourceBusyError,
   cacheDir,
   configSchema,
   configPath,
@@ -26,11 +27,12 @@ import {
 import { type Command, CommanderError } from 'commander';
 import { parse as parseYaml, stringify } from 'yaml';
 
+import { createTerminalContext } from '../adapters/terminal/terminal-adapter.js';
+import { CommandFailure, type CommandContext } from '../context/command-context.js';
 import { keyOwner } from '../key-ownership.js';
 import { createRegisteredCommand } from '../registry/build-command-tree.js';
 import { handler } from '../registry/handler.js';
 import { CLI_JSON_SCHEMA_VERSION } from '../render/json.js';
-import { throwIfResourceBusy } from '../resource-busy.js';
 
 interface ConfigOptions {
   readonly json?: boolean;
@@ -87,49 +89,57 @@ export interface MoveDirectoryDependencies {
 
 const MOVE_DIRECTORY_FS: MoveDirectoryDependencies = { stat, mkdir, rename, cp, rm };
 
-export function makeConfigCommand(deps: DataDirDependencies = DATA_DIR_DEPENDENCIES): Command {
-  return createRegisteredCommand('config', configHandlers(deps));
+export function makeConfigCommand(
+  deps: DataDirDependencies = DATA_DIR_DEPENDENCIES,
+  context: CommandContext = createTerminalContext(),
+): Command {
+  return createRegisteredCommand('config', configHandlers(deps, context));
 }
 
 /** Handlers for the `config` family, bound by registry id. */
-export function configHandlers(deps: DataDirDependencies = DATA_DIR_DEPENDENCIES) {
+export function configHandlers(
+  deps: DataDirDependencies = DATA_DIR_DEPENDENCIES,
+  context: CommandContext = createTerminalContext(),
+) {
   return {
-    'config.path': handler((_args, options: ConfigOptions) => runPath(options)),
-    'config.list': handler((_args, options: ConfigOptions) => runList(options)),
-    'config.get': handler((args, options: ConfigOptions) => runGet(args[0] as string, options)),
-    'config.set': handler((args, options: ConfigOptions) =>
-      runSet(args[0] as string, args[1] as string, options),
+    'config.path': handler((_args, options: ConfigOptions) => runPath(context, options)),
+    'config.list': handler((_args, options: ConfigOptions) => runList(context, options)),
+    'config.get': handler((args, options: ConfigOptions) =>
+      runGet(context, args[0] as string, options),
     ),
-    'config.unset': handler((args, options: ConfigOptions) => runUnset(args[0] as string, options)),
-    'config.edit': handler((_args, options: ConfigOptions) => runEdit(options)),
-    'config.validate': handler((_args, options: ConfigOptions) => runValidate(options)),
+    'config.set': handler((args, options: ConfigOptions) =>
+      runSet(context, args[0] as string, args[1] as string, options),
+    ),
+    'config.unset': handler((args, options: ConfigOptions) =>
+      runUnset(context, args[0] as string, options),
+    ),
+    'config.edit': handler((_args, options: ConfigOptions) => runEdit(context, options)),
+    'config.validate': handler((_args, options: ConfigOptions) => runValidate(context, options)),
     'config.data-dir': handler((args, options: DataDirOptions) =>
-      runDataDir(args[0] as string | undefined, options, deps),
+      runDataDir(context, args[0] as string | undefined, options, deps),
     ),
   } as const;
 }
 
-function emit(kind: string, body: Record<string, unknown>): void {
-  process.stdout.write(
-    `${JSON.stringify({ schemaVersion: CLI_JSON_SCHEMA_VERSION, kind, ...body })}\n`,
-  );
+function emit(context: CommandContext, kind: string, body: Record<string, unknown>): void {
+  context.output.json({ schemaVersion: CLI_JSON_SCHEMA_VERSION, kind, ...body });
 }
 
-function fail(message: string, exitCode = 1): never {
-  process.stderr.write(`Error: ${message}\n`);
+function fail(context: CommandContext, message: string, exitCode = 1): never {
+  context.output.stderr.write(`Error: ${message}\n`);
   throw new CommanderError(exitCode, 'yantra.config.failed', message);
 }
 
-async function validated() {
+async function validated(context: CommandContext) {
   const result = await loadConfig();
   // ConfigError's message already names every offending key.
-  if (!result.isOk) fail(result.error.message);
+  if (!result.isOk) fail(context, result.error.message);
   return result.value;
 }
 
-function pathRows() {
+function pathRows(context: CommandContext) {
   const sources = storageDirSources();
-  const homeSource = process.env.YANTRA_HOME?.trim() ? 'env:YANTRA_HOME' : 'default';
+  const homeSource = context.settings.env().YANTRA_HOME?.trim() ? 'env:YANTRA_HOME' : 'default';
   return [
     { name: 'home', path: yantraHome(), source: homeSource },
     { name: 'config', path: configPath(), source: homeSource },
@@ -143,65 +153,83 @@ function pathRows() {
   ];
 }
 
-function runPath(options: ConfigOptions): void {
-  const rows = pathRows();
-  if (options.json) emit('config.path', { rows });
-  else for (const row of rows) process.stdout.write(`${row.name}\t${row.path}\t${row.source}\n`);
+function runPath(context: CommandContext, options: ConfigOptions): void {
+  const rows = pathRows(context);
+  if (options.json) emit(context, 'config.path', { rows });
+  else
+    for (const row of rows)
+      context.output.stdout.write(`${row.name}\t${row.path}\t${row.source}\n`);
 }
 
-async function runList(options: ConfigOptions): Promise<void> {
-  const config = redactConfigRefs(await validated());
-  if (options.json) emit('config.list', { config });
-  else process.stdout.write(stringify(config));
+async function runList(context: CommandContext, options: ConfigOptions): Promise<void> {
+  const config = redactConfigRefs(await validated(context));
+  if (options.json) emit(context, 'config.list', { config });
+  else context.output.stdout.write(stringify(config));
 }
 
-async function runGet(key: string, options: ConfigOptions): Promise<void> {
-  const config = redactConfigRefs(await validated()) as Record<string, unknown>;
+async function runGet(context: CommandContext, key: string, options: ConfigOptions): Promise<void> {
+  const config = redactConfigRefs(await validated(context)) as Record<string, unknown>;
   let value: unknown = config;
   for (const part of key.split('.')) {
     if (!value || typeof value !== 'object' || !(part in value))
-      fail(`unknown config key "${key}"`);
+      fail(context, `unknown config key "${key}"`);
     value = (value as Record<string, unknown>)[part];
   }
-  if (options.json) emit('config.get', { key, value });
-  else process.stdout.write(`${typeof value === 'string' ? value : stringify(value).trim()}\n`);
+  if (options.json) emit(context, 'config.get', { key, value });
+  else
+    context.output.stdout.write(`${typeof value === 'string' ? value : stringify(value).trim()}\n`);
 }
 
-async function runSet(key: string, rawValue: string, options: ConfigOptions): Promise<void> {
+async function runSet(
+  context: CommandContext,
+  key: string,
+  rawValue: string,
+  options: ConfigOptions,
+): Promise<void> {
   if (keyOwner(key) === 'prefs')
-    fail(`that is a personalization key - use: yantra prefs set ${key} ${rawValue}`);
-  if (keyOwner(key) !== 'config') fail(`unknown config key "${key}"`);
+    fail(context, `that is a personalization key - use: yantra prefs set ${key} ${rawValue}`);
+  if (keyOwner(key) !== 'config') fail(context, `unknown config key "${key}"`);
   let value: unknown;
   try {
     value = parseYaml(rawValue);
   } catch (error) {
-    fail(`invalid YAML value: ${error instanceof Error ? error.message : String(error)}`);
+    if (error instanceof CommandFailure) throw error;
+
+    fail(context, `invalid YAML value: ${error instanceof Error ? error.message : String(error)}`);
   }
   try {
     await setConfigKey(key, value);
   } catch (error) {
-    throwIfResourceBusy(error, 'config.set', options.json === true, process);
-    fail(error instanceof Error ? error.message : String(error));
+    if (error instanceof CommandFailure) throw error;
+
+    if (error instanceof ResourceBusyError) throw error;
+    fail(context, error instanceof Error ? error.message : String(error));
   }
   resetPathCache();
-  if (options.json) emit('config.set', { status: 'set', key });
-  else process.stdout.write(`Set ${key}.\n`);
+  if (options.json) emit(context, 'config.set', { status: 'set', key });
+  else context.output.stdout.write(`Set ${key}.\n`);
 }
 
-async function runUnset(key: string, options: ConfigOptions): Promise<void> {
-  if (keyOwner(key) !== 'config') fail(`unknown config key "${key}"`);
+async function runUnset(
+  context: CommandContext,
+  key: string,
+  options: ConfigOptions,
+): Promise<void> {
+  if (keyOwner(key) !== 'config') fail(context, `unknown config key "${key}"`);
   try {
     await unsetConfigKey(key);
   } catch (error) {
-    throwIfResourceBusy(error, 'config.unset', options.json === true, process);
-    fail(error instanceof Error ? error.message : String(error));
+    if (error instanceof CommandFailure) throw error;
+
+    if (error instanceof ResourceBusyError) throw error;
+    fail(context, error instanceof Error ? error.message : String(error));
   }
   resetPathCache();
-  if (options.json) emit('config.unset', { status: 'unset', key });
-  else process.stdout.write(`Unset ${key}; the schema default now applies.\n`);
+  if (options.json) emit(context, 'config.unset', { status: 'unset', key });
+  else context.output.stdout.write(`Unset ${key}; the schema default now applies.\n`);
 }
 
-async function runEdit(options: ConfigOptions): Promise<void> {
+async function runEdit(context: CommandContext, options: ConfigOptions): Promise<void> {
   const path = configPath();
   let original: string;
   try {
@@ -211,8 +239,8 @@ async function runEdit(options: ConfigOptions): Promise<void> {
     await mkdir(dirname(path), { recursive: true, mode: 0o700 });
     await writeFile(path, original, { mode: 0o600 });
   }
-  const editor = process.env.EDITOR?.trim();
-  if (!editor) fail('$EDITOR is not set');
+  const editor = context.settings.env().EDITOR?.trim();
+  if (!editor) fail(context, '$EDITOR is not set');
   const exitCode = await new Promise<number>((resolve) => {
     const child = spawn(editor, [path], { shell: true, stdio: 'inherit' });
     child.once('error', () => resolve(1));
@@ -220,22 +248,22 @@ async function runEdit(options: ConfigOptions): Promise<void> {
   });
   if (exitCode !== 0) {
     await writeFile(path, original, { mode: 0o600 });
-    fail(`editor exited with code ${exitCode}`);
+    fail(context, `editor exited with code ${exitCode}`);
   }
   const result = await loadConfig(path);
   if (!result.isOk) {
     await writeFile(path, original, { mode: 0o600 });
-    fail(`${result.error.message}; restored the original file`);
+    fail(context, `${result.error.message}; restored the original file`);
   }
   resetPathCache();
-  if (options.json) emit('config.edit', { status: 'saved', path });
-  else process.stdout.write(`Saved ${path}.\n`);
+  if (options.json) emit(context, 'config.edit', { status: 'saved', path });
+  else context.output.stdout.write(`Saved ${path}.\n`);
 }
 
-async function runValidate(options: ConfigOptions): Promise<void> {
-  await validated();
-  if (options.json) emit('config.validate', { valid: true, path: configPath() });
-  else process.stdout.write(`${configPath()} is valid.\n`);
+async function runValidate(context: CommandContext, options: ConfigOptions): Promise<void> {
+  await validated(context);
+  if (options.json) emit(context, 'config.validate', { valid: true, path: configPath() });
+  else context.output.stdout.write(`${configPath()} is valid.\n`);
 }
 
 /**
@@ -305,6 +333,7 @@ function isContainedIn(child: string, parent: string): boolean {
 }
 
 async function runDataDir(
+  context: CommandContext,
   target: string | undefined,
   options: DataDirOptions,
   deps: DataDirDependencies = DATA_DIR_DEPENDENCIES,
@@ -312,32 +341,33 @@ async function runDataDir(
   const source = dataDir();
   const sourceLabel = storageDirSources().dataSource;
   if (!target) {
-    if (options.json) emit('config.data-dir', { path: source, source: sourceLabel });
-    else process.stdout.write(`${source}\t${sourceLabel}\n`);
+    if (options.json) emit(context, 'config.data-dir', { path: source, source: sourceLabel });
+    else context.output.stdout.write(`${source}\t${sourceLabel}\n`);
     return;
   }
   const absolute = isAbsolute(target) || win32.isAbsolute(target);
-  if (!absolute) fail('data directory must be an absolute path');
+  if (!absolute) fail(context, 'data directory must be an absolute path');
   const normalizedSource = source.replace(/\\/g, '/').replace(/\/+$/u, '').toLowerCase();
   const normalizedTarget = target.replace(/\\/g, '/').replace(/\/+$/u, '').toLowerCase();
   if (
     normalizedTarget === normalizedSource ||
     normalizedTarget.startsWith(`${normalizedSource}/`)
   ) {
-    fail('target must not be the current data directory or nested inside it');
+    fail(context, 'target must not be the current data directory or nested inside it');
   }
-  const currentConfig = await validated();
+  const currentConfig = await validated(context);
   const candidate = configSchema.safeParse({
     ...currentConfig,
     paths: { ...currentConfig.paths, data_dir: target },
   });
   if (!candidate.success) {
     const issue = candidate.error.issues[0];
-    fail(`invalid data directory: ${issue?.message ?? 'configuration constraint failed'}`);
+    fail(context, `invalid data directory: ${issue?.message ?? 'configuration constraint failed'}`);
   }
   const lock = await new FileDaemonLock().probe();
   if (lock)
     fail(
+      context,
       `data relocation is unavailable while the daemon or a run holds the lock${lock.pid ? ` (pid ${lock.pid})` : ''}`,
     );
   // Relocation is a first-class caller of the managed-use contract: on Windows a
@@ -346,6 +376,7 @@ async function runDataDir(
   // Checked before any filesystem mutation.
   if (await deps.hasActiveManagedUse())
     fail(
+      context,
       'data relocation is unavailable while a Yantra-managed browser run is active; stop the running sessions and retry',
       3,
     );
@@ -355,11 +386,17 @@ async function runDataDir(
     targetEntries = await readdir(target);
     targetExists = true;
   } catch (error) {
+    if (error instanceof CommandFailure) throw error;
+
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
-      fail(`cannot inspect target: ${error instanceof Error ? error.message : String(error)}`, 2);
+      fail(
+        context,
+        `cannot inspect target: ${error instanceof Error ? error.message : String(error)}`,
+        2,
+      );
   }
   if (targetEntries.length > 0 && !options.force)
-    fail('target exists and is non-empty; pass --force to continue');
+    fail(context, 'target exists and is non-empty; pass --force to continue');
 
   const willMove = options.move !== false;
   const decide = deps.decideManagedTree ?? decideManagedTree;
@@ -373,30 +410,42 @@ async function runDataDir(
   const plan = { from: source, to: target, move: willMove, managedBrowsers: managed };
 
   if (options.dryRun) {
-    if (options.json) emit('config.data-dir', { dryRun: true, ...plan });
+    if (options.json) emit(context, 'config.data-dir', { dryRun: true, ...plan });
     else {
-      process.stdout.write(`Would ${plan.move ? 'move' : 'configure'} ${source} -> ${target}\n`);
-      process.stdout.write(`Managed browsers: ${managed.action} - ${managed.note}\n`);
+      context.output.stdout.write(
+        `Would ${plan.move ? 'move' : 'configure'} ${source} -> ${target}\n`,
+      );
+      context.output.stdout.write(`Managed browsers: ${managed.action} - ${managed.note}\n`);
     }
     return;
   }
 
   if (willMove) {
     if (targetExists && targetEntries.length === 0) await rm(target, { recursive: false });
-    await moveDirectory(source, target, targetEntries.length > 0, MOVE_DIRECTORY_FS, {
-      // A cross-volume relocation excludes the managed tree from the copy
-      // rather than duplicating hundreds of megabytes of re-downloadable binaries.
-      exclude: managed.action === 'drop-and-reinstall' ? managed.path : null,
-    });
+    await moveDirectory(
+      source,
+      target,
+      targetEntries.length > 0,
+      MOVE_DIRECTORY_FS,
+      {
+        // A cross-volume relocation excludes the managed tree from the copy
+        // rather than duplicating hundreds of megabytes of re-downloadable binaries.
+        exclude: managed.action === 'drop-and-reinstall' ? managed.path : null,
+      },
+      context,
+    );
   }
   try {
     await setConfigKey('paths.data_dir', target);
   } catch (error) {
+    if (error instanceof CommandFailure) throw error;
+
     // The rollback stays honest about what it can undo: a single rename, never
     // a copy-based cross-volume move of files it did not copy.
     if (willMove && managed.action !== 'drop-and-reinstall')
       await rename(target, source).catch(() => undefined);
     fail(
+      context,
       `relocation setting was not written: ${error instanceof Error ? error.message : String(error)}`,
       2,
     );
@@ -406,17 +455,17 @@ async function runDataDir(
   // managed tree at the source, under canonical containment, never its parent.
   if (willMove && managed.action === 'drop-and-reinstall') {
     if (!isContainedIn(managed.path, source))
-      fail(`refusing to remove ${managed.path}: it is not contained in ${source}`, 2);
+      fail(context, `refusing to remove ${managed.path}: it is not contained in ${source}`, 2);
     await rm(managed.path, { recursive: true, force: true }).catch(() => undefined);
   }
 
   resetPathCache();
-  if (options.json) emit('config.data-dir', { status: 'relocated', ...plan });
+  if (options.json) emit(context, 'config.data-dir', { status: 'relocated', ...plan });
   else {
-    process.stdout.write(
+    context.output.stdout.write(
       `${plan.move ? 'Moved' : 'Configured'} data directory: ${source} -> ${target}\n`,
     );
-    process.stdout.write(`Managed browsers: ${managed.action} - ${managed.note}\n`);
+    context.output.stdout.write(`Managed browsers: ${managed.action} - ${managed.note}\n`);
   }
 }
 
@@ -426,6 +475,7 @@ export async function moveDirectory(
   merge: boolean,
   fs: MoveDirectoryDependencies = MOVE_DIRECTORY_FS,
   opts: { readonly exclude?: string | null } = {},
+  context: CommandContext = createTerminalContext(),
 ): Promise<void> {
   const exclude = opts.exclude ?? null;
   const copyOptions = {
@@ -437,11 +487,17 @@ export async function moveDirectory(
   try {
     await fs.stat(source);
   } catch (error) {
+    if (error instanceof CommandFailure) throw error;
+
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       await fs.mkdir(target, { recursive: true, mode: 0o700 });
       return;
     }
-    fail(`cannot inspect source: ${error instanceof Error ? error.message : String(error)}`, 2);
+    fail(
+      context,
+      `cannot inspect source: ${error instanceof Error ? error.message : String(error)}`,
+      2,
+    );
   }
   await fs.mkdir(dirname(target), { recursive: true, mode: 0o700 });
   // Excluding a subtree makes a plain rename impossible, so that case takes the
@@ -452,7 +508,10 @@ export async function moveDirectory(
       await fs.rm(source, { recursive: true, force: true });
       return;
     } catch (error) {
+      if (error instanceof CommandFailure) throw error;
+
       fail(
+        context,
         `copy failed; source remains at ${source}: ${error instanceof Error ? error.message : String(error)}`,
         2,
       );
@@ -462,8 +521,11 @@ export async function moveDirectory(
     await fs.rename(source, target);
     return;
   } catch (error) {
+    if (error instanceof CommandFailure) throw error;
+
     if ((error as NodeJS.ErrnoException).code !== 'EXDEV') {
       fail(
+        context,
         `could not move data directory: ${error instanceof Error ? error.message : String(error)}`,
         2,
       );
@@ -472,7 +534,10 @@ export async function moveDirectory(
   try {
     await fs.cp(source, target, copyOptions);
   } catch (error) {
+    if (error instanceof CommandFailure) throw error;
+
     fail(
+      context,
       `cross-volume copy failed; source remains at ${source}: ${error instanceof Error ? error.message : String(error)}`,
       2,
     );

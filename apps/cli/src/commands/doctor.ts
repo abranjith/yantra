@@ -44,6 +44,7 @@ import {
   type AgentEvent,
 } from '@yantra/agent';
 import {
+  writeExecutionReceipt,
   cacheDir,
   createKeychainProvider,
   dataDir,
@@ -57,18 +58,26 @@ import {
   runsRoot,
   storageDirSources,
 } from '@yantra/core';
+import { COMMAND_REGISTRY } from '@yantra/protocol';
 import { PROTOCOL_VERSION } from '@yantra/protocol';
 import { type Command, CommanderError } from 'commander';
 
-import { CLIConnectorIO } from '../adapters/terminal/connector.js';
-import { buildRenderOpts } from '../adapters/terminal/connector.js';
+import {
+  createTerminalContext,
+  type TerminalOptions,
+} from '../adapters/terminal/terminal-adapter.js';
 import {
   resolveAgentInvocation,
   type AgentInvocation,
   type AgentModelOptions,
   type NoLlmOption,
 } from '../agent-options.js';
-import { noLlmReason, readGlobalFlags } from '../global-flags.js';
+import { buildRenderOpts } from '../connector-io.js';
+import type { ConnectorIO } from '../connector-io.js';
+import type { CommandContext } from '../context/command-context.js';
+import { commandFlags } from '../context/flags.js';
+import { draftRunReceipt } from '../context/run-receipt.js';
+import { noLlmReason } from '../global-flags.js';
 import { loadEffectivePreferences } from '../preferences.js';
 import { createRegisteredCommand } from '../registry/build-command-tree.js';
 import { handler, type Handler, type HandlerArgs } from '../registry/handler.js';
@@ -133,101 +142,108 @@ const CHECK_TITLES: Record<string, string> = {
   'search.provider': 'Search provider',
 };
 
-export function makeDoctorCommand(runtime?: Partial<DoctorRuntime>): Command {
+export function makeDoctorCommand(runtime?: Partial<DoctorRuntime> & TerminalOptions): Command {
   return createRegisteredCommand('doctor', { doctor: makeDoctorHandler(runtime) });
 }
 
 /** The `doctor` handler over an injectable runtime, bound to the `doctor` registry entry. */
-export function makeDoctorHandler(runtime?: Partial<DoctorRuntime>): Handler {
-  const resolved = doctorRuntime(runtime);
-  return handler(async (_args: HandlerArgs, options: DoctorOptions): Promise<void> => {
-    const preferences = await resolved.loadPreferences();
-    const flags = readGlobalFlags({
-      argv: process.argv,
-      env: resolved.env,
-      isTty: resolved.isTty,
-    });
-    const isJson = options.json === true || flags.json;
-    const renderer = isJson ? new JSONRenderer() : new TerminalRenderer();
-    const connector = new CLIConnectorIO(renderer);
-    const renderOpts = buildRenderOpts(
-      { ...flags, json: isJson },
-      { stdout: resolved.stdout, stderr: resolved.stderr },
-    );
+export function makeDoctorHandler(
+  runtime?: Partial<DoctorRuntime> & TerminalOptions,
+  context: CommandContext = createTerminalContext(runtime),
+): Handler {
+  const resolved = doctorRuntime(context, runtime);
+  let honorsAbort = false;
+  const bound = handler(
+    async (_args: HandlerArgs, options: DoctorOptions, command: Command): Promise<void> => {
+      honorsAbort = options.agentSmoke === true;
+      const entry = COMMAND_REGISTRY.commands.find((e) => e.id === 'doctor');
+      if (entry?.kind === 'leaf') context.settings.bind(entry, command);
+      const preferences = await resolved.loadPreferences();
+      context.settings.usePreferences(preferences);
+      const flags = commandFlags(context, options);
+      const isJson = options.json === true || flags.json;
+      const renderer = isJson ? new JSONRenderer() : new TerminalRenderer();
+      const connector = context.connector(renderer);
+      const renderOpts = buildRenderOpts(
+        { ...flags, json: isJson },
+        { stdout: resolved.stdout, stderr: resolved.stderr },
+      );
 
-    if (options.agentSmoke === true) {
-      const agent = await resolveAgentInvocation('doctor', options, resolved.env, preferences);
-      if (agent.mode === 'no-llm') {
-        if (agent.reason === 'unavailable') {
-          const error = new AgentAuthUnavailableError(
-            agent.model.provider,
-            'managed store, provider environment, runtime-key reference',
-            'Set the provider API key, seed managed auth, or pass --auth-secret <ref>.',
-          );
-          resolved.stderr.write(`${error.code}: ${error.message}\n`);
-          throw new CommanderError(3, error.code, error.message);
+      if (options.agentSmoke === true) {
+        const agent = await resolveAgentInvocation('doctor', options, resolved.env, preferences);
+        if (agent.mode === 'no-llm') {
+          if (agent.reason === 'unavailable') {
+            const error = new AgentAuthUnavailableError(
+              agent.model.provider,
+              'managed store, provider environment, runtime-key reference',
+              'Set the provider API key, seed managed auth, or pass --auth-secret <ref>.',
+            );
+            resolved.stderr.write(`${error.code}: ${error.message}\n`);
+            throw new CommanderError(3, error.code, error.message);
+          }
+          // Name the layer that actually selected the deterministic path;
+          // telling someone to remove a flag they never typed sends them
+          // looking for the wrong thing.
+          const message =
+            agent.reason === 'flag'
+              ? '`doctor --agent-smoke` requires an LLM; remove --no-llm.'
+              : '`doctor --agent-smoke` requires an LLM; unset LLM_PROVIDER=none.';
+          resolved.stderr.write(`${message}\n`);
+          throw new CommanderError(1, 'yantra.doctor.llm-required', message);
         }
-        // Name the layer that actually selected the deterministic path;
-        // telling someone to remove a flag they never typed sends them
-        // looking for the wrong thing.
-        const message =
-          agent.reason === 'flag'
-            ? '`doctor --agent-smoke` requires an LLM; remove --no-llm.'
-            : '`doctor --agent-smoke` requires an LLM; unset LLM_PROVIDER=none.';
-        resolved.stderr.write(`${message}\n`);
-        throw new CommanderError(1, 'yantra.doctor.llm-required', message);
+        await runAgentSmokeCommand(agent, resolved, connector, renderOpts, context);
+        return;
       }
-      await runAgentSmokeCommand(agent, resolved, connector, renderOpts);
-      return;
-    }
 
-    // `--no-llm` (or `LLM_PROVIDER=none`) selects the deterministic path, so
-    // the agent checks report that selection rather than silently probing
-    // for a model and credential that this invocation would never use.
-    const deterministic = noLlmReason(options, resolved.env);
+      // `--no-llm` (or `LLM_PROVIDER=none`) selects the deterministic path, so
+      // the agent checks report that selection rather than silently probing
+      // for a model and credential that this invocation would never use.
+      const deterministic = noLlmReason(options, resolved.env);
 
-    try {
-      const [report, agentChecks, configChecks] = await Promise.all([
-        resolved.coreDoctor({ refresh: options.refresh === true }),
-        resolved.agentDiagnostics(resolved.env, preferences, {
-          ...options,
-          ...(deterministic === null ? {} : { noLlm: deterministic }),
-        }),
-        runConfigurationChecks(resolved),
-      ]);
-      const checks = [...report.checks, ...agentChecks, ...configChecks];
+      try {
+        const [report, agentChecks, configChecks] = await Promise.all([
+          resolved.coreDoctor({ refresh: options.refresh === true }),
+          resolved.agentDiagnostics(resolved.env, preferences, {
+            ...options,
+            ...(deterministic === null ? {} : { noLlm: deterministic }),
+          }),
+          runConfigurationChecks(resolved),
+        ]);
+        const checks = [...report.checks, ...agentChecks, ...configChecks];
 
-      const result: DoctorRenderResult = {
-        checks: checks.map((check) => ({
-          id: check.id,
-          title: CHECK_TITLES[check.id] ?? check.id,
-          status: check.status === 'error' ? 'fail' : check.status,
-          summary: check.message,
-          ...(check.fixHint !== null ? { remediation: check.fixHint } : {}),
-        })),
-        overall: checks.some((check) => check.status === 'error')
-          ? 'fail'
-          : checks.some((check) => check.status === 'warn')
-            ? 'warn'
-            : 'ok',
-        version: PROTOCOL_VERSION,
-        platform: process.platform,
-        nodeVersion: process.versions.node,
-        ...browserProvenance(report.checks),
-        ...searchProvenance(configChecks),
-      };
+        const result: DoctorRenderResult = {
+          checks: checks.map((check) => ({
+            id: check.id,
+            title: CHECK_TITLES[check.id] ?? check.id,
+            status: check.status === 'error' ? 'fail' : check.status,
+            summary: check.message,
+            ...(check.fixHint !== null ? { remediation: check.fixHint } : {}),
+          })),
+          overall: checks.some((check) => check.status === 'error')
+            ? 'fail'
+            : checks.some((check) => check.status === 'warn')
+              ? 'warn'
+              : 'ok',
+          version: PROTOCOL_VERSION,
+          platform: process.platform,
+          nodeVersion: process.versions.node,
+          ...browserProvenance(report.checks),
+          ...searchProvenance(configChecks),
+        };
 
-      connector.renderResult({ kind: 'doctor', result }, renderOpts);
-      if (result.overall === 'fail') {
-        throw new CommanderError(3, 'yantra.doctor.failed', 'Environment checks failed.');
+        connector.renderResult({ kind: 'doctor', result }, renderOpts);
+        if (result.overall === 'fail') {
+          throw new CommanderError(3, 'yantra.doctor.failed', 'Environment checks failed.');
+        }
+      } catch (err) {
+        if (err instanceof CommanderError) throw err;
+        const message = err instanceof Error ? err.message : String(err);
+        resolved.stderr.write(`Error: ${message}\n`);
+        throw new CommanderError(3, 'yantra.doctor.failed', message);
       }
-    } catch (err) {
-      if (err instanceof CommanderError) throw err;
-      const message = err instanceof Error ? err.message : String(err);
-      resolved.stderr.write(`Error: ${message}\n`);
-      throw new CommanderError(3, 'yantra.doctor.failed', message);
-    }
-  });
+    },
+  );
+  return Object.defineProperty(bound, 'honorsAbort', { get: () => honorsAbort });
 }
 
 type CompatibilityLabel = NonNullable<DoctorRenderResult['browser']>['compatibility'];
@@ -483,23 +499,23 @@ async function searchProviderCheck(
 async function runAgentSmokeCommand(
   agent: LlmAgentInvocation,
   runtime: DoctorRuntime,
-  connector: CLIConnectorIO,
+  connector: ConnectorIO,
   renderOpts: ConnectorRenderOpts,
+  context: CommandContext,
 ): Promise<void> {
   const { provider, id: modelId } = agent.model;
   const streaming = !renderOpts.json;
   const runId = `agent-smoke-${new Date().toISOString().replace(/[:.]/g, '-')}`;
   const runDir = join(runtime.runsRoot(), runId);
   await mkdir(runDir, { recursive: true, mode: 0o700 });
+  await writeExecutionReceipt(runDir, await draftRunReceipt(context, ['doctor'], { agent }));
 
   const piAuthPath = await readPiAuthPathOptIn();
 
-  const controller = new AbortController();
   const onSigint = (): void => {
     if (streaming) runtime.stdout.write('\nAborting agent smoke (Ctrl+C)...\n');
-    controller.abort();
   };
-  process.once('SIGINT', onSigint);
+  context.signal.addEventListener('abort', onSigint, { once: true });
 
   if (streaming) {
     runtime.stdout.write(`Agent smoke: ${provider}/${modelId}\n`);
@@ -523,7 +539,7 @@ async function runAgentSmokeCommand(
               return value;
             },
           }),
-      signal: controller.signal,
+      signal: context.signal,
       ...(streaming
         ? { onEvent: (event: AgentEvent) => renderSmokeEvent(event, runtime.stdout) }
         : {}),
@@ -587,7 +603,7 @@ async function runAgentSmokeCommand(
       err instanceof Error ? err.message : String(err),
     );
   } finally {
-    process.removeListener('SIGINT', onSigint);
+    context.signal.removeEventListener('abort', onSigint);
   }
 }
 
@@ -614,12 +630,12 @@ function renderSmokeEvent(event: AgentEvent, stream: NodeJS.WritableStream): voi
   }
 }
 
-function doctorRuntime(runtime?: Partial<DoctorRuntime>): DoctorRuntime {
+function doctorRuntime(context: CommandContext, runtime?: Partial<DoctorRuntime>): DoctorRuntime {
   return {
-    env: runtime?.env ?? process.env,
-    stdout: runtime?.stdout ?? process.stdout,
-    stderr: runtime?.stderr ?? process.stderr,
-    isTty: runtime?.isTty ?? process.stdout.isTTY ?? false,
+    env: context.settings.env(),
+    stdout: context.output.stdout,
+    stderr: context.output.stderr,
+    isTty: context.isInteractive({}),
     coreDoctor: runtime?.coreDoctor ?? runCoreDoctor,
     agentDiagnostics: runtime?.agentDiagnostics ?? runAgentDiagnostics,
     loadPreferences: runtime?.loadPreferences ?? loadEffectivePreferences,

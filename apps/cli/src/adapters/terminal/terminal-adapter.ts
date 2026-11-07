@@ -90,7 +90,13 @@ export async function runTerminal(
         ? options.askRuntime
         : argv[0] === 'do'
           ? options.doRuntime
-          : undefined;
+          : argv[0] === 'sites'
+            ? options.sitesRuntime
+            : argv[0] === 'template'
+              ? options.templateRuntime
+              : argv[0] === 'doctor'
+                ? options.doctorRuntime
+                : undefined;
   const controller = new AbortController();
   const interrupt = () => controller.abort('SIGINT');
   const terminate = () => controller.abort('SIGTERM');

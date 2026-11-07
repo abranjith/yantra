@@ -806,7 +806,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
 
 ### TASK-012: Migrate the read-class commands
 
-- [ ] **Implementation**: Migrate these handlers to the context:
+- [x] **Implementation**: Migrate these handlers to the context:
   - `list`, `show`, `audit`, `report`, `usage`, `profile`;
   - `doctor`, including the `--agent-smoke` run path: its run directory (`doctor.ts:502`) gets a
     receipt, and its SIGINT handling moves to `context.signal` with `honorsAbort` when
@@ -817,13 +817,13 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
   Each `isTty: process.stdout.isTTY` becomes `context.output.colorCapable` or `columns`; each
   `process.exit` becomes a result or failure.
 
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Parity rows for each command in both `--json` and human mode where the command has both. Empty
     and populated sandboxed homes are covered.
   - `doctor --agent-smoke` (fake provider) writes a receipt.
   - The TASK-001 baselines are unchanged; the existing `doctor`, `usage`, `open` and `audit-builder`
     suites pass.
-- [ ] **Documentation Update**: Invoke **Document** update mode for
+- [x] **Documentation Update**: Invoke **Document** update mode for
       `docs/features/diagnostics-and-audit.md` (no behavior change; note the `doctor --agent-smoke`
       receipt).
 - **Verify**: These files are off the allowlist; the parity spec passes for every read row.
@@ -969,7 +969,7 @@ tests/setup` passes; `init.ts`, `init-wizard.ts` and `init-context-prompts.ts` a
 - [x] TASK-009: Migrate `ask` and `do` (agentic run class) with receipts and abort
 - [x] TASK-010: Migrate `run` and `resume` with receipts in the replay path
 - [x] TASK-011: Daemon, scheduling and `confirm`: migration plus daemon-fire receipts
-- [ ] TASK-012: Migrate the read-class commands
+- [x] TASK-012: Migrate the read-class commands
 - [ ] TASK-013: Migrate the mutate-class commands
 - [ ] TASK-014: The `init` application service with a pluggable answer collector
 - [ ] TASK-015: Empty the purity allowlist and run the full parity sweep

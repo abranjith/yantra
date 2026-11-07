@@ -7,7 +7,9 @@ import { acquireResourceLease, loadConfig, loadProfile, resetPathCache } from '@
 import { CommanderError } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createTerminalContext } from '../../src/adapters/terminal/terminal-adapter.js';
 import { makeModelCommand } from '../../src/commands/model.js';
+import { executeCommand } from '../../src/execute.js';
 import { loadEffectivePreferences } from '../../src/preferences.js';
 
 describe('@no-llm model command', () => {
@@ -129,10 +131,9 @@ describe('@no-llm model command', () => {
     const lease = await acquireResourceLease({ kind: 'profile' });
     stdout = [];
     try {
-      await expect(run(['default', 'fixture-model', '--json'])).rejects.toMatchObject({
-        exitCode: 3,
-        code: 'yantra.resource.busy',
-      });
+      await expect(
+        executeCommand(['model', 'default', 'fixture-model', '--json'], createTerminalContext()),
+      ).resolves.toMatchObject({ exitCode: 3 });
       expect(JSON.parse(stdout.join(''))).toMatchObject({
         kind: 'model.default',
         status: 'busy',

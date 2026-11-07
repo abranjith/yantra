@@ -43,13 +43,23 @@ export function terminalInputs(interactive: boolean): InputCollector {
       for await (const chunk of process.stdin) value += String(chunk);
       return value;
     },
-    editor: async (path) => {
-      const editor = process.env.EDITOR;
-      if (!editor) return false;
+    editor: async (path, options) => {
+      const editor =
+        process.env.EDITOR ??
+        (process.platform === 'win32'
+          ? 'notepad.exe'
+          : process.platform === 'darwin'
+            ? 'open'
+            : 'xdg-open');
       return new Promise<boolean>((resolve, reject) => {
-        const child = spawn(editor, [path], { stdio: 'inherit', shell: true });
+        const child = spawn(editor, [path], { stdio: 'inherit', shell: false });
         child.once('error', reject);
-        child.once('exit', (code) => resolve(code === 0));
+        if (options?.wait === false)
+          child.once('spawn', () => {
+            child.unref();
+            resolve(true);
+          });
+        else child.once('exit', (code) => resolve(code === 0));
       });
     },
   };

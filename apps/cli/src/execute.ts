@@ -27,6 +27,8 @@ export async function executeCommand(
     return { exitCode: 0 };
   }
   let result: CommandResult = { exitCode: 0 };
+  let activeKind = argv[0] ?? 'command';
+  let json = argv.includes('--json');
   const bindings = Object.fromEntries(
     Object.entries({ ...buildHandlers(options, context), ...handlers }).map(([id, fn]) => [
       id,
@@ -34,7 +36,11 @@ export async function executeCommand(
         ? fn
         : async (args, opts, command) => {
             const entry = COMMAND_REGISTRY.commands.find((e) => e.id === id);
-            if (entry?.kind === 'leaf') context.settings.bind(entry, command);
+            if (entry?.kind === 'leaf') {
+              context.settings.bind(entry, command);
+              activeKind = entry.id;
+              json = opts.json === true || opts.format === 'json';
+            }
             const value = await fn(args, opts, command, context);
             if (value) result = value;
           },
@@ -60,10 +66,10 @@ export async function executeCommand(
     return result;
   } catch (error) {
     if (error instanceof ResourceBusyError) {
-      if (argv.includes('--json'))
+      if (json)
         context.output.json({
           schemaVersion: '0.2',
-          kind: argv[0] ?? 'command',
+          kind: activeKind,
           status: 'busy',
           resource: error.resource,
           holder: error.holder,

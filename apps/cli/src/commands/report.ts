@@ -8,15 +8,16 @@
  * defaults. Memory.md §General "honesty over cleverness" applies here.
  */
 
-import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { LocalRunStore } from '@yantra/core/workflow/replay';
+import type { Command } from 'commander';
 
-import { CLIConnectorIO } from '../adapters/terminal/connector.js';
-import { buildRenderOpts } from '../adapters/terminal/connector.js';
-import { readGlobalFlags } from '../global-flags.js';
+import { createTerminalContext } from '../adapters/terminal/terminal-adapter.js';
+import { buildRenderOpts } from '../connector-io.js';
+import { CommandFailure, type CommandContext } from '../context/command-context.js';
+import { commandFlags } from '../context/flags.js';
 import type { HandlerArgs } from '../registry/handler.js';
 import { JSONRenderer } from '../render/json.js';
 import { TerminalRenderer } from '../render/terminal.js';
@@ -27,68 +28,58 @@ interface ReportOptions {
 }
 
 /** `yantra report`: bound to the `report` registry entry. */
-export async function reportHandler(args: HandlerArgs, options: ReportOptions): Promise<void> {
+export async function reportHandler(
+  args: HandlerArgs,
+  options: ReportOptions,
+  _command?: Command,
+  context: CommandContext = createTerminalContext(),
+): Promise<void> {
   const [runId] = args as readonly [string];
-  const flags = readGlobalFlags({
-    argv: process.argv,
-    env: process.env,
-    isTty: process.stdout.isTTY ?? false,
-  });
+  const flags = commandFlags(context, options);
   const isJson = options.json === true || flags.json;
 
   try {
     const runStore = new LocalRunStore();
     const run = await runStore.getRun(runId);
     if (run === null) {
-      process.stderr.write(`Run "${runId}" not found.\n`);
-      process.exit(1);
+      context.output.stderr.write(`Run "${runId}" not found.\n`);
+      throw new CommandFailure(1, 'yantra.report.failed', '', null, true);
     }
     const reportPath = join(run.runDir, 'report.md');
 
     if (options.open === true) {
       if (isJson) {
-        process.stderr.write('--open is interactive and cannot be combined with --json.\n');
-        process.exit(1);
+        context.output.stderr.write('--open is interactive and cannot be combined with --json.\n');
+        throw new CommandFailure(1, 'yantra.report.failed', '', null, true);
       }
-      openInEditor(reportPath);
-      process.exit(0);
+      if (context.surface === 'worker') context.openExternal(reportPath);
+      else if (!(await context.input.editor(reportPath, { wait: false })))
+        throw new CommandFailure(1, 'yantra.report.open', 'Failed to launch the report editor.');
+      return;
     }
 
     let markdown: string;
     try {
       markdown = await readFile(reportPath, 'utf8');
     } catch {
-      process.stderr.write(
+      context.output.stderr.write(
         `report.md not found for run ${runId} (the run may still be in progress).\n`,
       );
-      process.exit(1);
+      throw new CommandFailure(1, 'yantra.report.failed', '', null, true);
     }
 
     const renderer = isJson ? new JSONRenderer() : new TerminalRenderer();
-    const connector = new CLIConnectorIO(renderer);
+    const connector = context.connector(renderer);
     connector.renderResult(
       { kind: 'report', markdown },
-      buildRenderOpts({ ...flags, json: isJson }),
+      buildRenderOpts({ ...flags, json: isJson }, context.output),
     );
-    process.exit(0);
+    return;
   } catch (err) {
+    if (err instanceof CommandFailure) throw err;
+
     const message = err instanceof Error ? err.message : String(err);
-    process.stderr.write(`Error: ${message}\n`);
-    process.exit(1);
+    context.output.stderr.write(`Error: ${message}\n`);
+    throw new CommandFailure(1, 'yantra.report.failed', '', null, true);
   }
-}
-
-function openInEditor(path: string): void {
-  const editor = process.env.EDITOR ?? defaultPlatformEditor();
-  const child = spawn(editor, [path], { stdio: 'inherit', shell: false });
-  child.on('error', (err) => {
-    process.stderr.write(`Failed to launch ${editor}: ${err.message}\n`);
-    process.exit(1);
-  });
-}
-
-function defaultPlatformEditor(): string {
-  if (process.platform === 'win32') return 'notepad.exe';
-  if (process.platform === 'darwin') return 'open';
-  return 'xdg-open';
 }

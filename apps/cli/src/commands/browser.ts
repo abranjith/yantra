@@ -20,6 +20,7 @@
  * each has to say which it is, because one word meaning two opposite things
  * inside one noun namespace is exactly what makes a command surface unreadable.
  */
+
 import {
   compareManagedBuild,
   createLocalBrowserRuntimeServices,
@@ -48,10 +49,12 @@ import {
 import { type Command, CommanderError } from 'commander';
 import prompts from 'prompts';
 
+import { createTerminalContext } from '../adapters/terminal/terminal-adapter.js';
 import {
   resolveBrowserSelectionOverride,
   type BrowserSelectionOptions,
 } from '../browser-options.js';
+import type { CommandContext } from '../context/command-context.js';
 import { createRegisteredCommand } from '../registry/build-command-tree.js';
 import { fromAction } from '../registry/handler.js';
 import { CLI_JSON_SCHEMA_VERSION } from '../render/json.js';
@@ -107,10 +110,16 @@ export function makeBrowserCommand(runtime: BrowserCommandRuntime = {}): Command
 }
 
 /** Handlers for `browser`, bound by registry id; each is its former commander action, unchanged. */
-export function browserHandlers(runtime: BrowserCommandRuntime = {}) {
-  const stdout = runtime.stdout ?? process.stdout;
-  const stderr = runtime.stderr ?? process.stderr;
-  const isTty = runtime.isTty ?? (() => process.stdin.isTTY === true);
+export function browserHandlers(
+  runtime: BrowserCommandRuntime = {},
+  context: CommandContext = createTerminalContext({
+    ...(runtime.stdout ? { stdout: runtime.stdout } : {}),
+    ...(runtime.stderr ? { stderr: runtime.stderr } : {}),
+  }),
+) {
+  const stdout = context.output.stdout;
+  const stderr = context.output.stderr;
+  const isTty = runtime.isTty ?? (() => context.isInteractive({}));
   const prompt = runtime.prompt ?? prompts;
   const destinationRoot = runtime.destinationRoot ?? managedBrowsersRoot;
   const now = runtime.now ?? (() => new Date());
@@ -415,7 +424,7 @@ export function browserHandlers(runtime: BrowserCommandRuntime = {}) {
     'browser.list': fromAction(async (options: ListOptions) => {
       const inventory = await readInventory(services());
       if (options.json === true) {
-        stdout.write(`${JSON.stringify(browserListPayload(inventory))}\n`);
+        context.output.json(browserListPayload(inventory));
         return;
       }
       renderInventoryTerminal(stdout, inventory);

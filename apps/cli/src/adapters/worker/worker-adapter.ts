@@ -185,7 +185,7 @@ export async function runWorkerInvocation(
       options,
       handlers,
     );
-    if (result.failure)
+    if (result.failure && envelope === null)
       return finish({
         type: 'error',
         exit_code: result.exitCode === 0 ? 2 : result.exitCode,

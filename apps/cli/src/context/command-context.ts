@@ -47,7 +47,7 @@ export interface InputCollector {
   confirm(message: string): Promise<boolean | null>;
   password(message: string): Promise<string | null>;
   stdin(): Promise<string | null>;
-  editor(path: string): Promise<boolean>;
+  editor(path: string, options?: { readonly wait?: boolean }): Promise<boolean>;
 }
 export interface CommandContext {
   readonly surface: 'terminal' | 'worker';

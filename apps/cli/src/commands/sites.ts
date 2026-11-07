@@ -10,6 +10,8 @@ import {
 } from '@yantra/core';
 import { type Command, CommanderError } from 'commander';
 
+import { createTerminalContext } from '../adapters/terminal/terminal-adapter.js';
+import type { CommandContext } from '../context/command-context.js';
 import { createRegisteredCommand } from '../registry/build-command-tree.js';
 import { handler } from '../registry/handler.js';
 import { CLI_JSON_SCHEMA_VERSION } from '../render/json.js';
@@ -26,6 +28,7 @@ export interface SitesStoreHandle {
 }
 
 export interface SitesRuntime {
+  readonly json?: (value: unknown) => void;
   readonly stdout: NodeJS.WritableStream;
   readonly stderr: NodeJS.WritableStream;
   readonly openStore: (logger: Logger) => Promise<SitesStoreHandle | null>;
@@ -36,8 +39,11 @@ export function makeSitesCommand(runtime?: Partial<SitesRuntime>): Command {
 }
 
 /** Handlers for the `sites` family, bound by registry id. */
-export function sitesHandlers(runtime?: Partial<SitesRuntime>) {
-  const resolved = runtimeWithDefaults(runtime);
+export function sitesHandlers(
+  runtime?: Partial<SitesRuntime>,
+  context: CommandContext = createTerminalContext(runtime),
+) {
+  const resolved = runtimeWithDefaults(context, runtime);
   return {
     'sites.list': handler((_args, options: SitesOptions) => runList(options, resolved)),
     'sites.add': handler((args, options: SitesOptions) =>
@@ -108,7 +114,7 @@ async function withStore(
   runtime: SitesRuntime,
   action: (store: DomainRankStore) => void,
 ): Promise<void> {
-  const handle = await runtime.openStore(makeStderrLogger(options.debug === true, process.stderr));
+  const handle = await runtime.openStore(makeStderrLogger(options.debug === true, runtime.stderr));
   if (handle === null) fail(runtime, 'site ranking index unavailable — run `yantra doctor`', 3);
   try {
     action(handle.store);
@@ -131,9 +137,9 @@ function renderTable(runtime: SitesRuntime, rows: readonly DomainRankRecord[]): 
 }
 
 function emit(runtime: SitesRuntime, body: Record<string, unknown>): void {
-  runtime.stdout.write(
-    `${JSON.stringify({ schemaVersion: CLI_JSON_SCHEMA_VERSION, kind: 'sites', ...body })}\n`,
-  );
+  const value = { schemaVersion: CLI_JSON_SCHEMA_VERSION, kind: 'sites', ...body };
+  if (runtime.json) runtime.json(value);
+  else runtime.stdout.write(`${JSON.stringify(value)}\n`);
 }
 
 function fail(runtime: SitesRuntime, message: string, exitCode = 1): never {
@@ -141,10 +147,14 @@ function fail(runtime: SitesRuntime, message: string, exitCode = 1): never {
   throw new CommanderError(exitCode, 'yantra.sites.failed', message);
 }
 
-function runtimeWithDefaults(runtime?: Partial<SitesRuntime>): SitesRuntime {
+function runtimeWithDefaults(
+  context: CommandContext,
+  runtime?: Partial<SitesRuntime>,
+): SitesRuntime {
   return {
-    stdout: runtime?.stdout ?? process.stdout,
-    stderr: runtime?.stderr ?? process.stderr,
+    json: (value) => context.output.json(value),
+    stdout: context.output.stdout,
+    stderr: context.output.stderr,
     openStore: runtime?.openStore ?? openDefaultStore,
   };
 }

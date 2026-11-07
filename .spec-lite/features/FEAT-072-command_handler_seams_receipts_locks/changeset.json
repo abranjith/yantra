@@ -182,6 +182,12 @@
       "task": "TASK-006"
     },
     {
+      "path": "apps/cli/src/commands/template.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
       "path": "apps/cli/src/commands/usage.ts",
       "status": "M",
       "role": "implement",
@@ -198,6 +204,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/context/flags.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
     },
     {
       "path": "apps/cli/src/context/replay-content.ts",
@@ -291,7 +303,7 @@
     },
     {
       "path": "apps/cli/tests/adapters/daemon-adapter.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
@@ -1004,6 +1016,12 @@
       "task": "TASK-001"
     },
     {
+      "path": "apps/cli/tests/characterization/read-parity.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
       "path": "apps/cli/tests/characterization/receipt-canary.spec.ts",
       "status": "A",
       "role": "implement",
@@ -1023,7 +1041,7 @@
     },
     {
       "path": "apps/cli/tests/characterization/scheduling-parity.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
@@ -1032,6 +1050,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "apps/cli/tests/commands/doctor.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
     },
     {
       "path": "apps/cli/tests/commands/model.spec.ts",
@@ -1347,7 +1371,7 @@
     },
     {
       "path": "packages/core/src/scheduler/process-control.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
@@ -1491,7 +1515,7 @@
     },
     {
       "path": "packages/core/tests/scheduler/process-control.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
