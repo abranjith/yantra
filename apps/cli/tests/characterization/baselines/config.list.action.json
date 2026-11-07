@@ -1,0 +1,6 @@
+{
+  "stdout": "{\"schemaVersion\":\"0.2\",\"kind\":\"config.list\",\"config\":{\"version\":1,\"paths\":{\"data_dir\":null,\"cache_dir\":null},\"models\":[],\"search\":{\"provider\":\"auto\",\"fallback_chain\":[\"tavily\",\"brave\",\"duckduckgo\"],\"fetch_top\":3,\"tavily\":{\"api_key\":null},\"brave\":{\"api_key\":null}},\"ethics\":{\"robots_enabled\":false,\"user_agent\":\"YantraBot/0.1 (+https://yantra.dev)\",\"rate_limit\":{\"default\":{\"tokens_per_second\":1,\"burst\":2},\"overrides\":{}}},\"retention\":{\"runs_days\":30,\"corrupt_index_keep\":3},\"agent\":{\"pi_auth_path\":null},\"browser\":{\"source\":\"auto\",\"executable_path\":null}}}\n",
+  "stderr": "",
+  "exitCode": 0,
+  "tree": {}
+}

@@ -1,0 +1,6 @@
+{
+  "stdout": "Usage: yantra usage [options]\n\nSummarize task volume and cost from the history index\n\nOptions:\n  --type <type>   filter by task type (ask|research|run|do)\n  --since <when>  only tasks since a date (YYYY-MM-DD) or age (e.g. 7d, 24h)\n  --json          emit JSON instead of a table (default: false)\n  --debug         verbose logging on stderr (default: false)\n  -h, --help      display help for command\n",
+  "stderr": "intercepted exit 0\n",
+  "exitCode": 0,
+  "tree": {}
+}

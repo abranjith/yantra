@@ -1,0 +1,6 @@
+{
+  "stdout": "Usage: yantra template [options] [command]\n\nCreate, validate, save, inspect, and remove report templates.\n\nOptions:\n  -h, --help                     display help for command\n\nCommands:\n  new [options] <name>           Create a starter template covering every slot\n                                 kind.\n  lint [options] <name-or-path>  Parse a saved template or Markdown path and\n                                 print its slot manifest.\n  save [options] <path>          Validate and save a Markdown template in the\n                                 local library.\n  list [options]                 List valid saved report templates.\n  show [options] <name>          Print a saved template and its parsed slots.\n  remove [options] <name>        Delete a saved report template.\n  help [command]                 display help for command\n",
+  "stderr": "intercepted exit 0\n",
+  "exitCode": 0,
+  "tree": {}
+}

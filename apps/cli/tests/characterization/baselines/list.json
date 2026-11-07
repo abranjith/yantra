@@ -1,0 +1,6 @@
+{
+  "stdout": "Usage: yantra list [options] [target]\n\nList saved workflows or recent runs\n\nArguments:\n  target             workflows | runs (default: \"runs\")\n\nOptions:\n  --limit <n>        maximum number of entries to show (default: \"20\")\n  --workflow <name>  filter runs by workflow name\n  --status <s>       filter runs by status\n                     (running|completed|failed|aborted|paused)\n  --json             emit JSON instead of a terminal table (default: false)\n  --debug            verbose logging on stderr (default: false)\n  -h, --help         display help for command\n",
+  "stderr": "intercepted exit 0\n",
+  "exitCode": 0,
+  "tree": {}
+}

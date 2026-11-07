@@ -1,0 +1,6 @@
+{
+  "stdout": "",
+  "stderr": "Invalid cron expression \"invalid\": CronPattern: invalid configuration format ('invalid'), exactly five, six, or seven space separated parts are required.\n",
+  "exitCode": 1,
+  "tree": {}
+}

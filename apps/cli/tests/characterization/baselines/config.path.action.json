@@ -1,0 +1,6 @@
+{
+  "stdout": "{\"schemaVersion\":\"0.2\",\"kind\":\"config.path\",\"rows\":[{\"name\":\"home\",\"path\":\"<home>\",\"source\":\"env:YANTRA_HOME\"},{\"name\":\"config\",\"path\":\"<home>\\\\config.yaml\",\"source\":\"env:YANTRA_HOME\"},{\"name\":\"profile\",\"path\":\"<home>\\\\profile.yaml\",\"source\":\"env:YANTRA_HOME\"},{\"name\":\"data\",\"path\":\"<home>\\\\data\",\"source\":\"default\"},{\"name\":\"cache\",\"path\":\"<home>\\\\cache\",\"source\":\"default\"},{\"name\":\"runs\",\"path\":\"<home>\\\\data\\\\runs\",\"source\":\"default\"},{\"name\":\"workflows\",\"path\":\"<home>\\\\data\\\\workflows\",\"source\":\"default\"},{\"name\":\"templates\",\"path\":\"<home>\\\\data\\\\templates\",\"source\":\"default\"},{\"name\":\"index.db\",\"path\":\"<home>\\\\data\\\\index.db\",\"source\":\"default\"}]}\n",
+  "stderr": "",
+  "exitCode": 0,
+  "tree": {}
+}

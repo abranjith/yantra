@@ -1,0 +1,6 @@
+{
+  "stdout": "",
+  "stderr": "Error: model \"missing\" is not registered\n",
+  "exitCode": 1,
+  "tree": {}
+}

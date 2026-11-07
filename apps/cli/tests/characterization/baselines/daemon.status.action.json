@@ -1,0 +1,6 @@
+{
+  "stdout": "{\n  \"running\": false,\n  \"pid\": null,\n  \"schedulesLoaded\": 0,\n  \"nextFires\": [],\n  \"pendingConfirmations\": 0\n}\n",
+  "stderr": "",
+  "exitCode": 0,
+  "tree": {}
+}

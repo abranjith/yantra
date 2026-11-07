@@ -1,0 +1,6 @@
+{
+  "stdout": "Usage: yantra schedule [options] <workflow-name>\n\nRegister a recurring unattended run of a saved workflow\n\nArguments:\n  workflow-name                Name of the saved workflow to schedule\n\nOptions:\n  --cron <expr>                Cron expression (e.g. \"0 8 * * 1\")\n  -p, --params <key=value...>  Workflow parameter (repeatable) (default: [])\n  --params-file <path>         YAML/JSON file of parameter key-value pairs\n  --notify <target>            Notification sink: desktop | file | none\n                               (default: \"desktop\")\n  --on-confirm <policy>        Confirmation policy — only \"pause-and-notify\" is\n                               accepted (default: \"pause-and-notify\")\n  --json                       Emit JSON summary to stdout (default: false)\n  --debug                      Verbose logging to stderr (default: false)\n  -h, --help                   display help for command\n",
+  "stderr": "intercepted exit 0\n",
+  "exitCode": 0,
+  "tree": {}
+}

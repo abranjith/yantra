@@ -1,0 +1,6 @@
+{
+  "stdout": "{\"schemaVersion\":\"0.2\",\"kind\":\"config.validate\",\"valid\":true,\"path\":\"<home>\\\\config.yaml\"}\n",
+  "stderr": "",
+  "exitCode": 0,
+  "tree": {}
+}

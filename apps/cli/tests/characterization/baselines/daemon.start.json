@@ -1,0 +1,6 @@
+{
+  "stdout": "Usage: yantra daemon start [options]\n\nStart the scheduler daemon\n\nOptions:\n  --foreground  Run in the foreground instead of detaching (default: false)\n  --debug       Verbose logging to stderr (default: false)\n  -h, --help    display help for command\n",
+  "stderr": "intercepted exit 0\n",
+  "exitCode": 0,
+  "tree": {}
+}

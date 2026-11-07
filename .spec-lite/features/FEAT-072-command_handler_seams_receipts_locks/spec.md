@@ -934,7 +934,7 @@ tests/setup` passes; `init.ts`, `init-wizard.ts` and `init-context-prompts.ts` a
 
 ## 8. State Tracking
 
-- [ ] TASK-001: Characterization harness and pre-migration terminal baselines
+- [x] TASK-001: Characterization harness and pre-migration terminal baselines
 - [ ] TASK-002: Core resource-lock helper, unique temp files and locked `config.yaml` writes
 - [ ] TASK-003: Locked `profile.yaml` writes and the concurrent-writer evidence (I1)
 - [ ] TASK-004: Workflow, template and schedule-registry locks; core fixed-temp lint rule

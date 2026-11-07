@@ -1,0 +1,6 @@
+{
+  "stdout": "",
+  "stderr": "Could not read template path E:\\ai\\yantra\\.worktrees\\feat-072-command-handler-seams-receipts-locks\\apps\\cli\\missing.md: ENOENT: no such file or directory, open 'E:\\ai\\yantra\\.worktrees\\feat-072-command-handler-seams-receipts-locks\\apps\\cli\\missing.md'\n",
+  "exitCode": 1,
+  "tree": {}
+}

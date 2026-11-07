@@ -1,0 +1,6 @@
+{
+  "stdout": "Usage: yantra init [options]\n\nCreate or update ~/.yantra/config.yaml\n\nOptions:\n  --provider <name>  default model provider: 'anthropic' | 'ollama' | 'none'\n  --reset            back up existing files and rewrite from defaults (default:\n                     false)\n  --json             emit a JSON status object after writing (default: false)\n  --yes              accept defaults without prompting (default: false)\n  -h, --help         display help for command\n",
+  "stderr": "intercepted exit 0\n",
+  "exitCode": 0,
+  "tree": {}
+}

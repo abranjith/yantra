@@ -1,0 +1,6 @@
+{
+  "stdout": "Usage: yantra sites [options] [command]\n\nInspect and curate local website ranks\n\nOptions:\n  -h, --help                 display help for command\n\nCommands:\n  list [options]             List ranked domains\n  add [options] <domain>     Add or promote a user-curated domain\n  remove [options] <domain>  Remove a domain from local ranking\n  help [command]             display help for command\n",
+  "stderr": "intercepted exit 0\n",
+  "exitCode": 0,
+  "tree": {}
+}

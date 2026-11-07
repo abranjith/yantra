@@ -1,0 +1,6 @@
+{
+  "stdout": "Usage: yantra browser update [options]\n\nReplace the Yantra-managed browser with current Chrome for Testing Stable. This\nis the only command that checks whether a newer browser exists; use --dry-run to\nreport availability and download nothing\n\nOptions:\n  --dry-run   report what is available without downloading or changing anything\n              (default: false)\n  --yes       accept the replacement without prompting (default: false)\n  --json      emit exactly one JSON outcome (default: false)\n  -h, --help  display help for command\n",
+  "stderr": "intercepted exit 0\n",
+  "exitCode": 0,
+  "tree": {}
+}

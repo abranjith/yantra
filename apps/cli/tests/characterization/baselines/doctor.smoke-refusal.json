@@ -1,0 +1,6 @@
+{
+  "stdout": "",
+  "stderr": "`doctor --agent-smoke` requires an LLM; remove --no-llm.\n",
+  "exitCode": 1,
+  "tree": {}
+}

@@ -1,0 +1,6 @@
+{
+  "stdout": "",
+  "stderr": "Error: models.0.base_url: base_url is required for provider \"ollama\"\n",
+  "exitCode": 1,
+  "tree": {}
+}

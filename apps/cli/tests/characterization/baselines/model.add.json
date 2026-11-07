@@ -1,0 +1,6 @@
+{
+  "stdout": "Usage: yantra model add [options] <id>\n\nOptions:\n  --provider <provider>\n  --base-url <url>\n  --api-key-ref <reference>\n  --input <kinds>            comma-separated: text,image (default: \"text\")\n  --force                    replace an existing provider/id pair (default:\n                             false)\n  --json                     emit JSON (default: false)\n  -h, --help                 display help for command\n",
+  "stderr": "intercepted exit 0\n",
+  "exitCode": 0,
+  "tree": {}
+}

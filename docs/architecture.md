@@ -2529,6 +2529,33 @@ put the action body in an exported handler in the command's module, and bind it 
 `makeBrowserCommand`) is a one-line wrapper around `createRegisteredCommand`, so it is generated as
 well.
 
+#### Terminal behavior characterization
+
+`apps/cli/tests/characterization/terminal-baseline.spec.ts` adds an `@no-llm` baseline of the
+current terminal boundary. It derives a `--help` scenario for every entry in `COMMAND_REGISTRY`
+and compares those paths with the recursive `walkCommandTree(buildProgram())` traversal, including
+groups and leaves. Each baseline records stdout, stderr, exit code, and the durable file tree
+under an isolated temporary `YANTRA_HOME`. The existing fixed-width help and parse-error goldens
+above continue to cover the registry surface.
+
+`harness.ts` resets the core path cache before and after an in-process invocation, temporarily
+captures stdout and stderr, supplies the stdin TTY flag, and restores the environment, TTY
+descriptor, process spies, and `process.exitCode` afterwards. Its throwing `process.exit` spy keeps
+the Vitest worker alive and records the requested exit code. `snapshotTree` traverses files in a
+stable order, uses relative paths, excludes SQLite database files and their WAL/SHM companions,
+and normalizes home paths, UUIDs, ISO timestamps, and JSON PID/duration counters. Self-checks pin
+normalization across separate trees, interception of an exit, and detection of changed stderr.
+
+Action rows in `scenarios.ts` use `runTerminalProcessScenario` to invoke the same `run(argv)` in
+a real Node child through `tsx`, capture its actual exit and streams, and snapshot its isolated
+home. A real exit matters because legacy handler catch blocks can catch a throwing exit spy and
+print an extra error that the terminal never emits. Deterministic `ask` and `research` use the
+existing runtime seams with a canonical Brief and stub pipeline or loop; the other rows exercise
+local operations and refusals without network, model, or Chrome work. Expected results live in
+`characterization/baselines/*.json`; `CAPTURE_TERMINAL_BASELINES=1` explicitly recaptures them.
+This captures today's terminal behavior while command handlers still retain their current
+process dependencies.
+
 ### `packages/ui` (Drshya)
 
 `@yantra/ui` is Drshya, the design system that the future web app's screens are to be built from.

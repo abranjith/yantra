@@ -1,0 +1,6 @@
+{
+  "stdout": "",
+  "stderr": "Unknown provider \"invalid\" (expected: anthropic | ollama | none)\n",
+  "exitCode": 1,
+  "tree": {}
+}

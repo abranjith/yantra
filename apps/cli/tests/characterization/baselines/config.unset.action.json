@@ -1,0 +1,8 @@
+{
+  "stdout": "{\"schemaVersion\":\"0.2\",\"kind\":\"config.unset\",\"status\":\"unset\",\"key\":\"browser.source\"}\n",
+  "stderr": "",
+  "exitCode": 0,
+  "tree": {
+    "config.yaml": "version: 1\npaths:\n  data_dir: null\n  cache_dir: null\nmodels: []\nsearch:\n  provider: auto\n  fallback_chain:\n    - tavily\n    - brave\n    - duckduckgo\n  fetch_top: 3\n  tavily:\n    api_key: null\n  brave:\n    api_key: null\nethics:\n  robots_enabled: false\n  user_agent: YantraBot/0.1 (+https://yantra.dev)\n  rate_limit:\n    default:\n      tokens_per_second: 1\n      burst: 2\n    overrides: {}\nretention:\n  runs_days: 30\n  corrupt_index_keep: 3\nagent:\n  pi_auth_path: null\nbrowser:\n  executable_path: null\n"
+  }
+}

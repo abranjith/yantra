@@ -1,0 +1,6 @@
+{
+  "stdout": "Usage: yantra report [options] <run-id>\n\nOpen or print a run's report.md\n\nOptions:\n  --open      open report.md in $EDITOR (or platform default) (default: false)\n  --json      emit the markdown wrapped in a JSON envelope (default: false)\n  -h, --help  display help for command\n",
+  "stderr": "intercepted exit 0\n",
+  "exitCode": 0,
+  "tree": {}
+}

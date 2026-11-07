@@ -1,0 +1,6 @@
+{
+  "stdout": "{\"schemaVersion\":\"0.2\",\"kind\":\"browser_install\",\"destinationRoot\":\"<home>\\\\data\\\\browsers\",\"outcome\":{\"status\":\"failed\",\"error\":{\"code\":\"consent-required\",\"phase\":\"preflight\",\"remediation\":\"Pass --yes only after reviewing the download notice.\",\"detail\":\"`yantra browser install --yes` is required for JSON or non-interactive use.\",\"retainedOrphan\":null}}}\n",
+  "stderr": "`yantra browser install --yes` is required for JSON or non-interactive use.\n",
+  "exitCode": 1,
+  "tree": {}
+}
