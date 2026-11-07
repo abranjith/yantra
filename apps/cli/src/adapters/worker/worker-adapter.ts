@@ -1,5 +1,7 @@
 import { Writable } from 'node:stream';
+import { fileURLToPath } from 'node:url';
 
+import { NodeDaemonProcessControl } from '@yantra/core';
 import {
   CommandResultMessageSchema,
   parseInvocation,
@@ -91,6 +93,11 @@ export async function runWorkerInvocation(
     return typeof value === 'string' ? value : null;
   };
   const context: CommandContext = {
+    processes: new NodeDaemonProcessControl({
+      entrypoint: fileURLToPath(new URL('../../bin.js', import.meta.url)),
+      cwd: invocation.cwd,
+      env,
+    }),
     surface: 'worker',
     cwd: invocation.cwd,
     invocationId: invocation.invocation_id,

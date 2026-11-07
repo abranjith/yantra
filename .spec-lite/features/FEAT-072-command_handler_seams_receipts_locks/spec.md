@@ -776,7 +776,11 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
 
 ### TASK-011: Daemon, scheduling and `confirm`: migration plus daemon-fire receipts
 
-- [ ] **Implementation**:
+> Standing-memory compliance: daemon process control is an adapter capability backed by core. New
+> daemon owners record their process creation identity; stop refuses legacy or unverifiable owners
+> instead of signalling a bare PID. PID display and ordinary start/stop behavior remain compatible.
+
+- [x] **Implementation**:
   - Migrate `daemon.ts` (13 `process.exit` calls). The foreground `daemon start` awaits
     `context.signal` (`honorsAbort: true`) instead of never-resolving plus `process.exit` in signal
     handlers. SIGTERM and SIGINT are wired by the terminal adapter. `stop` and `status` return
@@ -786,7 +790,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
   - Daemon fires build a receipt draft: `invoked_by: daemon`, `invocation_id: null`, params with
     source `schedule`, and the workflow identity. It is passed through `FireRunDriver.run` into
     `RunRequest.receipt`. Fires stay hard zero-LLM; the guard is unchanged and asserted.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - The `daemon start` foreground loop exits cleanly when the signal aborts.
   - A daemon fire over the fake orchestrator writes a receipt with `invoked_by: 'daemon'` and no
     model settings.
@@ -795,7 +799,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
     fixture (identical decision files and exit codes).
   - The TASK-001 baselines for these commands are unchanged.
   - e2e `scheduling.spec.ts` passes.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/scheduling.md`
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/scheduling.md`
       (daemon receipts).
 - **Verify**: `daemon.ts`, `schedule.ts`, `confirm.ts` and `daemon-runtime.ts` are off the allowlist;
   `cd e2e && npx vitest run scheduling.spec.ts` passes after `turbo run build`.
@@ -964,7 +968,7 @@ tests/setup` passes; `init.ts`, `init-wizard.ts` and `init-context-prompts.ts` a
 - [x] TASK-008: Execution receipts, settings provenance and the canary (research first)
 - [x] TASK-009: Migrate `ask` and `do` (agentic run class) with receipts and abort
 - [x] TASK-010: Migrate `run` and `resume` with receipts in the replay path
-- [ ] TASK-011: Daemon, scheduling and `confirm`: migration plus daemon-fire receipts
+- [x] TASK-011: Daemon, scheduling and `confirm`: migration plus daemon-fire receipts
 - [ ] TASK-012: Migrate the read-class commands
 - [ ] TASK-013: Migrate the mutate-class commands
 - [ ] TASK-014: The `init` application service with a pluggable answer collector

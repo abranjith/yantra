@@ -16,6 +16,8 @@ import { runsRoot, createConfirmationStore } from '@yantra/core';
 import type { ConfirmationDecision } from '@yantra/protocol';
 import { type Command } from 'commander';
 
+import { createTerminalContext } from '../adapters/terminal/terminal-adapter.js';
+import type { CommandContext, ExitCode } from '../context/command-context.js';
 import { createRegisteredCommand } from '../registry/build-command-tree.js';
 import { fromAction } from '../registry/handler.js';
 
@@ -29,13 +31,15 @@ export function makeConfirmCommand(): Command {
 }
 
 /** Handlers for `confirm`, bound by registry id; each is its former commander action, unchanged. */
-export function confirmHandlers() {
+export function confirmHandlers(context: CommandContext = createTerminalContext()) {
   return {
     confirm: fromAction(async (runId: string, decisionArg: string, options: ConfirmOptions) => {
       try {
         if (decisionArg !== 'grant' && decisionArg !== 'deny') {
-          process.stderr.write(`Invalid decision "${decisionArg}": expected "grant" or "deny"\n`);
-          process.exit(1);
+          context.output.stderr.write(
+            `Invalid decision "${decisionArg}": expected "grant" or "deny"\n`,
+          );
+          return { exitCode: 1 as ExitCode };
         }
 
         const runDir = `${runsRoot()}/${runId}`;
@@ -45,22 +49,22 @@ export function confirmHandlers() {
         if (pendingRequest === null) {
           const message = `No pending confirmation found for run "${runId}".`;
           if (options.json === true) {
-            process.stdout.write(`${JSON.stringify({ error: message, runId }, null, 2)}\n`);
+            context.output.json({ error: message, runId }, { indent: 2 });
           } else {
-            process.stderr.write(`${message}\n`);
+            context.output.stderr.write(`${message}\n`);
           }
-          process.exit(1);
+          return { exitCode: 1 as ExitCode };
         }
 
         const alreadyResolved = await store.hasDecision(pendingRequest.confirmation_id);
         if (alreadyResolved) {
           const message = `Confirmation ${pendingRequest.confirmation_id} is already resolved.`;
           if (options.json === true) {
-            process.stdout.write(`${JSON.stringify({ error: message, runId }, null, 2)}\n`);
+            context.output.json({ error: message, runId }, { indent: 2 });
           } else {
-            process.stderr.write(`${message}\n`);
+            context.output.stderr.write(`${message}\n`);
           }
-          process.exit(1);
+          return { exitCode: 1 as ExitCode };
         }
 
         const decision: ConfirmationDecision = {
@@ -73,28 +77,26 @@ export function confirmHandlers() {
         await store.appendDecision(decision);
 
         if (options.json === true) {
-          process.stdout.write(
-            `${JSON.stringify({ runId, decision, request: pendingRequest }, null, 2)}\n`,
-          );
+          context.output.json({ runId, decision, request: pendingRequest }, { indent: 2 });
         } else {
           const icon = decisionArg === 'grant' ? '✓' : '✗';
-          process.stdout.write(
+          context.output.stdout.write(
             `${icon} Confirmation ${decisionArg}ed for run ${runId} (step: ${pendingRequest.step_id})\n`,
           );
         }
 
         if (decisionArg === 'grant') {
-          process.stdout.write(`Resuming run ${runId}...\n`);
-          process.stdout.write(`Use "yantra resume ${runId}" to continue execution.\n`);
+          context.output.stdout.write(`Resuming run ${runId}...\n`);
+          context.output.stdout.write(`Use "yantra resume ${runId}" to continue execution.\n`);
         } else {
-          process.stdout.write(`Run ${runId} aborted (denied).\n`);
+          context.output.stdout.write(`Run ${runId} aborted (denied).\n`);
         }
 
-        process.exit(0);
+        return { exitCode: 0 as ExitCode };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        process.stderr.write(`Error: ${message}\n`);
-        process.exit(1);
+        context.output.stderr.write(`Error: ${message}\n`);
+        return { exitCode: 1 as ExitCode };
       }
     }),
   };

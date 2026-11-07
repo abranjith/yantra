@@ -74,6 +74,18 @@
       "task": "TASK-002"
     },
     {
+      "path": "apps/cli/src/commands/confirm.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/cli/src/commands/daemon-runtime.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
       "path": "apps/cli/src/commands/daemon.ts",
       "status": "M",
       "role": "implement",
@@ -189,13 +201,13 @@
     },
     {
       "path": "apps/cli/src/context/replay-content.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
     {
       "path": "apps/cli/src/context/replay-runtime.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
@@ -276,6 +288,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-009"
+    },
+    {
+      "path": "apps/cli/tests/adapters/daemon-adapter.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-011"
     },
     {
       "path": "apps/cli/tests/adapters/settings-resolver.spec.ts",
@@ -993,7 +1011,7 @@
     },
     {
       "path": "apps/cli/tests/characterization/replay-parity.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
@@ -1002,6 +1020,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "apps/cli/tests/characterization/scheduling-parity.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-011"
     },
     {
       "path": "apps/cli/tests/characterization/terminal-baseline.spec.ts",
@@ -1106,6 +1130,12 @@
       "task": "TASK-004"
     },
     {
+      "path": "docs/features/scheduling.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
       "path": "docs/protocol-spec.md",
       "status": "M",
       "role": "implement",
@@ -1116,6 +1146,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "e2e/scheduling.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-011"
     },
     {
       "path": "e2e/task-fidelity/progress-support.ts",
@@ -1286,6 +1322,12 @@
       "task": "TASK-008"
     },
     {
+      "path": "packages/core/src/scheduler/daemon-lock.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
       "path": "packages/core/src/scheduler/daemon.ts",
       "status": "M",
       "role": "implement",
@@ -1296,6 +1338,18 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/scheduler/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "packages/core/src/scheduler/process-control.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-011"
     },
     {
       "path": "packages/core/src/workflow/recorder/store.ts",
@@ -1434,6 +1488,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/tests/scheduler/process-control.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-011"
     },
     {
       "path": "packages/core/tests/workflow/recorder/store.spec.ts",

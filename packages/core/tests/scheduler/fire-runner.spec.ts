@@ -91,6 +91,40 @@ const noHistory: HistoryStore = {
 };
 
 describe('@no-llm runScheduledFire', () => {
+  it('passes a scheduled receipt draft to the driver without introducing model settings', async () => {
+    const { notifier } = recordingNotifier();
+    const receipt = {
+      schema_version: 1 as const,
+      yantra_version: 'fixture',
+      invoked_by: 'daemon' as const,
+      invocation_id: null,
+      command: ['run'] as [string],
+      cwd: '/fixture',
+      settings: [
+        { key: 'params', value: { subject: 'fixture' }, source: { kind: 'schedule' as const } },
+      ],
+      content: [],
+      browser: null,
+    };
+    const run = vi.fn(() =>
+      Promise.resolve({ kind: 'success' as const, runId: 'fixture-receipt' }),
+    );
+    const isolatedRuns = await mkdtemp(join(tmpdir(), 'yantra-scheduled-draft-'));
+    try {
+      await runScheduledFire(makeSchedule(), new Date(), {
+        runsDir: isolatedRuns,
+        driver: { run },
+        notifier,
+        logger: silentLogger,
+        receipt: () => Promise.resolve(receipt),
+      });
+      expect(run).toHaveBeenCalledWith(expect.objectContaining({ receipt }));
+      expect(receipt.settings.some((setting) => setting.key === 'model')).toBe(false);
+    } finally {
+      await rm(isolatedRuns, { recursive: true, force: true });
+    }
+  });
+
   it('records a busy profile as failed without retrying the fire', async () => {
     const { notifier, sent } = recordingNotifier();
     const run = vi.fn(async () => {

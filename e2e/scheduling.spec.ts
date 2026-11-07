@@ -96,10 +96,11 @@ async function invoke(argv: readonly string[]): Promise<InvocationResult> {
   };
 
   try {
-    await run(argv).catch((err: unknown) => {
+    const result = await run(argv).catch((err: unknown) => {
       if (err instanceof Error && err.message === '__cli_exit__') return;
       throw err;
     });
+    if (!exited && typeof result === 'number') exitCode = result;
   } finally {
     process.stdout.write = originalOut;
     process.stderr.write = originalErr;

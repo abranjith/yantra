@@ -1,3 +1,6 @@
+import { fileURLToPath } from 'node:url';
+
+import { NodeDaemonProcessControl } from '@yantra/core';
 import { InteractiveConfirmationGateway, InteractiveInstallOfferGateway } from '@yantra/core';
 
 import type { CommandContext } from '../../context/command-context.js';
@@ -26,10 +29,16 @@ export function createTerminalContext(options: TerminalOptions = {}): CommandCon
   const tty = options.isTty ?? process.stdin.isTTY === true;
   const settings = new SettingsResolver(options.env ?? process.env, undefined, {
     cwd: options.cwd ?? process.cwd(),
+
     surface: 'terminal',
     invocationId: null,
   });
   const context: CommandContext = {
+    processes: new NodeDaemonProcessControl({
+      entrypoint: fileURLToPath(new URL('../../bin.js', import.meta.url)),
+      cwd: options.cwd ?? process.cwd(),
+      env: options.env ?? process.env,
+    }),
     surface: 'terminal',
     cwd: options.cwd ?? process.cwd(),
     invocationId: null,
@@ -83,9 +92,10 @@ export async function runTerminal(
           ? options.doRuntime
           : undefined;
   const controller = new AbortController();
-  const abort = () => controller.abort();
-  process.once('SIGINT', abort);
-  process.once('SIGTERM', abort);
+  const interrupt = () => controller.abort('SIGINT');
+  const terminate = () => controller.abort('SIGTERM');
+  process.once('SIGINT', interrupt);
+  process.once('SIGTERM', terminate);
   try {
     return (
       await executeCommand(
@@ -99,7 +109,7 @@ export async function runTerminal(
       )
     ).exitCode;
   } finally {
-    process.off('SIGINT', abort);
-    process.off('SIGTERM', abort);
+    process.off('SIGINT', interrupt);
+    process.off('SIGTERM', terminate);
   }
 }

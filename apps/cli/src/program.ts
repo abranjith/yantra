@@ -3,6 +3,7 @@ import { Command } from 'commander';
 
 import type { TerminalOptions } from './adapters/terminal/terminal-adapter.js';
 import type { AskRuntime } from './commands/ask.js';
+import type { DaemonRuntime } from './commands/daemon.js';
 import type { DoRuntime } from './commands/do.js';
 import type { ResearchRuntime } from './commands/research.js';
 import type { SitesRuntime } from './commands/sites.js';
@@ -13,6 +14,7 @@ import { buildHandlers } from './registry/handlers.js';
 
 /** Injectable runtimes for the commands that accept them (hermetic tests). */
 export interface CliRunOptions {
+  readonly daemonRuntime?: DaemonRuntime;
   readonly replayRuntime?: ReplayRuntimeDependencies;
   readonly askRuntime?: Partial<AskRuntime> & TerminalOptions;
   readonly researchRuntime?: Partial<ResearchRuntime> & TerminalOptions;

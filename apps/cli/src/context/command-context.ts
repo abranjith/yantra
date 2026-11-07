@@ -1,4 +1,9 @@
-import type { ConfirmationGateway, InstallOfferGateway, Logger } from '@yantra/core';
+import type {
+  CommandProcessControl,
+  ConfirmationGateway,
+  InstallOfferGateway,
+  Logger,
+} from '@yantra/core';
 
 import type { CliAgentConnectorOptions, ConnectorIO } from '../connector-io.js';
 import type { OutputRenderer } from '../render/types.js';
@@ -53,6 +58,7 @@ export interface CommandContext {
   readonly input: InputCollector;
   readonly settings: SettingsResolver;
   readonly logger: Logger;
+  readonly processes: CommandProcessControl;
   isInteractive(options: { readonly json?: boolean }): boolean;
   connector(renderer: OutputRenderer, options?: CliAgentConnectorOptions): ConnectorIO;
   readonly gateways: {
