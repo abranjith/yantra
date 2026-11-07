@@ -1,7 +1,11 @@
+import { resolve } from 'node:path';
+
 import { loadWorkflow, lint } from '@yantra/core';
 import type { LintReport, LintFinding } from '@yantra/core';
 import { type Command } from 'commander';
 
+import { createTerminalContext } from '../adapters/terminal/terminal-adapter.js';
+import type { CommandContext } from '../context/command-context.js';
 import { createRegisteredCommand } from '../registry/build-command-tree.js';
 import { fromAction } from '../registry/handler.js';
 
@@ -15,16 +19,16 @@ function formatFinding(finding: LintFinding): string {
   return line;
 }
 
-function printReport(report: LintReport): void {
+function printReport(context: CommandContext, report: LintReport): void {
   const allFindings = [...report.errors, ...report.warnings, ...report.infos];
 
   for (const finding of allFindings) {
-    process.stdout.write(formatFinding(finding) + '\n');
+    context.output.stdout.write(formatFinding(finding) + '\n');
   }
 
   const errorCount = report.errors.length;
   const warnCount = report.warnings.length;
-  process.stdout.write(
+  context.output.stdout.write(
     `\n${errorCount} error${errorCount !== 1 ? 's' : ''}, ${warnCount} warning${warnCount !== 1 ? 's' : ''}\n`,
   );
 }
@@ -34,37 +38,37 @@ export function makeLintCommand(): Command {
 }
 
 /** Handlers for `lint`, bound by registry id; each is its former commander action, unchanged. */
-export function lintHandlers() {
+export function lintHandlers(context: CommandContext = createTerminalContext()) {
   return {
     lint: fromAction(async (file: string, options: { strict: boolean; json: boolean }) => {
-      const loadResult = await loadWorkflow(file);
+      const loadResult = await loadWorkflow(resolve(context.cwd, file));
 
       if (!loadResult.isOk) {
         const parseReport = loadResult.error;
 
         if (options.json) {
-          process.stdout.write(JSON.stringify(parseReport, null, 2) + '\n');
+          context.output.json(parseReport, { indent: 2 });
         } else {
-          printReport(parseReport);
+          printReport(context, parseReport);
         }
 
-        process.exit(1);
+        return { exitCode: 1 as const };
       }
 
       const workflow = loadResult.value;
       const report = lint(workflow, { strict: options.strict });
 
       if (options.json) {
-        process.stdout.write(JSON.stringify(report, null, 2) + '\n');
+        context.output.json(report, { indent: 2 });
       } else {
         if (
           report.errors.length === 0 &&
           report.warnings.length === 0 &&
           report.infos.length === 0
         ) {
-          process.stdout.write('No lint findings.\n');
+          context.output.stdout.write('No lint findings.\n');
         } else {
-          printReport(report);
+          printReport(context, report);
         }
       }
 
@@ -72,10 +76,10 @@ export function lintHandlers() {
       const hasWarningsInStrict = options.strict && report.warnings.length > 0;
 
       if (hasErrors || hasWarningsInStrict) {
-        process.exit(1);
+        return { exitCode: 1 as const };
       }
 
-      process.exit(0);
+      return { exitCode: 0 as const };
     }),
   };
 }

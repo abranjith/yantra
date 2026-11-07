@@ -291,11 +291,11 @@ Elsewhere — `daemon`, `schedule`, `init`, `list`, `config`, `doctor`,
 
 ### `browser use`, `list`, and `check` exit codes
 
-| Exit | Meaning                                                                                              |
-| ---: | ---------------------------------------------------------------------------------------------------- |
-|  `0` | The selection was committed, the inventory was reported, or every required capability passed         |
-|  `1` | An invalid or conflicting flag, an unresolvable `--path`, or a managed selection with no ready build |
-|  `3` | `browser check` could not resolve a browser, or the browser failed a required capability             |
+| Exit | Meaning                                                                                                                    |
+| ---: | -------------------------------------------------------------------------------------------------------------------------- |
+|  `0` | The selection was committed, the inventory was reported, or every required capability passed                               |
+|  `1` | An invalid or conflicting flag, an unresolvable `--path`, or a managed selection with no ready build                       |
+|  `3` | `browser use` found a busy configuration lock; `browser check` could not resolve a browser or failed a required capability |
 
 See [Browser Selection and Diagnostics](features/browser-selection-and-diagnostics.md)
 for the full behavior and the JSON payloads.
@@ -1144,6 +1144,22 @@ overview|standard|full`, and `--length short|medium|long`; `--json` is shorthand
 for JSON format. `--debug` writes diagnostics to stderr on commands that expose
 it.
 
+### Concurrent writes and worker execution
+
+Terminal and worker execution share command handlers for configuration updates,
+model registration and selection, preferences, sites, templates, linting, and
+browser operations. The same validation and file mutations apply on both
+surfaces.
+
+Every locked writer reports contention as `busy` with exit `3` after its
+bounded retry window. Short file mutations normally wait about five seconds;
+retry when the holder finishes. Human output describes the resource on stderr.
+With `--json`, the busy envelope includes `schemaVersion`, the dotted command
+`kind` (for example `config.set` or `browser.use`), `status: "busy"`, `resource`,
+and `holder`. Holder metadata contains a PID, command label, start time, and
+surface, or is `null` when unavailable; it contains no full argument list or
+credential values. Worker execution returns the same envelope.
+
 ## Configuration, storage, models, and credentials
 
 Yantra separates installation state from personal preferences:
@@ -1175,8 +1191,11 @@ template, and index locations with their source labels. `list` and `get` show a
 fully defaulted view without resolving credentials. Values passed to `set` are
 parsed as YAML and the whole candidate is validated; comments and key order are
 preserved. `unset` removes an explicit value so its schema default applies.
-`edit` launches `$EDITOR` and restores the original bytes if the editor fails or
-the result is invalid. Every action accepts `--json`.
+`edit` launches `$EDITOR` from the terminal, holding the configuration lock
+through the editor session and validation. It restores the original bytes if
+the editor fails or the result is invalid. Worker execution refuses `edit`
+with exit `1` and directs you to the app's raw-YAML editor. Every action accepts
+`--json`.
 
 A verified search block is:
 
@@ -1215,7 +1234,9 @@ relocatable; config, profile, blocklist, and sanitizer overrides move only with
 `YANTRA_HOME`. There is no automatic migration from the retired XDG/AppData
 locations.
 
-Use the relocation command when Yantra should move its current data tree:
+Use the relocation command from the terminal when Yantra should move its
+current data tree. It is a terminal-only exemption because relocation moves
+app coordination files; worker execution refuses it with exit `1`:
 
 ```console
 yantra config data-dir
@@ -1295,6 +1316,10 @@ exposed through shell history and process listings. Empty values are rejected.
 `list` never prints values; `rm` reports `removed` or `absent`. If the platform
 keychain is unavailable, use an `${env:NAME}` reference instead. All secret
 subcommands accept `--json`.
+
+`secret set`, `secret list`, and `secret rm` run on the secure terminal surface.
+Worker execution refuses them with exit `1`; secret values continue to enter
+only through the hidden prompt or stdin.
 
 Agent option environment variables use the `YANTRA_AGENT_` prefix, including
 `YANTRA_AGENT_PROVIDER`, `YANTRA_AGENT_MODEL`,
@@ -1423,7 +1448,7 @@ tie-break.
 |   `0` | Success; doctor warnings and partial deterministic results with notices can still succeed                      |
 |   `1` | Invalid command input, option, YAML, template, or local lookup                                                 |
 |   `2` | A started task failed, hit a fatal execution budget, or could not publish a valid result; a `partial` `do` run |
-|   `3` | Environment failure, failed doctor check, or unavailable required model setup                                  |
+|   `3` | Environment failure, a busy resource lock, failed doctor check, or unavailable required model setup            |
 |   `4` | Human handoff, including CAPTCHA, MFA, missing required location, or denied consent                            |
 | `130` | An agentic run or live smoke was interrupted with Ctrl+C                                                       |
 

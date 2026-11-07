@@ -13,6 +13,7 @@ import { type Command, CommanderError } from 'commander';
 
 import { createTerminalContext } from '../adapters/terminal/terminal-adapter.js';
 import { CommandFailure, type CommandContext } from '../context/command-context.js';
+import { resourceOptions } from '../context/resource-options.js';
 import { createRegisteredCommand } from '../registry/build-command-tree.js';
 import { handler } from '../registry/handler.js';
 import { CLI_JSON_SCHEMA_VERSION } from '../render/json.js';
@@ -71,17 +72,21 @@ async function runAdd(context: CommandContext, id: string, options: ModelOptions
   let existing = -1;
   const candidate = { id, provider, base_url: options.baseUrl ?? null, api_key: apiKey, input };
   try {
-    await mutateConfig((current) => {
-      existing = current.models.findIndex(
-        (model) => model.provider === provider && model.id === id,
-      );
-      if (existing >= 0 && !options.force)
-        fail(context, `model ${provider}/${id} already exists; pass --force to overwrite`);
-      const models = [...current.models];
-      if (existing >= 0) models[existing] = candidate as ModelConfig;
-      else models.push(candidate as ModelConfig);
-      return { ...current, models };
-    });
+    await mutateConfig(
+      (current) => {
+        existing = current.models.findIndex(
+          (model) => model.provider === provider && model.id === id,
+        );
+        if (existing >= 0 && !options.force)
+          fail(context, `model ${provider}/${id} already exists; pass --force to overwrite`);
+        const models = [...current.models];
+        if (existing >= 0) models[existing] = candidate as ModelConfig;
+        else models.push(candidate as ModelConfig);
+        return { ...current, models };
+      },
+      undefined,
+      resourceOptions(context, 'model add'),
+    );
   } catch (error) {
     if (error instanceof CommandFailure) throw error;
 
@@ -132,25 +137,29 @@ async function runRemove(
 ): Promise<void> {
   let provider = '';
   try {
-    await mutateConfig(async (current) => {
-      const matches = current.models.filter((model) => model.id === id);
-      if (matches.length === 0) fail(context, `model "${id}" is not registered`);
-      if (matches.length > 1) fail(context, `model id "${id}" is ambiguous across providers`);
-      const target = matches[0]!;
-      const profile = await loadProfile();
-      if (
-        profile.isOk &&
-        profile.value.agent.provider === target.provider &&
-        profile.value.agent.model === target.id &&
-        !options.force
-      )
-        fail(
-          context,
-          `${target.provider}/${target.id} is the current default; pass --force to remove it`,
-        );
-      provider = target.provider;
-      return { ...current, models: current.models.filter((model) => model !== target) };
-    });
+    await mutateConfig(
+      async (current) => {
+        const matches = current.models.filter((model) => model.id === id);
+        if (matches.length === 0) fail(context, `model "${id}" is not registered`);
+        if (matches.length > 1) fail(context, `model id "${id}" is ambiguous across providers`);
+        const target = matches[0]!;
+        const profile = await loadProfile();
+        if (
+          profile.isOk &&
+          profile.value.agent.provider === target.provider &&
+          profile.value.agent.model === target.id &&
+          !options.force
+        )
+          fail(
+            context,
+            `${target.provider}/${target.id} is the current default; pass --force to remove it`,
+          );
+        provider = target.provider;
+        return { ...current, models: current.models.filter((model) => model !== target) };
+      },
+      undefined,
+      resourceOptions(context, 'model rm'),
+    );
   } catch (error) {
     if (error instanceof CommandFailure) throw error;
 
@@ -178,10 +187,14 @@ async function runDefault(
     );
   const target = matches[0]!;
   try {
-    await mutateProfile((current) => ({
-      ...current,
-      agent: { ...current.agent, provider: target.provider, model: target.id },
-    }));
+    await mutateProfile(
+      (current) => ({
+        ...current,
+        agent: { ...current.agent, provider: target.provider, model: target.id },
+      }),
+      undefined,
+      resourceOptions(context, 'model default'),
+    );
   } catch (error) {
     if (error instanceof CommandFailure) throw error;
 

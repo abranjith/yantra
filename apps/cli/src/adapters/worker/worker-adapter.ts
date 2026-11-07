@@ -108,7 +108,7 @@ export async function runWorkerInvocation(
       surface: 'worker',
       invocationId: invocation.invocation_id,
     }),
-    logger: makeStderrLogger(true, stderr),
+    logger: makeStderrLogger(false, stderr),
     output: {
       stdout,
       stderr,

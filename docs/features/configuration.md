@@ -46,6 +46,10 @@ Each operation holds the lock while reading the current file, applying its
 change, validating the result, and replacing the file. Concurrent model
 registrations therefore preserve each other's additions.
 
+`yantra config edit` holds the same configuration lock throughout the editor
+session, validation, and any restoration of the original bytes. Other locked
+writers may report `busy` while the editor remains open.
+
 `yantra model default` locks `profile.yaml` while reading the current profile,
 changing the selected provider and model, validating, and replacing the file.
 Unrelated profile fields are preserved. Its profile lock is separate from the
@@ -333,12 +337,19 @@ yantra config edit
   on the next load.
 - `validate` reports malformed YAML, unknown keys, constraints, and suggested
   sibling spellings without changing the file.
-- `edit` launches `$EDITOR`. Yantra restores the original bytes when the editor
-  fails or the edited file does not validate.
+- `edit` launches `$EDITOR` from the terminal and holds the configuration lock
+  until editing and validation finish. Yantra restores the original bytes when
+  the editor fails or the edited file does not validate. Worker execution
+  refuses this command with exit `1` and directs you to the app's raw-YAML
+  editor.
 
 Every action also accepts `--json`.
 
 ### Relocate the data directory
+
+Run relocation from the terminal. `config data-dir` is a terminal-only
+exemption because moving the data directory also moves app coordination files;
+worker execution refuses it with exit `1`.
 
 ```bash
 yantra config data-dir
@@ -404,6 +415,10 @@ never prints values. `secret rm` reports `removed` or `absent`. `set` and `rm`
 exit with the environment-error code when the OS keychain is unavailable and
 suggest `${env:NAME}` references as the supported alternative. Every secret
 subcommand accepts `--json`.
+
+These credential commands run on the secure terminal surface. Worker execution
+refuses `secret set`, `secret list`, and `secret rm` with exit `1`; credential
+values still enter only through the hidden prompt or stdin.
 
 ### Open completed run output
 
@@ -537,8 +552,9 @@ credential labels:
 Configuration writes are validated before replacement and use owner-only mode
 `0600`. The containing directory is created with mode `0700` where supported.
 
-For lock contention, the commands listed under configuration coordination emit
-this shape on stdout with `--json` and exit with code `3`:
+Every locked mutation routed through the shared command executor reports lock
+contention with exit code `3`. With `--json`, terminal and worker execution
+produce the same busy envelope; terminal output writes it to stdout:
 
 ```json
 {
@@ -550,8 +566,8 @@ this shape on stdout with `--json` and exit with code `3`:
 }
 ```
 
-`kind` identifies the command: `config.set`, `config.unset`, `model.add`,
-`model.rm`, `browser_use`, `model.default`, or `init`. The resource is
+`kind` identifies the command: `config.set`, `config.unset`, `config.edit`,
+`model.add`, `model.rm`, `browser.use`, `model.default`, or `init`. The resource is
 `{"kind":"profile"}` for `model.default`; for `init` it identifies the
 configuration or profile write that was busy. When readable, `holder` is an
 object with `pid`, `command`, `started_at`, and `surface`; otherwise it is `null`. Missing holder
@@ -568,8 +584,8 @@ Secret Service/libsecret environment.
 
 ## Limitations
 
-- `config edit` and direct file edits do not participate in the configuration
-  lock described above.
+- Direct file edits outside `yantra config edit` do not participate in the
+  configuration lock described above.
 - `init` checks for existing files, backs up a reset configuration, collects
   answers, and writes configuration and profile files in separate steps. A
   failure or contention partway through can leave earlier steps completed;

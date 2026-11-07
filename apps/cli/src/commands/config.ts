@@ -1,9 +1,10 @@
-import { spawn } from 'node:child_process';
-import { cp, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, readdir, rename, rm, stat } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve, sep, win32 } from 'node:path';
 
 import {
   ResourceBusyError,
+  withResourceLock,
+  writeFileAtomic,
   cacheDir,
   configSchema,
   configPath,
@@ -29,6 +30,7 @@ import { parse as parseYaml, stringify } from 'yaml';
 
 import { createTerminalContext } from '../adapters/terminal/terminal-adapter.js';
 import { CommandFailure, type CommandContext } from '../context/command-context.js';
+import { resourceOptions } from '../context/resource-options.js';
 import { keyOwner } from '../key-ownership.js';
 import { createRegisteredCommand } from '../registry/build-command-tree.js';
 import { handler } from '../registry/handler.js';
@@ -198,7 +200,7 @@ async function runSet(
     fail(context, `invalid YAML value: ${error instanceof Error ? error.message : String(error)}`);
   }
   try {
-    await setConfigKey(key, value);
+    await setConfigKey(key, value, undefined, resourceOptions(context, 'config set'));
   } catch (error) {
     if (error instanceof CommandFailure) throw error;
 
@@ -217,7 +219,7 @@ async function runUnset(
 ): Promise<void> {
   if (keyOwner(key) !== 'config') fail(context, `unknown config key "${key}"`);
   try {
-    await unsetConfigKey(key);
+    await unsetConfigKey(key, undefined, resourceOptions(context, 'config unset'));
   } catch (error) {
     if (error instanceof CommandFailure) throw error;
 
@@ -230,34 +232,46 @@ async function runUnset(
 }
 
 async function runEdit(context: CommandContext, options: ConfigOptions): Promise<void> {
+  if (context.surface === 'worker')
+    throw new CommandFailure(
+      1,
+      'config.editor.unavailable',
+      "Use the app's raw-YAML editor to edit configuration.",
+    );
   const path = configPath();
-  let original: string;
-  try {
-    original = await readFile(path, 'utf8');
-  } catch {
-    original = stringify(defaultConfig());
-    await mkdir(dirname(path), { recursive: true, mode: 0o700 });
-    await writeFile(path, original, { mode: 0o600 });
-  }
-  const editor = context.settings.env().EDITOR?.trim();
-  if (!editor) fail(context, '$EDITOR is not set');
-  const exitCode = await new Promise<number>((resolve) => {
-    const child = spawn(editor, [path], { shell: true, stdio: 'inherit' });
-    child.once('error', () => resolve(1));
-    child.once('exit', (code) => resolve(code ?? 1));
-  });
-  if (exitCode !== 0) {
-    await writeFile(path, original, { mode: 0o600 });
-    fail(context, `editor exited with code ${exitCode}`);
-  }
-  const result = await loadConfig(path);
-  if (!result.isOk) {
-    await writeFile(path, original, { mode: 0o600 });
-    fail(context, `${result.error.message}; restored the original file`);
-  }
-  resetPathCache();
-  if (options.json) emit(context, 'config.edit', { status: 'saved', path });
-  else context.output.stdout.write(`Saved ${path}.\n`);
+  await withResourceLock(
+    { kind: 'config' },
+    async () => {
+      let original: string;
+      try {
+        original = await readFile(path, 'utf8');
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+        original = stringify(defaultConfig());
+        await writeFileAtomic(path, original, { mode: 0o600 });
+      }
+      if (!context.settings.env().EDITOR?.trim()) fail(context, '$EDITOR is not set');
+      let saved: boolean;
+      try {
+        saved = await context.input.editor(path);
+      } catch {
+        saved = false;
+      }
+      if (!saved) {
+        await writeFileAtomic(path, original, { mode: 0o600 });
+        fail(context, 'editor exited with code 1');
+      }
+      const result = await loadConfig(path);
+      if (!result.isOk) {
+        await writeFileAtomic(path, original, { mode: 0o600 });
+        fail(context, `${result.error.message}; restored the original file`);
+      }
+      resetPathCache();
+      if (options.json) emit(context, 'config.edit', { status: 'saved', path });
+      else context.output.stdout.write(`Saved ${path}.\n`);
+    },
+    { ...resourceOptions(context, 'config edit'), targetPath: path },
+  );
 }
 
 async function runValidate(context: CommandContext, options: ConfigOptions): Promise<void> {
@@ -436,7 +450,12 @@ async function runDataDir(
     );
   }
   try {
-    await setConfigKey('paths.data_dir', target);
+    await setConfigKey(
+      'paths.data_dir',
+      target,
+      undefined,
+      resourceOptions(context, 'config data-dir'),
+    );
   } catch (error) {
     if (error instanceof CommandFailure) throw error;
 
@@ -444,6 +463,7 @@ async function runDataDir(
     // a copy-based cross-volume move of files it did not copy.
     if (willMove && managed.action !== 'drop-and-reinstall')
       await rename(target, source).catch(() => undefined);
+    if (error instanceof ResourceBusyError) throw error;
     fail(
       context,
       `relocation setting was not written: ${error instanceof Error ? error.message : String(error)}`,

@@ -110,6 +110,12 @@
       "task": "TASK-003"
     },
     {
+      "path": "apps/cli/src/commands/lint.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
       "path": "apps/cli/src/commands/list.ts",
       "status": "M",
       "role": "implement",
@@ -120,6 +126,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "apps/cli/src/commands/open.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-013"
     },
     {
       "path": "apps/cli/src/commands/prefs.ts",
@@ -170,6 +182,12 @@
       "task": "TASK-004"
     },
     {
+      "path": "apps/cli/src/commands/secret.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
       "path": "apps/cli/src/commands/show.ts",
       "status": "M",
       "role": "implement",
@@ -207,7 +225,7 @@
     },
     {
       "path": "apps/cli/src/context/flags.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
@@ -222,6 +240,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-010"
+    },
+    {
+      "path": "apps/cli/src/context/resource-options.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-013"
     },
     {
       "path": "apps/cli/src/context/run-receipt.ts",
@@ -1016,8 +1040,14 @@
       "task": "TASK-001"
     },
     {
-      "path": "apps/cli/tests/characterization/read-parity.spec.ts",
+      "path": "apps/cli/tests/characterization/mutate-parity.spec.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "apps/cli/tests/characterization/read-parity.spec.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
@@ -1166,6 +1196,12 @@
       "task": "TASK-007"
     },
     {
+      "path": "docs/usage.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
       "path": "e2e/cli-commands.spec.ts",
       "status": "M",
       "role": "implement",
@@ -1218,6 +1254,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/browser/config-selection.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-013"
     },
     {
       "path": "packages/core/src/browser/paths.ts",

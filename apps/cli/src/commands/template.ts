@@ -5,6 +5,7 @@ import { basename, extname, resolve } from 'node:path';
 
 import {
   FileTemplateStore,
+  ResourceBusyError,
   TemplateCollisionError,
   normalizeTemplateSlug,
   normalizeTemplateTags,
@@ -20,6 +21,7 @@ import { stringify } from 'yaml';
 
 import { createTerminalContext } from '../adapters/terminal/terminal-adapter.js';
 import type { CommandContext } from '../context/command-context.js';
+import { resourceOptions } from '../context/resource-options.js';
 import { createRegisteredCommand } from '../registry/build-command-tree.js';
 import { fromAction } from '../registry/handler.js';
 import { CLI_JSON_SCHEMA_VERSION } from '../render/json.js';
@@ -66,6 +68,7 @@ export function templateHandlers(
             resolved.stdout.write(`${path}\n`);
           }
         } catch (error) {
+          if (error instanceof ResourceBusyError) throw error;
           fail(resolved, errorMessage(error), 'yantra.template.new');
         }
       },
@@ -93,6 +96,7 @@ export function templateHandlers(
           resolved.stdout.write(`${renderSlotTable(slots)}\n`);
         }
       } catch (error) {
+        if (error instanceof ResourceBusyError) throw error;
         if (error instanceof CommanderError) throw error;
         fail(resolved, errorMessage(error), 'yantra.template.lint');
       }
@@ -112,6 +116,7 @@ export function templateHandlers(
         try {
           text = await readFile(path, 'utf8');
         } catch (error) {
+          if (error instanceof ResourceBusyError) throw error;
           fail(
             resolved,
             `Could not read template path ${path}: ${errorMessage(error)}`,
@@ -159,6 +164,7 @@ export function templateHandlers(
             resolved.stdout.write(`Saved ${name} to ${savedPath}\n`);
           }
         } catch (error) {
+          if (error instanceof ResourceBusyError) throw error;
           fail(resolved, errorMessage(error), 'yantra.template.save');
         }
       },
@@ -234,6 +240,7 @@ export function templateHandlers(
           writeJson(resolved, { kind: 'template_remove', name, removed: true });
         else resolved.stdout.write(`Removed ${name}.\n`);
       } catch (error) {
+        if (error instanceof ResourceBusyError) throw error;
         fail(resolved, errorMessage(error), 'yantra.template.remove');
       }
     }),
@@ -246,7 +253,9 @@ function withDefaults(
 ): TemplateCommandRuntime {
   return {
     json: (value) => context.output.json(value),
-    store: runtime?.store ?? new FileTemplateStore(templatesRoot()),
+    store:
+      runtime?.store ??
+      new FileTemplateStore(templatesRoot(), resourceOptions(context, 'template')),
     cwd: context.cwd,
     stdout: context.output.stdout,
     stderr: context.output.stderr,

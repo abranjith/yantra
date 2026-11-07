@@ -6,7 +6,7 @@ import { basename, join } from 'node:path';
 import type { TemplateManifest } from '@yantra/protocol';
 
 import { writeFileAtomic } from '../fs/atomic-write.js';
-import { withResourceLock } from '../locks/resource-lock.js';
+import { withResourceLock, type ResourceLockOptions } from '../locks/resource-lock.js';
 
 import { parseTemplate } from './parse.js';
 
@@ -72,7 +72,10 @@ export class TemplateStoreError extends Error {
  */
 export class FileTemplateStore {
   /** Create a store rooted at the supplied templates directory. */
-  public constructor(private readonly root: string) {}
+  public constructor(
+    private readonly root: string,
+    private readonly lockOptions: ResourceLockOptions = {},
+  ) {}
 
   /** Return the path used for a validated saved name. */
   public pathFor(name: string): string {
@@ -111,7 +114,7 @@ export class FileTemplateStore {
           throw new TemplateStoreError('save', name, cause);
         }
       },
-      { targetPath: this.pathFor(name) },
+      { ...this.lockOptions, targetPath: this.pathFor(name) },
     );
   }
 
@@ -164,7 +167,7 @@ export class FileTemplateStore {
           throw new TemplateStoreError('remove', name, cause);
         }
       },
-      { targetPath: this.pathFor(name) },
+      { ...this.lockOptions, targetPath: this.pathFor(name) },
     );
   }
 

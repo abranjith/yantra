@@ -7,10 +7,7 @@
  * platform, so `YANTRA_HOME` is the only variable that isolates these runs —
  * XDG and `%APPDATA%` are ignored by design.
  *
- * Bypasses `process.exit` by trapping it during each command invocation.
- * The CLI handlers call `process.exit(<code>)` directly today; future work
- * (TASK-001's CommandOutcome plumbing) will let commands return outcomes
- * for cleaner testing.
+ * Captures the terminal adapter result and output for each invocation.
  */
 
 import { spawn } from 'node:child_process';
@@ -103,10 +100,11 @@ async function invoke(argv: readonly string[]): Promise<InvocationResult> {
   };
 
   try {
-    await run(argv).catch((err: unknown) => {
+    const result = await run(argv).catch((err: unknown) => {
       if (err instanceof Error && err.message === '__cli_exit__') return;
       throw err;
     });
+    if (!exited && typeof result === 'number') exitCode = result;
   } finally {
     process.stdout.write = originalOut;
     process.stderr.write = originalErr;

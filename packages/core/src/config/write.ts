@@ -114,12 +114,29 @@ export async function mutateConfig(
   );
 }
 
-export function setConfigKey(path: string, value: unknown, filePath?: string): Promise<void> {
-  return mutateConfigDocument((document) => document.setIn(path.split('.'), value), filePath);
+export function setConfigKey(
+  path: string,
+  value: unknown,
+  filePath?: string,
+  options: ResourceLockOptions = {},
+): Promise<void> {
+  return mutateConfigDocument(
+    (document) => document.setIn(path.split('.'), value),
+    filePath,
+    options,
+  );
 }
 
-export function unsetConfigKey(path: string, filePath?: string): Promise<void> {
-  return mutateConfigDocument((document) => {
-    document.deleteIn(path.split('.'));
-  }, filePath);
+export function unsetConfigKey(
+  path: string,
+  filePath?: string,
+  options: ResourceLockOptions = {},
+): Promise<void> {
+  return mutateConfigDocument(
+    (document) => {
+      document.deleteIn(path.split('.'));
+    },
+    filePath,
+    options,
+  );
 }

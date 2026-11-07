@@ -830,7 +830,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
 
 ### TASK-013: Migrate the mutate-class commands
 
-- [ ] **Implementation**: Migrate these handlers:
+- [x] **Implementation**: Migrate these handlers:
   - `config set/unset/edit/data-dir`. `edit` launches `$EDITOR` only through a terminal-supplied
     `input.editor` capability; the worker refuses with a validation error naming the app's raw-YAML
     editor (FEAT-070). `data-dir` is an `exemption` and stays terminal-only.
@@ -844,7 +844,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
 
   Each locked write surfaces `busy` through `executeCommand`.
 
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Parity rows for each worker-executable mutate command, comparing the resulting `config.yaml`,
     `profile.yaml`, workflow, template and site files byte for byte.
   - The `secret` and `config data-dir` worker refusals.
@@ -852,7 +852,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
   - A `busy` row: a held config lock gives exit 3 on both adapters with equal envelopes.
   - The existing `config`, `model`, `secret`, `sites`, `template`, `prefs-screenshots` and
     `browser-*` suites pass, and the TASK-001 baselines are unchanged.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/configuration.md`
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/configuration.md`
       and `docs/usage.md` (`busy` on every locked writer).
 - **Verify**: These files are off the allowlist; `cd e2e && npx vitest run cli-commands.spec.ts
 config-storage.spec.ts` passes after build.
@@ -970,7 +970,7 @@ tests/setup` passes; `init.ts`, `init-wizard.ts` and `init-context-prompts.ts` a
 - [x] TASK-010: Migrate `run` and `resume` with receipts in the replay path
 - [x] TASK-011: Daemon, scheduling and `confirm`: migration plus daemon-fire receipts
 - [x] TASK-012: Migrate the read-class commands
-- [ ] TASK-013: Migrate the mutate-class commands
+- [x] TASK-013: Migrate the mutate-class commands
 - [ ] TASK-014: The `init` application service with a pluggable answer collector
 - [ ] TASK-015: Empty the purity allowlist and run the full parity sweep
 

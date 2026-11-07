@@ -200,7 +200,7 @@ async function runSet(
       value: validated.value,
       json: options.json === true,
       provider,
-      write: (text) => context.output.stdout.write(text),
+      write: (text) => writePreferenceNotice(context, options.json === true, text),
     });
     if (!result.isOk) {
       fail(context, result.error.message);
@@ -208,12 +208,12 @@ async function runSet(
     if (options.json === true) {
       emit(context, 'prefs', { status: 'set', key, value: validated.value });
       emitScreenshotRevocation(key, validated.value, true, (text) =>
-        context.output.stdout.write(text),
+        writePreferenceNotice(context, options.json === true, text),
       );
     } else {
       context.output.stdout.write(`Set ${key}.\n`);
       emitScreenshotRevocation(key, validated.value, false, (text) =>
-        context.output.stdout.write(text),
+        writePreferenceNotice(context, options.json === true, text),
       );
     }
     return;
@@ -241,7 +241,7 @@ async function runApprove(
         result.value ? `Approved ${key}.\n` : `${key} is not a stored preference.\n`,
       );
     }
-    throw new CommandFailure(result.value ? 0 : 1, 'yantra.prefs.failed', '', null, true);
+    if (!result.value) throw new CommandFailure(1, 'yantra.prefs.failed', '', null, true);
   });
 }
 
@@ -258,10 +258,14 @@ async function runForget(
     }
     if (options.json === true) {
       emit(context, 'prefs', { status: result.value ? 'forgotten' : 'not-found', key });
-      emitScreenshotRevocation(key, false, true, (text) => context.output.stdout.write(text));
+      emitScreenshotRevocation(key, false, true, (text) =>
+        writePreferenceNotice(context, options.json === true, text),
+      );
     } else {
       context.output.stdout.write(result.value ? `Forgot ${key}.\n` : `${key} was not set.\n`);
-      emitScreenshotRevocation(key, false, false, (text) => context.output.stdout.write(text));
+      emitScreenshotRevocation(key, false, false, (text) =>
+        writePreferenceNotice(context, options.json === true, text),
+      );
     }
     return;
   });
@@ -359,4 +363,9 @@ function emit(context: CommandContext, kind: string, body: Record<string, unknow
 function fail(context: CommandContext, message: string): never {
   context.output.stderr.write(`Error: ${message}\n`);
   throw new CommandFailure(1, 'yantra.prefs.failed', '', null, true);
+}
+
+function writePreferenceNotice(context: CommandContext, json: boolean, text: string): void {
+  if (json) context.output.jsonLine(JSON.parse(text) as unknown);
+  else context.output.stdout.write(text);
 }
