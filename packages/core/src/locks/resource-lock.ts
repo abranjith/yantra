@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm } from 'node:fs/promises';
+import { mkdir, readFile, realpath, rm } from 'node:fs/promises';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 
 import pino from 'pino';
@@ -100,9 +100,17 @@ function validateResourceKey(resource: LockedResource): void {
     throw new Error('Browser profile lock path must be absolute');
 }
 
-function targetFor(resource: LockedResource, options: ResourceLockOptions): string {
+async function targetFor(resource: LockedResource, options: ResourceLockOptions): Promise<string> {
   validateResourceKey(resource);
-  return resolve(options.targetPath ?? resourceLockTarget(resource));
+  const target = resolve(options.targetPath ?? resourceLockTarget(resource));
+  if (resource.kind !== 'browser-profile') return target;
+  // Two directory aliases still name one Chrome user-data directory.
+  try {
+    return await realpath(target);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    return target;
+  }
 }
 
 async function readOwner(target: string): Promise<ResourceLockOwner | null> {
@@ -122,7 +130,7 @@ export async function probeResourceLock(
   resource: LockedResource,
   options: ResourceLockOptions = {},
 ): Promise<ResourceLockOwner | null> {
-  const target = targetFor(resource, options);
+  const target = await targetFor(resource, options);
   const held = await lockfile.check(target, {
     realpath: false,
     lockfilePath: `${target}.lock`,
@@ -136,7 +144,7 @@ export async function acquireResourceLease(
   resource: LockedResource,
   options: ResourceLockOptions = {},
 ): Promise<ResourceLease> {
-  const target = targetFor(resource, options);
+  const target = await targetFor(resource, options);
   await mkdir(dirname(target), { recursive: true, mode: 0o700 });
   const owner = OwnerSchema.parse(
     options.owner ?? {

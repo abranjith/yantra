@@ -61,6 +61,7 @@ import { createRegisteredCommand } from '../registry/build-command-tree.js';
 import { handler, type HandlerArgs } from '../registry/handler.js';
 import { TerminalRenderer } from '../render/terminal.js';
 import type { ConnectorRenderOpts } from '../render/types.js';
+import { throwIfResourceBusy } from '../resource-busy.js';
 import { buildOrchestratorRuntime, makeStderrLogger } from '../runtime.js';
 import { createSynthesisLlm } from '../synthesis-llm.js';
 
@@ -254,6 +255,7 @@ export async function runHandler(args: HandlerArgs, options: RunOptions): Promis
     process.exit(exitCodeFor(outcome));
   } catch (err) {
     closeRuntime();
+    throwIfResourceBusy(err, 'run', options.json === true, process);
     const message = err instanceof Error ? err.message : String(err);
     process.stderr.write(`Error: ${message}\n`);
     if (options.debug === true && err instanceof Error && err.stack !== undefined) {

@@ -183,6 +183,12 @@ Repeat `--params key=value` for several values. A parameter file must be a YAML 
 
 Replay uses the same outcome words as the agentic commands: a successful replay is `fulfilled`, a human handoff such as a confirmation that could not be granted is `handoff`, a user abort is `aborted`, and a workflow failure, scope violation, or ethics refusal is `failed`. Each word has one exit code across every command, read from the protocol's shared outcome table: a replay user abort exits `130`, as `do`, `ask`, and `research` do, and a handoff exits `4` (see [Exit behavior](#exit-behavior)). A replay's `manifest.json` does not record the word, so `yantra list runs` shows none beside a replay's status.
 
+### Persistent browser profiles
+
+A workflow with `cookies: auto` reuses its persistent browser profile, including cookies and storage. Only one run may use that profile at a time. A second `yantra run` targeting the same profile immediately returns `busy` with exit code `3`; it does not wait or launch another browser. Ordinary output describes the holder when available and says `Try again when it finishes.` With `--json`, the response includes `status: "busy"`, the resource, and holder information when available.
+
+The profile lease is released after the browser stops, including after an unexpected browser exit, or when browser startup rolls back. If shutdown cannot establish that the browser stopped, the lease stays held. Retry after the owning browser finishes. A workflow with `cookies: none` gets a fresh ephemeral profile for each run, so those profiles do not contend with each other.
+
 ### Control replay synthesis
 
 The workflow, not an opt-in CLI flag, decides whether the completed run creates a Brief and whether a model may write it:
@@ -289,6 +295,7 @@ Persisted output redaction does **not** rewrite the in-memory outcome used for t
 | `0`   | Replay completed successfully.                                                                                                                                                     |
 | `1`   | CLI, workflow-load, parameter, preflight, runtime-setup, or resume-eligibility error thrown before a terminal executor outcome. Lint also uses `1` for errors and strict warnings. |
 | `2`   | Executor returned a workflow failure, scope violation, or ethics refusal.                                                                                                          |
+| `3`   | Persistent browser profile is busy; retry when its owning run finishes.                                                                                                            |
 | `4`   | Confirmation/human handoff. Resume's non-interactive consent gate also uses `4`.                                                                                                   |
 | `130` | User abort (`aborted`), the same code the agentic commands use.                                                                                                                    |
 

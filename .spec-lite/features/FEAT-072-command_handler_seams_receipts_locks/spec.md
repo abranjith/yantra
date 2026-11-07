@@ -531,7 +531,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
 
 ### TASK-005: Persistent browser-profile exclusivity
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - In `LocalProfileStore.resolve`, the `workflow` and `explicit` kinds call
     `acquireResourceLease({kind:'browser-profile', path})` with no retries, and attach the release to
     `ResolvedProfile.lease`. Ephemeral profiles are never locked. Chrome itself refuses two instances
@@ -542,7 +542,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
     with no retry inside the fire).
   - Export `probeResourceLock` for FEAT-065.
   - Do not change the managed-browser reservations.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Two `resolve({kind:'workflow', workflowName:'bank'})` calls: the second gets `ResourceBusyError`
     naming the first holder.
   - After the first session closes, a third resolve succeeds.
@@ -551,7 +551,14 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
   - The I1 case "browser install during a run" (characterization only, no code change):
     `browser install` while a managed-use reservation is held refuses as it does today. The test pins
     that existing behavior with the real `ManagedBrowserCoordinator` against a temp root.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/saved-workflows.md`
+
+  > DEVIATION: the existing managed installer returns `already-installed` without helper I/O
+  > when the ready installation is reusable during a run. It does not refuse that no-op.
+  > The characterization preserves that behavior and verifies that the real coordinator
+  > rejects a mutation claim with reason `active-use` while the reservation remains held.
+  > Managed-browser reservation and installer production code remain unchanged.
+
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/saved-workflows.md`
       (`cookies: auto` workflows run one at a time; second run is `busy`).
 - **Verify**:
   - `cd packages/core && npx vitest run tests/browser/profile-lease.spec.ts` passes.
@@ -944,7 +951,7 @@ tests/setup` passes; `init.ts`, `init-wizard.ts` and `init-context-prompts.ts` a
 - [x] TASK-002: Core resource-lock helper, unique temp files and locked `config.yaml` writes
 - [x] TASK-003: Locked `profile.yaml` writes and the concurrent-writer evidence (I1)
 - [x] TASK-004: Workflow, template and schedule-registry locks; core fixed-temp lint rule
-- [ ] TASK-005: Persistent browser-profile exclusivity
+- [x] TASK-005: Persistent browser-profile exclusivity
 - [ ] TASK-006: Command context, terminal adapter and purity lint; migrate `research`
 - [ ] TASK-007: Worker adapter, result transport and `research` parity
 - [ ] TASK-008: Execution receipts, settings provenance and the canary (research first)

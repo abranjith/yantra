@@ -11,7 +11,7 @@
  * Dependencies are injected to keep this class testable without a live browser.
  */
 
-import { writeFile } from 'node:fs/promises';
+import { appendFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import {
@@ -36,6 +36,8 @@ import type {
   RunOutcome as ExecutorRunOutcome,
   Sanitizer,
 } from '../../executor/types.js';
+import { writeFileAtomic } from '../../fs/atomic-write.js';
+import { ResourceBusyError } from '../../locks/resource-lock.js';
 import type { KeychainProvider } from '../../secrets/keychain.js';
 import { DefaultOpaqueRefResolver } from '../../secrets/resolver.js';
 import type { WorkflowStore } from '../store.types.js';
@@ -157,7 +159,8 @@ export class RunOrchestrator {
    * Executes a workflow from scratch.
    *
    * @returns The orchestrator outcome (success, failure, or aborted).
-   * @throws Never — all errors are captured into the outcome.
+   * Validation and browser-startup refusals propagate typed to the adapter;
+   * executor outcomes are returned.
    */
   public async run(request: RunRequest): Promise<OrchestratorRunOutcome> {
     const clock = this.opts.clock ?? { now: () => new Date() };
@@ -226,10 +229,16 @@ export class RunOrchestrator {
     });
 
     // 8. Launch browser
-    const browser = await this.opts.browserProvider.launch({
-      profile: profileSpec,
-      headless: true,
-    });
+    const browser = await this.opts.browserProvider
+      .launch({
+        profile: profileSpec,
+        headless: true,
+      })
+      .catch(async (error: unknown) => {
+        if (error instanceof ResourceBusyError)
+          await this.recordStartupRefusal(runId, runDir, manifest, error);
+        throw error;
+      });
 
     try {
       // Update manifest with profile path
@@ -388,13 +397,19 @@ export class RunOrchestrator {
     manifest.status = 'running';
     await writeManifest(runDir, manifest);
 
-    const browser = await this.opts.browserProvider.launch({
-      profile:
-        point.profileKind === 'workflow' && point.cookieProfilePath !== null
-          ? { kind: 'explicit', absolutePath: point.cookieProfilePath }
-          : { kind: 'ephemeral' },
-      headless: true,
-    });
+    const browser = await this.opts.browserProvider
+      .launch({
+        profile:
+          point.profileKind === 'workflow' && point.cookieProfilePath !== null
+            ? { kind: 'explicit', absolutePath: point.cookieProfilePath }
+            : { kind: 'ephemeral' },
+        headless: true,
+      })
+      .catch(async (error: unknown) => {
+        if (error instanceof ResourceBusyError)
+          await this.recordStartupRefusal(runId, runDir, manifest, error);
+        throw error;
+      });
 
     try {
       const secretResolver = new DefaultOpaqueRefResolver({ keychain: this.opts.keychain });
@@ -536,6 +551,50 @@ export class RunOrchestrator {
       input.manifest.synthesis = stage.record;
     }
     return { brief: stage.brief, artifacts: stage.artifacts };
+  }
+
+  /** A busy startup already owns a run directory; never leave it marked running. */
+  private async recordStartupRefusal(
+    runId: string,
+    runDir: string,
+    manifest: RunManifest,
+    error: ResourceBusyError,
+  ): Promise<void> {
+    const endedAt = (this.opts.clock?.now() ?? new Date()).toISOString();
+    manifest.status = 'failed';
+    manifest.taskOutcome = 'failed';
+    manifest.failureClass = 'unexpected';
+    manifest.endedAt = endedAt;
+    manifest.durationMs = Math.max(
+      0,
+      new Date(endedAt).getTime() - new Date(manifest.startedAt).getTime(),
+    );
+    const report: RunReport = {
+      manifest,
+      stepLog: [],
+      failure: {
+        failureClass: 'unexpected',
+        stepId: 'startup',
+        message: `${error.message} ${error.remediation}`,
+      },
+      auditEntries: [{ kind: 'resource_busy', resource: error.resource, holder: error.holder }],
+    };
+    try {
+      await writeManifest(runDir, manifest);
+      const reportPath = join(runDir, REPORT_FILE);
+      await writeFileAtomic(reportPath, this.renderer.render(report));
+      await writeFileAtomic(
+        join(runDir, REPORT_JSON_FILE),
+        JSON.stringify(this.renderer.renderJson(report), null, 2),
+      );
+      await appendFile(
+        join(runDir, 'events.jsonl'),
+        `${JSON.stringify({ kind: 'task_failed', task_id: manifest.taskId, at: endedAt, failure_class: 'unexpected', task_outcome: 'failed', report_path: reportPath })}\n`,
+        { encoding: 'utf8', mode: 0o600 },
+      );
+    } finally {
+      await this.opts.runStore.releaseLock(runId);
+    }
   }
 
   private mapExecutorOutcome(

@@ -14,6 +14,18 @@ vi.mock('node:fs/promises', () => ({
   readdir: vi.fn(),
   rm: vi.fn(),
   stat: vi.fn(),
+  realpath: vi.fn(async (path: unknown) => String(path)),
+}));
+vi.mock('../../src/locks/resource-lock.js', () => ({
+  acquireResourceLease: vi.fn(async () => ({
+    owner: {
+      pid: 1234,
+      command: 'fixture',
+      started_at: '2026-11-06T12:00:00.000Z',
+      surface: 'terminal',
+    },
+    release: vi.fn(async () => undefined),
+  })),
 }));
 vi.mock('node:os', () => ({
   homedir: vi.fn(() => '/home/testuser'),

@@ -614,6 +614,40 @@ describe('@no-llm LocalBrowserProvider startup', () => {
     },
   );
 
+  it.each(['workflow', 'explicit'] as const)(
+    'releases the %s profile lease on startup rollback',
+    async (kind) => {
+      const { services } = makeServices(recorder);
+      mockLaunch.mockRejectedValue(new Error('launch failed'));
+      const release = vi.fn(async () => undefined);
+      const provider = new LocalBrowserProvider({
+        profileStore: makeProfileStore(recorder, {
+          resolve: async () => ({
+            absolutePath: '/fixture/profile',
+            kind,
+            createdNow: false,
+            lease: {
+              owner: {
+                pid: 1234,
+                command: 'fixture',
+                started_at: '2026-11-06T12:00:00.000Z',
+                surface: 'terminal',
+              },
+              release,
+            },
+          }),
+        }),
+        services,
+        logger,
+      });
+      await expect(
+        provider.launch({ profile: { kind: 'workflow', workflowName: 'fixture' } }),
+      ).rejects.toThrow('launch failed');
+      expect(release).toHaveBeenCalledOnce();
+      expect(recorder.events.some((event) => event.startsWith('cleanup:'))).toBe(false);
+    },
+  );
+
   it('surfaces a busy managed installation as a coordination error', async () => {
     const { services } = makeServices(recorder, {
       resolution: { status: 'resolved', installation: managedInstallation() },

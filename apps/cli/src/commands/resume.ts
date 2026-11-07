@@ -37,6 +37,7 @@ import { openArtifact } from '../open-artifact.js';
 import { loadEffectivePreferences } from '../preferences.js';
 import { createRegisteredCommand } from '../registry/build-command-tree.js';
 import { handler, type HandlerArgs } from '../registry/handler.js';
+import { throwIfResourceBusy } from '../resource-busy.js';
 import {
   buildOrchestratorRuntime,
   makeStderrLogger,
@@ -139,6 +140,7 @@ export async function resumeHandler(args: HandlerArgs, options: ResumeOptions): 
     process.exit(exitCodeFor(outcome));
   } catch (err) {
     closeRuntime();
+    throwIfResourceBusy(err, 'resume', options.json === true, process);
     const message = err instanceof Error ? err.message : String(err);
     process.stderr.write(`Error: ${message}\n`);
     if (options.debug === true && err instanceof Error && err.stack !== undefined) {

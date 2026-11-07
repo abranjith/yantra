@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { HistoryStore } from '../../src/index-db/history-store.js';
 import type { NotifyTarget, Schedule } from '../../src/index-db/schedule-store.js';
 import type { IndexDbError } from '../../src/index-db/types.js';
+import { ResourceBusyError } from '../../src/locks/resource-lock.js';
 import type {
   FireRunDriver,
   FireRunOutcome,
@@ -90,6 +91,20 @@ const noHistory: HistoryStore = {
 };
 
 describe('@no-llm runScheduledFire', () => {
+  it('records a busy profile as failed without retrying the fire', async () => {
+    const { notifier, sent } = recordingNotifier();
+    const run = vi.fn(async () => {
+      throw new ResourceBusyError({ kind: 'browser-profile', path: '/fixture/profile' }, null);
+    });
+    const result = await runScheduledFire(makeSchedule(), new Date('2026-07-05T00:05:00.000Z'), {
+      driver: { run },
+      notifier,
+      logger: silentLogger,
+    });
+    expect(result).toEqual({ runId: null, status: 'failed', reason: 'busy' });
+    expect(run).toHaveBeenCalledOnce();
+    expect(sent).toMatchObject([{ kind: 'failed' }]);
+  });
   it('reports succeeded, records history, and notifies completed on a success', async () => {
     const { notifier, sent } = recordingNotifier();
     const recordSpy = vi.fn(

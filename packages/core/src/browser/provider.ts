@@ -364,6 +364,14 @@ export class LocalBrowserProvider implements BrowserProvider {
     profile: ResolvedProfile | null,
     profileOwned: boolean,
   ): Promise<void> {
+    await profile?.lease
+      ?.release()
+      .catch((error: unknown) =>
+        this.logger.warn(
+          { error_class: errorClassOf(error) },
+          'failed to release the browser profile lease after startup rollback',
+        ),
+      );
     if (profile !== null && profileOwned) {
       await this.profileStore
         .cleanupEphemeral(profile.absolutePath)
