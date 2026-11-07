@@ -1,7 +1,7 @@
 import type { KeychainProvider } from '@yantra/core';
 import { describe, expect, it, vi } from 'vitest';
 
-import { runInitWizard } from '../../src/commands/init-wizard.js';
+import { runInitWizard } from '../../src/adapters/terminal/init-wizard.js';
 
 describe('@no-llm init wizard', () => {
   it('collects provider, env reference, model, and storage in order', async () => {

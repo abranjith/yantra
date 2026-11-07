@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 
+import type { InitAnswerCollector } from '@yantra/core';
 import prompts from 'prompts';
 
 import type { InputCollector } from '../../context/command-context.js';
@@ -63,4 +64,10 @@ export function terminalInputs(interactive: boolean): InputCollector {
       });
     },
   };
+}
+
+import { collectContextGrants } from './init-context-prompts.js';
+import { runInitWizard } from './init-wizard.js';
+export function terminalInitCollector(): InitAnswerCollector {
+  return { providerAnswers: () => runInitWizard(), contextGrants: () => collectContextGrants() };
 }

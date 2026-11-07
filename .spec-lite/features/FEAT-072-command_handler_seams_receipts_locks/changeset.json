@@ -14,6 +14,18 @@
       "task": "TASK-006"
     },
     {
+      "path": "apps/cli/src/adapters/terminal/init-context-prompts.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-014"
+    },
+    {
+      "path": "apps/cli/src/adapters/terminal/init-wizard.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-014"
+    },
+    {
       "path": "apps/cli/src/adapters/terminal/prompts.ts",
       "status": "A",
       "role": "implement",
@@ -102,6 +114,18 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/commands/init-context-prompts.ts",
+      "status": "D",
+      "role": "implement",
+      "task": "TASK-014"
+    },
+    {
+      "path": "apps/cli/src/commands/init-wizard.ts",
+      "status": "D",
+      "role": "implement",
+      "task": "TASK-014"
     },
     {
       "path": "apps/cli/src/commands/init.ts",
@@ -243,7 +267,7 @@
     },
     {
       "path": "apps/cli/src/context/resource-options.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-013"
     },
@@ -1040,8 +1064,14 @@
       "task": "TASK-001"
     },
     {
-      "path": "apps/cli/tests/characterization/mutate-parity.spec.ts",
+      "path": "apps/cli/tests/characterization/init-parity.spec.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-014"
+    },
+    {
+      "path": "apps/cli/tests/characterization/mutate-parity.spec.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-013"
     },
@@ -1086,6 +1116,18 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-012"
+    },
+    {
+      "path": "apps/cli/tests/commands/init-context-prompts.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-014"
+    },
+    {
+      "path": "apps/cli/tests/commands/init-wizard.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-014"
     },
     {
       "path": "apps/cli/tests/commands/model.spec.ts",
@@ -1194,6 +1236,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-007"
+    },
+    {
+      "path": "docs/quickstart.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-014"
     },
     {
       "path": "docs/usage.md",
@@ -1418,6 +1466,12 @@
       "task": "TASK-011"
     },
     {
+      "path": "packages/core/src/setup/init-service.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-014"
+    },
+    {
       "path": "packages/core/src/workflow/recorder/store.ts",
       "status": "M",
       "role": "implement",
@@ -1560,6 +1614,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-011"
+    },
+    {
+      "path": "packages/core/tests/setup/init-service.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-014"
     },
     {
       "path": "packages/core/tests/workflow/recorder/store.spec.ts",

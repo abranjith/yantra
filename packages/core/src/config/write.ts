@@ -64,7 +64,7 @@ export async function mutateConfigDocument(
 export async function writeConfigDocument(
   text: string,
   path: string = configPath(),
-  options: ResourceLockOptions = {},
+  options: ResourceLockOptions & { readonly beforeWrite?: () => Promise<boolean> } = {},
 ): Promise<void> {
   await withResourceLock(
     { kind: 'config' },
@@ -81,6 +81,7 @@ export async function writeConfigDocument(
             .map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`)
             .join('; '),
         );
+      if (options.beforeWrite && !(await options.beforeWrite())) return;
       await writeFileAtomic(path, text, { mode: 0o600 });
     },
     { ...options, targetPath: path },

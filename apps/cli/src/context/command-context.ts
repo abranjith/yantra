@@ -1,5 +1,6 @@
 import type {
   CommandProcessControl,
+  InitAnswerCollector,
   ConfirmationGateway,
   InstallOfferGateway,
   Logger,
@@ -50,6 +51,7 @@ export interface InputCollector {
   editor(path: string, options?: { readonly wait?: boolean }): Promise<boolean>;
 }
 export interface CommandContext {
+  readonly initAnswers: InitAnswerCollector;
   readonly surface: 'terminal' | 'worker';
   readonly cwd: string;
   readonly invocationId: string | null;

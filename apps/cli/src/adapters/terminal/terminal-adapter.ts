@@ -12,7 +12,7 @@ import { JSONRenderer } from '../../render/json.js';
 import { makeStderrLogger } from '../../runtime.js';
 
 import { CLIConnectorIO } from './connector.js';
-import { terminalInputs } from './prompts.js';
+import { terminalInputs, terminalInitCollector } from './prompts.js';
 
 /** Optional terminal capabilities also let tests supply hermetic streams and input. */
 export interface TerminalOptions {
@@ -34,6 +34,7 @@ export function createTerminalContext(options: TerminalOptions = {}): CommandCon
     invocationId: null,
   });
   const context: CommandContext = {
+    initAnswers: terminalInitCollector(),
     processes: new NodeDaemonProcessControl({
       entrypoint: fileURLToPath(new URL('../../bin.js', import.meta.url)),
       cwd: options.cwd ?? process.cwd(),

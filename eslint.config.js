@@ -169,9 +169,6 @@ export const DRSHYA_STYLE_SELECTORS = [
 
 /** Shrink-only migration list, introduced 2026-11-03; removed at TASK-015. */
 export const HANDLER_PURITY_MIGRATION_ALLOWLIST = [
-  'apps/cli/src/commands/init-context-prompts.ts',
-  'apps/cli/src/commands/init-wizard.ts',
-  'apps/cli/src/commands/init.ts',
   'apps/cli/src/global-flags.ts',
   'apps/cli/src/open-artifact.ts',
   'apps/cli/src/render/brief-terminal.ts',

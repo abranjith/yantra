@@ -859,7 +859,7 @@ config-storage.spec.ts` passes after build.
 
 ### TASK-014: The `init` application service with a pluggable answer collector
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - Create `packages/core/src/setup/init-service.ts`:
     - `runInit({provider?, reset, yes, interactive}, collector, deps) → InitResult`, with these
       statuses: `already-initialized`, `written`, `invalid-provider`, `failed`;
@@ -873,7 +873,7 @@ config-storage.spec.ts` passes after build.
   - `commands/init.ts` becomes a thin handler: it builds the request from options, picks the collector
     from the context (terminal prompts when interactive; a defaults collector otherwise) and renders
     `InitResult` exactly as today (stdout lines and the `--json` envelope).
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - `init-service.spec.ts`: for each of `anthropic`, `ollama` and `none`, with and without a data dir,
     with grants on and off, and for search-key `stored`, `manual` and `skipped`, the service writes
     `config.yaml` and `profile.yaml` **byte-identical** to the TASK-001 baseline of today's wizard
@@ -883,7 +883,7 @@ config-storage.spec.ts` passes after build.
   - The search-key value never appears in any written file (canary).
   - A config lock held during `init` gives `busy`.
   - The existing `init-wizard` and `init-context-prompts` suites pass from their new location.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/quickstart.md` (init is
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/quickstart.md` (init is
       unchanged for users; note it is shared with app onboarding).
 - **Verify**: The `init` TASK-001 baselines are unchanged; `cd packages/core && npx vitest run
 tests/setup` passes; `init.ts`, `init-wizard.ts` and `init-context-prompts.ts` are off the allowlist.
@@ -971,7 +971,7 @@ tests/setup` passes; `init.ts`, `init-wizard.ts` and `init-context-prompts.ts` a
 - [x] TASK-011: Daemon, scheduling and `confirm`: migration plus daemon-fire receipts
 - [x] TASK-012: Migrate the read-class commands
 - [x] TASK-013: Migrate the mutate-class commands
-- [ ] TASK-014: The `init` application service with a pluggable answer collector
+- [x] TASK-014: The `init` application service with a pluggable answer collector
 - [ ] TASK-015: Empty the purity allowlist and run the full parity sweep
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

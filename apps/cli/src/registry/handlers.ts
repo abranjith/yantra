@@ -66,7 +66,7 @@ export function buildHandlers(
     ...modelHandlers(context),
     prefs: handler(prefsHandler),
     ...sitesHandlers(options.sitesRuntime, context),
-    init: makeInitHandler(),
+    init: makeInitHandler(undefined, context),
     ...confirmHandlers(context),
     ...scheduleHandlers(context),
     ...unscheduleHandlers(context),
