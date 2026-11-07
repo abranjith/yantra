@@ -15,6 +15,7 @@ import { appendFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import {
+  JsonValue,
   TASK_OUTCOME_TABLE,
   type Brief,
   type Plan,
@@ -38,6 +39,10 @@ import type {
 } from '../../executor/types.js';
 import { writeFileAtomic } from '../../fs/atomic-write.js';
 import { ResourceBusyError } from '../../locks/resource-lock.js';
+import {
+  writeExecutionReceipt,
+  type ExecutionReceiptDraft,
+} from '../../receipt/execution-receipt.js';
 import type { KeychainProvider } from '../../secrets/keychain.js';
 import { DefaultOpaqueRefResolver } from '../../secrets/resolver.js';
 import type { WorkflowStore } from '../store.types.js';
@@ -199,6 +204,27 @@ export class RunOrchestrator {
 
     // 5. Create run directory
     const { runId, runDir } = await this.opts.runStore.createRun(request);
+    if (request.receipt)
+      await writeExecutionReceipt(runDir, {
+        ...request.receipt,
+        settings: [
+          ...request.receipt.settings.filter(
+            (s) => s.key !== 'synthesis.use_llm' && s.key !== 'params',
+          ),
+          {
+            key: 'params',
+            value: JsonValue.parse(redactParamsForManifest(params, declaredSecretKeys)),
+            source: request.receipt.settings.find((s) => s.key === 'params')?.source ?? {
+              kind: 'workflow',
+            },
+          },
+          {
+            key: 'synthesis.use_llm',
+            value: workflow.synthesis?.use_llm ?? false,
+            source: workflow.synthesis ? { kind: 'workflow' } : { kind: 'default' },
+          },
+        ],
+      });
 
     const taskId = plan.task_id;
     const startedAt = clock.now().toISOString();
@@ -386,12 +412,17 @@ export class RunOrchestrator {
    * The caller should use `requiresUserConsent()` to gate this call when the
    * original failure class was `scope_violation` or `ethics_refused`.
    */
-  public async resume(runId: string): Promise<OrchestratorRunOutcome> {
+  public async resume(
+    runId: string,
+    options: { readonly receipt?: ExecutionReceiptDraft } = {},
+  ): Promise<OrchestratorRunOutcome> {
     const logger = this.opts.logger;
 
     // Load resume point (validates resumability)
     const point = await loadResumePoint(this.opts.runStore, runId);
     const { plan, nextStepIndex, lastCheckpoint, manifest, runDir } = point;
+
+    if (options.receipt) await writeExecutionReceipt(runDir, options.receipt, { resume: true });
 
     // Update status to running
     manifest.status = 'running';

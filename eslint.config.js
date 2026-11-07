@@ -185,8 +185,6 @@ export const HANDLER_PURITY_MIGRATION_ALLOWLIST = [
   'apps/cli/src/commands/prefs.ts',
   'apps/cli/src/commands/profile.ts',
   'apps/cli/src/commands/report.ts',
-  'apps/cli/src/commands/resume.ts',
-  'apps/cli/src/commands/run.ts',
   'apps/cli/src/commands/schedule.ts',
   'apps/cli/src/commands/secret.ts',
   'apps/cli/src/commands/show.ts',

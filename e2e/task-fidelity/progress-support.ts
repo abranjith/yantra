@@ -1,6 +1,6 @@
 import { Writable } from 'node:stream';
 
-import { CLIConnectorIO } from '../../apps/cli/src/connector-io.js';
+import { CLIConnectorIO } from '../../apps/cli/src/adapters/terminal/connector.js';
 import { TerminalRenderer } from '../../apps/cli/src/render/terminal.js';
 
 import type { ScriptContext } from './agent/scripted-provider.js';

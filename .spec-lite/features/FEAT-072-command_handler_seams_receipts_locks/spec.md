@@ -746,7 +746,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
 
 ### TASK-010: Migrate `run` and `resume` with receipts in the replay path
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - Replace the 6 `process.exit` calls in `run.ts` and 5 in `resume.ts` with `CommandFailure` or a
     returned `CommandResult`, keeping every exit code:
     - template refusal → 1;
@@ -762,7 +762,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
     the workflow YAML, the `.locators.json` sidecar when present and `--params-file`. The
     `synthesis.use_llm` setting is recorded with source `workflow`.
   - Resume writes `execution-receipt.resume-<k>.json`.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Parity rows: a successful `run` (fake orchestrator), a failing `run` (exit 2), `run --json`
     (byte-identical envelope), and `resume` of a checkpointed fixture run.
   - Receipt content hashes match the fixture files.
@@ -770,7 +770,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
   - A workflow edited between submission and start shows a different `sha256` (the I2 "edited
     workflow" evidence).
   - The existing `run-outputs`, `run-synthesis` and `resume-synthesis` suites pass.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/saved-workflows.md`
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/saved-workflows.md`
       (receipts on runs and resumes).
 - **Verify**: The parity and baseline specs pass; `run.ts` and `resume.ts` are off the allowlist.
 
@@ -963,7 +963,7 @@ tests/setup` passes; `init.ts`, `init-wizard.ts` and `init-context-prompts.ts` a
 - [x] TASK-007: Worker adapter, result transport and `research` parity
 - [x] TASK-008: Execution receipts, settings provenance and the canary (research first)
 - [x] TASK-009: Migrate `ask` and `do` (agentic run class) with receipts and abort
-- [ ] TASK-010: Migrate `run` and `resume` with receipts in the replay path
+- [x] TASK-010: Migrate `run` and `resume` with receipts in the replay path
 - [ ] TASK-011: Daemon, scheduling and `confirm`: migration plus daemon-fire receipts
 - [ ] TASK-012: Migrate the read-class commands
 - [ ] TASK-013: Migrate the mutate-class commands

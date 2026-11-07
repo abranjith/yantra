@@ -12,10 +12,9 @@
 
 import { PiAgentProvider } from '@yantra/agent';
 import {
+  ResourceBusyError,
   BrowserInstallOfferDeclinedError,
   BrowserManagedInstallError,
-  InteractiveConfirmationGateway,
-  InteractiveInstallOfferGateway,
   type EffectivePreferences,
   type Logger,
 } from '@yantra/core';
@@ -26,18 +25,21 @@ import {
   loadResumePoint,
   requiresUserConsent,
 } from '@yantra/core/workflow/replay';
+import { COMMAND_REGISTRY } from '@yantra/protocol';
 import { type Command } from 'commander';
 
+import { createTerminalContext } from '../adapters/terminal/terminal-adapter.js';
 import { resolveAgentInvocation, type AgentOptions } from '../agent-options.js';
 import {
   resolveBrowserSelectionOverride,
   type BrowserSelectionOptions,
 } from '../browser-options.js';
-import { openArtifact } from '../open-artifact.js';
-import { loadEffectivePreferences } from '../preferences.js';
+import type { CommandContext, CommandResult, ExitCode } from '../context/command-context.js';
+import { replayContent } from '../context/replay-content.js';
+import type { ReplayRuntimeDependencies } from '../context/replay-runtime.js';
+import { draftRunReceipt } from '../context/run-receipt.js';
 import { createRegisteredCommand } from '../registry/build-command-tree.js';
-import { handler, type HandlerArgs } from '../registry/handler.js';
-import { throwIfResourceBusy } from '../resource-busy.js';
+import { handler, type Handler, type HandlerArgs } from '../registry/handler.js';
 import {
   buildOrchestratorRuntime,
   makeStderrLogger,
@@ -56,11 +58,28 @@ export function makeResumeCommand(): Command {
   return createRegisteredCommand('resume', { resume: handler(resumeHandler) });
 }
 
-/** `yantra resume <run-id>`: bound to the `resume` registry entry. */
-export async function resumeHandler(args: HandlerArgs, options: ResumeOptions): Promise<void> {
-  const [runId] = args as readonly [string];
+export function makeResumeHandler(
+  dependencies?: ReplayRuntimeDependencies,
+  context?: CommandContext,
+): Handler {
+  return handler((args: HandlerArgs, options: ResumeOptions, command: Command) =>
+    resumeHandler(args, options, command, context, dependencies),
+  );
+}
 
-  const logger = makeStderrLogger(options.debug === true, process.stderr);
+/** `yantra resume <run-id>`: bound to the `resume` registry entry. */
+export async function resumeHandler(
+  args: HandlerArgs,
+  options: ResumeOptions,
+  command?: Command,
+  context: CommandContext = createTerminalContext(),
+  dependencies: ReplayRuntimeDependencies = {},
+): Promise<CommandResult> {
+  const [runId] = args as readonly [string];
+  const entry = COMMAND_REGISTRY.commands.find((e) => e.id === 'resume');
+  if (entry?.kind === 'leaf' && command) context.settings.bind(entry, command);
+
+  const logger = makeStderrLogger(options.debug === true, context.output.stderr);
   logger.info({ runId }, 'yantra resume: starting');
   let closeRuntime = (): void => undefined;
 
@@ -70,34 +89,38 @@ export async function resumeHandler(args: HandlerArgs, options: ResumeOptions): 
   try {
     browserSelection = resolveBrowserSelectionOverride(options);
   } catch (err) {
-    process.stderr.write(`${err instanceof Error ? err.message : String(err)}
+    context.output.stderr.write(`${err instanceof Error ? err.message : String(err)}
 `);
-    process.exit(1);
+    return { exitCode: 1 as ExitCode };
   }
 
   try {
     // Same consent policy as `run`: prompt only in an interactive TTY,
     // never under `--json` / unattended (plan §6).
-    const interactive = process.stdin.isTTY === true && options.json !== true;
+    const interactive = context.isInteractive({ json: options.json === true });
 
     // Read the resume point before building the runtime, so the runtime can
     // inherit the original run's synthesis strategy — a resumed run must not
     // silently change how its Brief is produced. `loadResumePoint` needs only
     // a run store, so this costs nothing extra.
-    const point = await loadResumePoint(new LocalRunStore(), runId);
+    const point = await (dependencies.loadResumePoint ?? loadResumePoint)(
+      new LocalRunStore(),
+      runId,
+    );
 
     const inherited = await synthesisForResume(
       point.manifest,
       logger,
       options,
-      process.env,
-      await loadEffectivePreferences(),
+      context.settings.env(),
+      await context.settings.preferences(),
+      context.cwd,
     );
-    const runtime = await buildOrchestratorRuntime({
+    const runtime = await (dependencies.build ?? buildOrchestratorRuntime)({
       logger,
-      confirmationGateway: interactive ? new InteractiveConfirmationGateway() : null,
+      confirmationGateway: context.gateways.confirmation(interactive),
       browser: {
-        installOfferGateway: interactive ? new InteractiveInstallOfferGateway() : null,
+        installOfferGateway: context.gateways.installOffer(interactive),
         ...(browserSelection === undefined ? {} : { selection: browserSelection }),
       },
       // Omitted, not set to undefined: an absent key disables the stage,
@@ -109,50 +132,54 @@ export async function resumeHandler(args: HandlerArgs, options: ResumeOptions): 
 
     if (options.force !== true && requiresUserConsent(point.manifest.failureClass)) {
       if (options.json === true) {
-        process.stderr.write(
+        context.output.stderr.write(
           `Resume of run ${runId} requires interactive consent (failure class: ${point.manifest.failureClass}). Re-run without --json or pass --force.\n`,
         );
         closeRuntime();
-        process.exit(4);
+        return { exitCode: 4 as ExitCode };
       }
-      process.stderr.write(
+      context.output.stderr.write(
         `\nThis run was stopped due to "${point.manifest.failureClass}".\n` +
           `Resume only if you intended to allow this workflow to access that resource.\n` +
           `Pass --force to bypass this check.\n`,
       );
       closeRuntime();
-      process.exit(4);
+      return { exitCode: 4 as ExitCode };
     }
 
-    const outcome = await orchestrator.resume(runId);
+    const receipt = await draftRunReceipt(context, ['resume'], {
+      ...(browserSelection === undefined ? {} : { browser: browserSelection }),
+      content: await replayContent(point.manifest.workflowName),
+    });
+    const outcome = await orchestrator.resume(runId, { receipt });
     if (options.open === true && outcome.kind === 'success' && outcome.brief) {
-      openArtifact(outcome.brief.htmlPath);
+      context.openExternal(outcome.brief.htmlPath);
     }
 
     if (options.json === true) {
-      process.stdout.write(`${JSON.stringify(outcome, null, 2)}\n`);
+      context.output.json(outcome, { indent: 2 });
     } else {
       const icon = outcome.kind === 'success' ? '✓' : outcome.kind === 'aborted' ? '⤺' : '✗';
-      process.stdout.write(`${icon} Resume ${outcome.runId}: ${outcome.kind}\n`);
+      context.output.stdout.write(`${icon} Resume ${outcome.runId}: ${outcome.kind}\n`);
     }
 
     closeRuntime();
-    process.exit(exitCodeFor(outcome));
+    return { exitCode: exitCodeFor(outcome) as ExitCode };
   } catch (err) {
     closeRuntime();
-    throwIfResourceBusy(err, 'resume', options.json === true, process);
+    if (err instanceof ResourceBusyError) throw err;
     const message = err instanceof Error ? err.message : String(err);
-    process.stderr.write(`Error: ${message}\n`);
+    context.output.stderr.write(`Error: ${message}\n`);
     if (options.debug === true && err instanceof Error && err.stack !== undefined) {
-      process.stderr.write(`${err.stack}\n`);
+      context.output.stderr.write(`${err.stack}\n`);
     }
-    process.exit(
-      err instanceof BrowserInstallOfferDeclinedError
+    return {
+      exitCode: (err instanceof BrowserInstallOfferDeclinedError
         ? 4
         : err instanceof BrowserManagedInstallError
           ? 3
-          : 1,
-    );
+          : 1) as ExitCode,
+    };
   }
 }
 
@@ -181,8 +208,9 @@ export async function synthesisForResume(
   manifest: RunManifest,
   logger: Logger,
   options: AgentOptions = {},
-  env: NodeJS.ProcessEnv = process.env,
+  env: NodeJS.ProcessEnv = {},
   prefs: EffectivePreferences = new Map(),
+  cwd = '.',
 ): Promise<OrchestratorSynthesisOptions | undefined> {
   const record = manifest.synthesis;
   if (record === undefined) return undefined;
@@ -203,7 +231,7 @@ export async function synthesisForResume(
         auth: invocation.auth,
         runId,
         runDir,
-        cwd: process.cwd(),
+        cwd,
         logger,
       }),
   };

@@ -7,11 +7,13 @@ import type { DoRuntime } from './commands/do.js';
 import type { ResearchRuntime } from './commands/research.js';
 import type { SitesRuntime } from './commands/sites.js';
 import type { TemplateCommandRuntime } from './commands/template.js';
+import type { ReplayRuntimeDependencies } from './context/replay-runtime.js';
 import { buildCommandTree, type HandlerTable } from './registry/build-command-tree.js';
 import { buildHandlers } from './registry/handlers.js';
 
 /** Injectable runtimes for the commands that accept them (hermetic tests). */
 export interface CliRunOptions {
+  readonly replayRuntime?: ReplayRuntimeDependencies;
   readonly askRuntime?: Partial<AskRuntime> & TerminalOptions;
   readonly researchRuntime?: Partial<ResearchRuntime> & TerminalOptions;
   readonly doRuntime?: Partial<DoRuntime> & TerminalOptions;

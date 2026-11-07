@@ -14,6 +14,7 @@
  */
 
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { createServer, type ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -240,6 +241,28 @@ describe('@no-llm cli commands e2e', () => {
           },
         })),
       );
+      for (const row of rows) {
+        const receipt = JSON.parse(
+          await readFile(join(runs, row.id, 'execution-receipt.json'), 'utf8'),
+        ) as {
+          run_id: string;
+          sequence: number;
+          settings: { key: string; value: unknown }[];
+          content: { kind: string; path: string; sha256: string }[];
+        };
+        expect(receipt.run_id).toBe(row.id);
+        expect(receipt.sequence).toBe(0);
+        expect(receipt.settings.find((setting) => setting.key === 'synthesis.use_llm')?.value).toBe(
+          false,
+        );
+        const workflow = receipt.content.find((identity) => identity.kind === 'workflow');
+        expect(workflow).toBeDefined();
+        expect(workflow!.sha256).toBe(
+          createHash('sha256')
+            .update(await readFile(workflow!.path))
+            .digest('hex'),
+        );
+      }
       const failed = rows.find((row) => row.manifest.status === 'failed');
       expect(failed).toBeDefined();
       expect(await readFile(join(runs, failed!.id, 'report.md'), 'utf8')).toContain('is busy');

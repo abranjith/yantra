@@ -188,8 +188,20 @@
       "task": "TASK-006"
     },
     {
-      "path": "apps/cli/src/context/run-receipt.ts",
+      "path": "apps/cli/src/context/replay-content.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/cli/src/context/replay-runtime.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/cli/src/context/run-receipt.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
@@ -297,7 +309,7 @@
     },
     {
       "path": "apps/cli/tests/characterization/agentic-parity.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
@@ -980,6 +992,12 @@
       "task": "TASK-008"
     },
     {
+      "path": "apps/cli/tests/characterization/replay-parity.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
       "path": "apps/cli/tests/characterization/scenarios.ts",
       "status": "A",
       "role": "implement",
@@ -996,6 +1014,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "apps/cli/tests/commands/run-synthesis.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
     },
     {
       "path": "apps/cli/tests/commands/schedule-registration.spec.ts",
@@ -1092,6 +1116,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "e2e/task-fidelity/progress-support.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
     },
     {
       "path": "eslint.config.js",
@@ -1284,6 +1314,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/workflow/replay/types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
     },
     {
       "path": "packages/core/src/workflow/store.ts",

@@ -24,8 +24,8 @@ import { prefsHandler } from '../commands/prefs.js';
 import { profileHandler } from '../commands/profile.js';
 import { reportHandler } from '../commands/report.js';
 import { makeResearchHandler } from '../commands/research.js';
-import { resumeHandler } from '../commands/resume.js';
-import { runHandler } from '../commands/run.js';
+import { makeResumeHandler } from '../commands/resume.js';
+import { makeRunHandler } from '../commands/run.js';
 import { schedulesHandler } from '../commands/schedule.js';
 import { scheduleHandlers, unscheduleHandlers } from '../commands/schedule.js';
 import { secretHandlers } from '../commands/secret.js';
@@ -51,8 +51,8 @@ export function buildHandlers(
     ask: makeAskHandler(options.askRuntime, context),
     research: makeResearchHandler(options.researchRuntime, context),
     do: makeDoHandler(options.doRuntime, context),
-    run: handler(runHandler),
-    resume: handler(resumeHandler),
+    run: makeRunHandler(options.replayRuntime, context),
+    resume: makeResumeHandler(options.replayRuntime, context),
     schedules: handler(schedulesHandler),
     list: handler(listHandler),
     show: handler(showHandler),

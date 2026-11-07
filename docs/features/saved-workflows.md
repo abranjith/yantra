@@ -181,6 +181,8 @@ Repeat `--params key=value` for several values. A parameter file must be a YAML 
 
 `--json` prints the raw run outcome, including outputs and Brief document data when available, plus `task_outcome`. Without it, the first line names the run and its outcome word, such as `✓ Run <run-id>: fulfilled`; a successful ordinary run then prints declared outputs and truncates very long terminal values with a pointer to `outputs.json`. A workflow with a `synthesis:` block renders the Brief instead.
 
+Terminal and worker invocations use the same `run` and `resume` handlers, with output, prompts, settings, and working directory supplied by their adapter. The command options and exit codes are shared, including exit `130` for a user abort.
+
 Replay uses the same outcome words as the agentic commands: a successful replay is `fulfilled`, a human handoff such as a confirmation that could not be granted is `handoff`, a user abort is `aborted`, and a workflow failure, scope violation, or ethics refusal is `failed`. Each word has one exit code across every command, read from the protocol's shared outcome table: a replay user abort exits `130`, as `do`, `ask`, and `research` do, and a handoff exits `4` (see [Exit behavior](#exit-behavior)). A replay's `manifest.json` does not record the word, so `yantra list runs` shows none beside a replay's status.
 
 ### Persistent browser profiles
@@ -222,6 +224,8 @@ yantra resume <run-id> --force
 ```
 
 Only runs whose manifest status is `failed` or `paused` and whose original workflow used `cookies: auto` pass resume eligibility. Completed/running runs and `cookies: none` runs are rejected. `--force` bypasses the extra resume gate for an original `scope_violation` or `ethics_refused` failure; it does not approve a workflow step marked `requires_confirmation`.
+
+An eligible resume writes a new numbered execution receipt in the existing run directory before updating its manifest or launching the browser. It preserves the original receipt; see [Execution receipts](#execution-receipts).
 
 A checkpoint is a logical step pointer, not a browser snapshot. The current resume implementation uses it to choose the next step in the same run directory, but does not restore prior captures or retry budgets, reopen the saved page URL, or rebuild the workflow's named locator table. It also does not rerun the post-execution synthesis stage or refresh `report.md`/`report.json`. Consequently, resume is currently reliable only for a remaining suffix that is self-contained and does not need earlier captures, page state, or named locators. For ordinary browser workflows, rerun from the beginning instead.
 
@@ -274,6 +278,8 @@ A direct replay writes under `<yantra-data-dir>/runs/<run-id>/`. Depending on th
 
 | Artifact                               | Purpose                                                                                                                           |
 | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `execution-receipt.json`               | Immutable invocation settings, their sources, input file identities, and initial browser selection for a fresh replay.            |
+| `execution-receipt.resume-<k>.json`    | Separate receipt for each resume attempt that reaches the orchestrator, numbered from `1` without replacing earlier receipts.     |
 | `manifest.json`                        | Workflow, params, profile mode/path, timing, status, failure class, Chrome-drift warning, output names, and synthesis provenance. |
 | `plan.json`                            | Fixed translated plan used for execution and resume.                                                                              |
 | `events.jsonl`                         | Append-only task, step, retry, checkpoint, confirmation, and failure events.                                                      |
@@ -287,6 +293,16 @@ A direct replay writes under `<yantra-data-dir>/runs/<run-id>/`. Depending on th
 `manifest.json`, `outputs.json`, and checkpoints use temporary-file/rename writes. Run directories are user-owned audit records and are not automatically deleted. `yantra report <run-id>` displays `report.md`; `yantra audit <run-id>` and `yantra show <run-id>` inspect the durable trail. For the general artifact trust model, see [Run artifacts](diagnostics-and-audit.md#run-artifacts).
 
 Persisted output redaction does **not** rewrite the in-memory outcome used for terminal and `--json` output. Do not bind secrets or credentials into workflow outputs. The `outputs_unredacted` field currently does not bypass disk redaction despite being accepted by the schema.
+
+### Execution receipts
+
+A fresh `yantra run` writes `execution-receipt.json` immediately after creating the run directory, before writing `plan.json` or launching a browser. Earlier workflow, parameter, or safety-preflight failures create no receipt. The file is published atomically and never rewritten. Resumes publish `execution-receipt.resume-1.json`, then the next unused number, preserving the original receipt and all earlier resume receipts.
+
+Each receipt records its run ID, sequence, timestamp, command, invocation surface (`terminal` or `worker`), worker invocation ID when supplied, explicit working directory, and Yantra CLI version. It includes non-secret settings with their source, such as a flag, named environment variable, profile preference, configuration key, or default, plus the browser selection at invocation. It does not contain secret-input values or a full environment dump. Credential reference names may appear; resolved credentials do not.
+
+The `content` entries identify the workflow YAML, its `.locators.json` sidecar when present, and a fresh run's `--params-file` when supplied. Each entry contains an absolute path and SHA-256 of the file's exact bytes. Resume records the workflow files present at that invocation; execution still uses the saved `plan.json` and manifest parameters. A receipt identifies input files without copying their contents or making resume reload an edited workflow.
+
+A fresh run also records the loaded workflow's `synthesis.use_llm` declaration with source `workflow`, or `false` with source `default` when no synthesis block exists. The declaration remains separate from invocation overrides such as `--no-llm`; the receipt does not promise that a provider session was opened or that synthesis completed. For actual synthesis results, inspect the manifest and Brief artifacts.
 
 ### Exit behavior
 

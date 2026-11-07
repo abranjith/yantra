@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 /**
  * `yantra run <workflow-name>` — executes a saved workflow.
  *
@@ -27,23 +29,20 @@
  *   yantra run quarterly-report --no-llm
  */
 
-import { readFile } from 'node:fs/promises';
-
 import { PiAgentProvider } from '@yantra/agent';
 import {
+  ResourceBusyError,
   BrowserInstallOfferDeclinedError,
   BrowserManagedInstallError,
-  InteractiveConfirmationGateway,
-  InteractiveInstallOfferGateway,
   type EffectivePreferences,
 } from '@yantra/core';
 import type { BriefRunArtifacts, RunRequest } from '@yantra/core/workflow/replay';
 import { exitCodeFor, taskOutcomeForReplay } from '@yantra/core/workflow/replay';
 import type { Brief } from '@yantra/protocol';
-import { validateBrief } from '@yantra/protocol';
+import { COMMAND_REGISTRY, validateBrief } from '@yantra/protocol';
 import { type Command } from 'commander';
 
-import { CLIConnectorIO } from '../adapters/terminal/connector.js';
+import { createTerminalContext } from '../adapters/terminal/terminal-adapter.js';
 import {
   resolveAgentInvocation,
   type AgentInvocationDependencies,
@@ -54,14 +53,15 @@ import {
   resolveBrowserSelectionOverride,
   type BrowserSelectionOptions,
 } from '../browser-options.js';
+import type { CommandContext, CommandResult, ExitCode } from '../context/command-context.js';
+import { replayContent } from '../context/replay-content.js';
+import type { ReplayRuntimeDependencies } from '../context/replay-runtime.js';
+import { draftRunReceipt } from '../context/run-receipt.js';
 import { recordTaskHistory } from '../history.js';
-import { openArtifact } from '../open-artifact.js';
-import { loadEffectivePreferences } from '../preferences.js';
 import { createRegisteredCommand } from '../registry/build-command-tree.js';
-import { handler, type HandlerArgs } from '../registry/handler.js';
+import { handler, type Handler, type HandlerArgs } from '../registry/handler.js';
 import { TerminalRenderer } from '../render/terminal.js';
 import type { ConnectorRenderOpts } from '../render/types.js';
-import { throwIfResourceBusy } from '../resource-busy.js';
 import { buildOrchestratorRuntime, makeStderrLogger } from '../runtime.js';
 import { createSynthesisLlm } from '../synthesis-llm.js';
 
@@ -96,17 +96,34 @@ export function makeRunCommand(): Command {
   return createRegisteredCommand('run', { run: handler(runHandler) });
 }
 
+export function makeRunHandler(
+  dependencies?: ReplayRuntimeDependencies,
+  context?: CommandContext,
+): Handler {
+  return handler((args: HandlerArgs, options: RunOptions, command: Command) =>
+    runHandler(args, options, command, context, dependencies),
+  );
+}
+
 /** `yantra run <workflow-name>`: bound to the `run` registry entry. */
-export async function runHandler(args: HandlerArgs, options: RunOptions): Promise<void> {
+export async function runHandler(
+  args: HandlerArgs,
+  options: RunOptions,
+  command?: Command,
+  context: CommandContext = createTerminalContext(),
+  dependencies: ReplayRuntimeDependencies = {},
+): Promise<CommandResult> {
   const [workflowName] = args as readonly [string];
+  const entry = COMMAND_REGISTRY.commands.find((e) => e.id === 'run');
+  if (entry?.kind === 'leaf' && command) context.settings.bind(entry, command);
 
   if (options.template !== undefined) {
-    process.stderr.write(
+    context.output.stderr.write(
       'templates are not yet supported on run; see docs/features/report-templates.md\n',
     );
-    process.exit(1);
+    return { exitCode: 1 as ExitCode };
   }
-  const logger = makeStderrLogger(options.debug === true, process.stderr);
+  const logger = makeStderrLogger(options.debug === true, context.output.stderr);
   logger.info({ workflowName }, 'yantra run: starting');
   let closeRuntime = (): void => undefined;
 
@@ -114,14 +131,14 @@ export async function runHandler(args: HandlerArgs, options: RunOptions): Promis
   try {
     params = parseParams(options.params);
   } catch (err) {
-    process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
-    process.exit(
-      err instanceof BrowserInstallOfferDeclinedError
+    context.output.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
+    return {
+      exitCode: (err instanceof BrowserInstallOfferDeclinedError
         ? 4
         : err instanceof BrowserManagedInstallError
           ? 3
-          : 1,
-    );
+          : 1) as ExitCode,
+    };
   }
 
   // Resolved BEFORE the try block for the same reason as the model wiring
@@ -131,23 +148,27 @@ export async function runHandler(args: HandlerArgs, options: RunOptions): Promis
   try {
     browserSelection = resolveBrowserSelectionOverride(options);
   } catch (err) {
-    process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
-    process.exit(1);
+    context.output.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
+    return { exitCode: 1 as ExitCode };
   }
 
   // Resolved BEFORE the try block so a bad `--provider`/`--model` stays a
   // validation failure (exit 1) rather than being reported as an execution
   // error after a run directory already exists — the `ask` precedent.
-  let wiring: RunSynthesisWiring = { noLlm: true, selection: null };
+  let wiring: RunSynthesisWiring;
   try {
-    wiring = await resolveRunSynthesis(options, process.env, await loadEffectivePreferences());
+    wiring = await resolveRunSynthesis(
+      options,
+      context.settings.env(),
+      await context.settings.preferences(),
+    );
   } catch (err) {
-    process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
-    process.exit(1);
+    context.output.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
+    return { exitCode: 1 as ExitCode };
   }
   const { selection } = wiring;
   if (wiring.reason === 'unavailable' && wiring.unavailableModel !== undefined) {
-    process.stderr.write(
+    context.output.stderr.write(
       `warning: model ${wiring.unavailableModel.provider}/${wiring.unavailableModel.id} is unavailable because no credential resolved; ` +
         'configure provider auth or pass --auth-secret <ref>; using deterministic replay synthesis\n',
     );
@@ -157,12 +178,12 @@ export async function runHandler(args: HandlerArgs, options: RunOptions): Promis
     // Interactive TTY runs can prompt for consent in-process; `--json` and
     // non-TTY surfaces stay fail-closed (no gateway) so they never
     // self-authorize a confirmable step (plan §6).
-    const interactive = process.stdin.isTTY === true && options.json !== true;
-    const runtime = await buildOrchestratorRuntime({
+    const interactive = context.isInteractive({ json: options.json === true });
+    const runtime = await (dependencies.build ?? buildOrchestratorRuntime)({
       logger,
-      confirmationGateway: interactive ? new InteractiveConfirmationGateway() : null,
+      confirmationGateway: context.gateways.confirmation(interactive),
       browser: {
-        installOfferGateway: interactive ? new InteractiveInstallOfferGateway() : null,
+        installOfferGateway: context.gateways.installOffer(interactive),
         ...(browserSelection === undefined ? {} : { selection: browserSelection }),
       },
       // The stage is always wired for `run`, so a workflow declaring
@@ -182,7 +203,7 @@ export async function runHandler(args: HandlerArgs, options: RunOptions): Promis
                   auth: selection.auth,
                   runId,
                   runDir,
-                  cwd: process.cwd(),
+                  cwd: context.cwd,
                   logger,
                 }),
       },
@@ -202,18 +223,26 @@ export async function runHandler(args: HandlerArgs, options: RunOptions): Promis
         : {
             workflowName,
             params,
-            paramsFile: options.paramsFile,
+            paramsFile: resolve(context.cwd, options.paramsFile),
             budgets: {},
             json: options.json === true,
             debug: options.debug === true,
           };
 
-    const outcome = await orchestrator.run(request);
+    const receipt = await draftRunReceipt(context, ['run'], {
+      ...(selection === null ? {} : { agent: selection }),
+      ...(browserSelection === undefined ? {} : { browser: browserSelection }),
+      content: await replayContent(
+        workflowName,
+        options.paramsFile === undefined ? undefined : resolve(context.cwd, options.paramsFile),
+      ),
+    });
+    const outcome = await orchestrator.run({ ...request, receipt });
 
     // Record the completed run into the history index (best-effort — the
     // index is an optional cache and must never fail a run).
     if (typeof outcome.runId === 'string' && outcome.runId.length > 0) {
-      await recordTaskHistory(outcome.runId);
+      await (dependencies.recordHistory ?? recordTaskHistory)(outcome.runId);
     }
 
     // A run that synthesized a Brief has a real document to show; reading it
@@ -227,41 +256,37 @@ export async function runHandler(args: HandlerArgs, options: RunOptions): Promis
     const taskOutcome = taskOutcomeForReplay(outcome);
     if (options.json === true) {
       const record = { ...outcome, task_outcome: taskOutcome };
-      process.stdout.write(
-        `${JSON.stringify(
-          brief === null ? record : { ...record, briefDocument: brief },
-          null,
-          2,
-        )}\n`,
-      );
+      context.output.json(brief === null ? record : { ...record, briefDocument: brief }, {
+        indent: 2,
+      });
     } else {
       const icon = outcome.kind === 'success' ? '✓' : outcome.kind === 'aborted' ? '⤺' : '✗';
-      process.stdout.write(`${icon} Run ${outcome.runId}: ${taskOutcome}\n`);
+      context.output.stdout.write(`${icon} Run ${outcome.runId}: ${taskOutcome}\n`);
       if (outcome.kind === 'success') {
         if (brief === null) {
-          process.stdout.write(renderOutputs(outcome.outputs));
+          context.output.stdout.write(renderOutputs(outcome.outputs));
         } else {
           // The Brief *is* the run's answer — render it the way `ask` does
           // rather than dumping the raw captures it was synthesized from.
-          renderBrief(brief, briefArtifacts ?? null, options.open === true);
+          renderBrief(context, brief, briefArtifacts ?? null, options.open === true);
         }
       }
     }
 
     if (options.open === true && briefArtifacts !== undefined)
-      openArtifact(briefArtifacts.htmlPath);
+      context.openExternal(briefArtifacts.htmlPath);
 
     closeRuntime();
-    process.exit(exitCodeFor(outcome));
+    return { exitCode: exitCodeFor(outcome) as ExitCode };
   } catch (err) {
     closeRuntime();
-    throwIfResourceBusy(err, 'run', options.json === true, process);
+    if (err instanceof ResourceBusyError) throw err;
     const message = err instanceof Error ? err.message : String(err);
-    process.stderr.write(`Error: ${message}\n`);
+    context.output.stderr.write(`Error: ${message}\n`);
     if (options.debug === true && err instanceof Error && err.stack !== undefined) {
-      process.stderr.write(`${err.stack}\n`);
+      context.output.stderr.write(`${err.stack}\n`);
     }
-    process.exit(1);
+    return { exitCode: 1 as ExitCode };
   }
 }
 
@@ -340,19 +365,23 @@ async function readBrief(artifacts: BriefRunArtifacts): Promise<Brief | null> {
 }
 
 /** Renders a Brief through the same connector dispatch `ask` uses. */
-function renderBrief(brief: Brief, artifacts: BriefRunArtifacts | null, opened = false): void {
-  const io = new CLIConnectorIO(new TerminalRenderer());
-  const stdout = process.stdout;
+function renderBrief(
+  context: CommandContext,
+  brief: Brief,
+  artifacts: BriefRunArtifacts | null,
+  opened = false,
+): void {
+  const io = context.connector(new TerminalRenderer());
   const opts: ConnectorRenderOpts = {
     json: false,
     debug: false,
-    noColor: process.env.NO_COLOR !== undefined,
-    stream: process.stdout,
-    errStream: process.stderr,
+    noColor: context.settings.env().NO_COLOR !== undefined,
+    stream: context.output.stdout,
+    errStream: context.output.stderr,
     briefDetail: 'standard',
     briefFormat: 'terminal',
     suppressOpenHint: opened,
-    ...(typeof stdout.columns === 'number' ? { width: stdout.columns } : {}),
+    ...(context.output.columns === null ? {} : { width: context.output.columns }),
   };
 
   io.renderResult({ kind: 'brief', brief, artifacts }, opts);
