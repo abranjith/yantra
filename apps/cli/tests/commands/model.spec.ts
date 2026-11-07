@@ -111,4 +111,16 @@ describe('@no-llm model command', () => {
       delete process.env.MODEL_TEST_API_KEY;
     }
   });
+
+  it('preserves both model additions when commands write concurrently', async () => {
+    await Promise.all([
+      run(['add', 'first', '--provider', 'anthropic']),
+      run(['add', 'second', '--provider', 'anthropic']),
+    ]);
+    const loaded = await loadConfig();
+    expect(loaded.isOk && loaded.value.models.map((model) => model.id).sort()).toEqual([
+      'first',
+      'second',
+    ]);
+  });
 });

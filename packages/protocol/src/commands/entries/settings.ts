@@ -79,6 +79,7 @@ export const configSet = leaf({
     exit.validation(
       `${PARSE_ERRORS}, an unknown or preference-owned key, an invalid YAML value, or a write failure`,
     ),
+    exit.environment('the shared configuration is busy'),
   ],
   json: CONFIG_JSON,
 });
@@ -92,7 +93,11 @@ export const configUnset = leaf({
   execution: MUTATE,
   effect: 'local',
   danger: confirm('removes the setting from config.yaml'),
-  exit_codes: [exit.ok(), exit.validation(`${PARSE_ERRORS}, an unknown key, or a write failure`)],
+  exit_codes: [
+    exit.ok(),
+    exit.validation(`${PARSE_ERRORS}, an unknown key, or a write failure`),
+    exit.environment('the shared configuration is busy'),
+  ],
   json: CONFIG_JSON,
 });
 
@@ -263,6 +268,7 @@ export const modelAdd = leaf({
     exit.validation(
       `${PARSE_ERRORS}, an empty provider, a literal key, an unknown input kind, an existing model without --force, or a write failure`,
     ),
+    exit.environment('the shared configuration is busy'),
   ],
   json: CONFIG_JSON,
 });
@@ -285,6 +291,7 @@ export const modelRm = leaf({
   exit_codes: [
     exit.ok(),
     exit.validation(`${PARSE_ERRORS}, an unknown or ambiguous id, or the default without --force`),
+    exit.environment('the shared configuration is busy'),
   ],
   json: CONFIG_JSON,
 });

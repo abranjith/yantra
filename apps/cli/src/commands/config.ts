@@ -30,6 +30,7 @@ import { keyOwner } from '../key-ownership.js';
 import { createRegisteredCommand } from '../registry/build-command-tree.js';
 import { handler } from '../registry/handler.js';
 import { CLI_JSON_SCHEMA_VERSION } from '../render/json.js';
+import { throwIfResourceBusy } from '../resource-busy.js';
 
 interface ConfigOptions {
   readonly json?: boolean;
@@ -179,6 +180,7 @@ async function runSet(key: string, rawValue: string, options: ConfigOptions): Pr
   try {
     await setConfigKey(key, value);
   } catch (error) {
+    throwIfResourceBusy(error, 'config.set', options.json === true, process);
     fail(error instanceof Error ? error.message : String(error));
   }
   resetPathCache();
@@ -191,6 +193,7 @@ async function runUnset(key: string, options: ConfigOptions): Promise<void> {
   try {
     await unsetConfigKey(key);
   } catch (error) {
+    throwIfResourceBusy(error, 'config.unset', options.json === true, process);
     fail(error instanceof Error ? error.message : String(error));
   }
   resetPathCache();

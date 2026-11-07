@@ -71,6 +71,7 @@ export const browserUse = leaf({
   exit_codes: [
     exit.ok(),
     exit.validation(`${PARSE_ERRORS}, an unknown source, an invalid path, or a write failure`),
+    exit.environment('the shared configuration is busy'),
   ],
   json: { flag: '--json', shape: 'envelope', schema: null },
 });

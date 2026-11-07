@@ -21,6 +21,8 @@ export * from './interaction/index.js';
 export * from './widgets/index.js';
 export * from './fill/index.js';
 export * from './config/index.js';
+export * from './locks/index.js';
+export * from './fs/atomic-write.js';
 export * from './retention/index.js';
 
 export {

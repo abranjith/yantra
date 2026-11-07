@@ -394,7 +394,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
 
 ### TASK-001: Characterization harness and pre-migration terminal baselines
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - Build `apps/cli/tests/characterization/harness.ts`:
     - `runTerminalScenario({argv, tty, stdin, env, home})` drives today's `run(argv)` with fake
       stdout and stderr, a TTY flag and a sandboxed `YANTRA_HOME` (with `resetPathCache()` before and
@@ -407,20 +407,26 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
     `AskRuntime`, a fake orchestrator for `run`/`resume`) so no network, model or Chrome is used.
   - Record baselines (`baselines/<command>.json`: stdout, stderr, exit code, tree) from the
     **current** code, then commit them.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - The harness normalizes a run-ID-bearing tree identically across two runs.
   - A deliberately changed stderr line fails the baseline comparison.
   - The `process.exit` interception reports the code and does not kill the Vitest worker.
   - Each scenario is `@no-llm` tagged.
-- [ ] **Documentation Update**: Invoke **Document** update mode for testing strategy in
+- [x] **Documentation Update**: Invoke **Document** update mode for testing strategy in
       `docs/architecture.md` (characterization baselines).
 - **Verify**: `cd apps/cli && npx vitest run tests/characterization/terminal-baseline.spec.ts` passes
   against unmodified source. Every command path in `yantra --help` (recursively) has at least one
   scenario; a test enumerates commander's tree to assert this.
 
+> Verification note: action captures use real subprocess exits as well as the throwing-spy
+> harness, because legacy handler catch blocks can catch the spy's exception. The `browser use`
+> action uses an injected browser resolver and compatibility reader; its initial baseline
+> accidentally contained this machine's Chrome path/version, corrected during TASK-002 to make
+> the external boundary deterministic. Production selection and output behavior are unchanged.
+
 ### TASK-002: Core resource-lock helper, unique temp files and locked `config.yaml` writes
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - Create `packages/core/src/fs/atomic-write.ts` (`uniqueTempPath`, `writeFileAtomic` with mode,
     optional fsync and temp cleanup on failure).
   - Create `packages/core/src/locks/resource-lock.ts`:
@@ -440,7 +446,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
   - Map `ResourceBusyError` to exit 3 in each touched command for now (TASK-006 centralizes this). On
     stderr print `message` plus `remediation`. Under `--json` emit
     `{schemaVersion, kind: <command kind>, status: 'busy', resource, holder}`.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - `writeFileAtomic` leaves no temp file on write or rename failure, and two concurrent writers use
     different temp names.
   - A second `withResourceLock` on the same resource waits and then succeeds when the first releases
@@ -452,7 +458,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
   - `mutateConfigDocument` still rejects malformed YAML and schema-invalid candidates (no write, lock
     released).
   - The `model add` read happens inside the lock (spy on the lock's `fn`).
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/configuration.md`
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/configuration.md`
       (locked writes, the `busy` response and exit 3).
 - **Verify**:
   - `cd packages/core && npx vitest run tests/locks tests/fs` passes.
@@ -935,7 +941,7 @@ tests/setup` passes; `init.ts`, `init-wizard.ts` and `init-context-prompts.ts` a
 ## 8. State Tracking
 
 - [x] TASK-001: Characterization harness and pre-migration terminal baselines
-- [ ] TASK-002: Core resource-lock helper, unique temp files and locked `config.yaml` writes
+- [x] TASK-002: Core resource-lock helper, unique temp files and locked `config.yaml` writes
 - [ ] TASK-003: Locked `profile.yaml` writes and the concurrent-writer evidence (I1)
 - [ ] TASK-004: Workflow, template and schedule-registry locks; core fixed-temp lint rule
 - [ ] TASK-005: Persistent browser-profile exclusivity

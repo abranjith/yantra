@@ -1,5 +1,5 @@
 {
-  "stdout": "{\"schemaVersion\":\"0.2\",\"kind\":\"browser_use\",\"status\":\"set\",\"source\":\"system\",\"executablePath\":\"C:\\\\Program Files\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe\",\"ownership\":\"external\",\"version\":\"157.0.8103.39\",\"compatibility\":\"unverified\",\"nextCommand\":\"yantra browser check\"}\n",
+  "stdout": "{\"schemaVersion\":\"0.2\",\"kind\":\"browser_use\",\"status\":\"set\",\"source\":\"system\",\"executablePath\":\"/fixture/browser\",\"ownership\":\"external\",\"version\":\"150.0.0.0\",\"compatibility\":\"unverified\",\"nextCommand\":\"yantra browser check\"}\n",
   "stderr": "",
   "exitCode": 0,
   "tree": {

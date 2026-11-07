@@ -55,6 +55,7 @@ import {
 import { createRegisteredCommand } from '../registry/build-command-tree.js';
 import { fromAction } from '../registry/handler.js';
 import { CLI_JSON_SCHEMA_VERSION } from '../render/json.js';
+import { throwIfResourceBusy } from '../resource-busy.js';
 
 interface InstallOptions {
   readonly yes?: boolean;
@@ -466,7 +467,12 @@ export function browserHandlers(runtime: BrowserCommandRuntime = {}) {
         return failUse(stderr, resolution.error.code, resolution.error.message);
       }
 
-      await writeSelection(selection);
+      try {
+        await writeSelection(selection);
+      } catch (error) {
+        throwIfResourceBusy(error, 'browser_use', options.json === true, { stdout, stderr });
+        throw error;
+      }
 
       const installation = resolution.status === 'resolved' ? resolution.installation : null;
       const evidence: CompatibilityEvidenceState =

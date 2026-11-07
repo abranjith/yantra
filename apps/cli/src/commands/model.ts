@@ -3,9 +3,8 @@ import {
   loadConfig,
   loadProfile,
   parseConfigRef,
-  redactConfigRefs,
+  mutateConfig,
   saveProfile,
-  setConfigKey,
   YANTRA_KEYCHAIN_SERVICE,
   type ModelConfig,
 } from '@yantra/core';
@@ -14,6 +13,7 @@ import { type Command, CommanderError } from 'commander';
 import { createRegisteredCommand } from '../registry/build-command-tree.js';
 import { handler } from '../registry/handler.js';
 import { CLI_JSON_SCHEMA_VERSION } from '../render/json.js';
+import { throwIfResourceBusy } from '../resource-busy.js';
 
 interface ModelOptions {
   readonly json?: boolean;
@@ -61,19 +61,23 @@ async function runAdd(id: string, options: ModelOptions): Promise<void> {
     .filter(Boolean);
   if (input.some((value) => value !== 'text' && value !== 'image'))
     fail('--input accepts only text,image');
-  const current = await config();
-  const existing = current.models.findIndex(
-    (model) => model.provider === provider && model.id === id,
-  );
-  if (existing >= 0 && !options.force)
-    fail(`model ${provider}/${id} already exists; pass --force to overwrite`);
+  let existing = -1;
   const candidate = { id, provider, base_url: options.baseUrl ?? null, api_key: apiKey, input };
-  const models = [...current.models];
-  if (existing >= 0) models[existing] = candidate as ModelConfig;
-  else models.push(candidate as ModelConfig);
   try {
-    await setConfigKey('models', redactConfigRefs(models));
+    await mutateConfig((current) => {
+      existing = current.models.findIndex(
+        (model) => model.provider === provider && model.id === id,
+      );
+      if (existing >= 0 && !options.force)
+        fail(`model ${provider}/${id} already exists; pass --force to overwrite`);
+      const models = [...current.models];
+      if (existing >= 0) models[existing] = candidate as ModelConfig;
+      else models.push(candidate as ModelConfig);
+      return { ...current, models };
+    });
   } catch (error) {
+    throwIfResourceBusy(error, 'model.add', options.json === true, process);
+    if (error instanceof CommanderError) throw error;
     fail(error instanceof Error ? error.message : String(error));
   }
   if (options.json)
@@ -112,25 +116,31 @@ async function runList(options: ModelOptions): Promise<void> {
 }
 
 async function runRemove(id: string, options: ModelOptions): Promise<void> {
-  const current = await config();
-  const matches = current.models.filter((model) => model.id === id);
-  if (matches.length === 0) fail(`model "${id}" is not registered`);
-  if (matches.length > 1) fail(`model id "${id}" is ambiguous across providers`);
-  const target = matches[0]!;
-  const profile = await loadProfile();
-  if (
-    profile.isOk &&
-    profile.value.agent.provider === target.provider &&
-    profile.value.agent.model === target.id &&
-    !options.force
-  )
-    fail(`${target.provider}/${target.id} is the current default; pass --force to remove it`);
-  await setConfigKey(
-    'models',
-    redactConfigRefs(current.models.filter((model) => model !== target)),
-  );
-  if (options.json) emit('model.rm', { status: 'removed', provider: target.provider, id });
-  else process.stdout.write(`Removed ${target.provider}/${id}.\n`);
+  let provider = '';
+  try {
+    await mutateConfig(async (current) => {
+      const matches = current.models.filter((model) => model.id === id);
+      if (matches.length === 0) fail(`model "${id}" is not registered`);
+      if (matches.length > 1) fail(`model id "${id}" is ambiguous across providers`);
+      const target = matches[0]!;
+      const profile = await loadProfile();
+      if (
+        profile.isOk &&
+        profile.value.agent.provider === target.provider &&
+        profile.value.agent.model === target.id &&
+        !options.force
+      )
+        fail(`${target.provider}/${target.id} is the current default; pass --force to remove it`);
+      provider = target.provider;
+      return { ...current, models: current.models.filter((model) => model !== target) };
+    });
+  } catch (error) {
+    throwIfResourceBusy(error, 'model.rm', options.json === true, process);
+    if (error instanceof CommanderError) throw error;
+    fail(error instanceof Error ? error.message : String(error));
+  }
+  if (options.json) emit('model.rm', { status: 'removed', provider, id });
+  else process.stdout.write(`Removed ${provider}/${id}.\n`);
 }
 
 async function runDefault(id: string, options: ModelOptions): Promise<void> {

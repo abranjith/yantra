@@ -127,6 +127,7 @@ export async function runTerminalProcessScenario(request: {
 }): Promise<ScenarioResult> {
   const entry = new URL('../../dist/index.js', import.meta.url).href;
   const brief = new URL('../../../../packages/test-helpers/dist/brief.js', import.meta.url).href;
+  const browser = new URL('../../dist/commands/browser.js', import.meta.url).href;
   const script = `
     import { registerHooks } from 'node:module';
     const keytar = 'data:text/javascript,' + encodeURIComponent('export default { getPassword: async () => null, setPassword: async () => {}, deletePassword: async () => false, findCredentials: async () => [] };');
@@ -135,7 +136,22 @@ export async function runTerminalProcessScenario(request: {
     const { canonicalBrief } = await import(${JSON.stringify(brief)});
     const result = { brief: canonicalBrief, artifacts: null, hops: [], terminationReason: 'max_hops' };
     const runtime = { env: {}, isTty: false, recordHistory: async () => {} };
-    process.exitCode = await run(JSON.parse(process.argv[1]), {
+    const argv = JSON.parse(process.argv[1]);
+    if (argv[0] === 'browser' && argv[1] === 'use') {
+      const { makeBrowserCommand } = await import(${JSON.stringify(browser)});
+      const services = {
+        resolver: { resolve: async (selection) => ({ status: 'resolved', installation: {
+          canonicalPath: '/fixture/browser', version: '150.0.0.0', majorVersion: 150,
+          platform: 'linux', architecture: 'x64', statFingerprint: 'fixture',
+          ownership: 'external', requestedSelection: selection,
+          selectionOrigin: 'invocation', selectionReason: 'system-discovery',
+          channel: 'stable', managedIdentity: null,
+        } }) },
+        compatibility: { readCached: async () => ({ state: 'unverified' }) },
+      };
+      try { await makeBrowserCommand({ services }).exitOverride().parseAsync(argv.slice(1), { from: 'user' }); }
+      catch (error) { process.stderr.write(error.message + '\\n'); process.exitCode = error.exitCode ?? 2; }
+    } else process.exitCode = await run(argv, {
       askRuntime: { ...runtime, createPipeline: async () => ({ run: async () => result }) },
       researchRuntime: { ...runtime, createLoop: async () => ({ run: async () => result }) },
       doRuntime: runtime,
