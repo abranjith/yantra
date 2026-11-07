@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { runAgentDiagnostics } from '@yantra/agent';
-import { loadConfig, loadProfile, resetPathCache } from '@yantra/core';
+import { acquireResourceLease, loadConfig, loadProfile, resetPathCache } from '@yantra/core';
 import { CommanderError } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -123,4 +123,24 @@ describe('@no-llm model command', () => {
       'second',
     ]);
   });
+
+  it('returns busy exit 3 when the profile is locked during model default', async () => {
+    await run(['add', 'fixture-model', '--provider', 'anthropic']);
+    const lease = await acquireResourceLease({ kind: 'profile' });
+    stdout = [];
+    try {
+      await expect(run(['default', 'fixture-model', '--json'])).rejects.toMatchObject({
+        exitCode: 3,
+        code: 'yantra.resource.busy',
+      });
+      expect(JSON.parse(stdout.join(''))).toMatchObject({
+        kind: 'model.default',
+        status: 'busy',
+        resource: { kind: 'profile' },
+        holder: { pid: process.pid },
+      });
+    } finally {
+      await lease.release();
+    }
+  }, 10_000);
 });

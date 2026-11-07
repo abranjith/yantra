@@ -1,4 +1,4 @@
-import { mkdir, rename, stat, writeFile } from 'node:fs/promises';
+import { mkdir, rename, stat } from 'node:fs/promises';
 import { dirname, isAbsolute, win32 } from 'node:path';
 
 import {
@@ -7,7 +7,8 @@ import {
   defaultProfile,
   profilePath,
   redactConfigRefs,
-  saveProfile,
+  mutateProfile,
+  writeConfigDocument,
   type YantraConfig,
 } from '@yantra/core';
 import { type Command } from 'commander';
@@ -16,6 +17,7 @@ import { stringify } from 'yaml';
 import { createRegisteredCommand } from '../registry/build-command-tree.js';
 import { handler, type Handler, type HandlerArgs } from '../registry/handler.js';
 import { CLI_JSON_SCHEMA_VERSION } from '../render/json.js';
+import { throwIfResourceBusy } from '../resource-busy.js';
 
 import {
   collectContextGrants,
@@ -78,7 +80,7 @@ export function makeInitHandler(deps: InitDeps = {}): Handler {
       if (answers.dataDir) await mkdir(answers.dataDir, { recursive: true, mode: 0o700 });
 
       const config = buildConfig(answers);
-      await writeFile(target, stringify(serializable(config)), { encoding: 'utf8', mode: 0o600 });
+      await writeConfigDocument(stringify(serializable(config)), target);
 
       const profileTarget = profilePath();
       const writingProfile = options.reset === true || !(await fileExists(profileTarget));
@@ -86,8 +88,8 @@ export function makeInitHandler(deps: InitDeps = {}): Handler {
       if (writingProfile) {
         if (interactive) grants = await (deps.collect ?? collectContextGrants)();
         const profile = defaultProfile();
-        await saveProfile(
-          {
+        await mutateProfile(
+          () => ({
             ...profile,
             locale: { ...profile.locale, city: grants.city },
             context: { ...profile.context, location: grants.grants.location },
@@ -96,7 +98,7 @@ export function makeInitHandler(deps: InitDeps = {}): Handler {
               provider: answers.provider === 'none' ? null : answers.provider,
               model: answers.modelId,
             },
-          },
+          }),
           profileTarget,
         );
       }
@@ -127,6 +129,7 @@ export function makeInitHandler(deps: InitDeps = {}): Handler {
       }
       process.exit(0);
     } catch (error) {
+      throwIfResourceBusy(error, 'init', options.json === true, process);
       process.stderr.write(
         `init failed: ${error instanceof Error ? error.message : String(error)}\n`,
       );

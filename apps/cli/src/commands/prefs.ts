@@ -101,6 +101,8 @@ async function withStore<T>(
     process.exit(3);
   }
   try {
+    // prefs set/approve use the transactional SQLite machine layer, never
+    // profile.yaml. Future ui.* preferences follow this same storage path.
     return await fn(handle.store);
   } finally {
     handle.close();

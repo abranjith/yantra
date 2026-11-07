@@ -468,7 +468,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
 
 ### TASK-003: Locked `profile.yaml` writes and the concurrent-writer evidence (I1)
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - Add `mutateProfile(fn)` under `withResourceLock({kind:'profile'})`. `saveProfile` uses
     `writeFileAtomic`.
   - Route `model default` (load, modify, save) through `mutateProfile`.
@@ -477,7 +477,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
   - Confirm that `prefs set/approve` write the SQLite preferences table (transactional) and **not**
     `profile.yaml`. Document this in a code comment so later `ui.*` keys (FEAT-061) know which path
     they take.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Write `packages/core/tests/locks/concurrent-writers.spec.ts`. It spawns N real child processes
     (`node` running a tiny script against built core), each setting a distinct config key, and N
     children each changing a distinct profile field through `mutateProfile`. All N changes must be
@@ -485,7 +485,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
   - Run the same test against the pre-change `<path>.tmp` implementation (kept as a test double) to
     show it does lose writes or fail with `ENOENT` on rename. The test documents the race it closes.
   - `model default` under a held profile lock produces `busy` exit 3.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/configuration.md`
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/configuration.md`
       (which file each writer locks).
 - **Verify**:
   - The concurrent-writer spec passes on Windows locally; the cross-OS matrix runs it in CI.
@@ -942,7 +942,7 @@ tests/setup` passes; `init.ts`, `init-wizard.ts` and `init-context-prompts.ts` a
 
 - [x] TASK-001: Characterization harness and pre-migration terminal baselines
 - [x] TASK-002: Core resource-lock helper, unique temp files and locked `config.yaml` writes
-- [ ] TASK-003: Locked `profile.yaml` writes and the concurrent-writer evidence (I1)
+- [x] TASK-003: Locked `profile.yaml` writes and the concurrent-writer evidence (I1)
 - [ ] TASK-004: Workflow, template and schedule-registry locks; core fixed-temp lint rule
 - [ ] TASK-005: Persistent browser-profile exclusivity
 - [ ] TASK-006: Command context, terminal adapter and purity lint; migrate `research`

@@ -4,7 +4,7 @@ import {
   loadProfile,
   parseConfigRef,
   mutateConfig,
-  saveProfile,
+  mutateProfile,
   YANTRA_KEYCHAIN_SERVICE,
   type ModelConfig,
 } from '@yantra/core';
@@ -152,13 +152,16 @@ async function runDefault(id: string, options: ModelOptions): Promise<void> {
         ? `model "${id}" is not registered`
         : `model id "${id}" is ambiguous across providers`,
     );
-  const loaded = await loadProfile();
-  if (!loaded.isOk) fail(loaded.error);
   const target = matches[0]!;
-  await saveProfile({
-    ...loaded.value,
-    agent: { ...loaded.value.agent, provider: target.provider, model: target.id },
-  });
+  try {
+    await mutateProfile((current) => ({
+      ...current,
+      agent: { ...current.agent, provider: target.provider, model: target.id },
+    }));
+  } catch (error) {
+    throwIfResourceBusy(error, 'model.default', options.json === true, process);
+    fail(error instanceof Error ? error.message : String(error));
+  }
   if (options.json) emit('model.default', { status: 'selected', provider: target.provider, id });
   else process.stdout.write(`Default model: ${target.provider}/${id}.\n`);
 }

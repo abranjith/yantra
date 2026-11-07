@@ -8,6 +8,7 @@ import {
   defaultProfile,
   flattenProfile,
   loadProfile,
+  mutateProfile,
   saveProfile,
   validatePreference,
 } from '../../src/profile/profile-file.js';
@@ -80,6 +81,49 @@ describe('@no-llm profile-file load/save', () => {
     const result = await loadProfile(join(dir, 'nope.yaml'));
     expect(result.isOk).toBe(true);
     if (result.isOk) expect(result.value).toEqual(defaultProfile());
+  });
+
+  it('serializes mutations without discarding unrelated preference changes', async () => {
+    const path = join(dir, 'profile.yaml');
+    await Promise.all([
+      mutateProfile(
+        (current) => ({ ...current, locale: { ...current.locale, city: 'Fixture City' } }),
+        path,
+      ),
+      mutateProfile(
+        (current) => ({ ...current, context: { ...current.context, location: false } }),
+        path,
+      ),
+    ]);
+    const loaded = await loadProfile(path);
+    expect(loaded.isOk && loaded.value.locale.city).toBe('Fixture City');
+    expect(loaded.isOk && loaded.value.context.location).toBe(false);
+  });
+
+  it('leaves an invalid existing profile untouched and releases its lock', async () => {
+    const path = join(dir, 'profile.yaml');
+    const invalid = 'defaults:\n  detail: invalid\n';
+    await writeFile(path, invalid);
+    await expect(mutateProfile((current) => current, path)).rejects.toMatchObject({
+      name: 'ProfileMutationError',
+    });
+    expect(await readFile(path, 'utf8')).toBe(invalid);
+    await saveProfile(defaultProfile(), path);
+    await mutateProfile((current) => current, path);
+  });
+
+  it('releases the lock after an invalid mutation and preserves the previous file', async () => {
+    const path = join(dir, 'profile.yaml');
+    await saveProfile(defaultProfile(), path);
+    const before = await readFile(path, 'utf8');
+    await expect(
+      mutateProfile(
+        (current) => ({ ...current, agent: { ...current.agent, max_tokens: -1 } }),
+        path,
+      ),
+    ).rejects.toThrow();
+    expect(await readFile(path, 'utf8')).toBe(before);
+    await mutateProfile((current) => current, path);
   });
 
   it('round-trips a saved profile', async () => {

@@ -14,14 +14,26 @@
       "task": "TASK-002"
     },
     {
+      "path": "apps/cli/src/commands/init.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
       "path": "apps/cli/src/commands/model.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-002"
     },
     {
+      "path": "apps/cli/src/commands/prefs.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
       "path": "apps/cli/src/resource-busy.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
@@ -717,7 +729,7 @@
     },
     {
       "path": "apps/cli/tests/resource-busy.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
@@ -747,7 +759,7 @@
     },
     {
       "path": "packages/core/src/fs/atomic-write.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
@@ -759,27 +771,51 @@
     },
     {
       "path": "packages/core/src/locks/index.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "packages/core/src/locks/resource-lock.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/src/profile/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/profile/profile-file.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
     },
     {
       "path": "packages/core/tests/fs/atomic-write.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
-      "path": "packages/core/tests/locks/resource-lock.spec.ts",
+      "path": "packages/core/tests/locks/concurrent-writers.spec.ts",
       "status": "U",
       "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/locks/resource-lock.spec.ts",
+      "status": "A",
+      "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/tests/profile/profile-file.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
     },
     {
       "path": "packages/protocol/src/commands/entries/browser.ts",

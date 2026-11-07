@@ -308,6 +308,7 @@ export const modelDefault = leaf({
   exit_codes: [
     exit.ok(),
     exit.validation(`${PARSE_ERRORS}, an unknown or ambiguous id, or an invalid profile`),
+    exit.environment('the shared profile is busy'),
   ],
   json: CONFIG_JSON,
 });
@@ -450,6 +451,7 @@ export const init = leaf({
   exit_codes: [
     exit.ok(),
     exit.validation(`${PARSE_ERRORS}, an unknown provider, or a write failure`),
+    exit.environment('the shared configuration or profile is busy'),
   ],
   json: { flag: '--json', shape: 'document', schema: null },
 });

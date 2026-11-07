@@ -34,13 +34,26 @@ flag. `yantra model default` selects one registered model by writing
 `agent.provider` and `agent.model` to `profile.yaml`. An explicit command flag
 or agent environment variable can still override that preference.
 
-### Coordinates configuration changes across processes
+`yantra prefs set` and `yantra prefs approve` write the transactional SQLite
+preferences table, not `profile.yaml`. The effective preference view combines
+that stored layer with the human-editable profile.
+
+### Coordinates configuration and profile changes across processes
 
 `yantra config set`, `yantra config unset`, `yantra model add`,
 `yantra model rm`, and `yantra browser use` share a lock on `config.yaml`.
 Each operation holds the lock while reading the current file, applying its
 change, validating the result, and replacing the file. Concurrent model
 registrations therefore preserve each other's additions.
+
+`yantra model default` locks `profile.yaml` while reading the current profile,
+changing the selected provider and model, validating, and replacing the file.
+Unrelated profile fields are preserved. Its profile lock is separate from the
+configuration lock.
+
+When `yantra init` writes files, it locks the configuration write and the
+profile write separately. These protect each file's write; they do not make
+the entire initialization or reset a single transaction.
 
 If another writer holds the lock, these commands retry for about five seconds.
 If it remains busy, they report the contention and exit with code `3`; retry
@@ -50,7 +63,7 @@ The owner record contains no full argument list or credential values.
 
 Each replacement uses its own sibling staging file, named
 `<file>.<pid>.<random>.tmp`, then renames the completed file into place. Failed
-writes clean up their staging file. Configuration file permissions remain
+writes clean up their staging file. Configuration and profile permissions remain
 owner-only where supported.
 
 ### Validates one strict installation schema
@@ -538,8 +551,10 @@ this shape on stdout with `--json` and exit with code `3`:
 ```
 
 `kind` identifies the command: `config.set`, `config.unset`, `model.add`,
-`model.rm`, or `browser_use`. When readable, `holder` is an object with `pid`,
-`command`, `started_at`, and `surface`; otherwise it is `null`. Missing holder
+`model.rm`, `browser_use`, `model.default`, or `init`. The resource is
+`{"kind":"profile"}` for `model.default`; for `init` it identifies the
+configuration or profile write that was busy. When readable, `holder` is an
+object with `pid`, `command`, `started_at`, and `surface`; otherwise it is `null`. Missing holder
 details do not make a held lock available. Human output describes the busy
 resource on stderr and asks you to try again when the operation finishes.
 
@@ -555,6 +570,10 @@ Secret Service/libsecret environment.
 
 - `config edit` and direct file edits do not participate in the configuration
   lock described above.
+- `init` checks for existing files, backs up a reset configuration, collects
+  answers, and writes configuration and profile files in separate steps. A
+  failure or contention partway through can leave earlier steps completed;
+  the separate file locks do not roll those steps back.
 - There is no legacy XDG/AppData migration command. This is a clean storage
   layout, while `yantra config data-dir` is an explicit ongoing relocation
   feature.
