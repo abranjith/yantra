@@ -5,6 +5,7 @@ import { SettingsResolver } from '../../context/settings-resolver.js';
 import { executeCommand } from '../../execute.js';
 import { openArtifact } from '../../open-artifact.js';
 import type { CliRunOptions } from '../../program.js';
+import { JSONRenderer } from '../../render/json.js';
 import { makeStderrLogger } from '../../runtime.js';
 
 import { CLIConnectorIO } from './connector.js';
@@ -28,7 +29,7 @@ export function createTerminalContext(options: TerminalOptions = {}): CommandCon
     surface: 'terminal',
     invocationId: null,
   });
-  return {
+  const context: CommandContext = {
     surface: 'terminal',
     cwd: options.cwd ?? process.cwd(),
     invocationId: null,
@@ -49,7 +50,13 @@ export function createTerminalContext(options: TerminalOptions = {}): CommandCon
     logger: makeStderrLogger(false, stderr),
     input: terminalInputs(tty),
     isInteractive: ({ json }) => tty && !json,
-    connector: (renderer, opts) => new CLIConnectorIO(renderer, opts),
+    connector: (renderer, opts) =>
+      new CLIConnectorIO(
+        renderer instanceof JSONRenderer
+          ? new JSONRenderer((value) => context.output.json(value))
+          : renderer,
+        opts ? { ...opts, output: context.output } : undefined,
+      ),
     gateways: {
       confirmation: (interactive) =>
         interactive ? new InteractiveConfirmationGateway({ sink: stderr }) : null,
@@ -60,6 +67,7 @@ export function createTerminalContext(options: TerminalOptions = {}): CommandCon
       openArtifact(path);
     },
   };
+  return context;
 }
 export async function runTerminal(
   argv: readonly string[],

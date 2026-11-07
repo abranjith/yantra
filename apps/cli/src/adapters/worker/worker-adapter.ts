@@ -15,6 +15,7 @@ import { executeCommand } from '../../execute.js';
 import type { CliRunOptions } from '../../program.js';
 import type { HandlerTable } from '../../registry/build-command-tree.js';
 import { buildHandlers } from '../../registry/handlers.js';
+import { JSONRenderer } from '../../render/json.js';
 import { makeStderrLogger } from '../../runtime.js';
 
 import type { InputRequest, WorkerChannel } from './channel.js';
@@ -147,11 +148,14 @@ export async function runWorkerInvocation(
     },
     connector: (renderer, connectorOptions) =>
       new CommandConnectorIO(
-        renderer,
+        renderer instanceof JSONRenderer
+          ? new JSONRenderer((value) => context.output.json(value))
+          : renderer,
         connectorOptions === undefined
           ? undefined
           : {
               ...connectorOptions,
+              output: context.output,
               interactive: channel.attended(),
               confirmationPrompt: (request, signal) =>
                 channel.attended()

@@ -1061,6 +1061,38 @@ describe('@no-llm runAgenticTask lifecycle', () => {
   });
 
   describe('location pre-flight gate', () => {
+    it('keeps an execution receipt when location preflight hands off before provider setup', async () => {
+      const root = await mkdtemp(join(tmpdir(), 'yantra-location-receipt-'));
+      tempDirs.push(root);
+      const createEnvironment = vi.fn(() => Promise.reject(new Error('must not open a provider')));
+      const outcome = await runAgenticTask(
+        {
+          goal: 'Find a pharmacy near me',
+          model: { provider: 'fixture', id: 'fixture' },
+          auth: { mode: 'managed' },
+          connector: new RecordingConnector(),
+          ambient: { grants: { location: false, screenshots: false }, userLocation: null },
+          receipt: {
+            schema_version: 1,
+            yantra_version: 'fixture',
+            invoked_by: 'worker',
+            invocation_id: null,
+            command: ['ask'],
+            cwd: root,
+            settings: [],
+            content: [],
+            browser: null,
+          },
+        },
+        { runStore: new LocalRunStore(root), createEnvironment },
+      );
+      expect(outcome.kind).toBe('handoff');
+      expect(createEnvironment).not.toHaveBeenCalled();
+      expect(
+        JSON.parse(await readFile(join(outcome.runDir, 'execution-receipt.json'), 'utf8')),
+      ).toMatchObject({ command: ['ask'], sequence: 0 });
+    });
+
     /** Runs a goal through the gate with a controllable ambient block. */
     async function gated(
       goal: string,

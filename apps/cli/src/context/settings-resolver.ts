@@ -147,7 +147,7 @@ export class SettingsResolver {
     const parsed = this.command.opts<Record<string, unknown>>()[name];
     for (const step of spec.precedence ?? [
       { source: 'flag' },
-      { source: 'default', value: spec.default ?? null },
+      { source: 'default', value: parsed ?? spec.default ?? null },
     ]) {
       let value: unknown;
       let source: SettingSource;

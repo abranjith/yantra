@@ -24,38 +24,50 @@ import type {
 export const CLI_JSON_SCHEMA_VERSION = SCHEMA_VERSION;
 
 export class JSONRenderer implements OutputRenderer {
+  constructor(private readonly sink?: (value: unknown) => void) {}
+  private write(opts: ConnectorRenderOpts, value: string): void {
+    if (this.sink) this.sink(JSON.parse(value) as unknown);
+    else opts.stream.write(value);
+  }
+
   renderList(items: readonly ListItem[], opts: ConnectorRenderOpts): void {
-    opts.stream.write(
+    this.write(
+      opts,
       `${JSON.stringify({ schemaVersion: CLI_JSON_SCHEMA_VERSION, kind: 'list', items })}\n`,
     );
   }
 
   renderShow(item: ShowItem, opts: ConnectorRenderOpts): void {
-    opts.stream.write(
+    this.write(
+      opts,
       `${JSON.stringify({ schemaVersion: CLI_JSON_SCHEMA_VERSION, kind: 'show', item })}\n`,
     );
   }
 
   renderDoctor(result: DoctorRenderResult, opts: ConnectorRenderOpts): void {
-    opts.stream.write(
+    this.write(
+      opts,
       `${JSON.stringify({ schemaVersion: CLI_JSON_SCHEMA_VERSION, kind: 'doctor', ...result })}\n`,
     );
   }
 
   renderDoctorSmoke(result: DoctorSmokeRenderResult, opts: ConnectorRenderOpts): void {
-    opts.stream.write(
+    this.write(
+      opts,
       `${JSON.stringify({ schemaVersion: CLI_JSON_SCHEMA_VERSION, kind: 'doctor_smoke', ...result })}\n`,
     );
   }
 
   renderAudit(report: AuditRenderReport, opts: ConnectorRenderOpts): void {
-    opts.stream.write(
+    this.write(
+      opts,
       `${JSON.stringify({ schemaVersion: CLI_JSON_SCHEMA_VERSION, kind: 'audit', ...report })}\n`,
     );
   }
 
   renderReport(markdown: string, opts: ConnectorRenderOpts): void {
-    opts.stream.write(
+    this.write(
+      opts,
       `${JSON.stringify({ schemaVersion: CLI_JSON_SCHEMA_VERSION, kind: 'report', markdown })}\n`,
     );
   }
@@ -67,7 +79,8 @@ export class JSONRenderer implements OutputRenderer {
    * serializes to identical bytes.
    */
   renderBrief(brief: Brief, artifacts: BriefArtifactPaths | null, opts: ConnectorRenderOpts): void {
-    opts.stream.write(
+    this.write(
+      opts,
       `${JSON.stringify({ schemaVersion: CLI_JSON_SCHEMA_VERSION, kind: 'brief', brief, artifacts })}\n`,
     );
   }
@@ -77,7 +90,8 @@ export class JSONRenderer implements OutputRenderer {
     artifacts: BriefArtifactPaths | null,
     opts: ConnectorRenderOpts,
   ): void {
-    opts.stream.write(
+    this.write(
+      opts,
       `${JSON.stringify({
         schemaVersion: CLI_JSON_SCHEMA_VERSION,
         kind: 'templated_report',
@@ -88,7 +102,8 @@ export class JSONRenderer implements OutputRenderer {
   }
 
   renderEvent(event: TaskEvent, opts: ConnectorRenderOpts): void {
-    opts.stream.write(
+    this.write(
+      opts,
       `${JSON.stringify({ schemaVersion: CLI_JSON_SCHEMA_VERSION, kind: 'event', event })}\n`,
     );
   }

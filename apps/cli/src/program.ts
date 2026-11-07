@@ -12,9 +12,9 @@ import { buildHandlers } from './registry/handlers.js';
 
 /** Injectable runtimes for the commands that accept them (hermetic tests). */
 export interface CliRunOptions {
-  readonly askRuntime?: Partial<AskRuntime>;
+  readonly askRuntime?: Partial<AskRuntime> & TerminalOptions;
   readonly researchRuntime?: Partial<ResearchRuntime> & TerminalOptions;
-  readonly doRuntime?: Partial<DoRuntime>;
+  readonly doRuntime?: Partial<DoRuntime> & TerminalOptions;
   readonly sitesRuntime?: Partial<SitesRuntime>;
   readonly templateRuntime?: Partial<TemplateCommandRuntime>;
 }

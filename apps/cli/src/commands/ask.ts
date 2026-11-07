@@ -16,7 +16,6 @@ import {
   FileSystemAskCache,
   HttpFetcher,
   HybridContentFetcher,
-  InteractiveInstallOfferGateway,
   createSelectedBrowserProvider,
   type BrowserRuntimeOptions,
   type BrowserSelection,
@@ -34,17 +33,27 @@ import {
   resolveSearchProvider,
   type AskQuery,
   type AskRunResult,
+  type ExecutionReceiptDraft,
   type EffectivePreferences,
   type Logger,
   type Sanitized,
   type SearchProviderName,
   type SynthesisLength,
+  ResourceBusyError,
   UserInputMarkerError,
 } from '@yantra/core';
-import { validateBrief, validateTemplatedReport, type TemplatedReport } from '@yantra/protocol';
+import {
+  COMMAND_REGISTRY,
+  validateBrief,
+  validateTemplatedReport,
+  type TemplatedReport,
+} from '@yantra/protocol';
 import { CommanderError, type Command } from 'commander';
 
-import { CLIConnectorIO } from '../adapters/terminal/connector.js';
+import {
+  createTerminalContext,
+  type TerminalOptions,
+} from '../adapters/terminal/terminal-adapter.js';
 import {
   parseDuration,
   resolveAgentInvocation,
@@ -56,13 +65,10 @@ import {
   type BrowserSelectionOptions,
 } from '../browser-options.js';
 import { agentFailureLine } from '../connector-io.js';
+import type { CommandContext } from '../context/command-context.js';
+import { draftRunReceipt } from '../context/run-receipt.js';
 import { recordTaskHistory } from '../history.js';
-import { openArtifact } from '../open-artifact.js';
-import {
-  loadEffectivePreferences,
-  resolveAmbientContext,
-  type ResolvedAmbientContext,
-} from '../preferences.js';
+import { resolveAmbientContext, type ResolvedAmbientContext } from '../preferences.js';
 import { attachRegistered } from '../registry/build-command-tree.js';
 import { handler, type Handler, type HandlerArgs } from '../registry/handler.js';
 import { renderGoalEcho } from '../render/goal-echo.js';
@@ -97,9 +103,6 @@ interface AskOptions extends AgentOptions, BrowserSelectionOptions {
 }
 
 export interface AskRuntime {
-  readonly env: NodeJS.ProcessEnv;
-  readonly stdout: NodeJS.WritableStream;
-  readonly stderr: NodeJS.WritableStream;
   readonly createPipeline: (
     query: AskQuery,
     browser?: BrowserRuntimeOptions,
@@ -112,7 +115,6 @@ export interface AskRuntime {
   readonly runTask: typeof runAgenticTask;
   /** Shared option resolver; injectable so command tests never inspect host credentials. */
   readonly resolveAgent: typeof resolveAgentInvocation;
-  readonly isTty: boolean;
   readonly resolveTemplate: (ref: string) => Promise<ActiveReportTemplate>;
 }
 
@@ -120,31 +122,43 @@ export interface AskRuntime {
  * Registers the `ask` subcommand: `Search → Fetch → Extract → Synthesize →
  * Render`, producing a Brief (styled terminal / md / html / json).
  */
-export function registerAskCommand(program: Command, runtime?: Partial<AskRuntime>): void {
-  attachRegistered(program, 'ask', { ask: makeAskHandler(runtime) });
+export function registerAskCommand(
+  program: Command,
+  runtime?: Partial<AskRuntime> & TerminalOptions,
+  context?: CommandContext,
+): void {
+  attachRegistered(program, 'ask', { ask: makeAskHandler(runtime, context) });
 }
 
 /** The `ask` handler over an injectable runtime, bound to the `ask` registry entry. */
-export function makeAskHandler(runtime?: Partial<AskRuntime>): Handler {
-  const resolvedRuntime = runtimeWithDefaults(runtime);
-  return handler(
+export function makeAskHandler(
+  runtime?: Partial<AskRuntime> & TerminalOptions,
+  context: CommandContext = createTerminalContext(runtime),
+): Handler {
+  const resolvedRuntime = runtimeWithDefaults(context, runtime);
+  let honorsAbort = false;
+  const bound = handler(
     async (args: HandlerArgs, options: AskOptions, command: Command): Promise<void> => {
       const [queryArg] = args as readonly [string];
+      const entry = COMMAND_REGISTRY.commands.find((e) => e.id === 'ask');
+      if (entry?.kind === 'leaf') context.settings.bind(entry, command);
 
       // A conflicting `--browser` pair is a validation failure, resolved before
       // any pipeline or provider session exists.
       const browserSelection = resolveBrowserSelectionOverride(options);
       // Resolve unset flags from the effective preferences (explicit flag wins).
       const effective = await resolvedRuntime.resolveDefaults();
+      context.settings.usePreferences(effective);
       const resolved = resolveAskDefaults(options, effective);
       const agent = await resolvedRuntime.resolveAgent(
         'ask',
         options,
-        resolvedRuntime.env,
+        context.settings.env(),
         effective,
       );
+      honorsAbort = agent.mode === 'llm';
       if (agent.mode === 'no-llm' && agent.reason === 'unavailable') {
-        resolvedRuntime.stderr.write(
+        context.output.stderr.write(
           `warning: model ${agent.model.provider}/${agent.model.id} is unavailable because no credential resolved; ` +
             'configure provider auth or pass --auth-secret <ref>; using deterministic research\n',
         );
@@ -157,14 +171,14 @@ export function makeAskHandler(runtime?: Partial<AskRuntime>): Handler {
       const format = resolveFormat(options);
       const detail = resolved.detail;
       if (options.template !== undefined && query.noLlm) {
-        resolvedRuntime.stderr.write(`${TEMPLATE_LLM_GUARD}\n`);
+        context.output.stderr.write(`${TEMPLATE_LLM_GUARD}\n`);
         throw new CommanderError(1, 'yantra.template.llm-required', TEMPLATE_LLM_GUARD);
       }
       const template =
         options.template === undefined
           ? undefined
           : await resolvedRuntime.resolveTemplate(options.template).catch((error: unknown) => {
-              resolvedRuntime.stderr.write(
+              context.output.stderr.write(
                 `${error instanceof Error ? error.message : String(error)}\n`,
               );
               throw error;
@@ -174,23 +188,38 @@ export function makeAskHandler(runtime?: Partial<AskRuntime>): Handler {
         (command.getOptionValueSource('detail') === 'cli' ||
           command.getOptionValueSource('length') === 'cli')
       ) {
-        resolvedRuntime.stderr.write(
+        context.output.stderr.write(
           'warning: --detail and --length do not affect template-defined report structure\n',
         );
       }
 
+      const receipt = await draftRunReceipt(context, ['ask'], {
+        agent,
+        ...(template === undefined ? {} : { template }),
+        ...(browserSelection === undefined ? {} : { browser: browserSelection }),
+        settings: {
+          llm: !query.noLlm,
+          detail,
+          length: query.length,
+          format,
+          limit: query.limit,
+          searchProvider: query.searchProvider,
+          fetchTimeout: query.perFetchTimeoutMs,
+          pipelineTimeout: query.pipelineBudgetMs,
+        },
+      });
       // Resolved before the try so a bad --provider/--model is a validation
       // failure (exit 1) rather than being reclassified as an execution failure
       // by the catch below. Skipped entirely in deterministic mode, which never
       // constructs a provider session.
-      resolvedRuntime.stderr.write(
+      context.output.stderr.write(
         `ask: search-provider=${query.searchProvider ?? 'auto'} limit=${query.limit} ` +
           `no-llm=${query.noLlm} detail=${detail} format=${format}` +
           (agent.mode === 'no-llm' ? '' : ` model=${agent.model.provider}/${agent.model.id}`) +
           '\n',
       );
       // The goal exactly as received, so a shell-rewritten argument is visible.
-      resolvedRuntime.stderr.write(renderGoalEcho(queryArg));
+      context.output.stderr.write(renderGoalEcho(queryArg));
 
       try {
         // Selection happens before the agent runtime/provider is constructed.
@@ -203,23 +232,24 @@ export function makeAskHandler(runtime?: Partial<AskRuntime>): Handler {
             detail,
             options,
             resolvedRuntime,
+            context,
             template,
             agent,
             resolveAmbientContext(effective),
             browserSelection,
+            receipt,
           );
           return;
         }
         const pipeline = await resolvedRuntime.createPipeline(query, {
-          installOfferGateway:
-            resolvedRuntime.isTty && format !== 'json'
-              ? new InteractiveInstallOfferGateway({ sink: resolvedRuntime.stderr })
-              : null,
+          installOfferGateway: context.gateways.installOffer(
+            context.isInteractive({ json: format === 'json' }),
+          ),
           ...(browserSelection === undefined ? {} : { selection: browserSelection }),
         });
-        const result: AskRunResult = await pipeline.run(query);
+        const result: AskRunResult = await pipeline.run({ ...query, receipt });
 
-        renderBrief(resolvedRuntime, result, { format, detail, options });
+        renderBrief(context, result, { format, detail, options });
 
         // Record the completed task into the history index (best-effort — a
         // missing/failed index never fails the ask). Reads the manifest the
@@ -230,55 +260,56 @@ export function makeAskHandler(runtime?: Partial<AskRuntime>): Handler {
         }
 
         if (options.open === true && result.artifacts !== null) {
-          openArtifact(result.artifacts.htmlPath);
+          context.openExternal(result.artifacts.htmlPath);
         }
       } catch (error) {
+        if (error instanceof ResourceBusyError) throw error;
         const message = error instanceof Error ? error.message : String(error);
         if (error instanceof UserInputMarkerError) {
-          resolvedRuntime.stderr.write(`ask validation failed: ${message}\n`);
+          context.output.stderr.write(`ask validation failed: ${message}\n`);
           throw new CommanderError(1, 'yantra.ask.invalid-user-input-marker', message);
         }
-        resolvedRuntime.stderr.write(`ask failed: ${message}\n`);
+        context.output.stderr.write(`ask failed: ${message}\n`);
+        if (error instanceof CommanderError) throw error;
         throw new CommanderError(2, 'yantra.ask.failed', message);
       }
     },
   );
+  return Object.defineProperty(bound, 'honorsAbort', { get: () => honorsAbort });
 }
 
 /** Renders the Brief through the unified connector dispatch. */
 function renderBrief(
-  runtime: AskRuntime,
+  context: CommandContext,
   result: AskRunResult,
   view: { format: BriefOutputFormat; detail: BriefDetailLevel; options: AskOptions },
 ): void {
   const renderer = view.format === 'json' ? new JSONRenderer() : new TerminalRenderer();
-  const io = new CLIConnectorIO(renderer);
-  const stdout = runtime.stdout as NodeJS.WriteStream;
+  const io = context.connector(renderer);
 
   const opts: ConnectorRenderOpts = {
     json: view.format === 'json',
     debug: false,
-    noColor: resolveNoColor(view.options, runtime),
-    stream: runtime.stdout,
-    errStream: runtime.stderr,
+    noColor: resolveNoColor(view.options, context),
+    stream: context.output.stdout,
+    errStream: context.output.stderr,
     briefDetail: view.detail,
     briefFormat: view.format,
     suppressOpenHint: view.options.open === true,
-    ...(typeof stdout.columns === 'number' ? { width: stdout.columns } : {}),
+    ...(context.output.columns === null ? {} : { width: context.output.columns }),
   };
 
   io.renderResult({ kind: 'brief', brief: result.brief, artifacts: result.artifacts }, opts);
 }
 
 function renderTemplated(
-  runtime: AskRuntime,
+  context: CommandContext,
   report: TemplatedReport,
   view: { format: BriefOutputFormat; detail: BriefDetailLevel; options: AskOptions },
   artifacts: { jsonPath: string; markdownPath: string; htmlPath: string },
 ): void {
   const renderer = view.format === 'json' ? new JSONRenderer() : new TerminalRenderer();
-  const io = new CLIConnectorIO(renderer);
-  const stdout = runtime.stdout as NodeJS.WriteStream;
+  const io = context.connector(renderer);
   io.renderResult(
     {
       kind: 'templated_report',
@@ -292,12 +323,12 @@ function renderTemplated(
     {
       json: view.format === 'json',
       debug: false,
-      noColor: resolveNoColor(view.options, runtime),
-      stream: runtime.stdout,
-      errStream: runtime.stderr,
+      noColor: resolveNoColor(view.options, context),
+      stream: context.output.stdout,
+      errStream: context.output.stderr,
       briefDetail: view.detail,
       briefFormat: view.format,
-      ...(typeof stdout.columns === 'number' ? { width: stdout.columns } : {}),
+      ...(context.output.columns === null ? {} : { width: context.output.columns }),
     },
   );
 }
@@ -311,6 +342,7 @@ function renderTemplated(
 export async function createDefaultAskPipeline(
   query: AskQuery,
   browser: BrowserRuntimeOptions = {},
+  env: Readonly<NodeJS.ProcessEnv> = {},
 ): Promise<AskPipeline> {
   const logger = noopLogger;
 
@@ -350,7 +382,7 @@ export async function createDefaultAskPipeline(
   const searchConfig = await loadSearchConfig();
   const resolved = await resolveSearchProvider({
     explicitProvider: query.searchProvider,
-    env: process.env,
+    env,
     config: searchConfig,
     deps: { keychain, pages, ethicsGate: askEthicsGate, logger },
   });
@@ -379,20 +411,23 @@ export async function createDefaultAskPipeline(
   });
 }
 
-function runtimeWithDefaults(runtime?: Partial<AskRuntime>): AskRuntime {
+function runtimeWithDefaults(context: CommandContext, runtime?: Partial<AskRuntime>): AskRuntime {
   return {
-    env: runtime?.env ?? process.env,
-    stdout: runtime?.stdout ?? process.stdout,
-    stderr: runtime?.stderr ?? process.stderr,
-    createPipeline: runtime?.createPipeline ?? createDefaultAskPipeline,
-    resolveDefaults: runtime?.resolveDefaults ?? (() => loadEffectivePreferences()),
-    recordHistory: runtime?.recordHistory ?? ((runId: string) => recordTaskHistory(runId)),
+    createPipeline:
+      runtime?.createPipeline ??
+      ((query, browser) => createDefaultAskPipeline(query, browser, context.settings.env())),
+    resolveDefaults: runtime?.resolveDefaults ?? (() => context.settings.preferences()),
+    recordHistory: runtime?.recordHistory ?? recordTaskHistory,
     runTask: runtime?.runTask ?? runAgenticTaskWithRankSink,
     resolveAgent: runtime?.resolveAgent ?? resolveAgentInvocation,
-    isTty: runtime?.isTty ?? process.stdin.isTTY === true,
     resolveTemplate:
       runtime?.resolveTemplate ??
-      ((ref) => resolveTemplateRef(ref, { isTty: runtime?.isTty ?? process.stdin.isTTY === true })),
+      ((ref) =>
+        resolveTemplateRef(ref, {
+          cwd: context.cwd,
+          isTty: context.isInteractive({}),
+          choose: (names) => context.input.choose(names),
+        })),
   };
 }
 
@@ -403,17 +438,19 @@ async function runAgenticAsk(
   detail: BriefDetailLevel,
   options: AskOptions,
   runtime: AskRuntime,
+  context: CommandContext,
   template: ActiveReportTemplate | undefined,
   agent: Extract<AgentInvocation, { readonly mode: 'llm' }>,
   ambient: ResolvedAmbientContext,
   browserSelection: BrowserSelection | undefined,
+  receipt: ExecutionReceiptDraft,
 ): Promise<void> {
-  const renderOpts = agentRenderOpts(runtime, format, detail, options);
-  const connector = new CLIConnectorIO(
+  const renderOpts = agentRenderOpts(context, format, detail, options);
+  const connector = context.connector(
     format === 'json' ? new JSONRenderer() : new TerminalRenderer(),
     {
       renderOpts,
-      interactive: runtime.isTty && format !== 'json',
+      interactive: context.isInteractive({ json: format === 'json' }),
       suppressPublishedOutcome: true,
     },
   );
@@ -421,6 +458,8 @@ async function runAgenticAsk(
   const outcome = await runtime.runTask(
     {
       goal: question,
+      receipt,
+      signal: context.signal,
       model: agent.model,
       ...(agent.thinkingSource === undefined ? {} : { thinkingSource: agent.thinkingSource }),
       auth: agent.auth,
@@ -433,58 +472,62 @@ async function runAgenticAsk(
       connector,
     },
     {
-      browserInstallOfferGateway:
-        runtime.isTty && format !== 'json'
-          ? new InteractiveInstallOfferGateway({ sink: runtime.stderr })
-          : null,
+      cwd: context.cwd,
+      browserInstallOfferGateway: context.gateways.installOffer(
+        context.isInteractive({ json: format === 'json' }),
+      ),
       ...(browserSelection === undefined ? {} : { browserSelection }),
     },
   );
-  await renderAgenticOutcome(outcome, runtime, format, detail, options);
+  await renderAgenticOutcome(outcome, runtime, context, format, detail, options);
 }
 
 function agentRenderOpts(
-  runtime: AskRuntime,
+  context: CommandContext,
   format: BriefOutputFormat,
   detail: BriefDetailLevel,
   options: AskOptions,
 ): ConnectorRenderOpts {
-  const stdout = runtime.stdout as NodeJS.WriteStream;
   return {
     json: format === 'json',
     debug: false,
-    noColor: resolveNoColor(options, runtime),
-    stream: runtime.stdout,
-    errStream: runtime.stderr,
+    noColor: resolveNoColor(options, context),
+    stream: context.output.stdout,
+    errStream: context.output.stderr,
     briefDetail: detail,
     briefFormat: format,
     suppressOpenHint: options.open === true,
-    ...(typeof stdout.columns === 'number' ? { width: stdout.columns } : {}),
+    ...(context.output.columns === null ? {} : { width: context.output.columns }),
   };
 }
 
 async function renderAgenticOutcome(
   outcome: AgenticTaskOutcome,
   runtime: AskRuntime,
+  context: CommandContext,
   format: BriefOutputFormat,
   detail: BriefDetailLevel,
   options: AskOptions,
 ): Promise<void> {
   if (outcome.kind !== 'published') {
-    throw new Error(agentFailureLine(outcome));
+    throw new CommanderError(
+      exitCodeForAgenticOutcome(outcome),
+      'yantra.ask.' + outcome.kind,
+      agentFailureLine(outcome),
+    );
   }
   const raw = JSON.parse(await readFile(outcome.brief.jsonPath, 'utf8')) as unknown;
   if (outcome.brief.kind === 'templated_report') {
     const parsed = validateTemplatedReport(raw);
     if (!parsed.isOk) throw new Error('The agent published an invalid templated report artifact.');
-    renderTemplated(runtime, parsed.value, { format, detail, options }, outcome.brief);
+    renderTemplated(context, parsed.value, { format, detail, options }, outcome.brief);
   } else {
     const parsed = validateBrief(raw);
     if (!parsed.isOk) throw new Error('The agent published an invalid Brief artifact.');
-    renderBrief(runtime, { brief: parsed.value, artifacts: null }, { format, detail, options });
+    renderBrief(context, { brief: parsed.value, artifacts: null }, { format, detail, options });
   }
   await runtime.recordHistory(outcome.runId);
-  if (options.open === true) openArtifact(outcome.brief.htmlPath);
+  if (options.open === true) context.openExternal(outcome.brief.htmlPath);
   const exitCode = exitCodeForAgenticOutcome(outcome);
   if (exitCode !== 0) throw new Error(`Agentic ask exited with ${exitCode}.`);
 }
@@ -576,14 +619,14 @@ function resolveFormat(options: AskOptions): BriefOutputFormat {
   return format === 'md' || format === 'html' || format === 'json' ? format : 'terminal';
 }
 
-function resolveNoColor(options: AskOptions, runtime: AskRuntime): boolean {
+function resolveNoColor(options: AskOptions, context: CommandContext): boolean {
   if (options.color === false) {
     return true;
   }
-  if (runtime.env.NO_COLOR !== undefined && runtime.env.NO_COLOR !== '') {
+  if (context.settings.env().NO_COLOR !== undefined && context.settings.env().NO_COLOR !== '') {
     return true;
   }
-  return (runtime.stdout as NodeJS.WriteStream).isTTY !== true;
+  return !context.output.colorCapable;
 }
 
 function clampInt(raw: string | undefined, fallback: number, min: number, max: number): number {

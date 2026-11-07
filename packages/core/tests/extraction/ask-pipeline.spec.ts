@@ -149,19 +149,42 @@ afterEach(async () => {
 
 describe('@no-llm extraction/ask-pipeline', () => {
   it('produces a schema-valid Brief with a source per successful fetch', async () => {
+    const root = await makeRunDir();
     const cache = new InMemoryAskCache();
     const pipeline = new AskPipeline({
-      searchProvider: { name: 'duckduckgo', search: async () => searchRows },
+      searchProvider: {
+        name: 'duckduckgo',
+        search: async () => {
+          const ids = await readdir(root);
+          expect(
+            JSON.parse(await readFile(join(root, ids[0]!, 'execution-receipt.json'), 'utf8')),
+          ).toMatchObject({ command: ['ask'] });
+          return searchRows;
+        },
+      },
       fetcher: { fetch: async (url) => makeDoc(url) },
       extractor: { extract: async (doc) => makeArticle(doc.finalUrl) },
       cache,
       ethicsGate: { checkUrl: async () => ({ ok: true }) },
       logger,
-      runRootDir: await makeRunDir(),
+      runRootDir: root,
       synthesizer: makeSynthesizer(),
     });
 
-    const { brief, artifacts } = await pipeline.run(baseQuery);
+    const { brief, artifacts } = await pipeline.run({
+      ...baseQuery,
+      receipt: {
+        schema_version: 1,
+        yantra_version: 'fixture',
+        invoked_by: 'terminal',
+        invocation_id: null,
+        command: ['ask'],
+        cwd: root,
+        settings: [],
+        content: [],
+        browser: null,
+      },
+    });
 
     expect(validateBrief(brief).isOk).toBe(true);
     expect(brief.schema_version).toBe('0.2');

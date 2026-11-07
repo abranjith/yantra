@@ -11,7 +11,6 @@ import {
   templatesRoot,
 } from '@yantra/core';
 import { CommanderError } from 'commander';
-import prompts from 'prompts';
 
 /** Identical help text used by every agentic command. */
 export const TEMPLATE_OPTION_DESCRIPTION =
@@ -48,8 +47,8 @@ export async function resolveTemplateRef(
 ): Promise<ActiveReportTemplate> {
   const value = ref.trim();
   const store = deps.store ?? new FileTemplateStore(templatesRoot());
-  const cwd = deps.cwd ?? process.cwd();
-  const isTty = deps.isTty ?? process.stdin.isTTY === true;
+  const cwd = deps.cwd ?? '.';
+  const isTty = deps.isTty ?? false;
 
   if (value.startsWith('path:')) return resolvePath(value.slice(5), cwd);
   if (value.startsWith('name:')) return resolveName(value.slice(5), store);
@@ -112,7 +111,7 @@ async function resolveTag(
       `Template tag "${tag}" is ambiguous; matching templates: ${names.join(', ')}`,
     );
   }
-  const selected = await (choose ?? promptForChoice)(names);
+  const selected = await (choose ?? (() => Promise.resolve(null)))(names);
   if (selected === null) throw new TemplateReferenceError('Template selection was cancelled.');
   return resolveName(selected, store);
 }
@@ -140,14 +139,4 @@ function isPathShape(value: string): boolean {
     value.includes('\\') ||
     value.includes(sep)
   );
-}
-
-async function promptForChoice(names: readonly string[]): Promise<string | null> {
-  const answer = (await prompts({
-    type: 'select',
-    name: 'name',
-    message: 'Choose a report template',
-    choices: names.map((name) => ({ title: name, value: name })),
-  })) as { name?: unknown };
-  return typeof answer.name === 'string' ? answer.name : null;
 }

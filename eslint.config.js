@@ -169,13 +169,11 @@ export const DRSHYA_STYLE_SELECTORS = [
 
 /** Shrink-only migration list, introduced 2026-11-03; removed at TASK-015. */
 export const HANDLER_PURITY_MIGRATION_ALLOWLIST = [
-  'apps/cli/src/commands/ask.ts',
   'apps/cli/src/commands/audit.ts',
   'apps/cli/src/commands/browser.ts',
   'apps/cli/src/commands/config.ts',
   'apps/cli/src/commands/confirm.ts',
   'apps/cli/src/commands/daemon.ts',
-  'apps/cli/src/commands/do.ts',
   'apps/cli/src/commands/doctor.ts',
   'apps/cli/src/commands/init-context-prompts.ts',
   'apps/cli/src/commands/init-wizard.ts',
@@ -200,7 +198,6 @@ export const HANDLER_PURITY_MIGRATION_ALLOWLIST = [
   'apps/cli/src/render/brief-terminal.ts',
   'apps/cli/src/render/types.ts',
   'apps/cli/src/synthesis-llm.ts',
-  'apps/cli/src/template-ref.ts',
 ];
 export const HANDLER_PURITY_SELECTORS = [
   {

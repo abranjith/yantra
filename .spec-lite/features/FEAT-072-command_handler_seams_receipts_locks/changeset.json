@@ -188,6 +188,12 @@
       "task": "TASK-006"
     },
     {
+      "path": "apps/cli/src/context/run-receipt.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
       "path": "apps/cli/src/context/settings-resolver.ts",
       "status": "A",
       "role": "implement",
@@ -219,7 +225,7 @@
     },
     {
       "path": "apps/cli/src/registry/dead-options.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
@@ -236,6 +242,12 @@
       "task": "TASK-006"
     },
     {
+      "path": "apps/cli/src/render/json.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
       "path": "apps/cli/src/resource-busy.ts",
       "status": "A",
       "role": "implement",
@@ -248,8 +260,14 @@
       "task": "TASK-006"
     },
     {
+      "path": "apps/cli/src/template-ref.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
       "path": "apps/cli/tests/adapters/settings-resolver.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
@@ -276,6 +294,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-007"
+    },
+    {
+      "path": "apps/cli/tests/characterization/agentic-parity.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
     },
     {
       "path": "apps/cli/tests/characterization/baselines/ask.deterministic.json",
@@ -951,7 +975,7 @@
     },
     {
       "path": "apps/cli/tests/characterization/receipt-canary.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
@@ -1014,6 +1038,18 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "docs/features/agentic-tasks.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "docs/features/ask.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
     },
     {
       "path": "docs/features/configuration.md",
@@ -1136,6 +1172,18 @@
       "task": "TASK-004"
     },
     {
+      "path": "packages/core/src/extraction/ask-pipeline.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/core/src/extraction/types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
       "path": "packages/core/src/fs/atomic-write.ts",
       "status": "A",
       "role": "implement",
@@ -1173,13 +1221,13 @@
     },
     {
       "path": "packages/core/src/receipt/execution-receipt.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
     {
       "path": "packages/core/src/receipt/index.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
@@ -1292,6 +1340,12 @@
       "task": "TASK-005"
     },
     {
+      "path": "packages/core/tests/extraction/ask-pipeline.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
       "path": "packages/core/tests/fs/atomic-write.spec.ts",
       "status": "A",
       "role": "implement",
@@ -1317,7 +1371,7 @@
     },
     {
       "path": "packages/core/tests/receipt/execution-receipt.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
@@ -1365,7 +1419,7 @@
     },
     {
       "path": "packages/protocol/generated/json-schema/execution-receipt.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
@@ -1401,7 +1455,7 @@
     },
     {
       "path": "packages/protocol/src/schemas/execution-receipt.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
@@ -1413,7 +1467,7 @@
     },
     {
       "path": "packages/protocol/tests/execution-receipt.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     }

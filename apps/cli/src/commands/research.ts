@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 
 import {
+  exitCodeForAgenticOutcome,
   resolveCommandTaskProfile,
   type runAgenticTask,
   type ActiveReportTemplate,
@@ -38,6 +39,7 @@ import {
   type ResearchRunResult,
   type SearchProviderName,
   type SynthesisLength,
+  ResourceBusyError,
   UserInputMarkerError,
 } from '@yantra/core';
 import {
@@ -306,12 +308,14 @@ export function makeResearchHandler(
           context.openExternal(result.artifacts.htmlPath);
         }
       } catch (error) {
+        if (error instanceof ResourceBusyError) throw error;
         const message = error instanceof Error ? error.message : String(error);
         if (error instanceof UserInputMarkerError) {
           context.output.stderr.write(`research validation failed: ${message}\n`);
           throw new CommanderError(1, 'yantra.research.invalid-user-input-marker', message);
         }
         context.output.stderr.write(`research failed: ${message}\n`);
+        if (error instanceof CommanderError) throw error;
         throw new CommanderError(2, 'yantra.research.failed', message);
       }
     },
@@ -499,6 +503,7 @@ async function runAgenticResearch(
       connector,
     },
     {
+      cwd: context.cwd,
       browserInstallOfferGateway: context.gateways.installOffer(
         context.isInteractive({ json: format === 'json' }),
       ),
@@ -506,7 +511,11 @@ async function runAgenticResearch(
     },
   );
   if (outcome.kind !== 'published') {
-    throw new Error(agentFailureLine(outcome));
+    throw new CommanderError(
+      exitCodeForAgenticOutcome(outcome),
+      'yantra.research.' + outcome.kind,
+      agentFailureLine(outcome),
+    );
   }
   const raw = JSON.parse(await readFile(outcome.brief.jsonPath, 'utf8')) as unknown;
   if (outcome.brief.kind === 'templated_report') {

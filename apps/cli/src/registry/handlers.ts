@@ -48,9 +48,9 @@ export function buildHandlers(
   context?: CommandContext,
 ): Readonly<Record<LeafCommandId, HandlerBinding>> {
   return {
-    ask: makeAskHandler(options.askRuntime),
+    ask: makeAskHandler(options.askRuntime, context),
     research: makeResearchHandler(options.researchRuntime, context),
-    do: makeDoHandler(options.doRuntime),
+    do: makeDoHandler(options.doRuntime, context),
     run: handler(runHandler),
     resume: handler(resumeHandler),
     schedules: handler(schedulesHandler),

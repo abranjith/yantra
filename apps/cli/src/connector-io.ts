@@ -100,6 +100,7 @@ export interface CliAgentConnectorOptions {
   ) => Promise<'granted' | 'denied'>;
   /** Command will render the published Brief itself using its selected format. */
   readonly suppressPublishedOutcome?: boolean;
+  readonly output?: { json(value: unknown): void; jsonLine(value: unknown): void };
 }
 
 /**
@@ -132,7 +133,7 @@ export class CommandConnectorIO implements ConnectorIO {
 
   /** True only for an explicitly interactive, non-JSON TTY command. */
   public get interactive(): boolean {
-    return this.agentOptions?.interactive === true && this.agentOptions.renderOpts.json === false;
+    return this.agentOptions?.interactive === true;
   }
 
   onEvent(handler: (event: TaskEvent) => void): () => void {
@@ -172,9 +173,9 @@ export class CommandConnectorIO implements ConnectorIO {
   public emitAgentEvent(event: AgentProgressEvent): void {
     const opts = this.requireAgentOptions();
     if (opts.json) {
-      opts.stream.write(
-        `${JSON.stringify({ schemaVersion: SCHEMA_VERSION, kind: 'agent_progress', event })}\n`,
-      );
+      const value = { schemaVersion: SCHEMA_VERSION, kind: 'agent_progress', event };
+      if (this.agentOptions?.output) this.agentOptions.output.jsonLine(value);
+      else opts.stream.write(`${JSON.stringify(value)}\n`);
       return;
     }
     switch (event.type) {
@@ -247,7 +248,8 @@ export class CommandConnectorIO implements ConnectorIO {
         artifacts: outcome.kind === 'published' ? outcome.artifacts : [],
         outcome,
       };
-      opts.stream.write(`${JSON.stringify(record)}\n`);
+      if (this.agentOptions?.output) this.agentOptions.output.json(record);
+      else opts.stream.write(`${JSON.stringify(record)}\n`);
       return;
     }
     switch (outcome.kind) {

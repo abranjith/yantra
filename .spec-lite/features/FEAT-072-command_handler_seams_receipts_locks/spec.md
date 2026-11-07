@@ -712,7 +712,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
 
 ### TASK-009: Migrate `ask` and `do` (agentic run class) with receipts and abort
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - Migrate `ask.ts` and `do.ts` to the context. `env`, `stdout`, `stderr` and `isTty` leave
     `AskRuntime` and `DoRuntime`.
   - `do` stops constructing `CLIConnectorIO` itself (`do.ts:170`) and uses `context.connector`. The
@@ -724,7 +724,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
   - Both commands draft receipts. Content identity covers `--template` (path plus SHA-256) and
     `--save-as` does not apply. The agent orchestrator writes the receipt before the location
     pre-flight, so even a refused run has one.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Parity rows:
     - `ask --no-llm`;
     - `ask` with a fake provider;
@@ -737,7 +737,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
   - The location-handoff run still writes a receipt.
   - The TASK-001 baselines for `ask` and `do` are unchanged; the existing `do-chaos` and
     `do-promotion` suites pass.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md`
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md`
       and `docs/features/ask.md` (receipts; cancellation from the app).
 - **Verify**:
   - `cd apps/cli && npx vitest run tests/commands/ask.spec.ts tests/commands/do.spec.ts tests/commands/do-chaos.spec.ts tests/characterization`
@@ -962,7 +962,7 @@ tests/setup` passes; `init.ts`, `init-wizard.ts` and `init-context-prompts.ts` a
 - [x] TASK-006: Command context, terminal adapter and purity lint; migrate `research`
 - [x] TASK-007: Worker adapter, result transport and `research` parity
 - [x] TASK-008: Execution receipts, settings provenance and the canary (research first)
-- [ ] TASK-009: Migrate `ask` and `do` (agentic run class) with receipts and abort
+- [x] TASK-009: Migrate `ask` and `do` (agentic run class) with receipts and abort
 - [ ] TASK-010: Migrate `run` and `resume` with receipts in the replay path
 - [ ] TASK-011: Daemon, scheduling and `confirm`: migration plus daemon-fire receipts
 - [ ] TASK-012: Migrate the read-class commands

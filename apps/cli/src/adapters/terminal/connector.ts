@@ -19,7 +19,7 @@ export class CLIConnectorIO extends CommandConnectorIO {
     super(renderer, {
       ...options,
       renderOpts,
-      interactive: options?.interactive === true,
+      interactive: options?.interactive === true && !renderOpts.json,
       confirmationPrompt:
         options?.confirmationPrompt ??
         ((request, signal) => terminalConfirmation(request, signal, renderOpts.errStream)),
