@@ -928,18 +928,70 @@ tests/commands/format.property.spec.ts` is green with every leaf covered. The te
 
 ## 8. State Tracking
 
-- [ ] TASK-001: Program builder seam and CLI surface characterization goldens
-- [ ] TASK-002: Registry schema, validation and execution-class resolution in protocol
-- [ ] TASK-003: Option groups and read-class registry entries (M1), checked against the live tree
-- [ ] TASK-004: Commander generator with path-bound handlers; migrate the wholly read-only families
+- [x] TASK-001: Program builder seam and CLI surface characterization goldens
+- [x] TASK-002: Registry schema, validation and execution-class resolution in protocol
+- [x] TASK-003: Option groups and read-class registry entries (M1), checked against the live tree
+- [x] TASK-004: Commander generator with path-bound handlers; migrate the wholly read-only families
       (M1)
-- [ ] TASK-005: Run-class entries with precedence and applicability; migrate `ask`, `research`,
+- [x] TASK-005: Run-class entries with precedence and applicability; migrate `ask`, `research`,
       `do`, `run`, `resume`, `doctor`
-- [ ] TASK-006: Settings families: `config`, `prefs`, `secret`, `model`, `sites`, `init`
-- [ ] TASK-007: Remaining families and registry completeness
-- [ ] TASK-008: Registry integrity: option consumers, danger guard, group spelling
-- [ ] TASK-009: `CommandInvocation` and `parseInvocation`
-- [ ] TASK-010: Shell-aware `formatInvocation` and round-trip for every command
-- [ ] TASK-011: Copied commands execute correctly in real bash, PowerShell 5.1 and cmd
+- [x] TASK-006: Settings families: `config`, `prefs`, `secret`, `model`, `sites`, `init`
+- [x] TASK-007: Remaining families and registry completeness
+- [x] TASK-008: Registry integrity: option consumers, danger guard, group spelling
+- [x] TASK-009: `CommandInvocation` and `parseInvocation`
+- [x] TASK-010: Shell-aware `formatInvocation` and round-trip for every command
+- [x] TASK-011: Copied commands execute correctly in real bash, PowerShell 5.1 and cmd
 
 Legend: [ ] Not started | [/] In progress | [x] Completed
+
+## 9. Implementation Deviations
+
+Recorded during implementation (2026-11-05/06). Each is a place where the code differs from the
+letter of this spec, with the reason.
+
+- **DEVIATION (TASK-011): PowerShell 5.1 through the `.cmd` launcher cannot carry `%NAME%` or a
+  line break.** When PowerShell runs `yantra.cmd` explicitly, Windows re-reads the command line
+  through cmd, which expands a `%NAME%` pair and ends the command at a line break; no quoting
+  survives that. Failing values in the real-shell suite: `%PATH%` and `line\nbreak`. PowerShell
+  is not marked unavailable: its own resolution of `yantra` picks the `.ps1` launcher, which
+  carries every value in the corpus. To widen the `.cmd` route, `formatInvocation` wraps every
+  quoted PowerShell value in literal double quotes (MSVCRT-encoded inside), so `& | < > ^` stay
+  quoted for cmd; a lone `%` also passes. `e2e/command-format-shells.spec.ts` asserts the two
+  limits still fail, so a change is noticed. Bash is not run through `yantra.cmd`: it resolves
+  `yantra` to the sh launcher.
+- **`ArgumentSpec.default`** (TASK-002) was added: `list [target]` has a commander default
+  (`runs`) that `--help` prints, which byte-identical help needs.
+- **`PrecedenceStep` env `equals`** (TASK-003) was added: `--no-llm`'s environment step is
+  `LLM_PROVIDER=none`, a value condition, not just a variable name.
+- **`ParseError` code `invalid_invocation`** (TASK-009) was added for a relative `cwd` or a
+  malformed invocation id, so `parseInvocation` never throws.
+- **`research` reads no preferences** (TASK-005). The spec said `ask`/`research` `--detail`,
+  `--length` and `--search-provider` resolve through preferences; only `ask` does. The registry
+  records research's real chain (flag, then the commander default) and `.spec-lite/TODO.md`
+  asks whether research should honor them.
+- **Exit 130 is not representable** (TASK-003/005). `doctor --agent-smoke` and the agentic
+  `aborted` outcome exit 130, outside the 0–4 contract that `ExitCodeSpec` encodes. Logged in
+  `.spec-lite/TODO.md`.
+- **`run --template` is a `refused` known-dead entry** (TASK-008). The handler reads the option
+  only to refuse it, so a syntactic consumer exists; `KNOWN_DEAD_OPTIONS` records it as
+  `kind: 'refused'` with the refusal text as evidence, and the suite fails if that text
+  disappears.
+- **`model add --provider` is a second group-spelling exception** (TASK-008) besides
+  `init --provider`: it names the provider of the model being registered (mandatory,
+  `<provider>`), not the per-run agent provider.
+- **Tests re-pointed from registration source to registry data** (TASK-005/007), because the
+  spec deletes the code they read: the registrar tests in `agent-options.spec.ts` and one in
+  `browser-options.spec.ts` now probe generated commands built from the same groups;
+  `zero-llm-guardrails.spec.ts` asserts `run`'s `--no-llm`/no `--llm` surface on the registry;
+  `e2e/task-fidelity-harness.spec.ts` reads the model flags from the `agent-model` group. Every
+  assertion kept its meaning.
+- **Factories kept as generated wrappers.** `make*Command`/`register*Command` exports that suites
+  and composition still use (`makeListCommand`, `makeBrowserCommand`, `registerAskCommand`, …)
+  remain as one-line wrappers over `createRegisteredCommand`/`attachRegistered`, so they are
+  generated too and existing suites run unchanged. Multi-subcommand families keep their former
+  actions verbatim in handler tables through `fromAction`.
+- **Transition order.** While families were unmigrated, `buildCommandTree` took the legacy list
+  as the root order (registry entries did not yet exist for every family). With the allowlist
+  empty it uses registry order; the legacy path remains for a family that ever needs it.
+- **Characterization goldens** also cover a group invoked without a subcommand and an unknown
+  top-level command, beyond the per-leaf error cases the spec lists.

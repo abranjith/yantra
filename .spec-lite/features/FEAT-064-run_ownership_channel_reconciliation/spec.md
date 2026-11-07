@@ -471,9 +471,9 @@ All paths above are under `packages/core/src/run-channel/`.
 command, log, logger})`: - claims the lease, with `log_seq_at_claim` taken from the FEAT-063 writer; - starts the heartbeat timer (5 s, `unref`). Heartbeat write failures are logged once and never
     crash the run; - exposes `recorder: BrowserOwnershipRecorder`.
 
-                `finish()` runs in this order: stop the timers, close the channel (TASK-005), then
-                `releaseLease`. The caller has already flushed the terminal event and manifest. `finish()` is
-                idempotent.
+                        `finish()` runs in this order: stop the timers, close the channel (TASK-005), then
+                        `releaseLease`. The caller has already flushed the terminal event and manifest. `finish()` is
+                        idempotent.
 
   - **`browser-ownership-recorder.ts`.**
     - `recordSpawned(identity)` appends to `owned_browsers` and flushes before returning.
@@ -742,32 +742,33 @@ completed_by_evidence`.
     from `result-evidence.ts`: - `partial` if a result was persisted: an `artifact_saved` of a result-bearing kind in
     this epoch, or a non-empty `brief.json`, `outputs.json` or document artifact; - otherwise `failed`; - **never** `aborted` (D7).
 
-             Flush.
+                 Flush.
 
-          4. **Manifest.** Atomically patch it, preserving every unknown field because ask and research
-             manifests have their own shapes:
-             - `status` from `TASK_OUTCOME_TABLE[outcome].manifestStatus`;
-             - `taskOutcome`, `terminationReason`, `endedAt` (the last event time, else the reconcile
-               time) and `durationMs`;
-             - `executionState: 'interrupted'`, only in the `owner_lost` branch.
+              4. **Manifest.** Atomically patch it, preserving every unknown field because ask and research
+                 manifests have their own shapes:
+                 - `status` from `TASK_OUTCOME_TABLE[outcome].manifestStatus`;
+                 - `taskOutcome`, `terminationReason`, `endedAt` (the last event time, else the reconcile
+                   time) and `durationMs`;
+                 - `executionState: 'interrupted'`, only in the `owner_lost` branch.
 
-             If no manifest exists, write a minimal `RunManifest` (`workflowName` = the lease `command`
-             joined, `runKind` derived from the command).
+                 If no manifest exists, write a minimal `RunManifest` (`workflowName` = the lease `command`
+                 joined, `runKind` derived from the command).
 
-          5. **History.** Call `history.recordFromRunDir(runId)`. A failure is logged and is not fatal,
-             because the index is rebuildable.
-          6. **Browsers.** For each `owned_browsers` entry, call `probe.check(identity)`:
-             - `alive`: re-check immediately before acting, then `terminator.terminate(pid)`, then confirm
-               `dead` (bounded wait);
-             - `dead`: drop the entry;
-             - `unknown`: **keep** the entry and never signal it.
-          7. **Lease.** Remove `lease.json` only if no owned browser remains. Otherwise rewrite it with
-             only the uncertain entries; it is then a "possible orphan" record. Re-running the reconciler
-             later is a no-op for steps 3 to 5 and retries step 6.
-          8. **Log and release.** Append `reconciled {by: 'host' | 'cli' | 'list' | 'stop', evidence:
+              5. **History.** Call `history.recordFromRunDir(runId)`. A failure is logged and is not fatal,
+                 because the index is rebuildable.
+              6. **Browsers.** For each `owned_browsers` entry, call `probe.check(identity)`:
+                 - `alive`: re-check immediately before acting, then `terminator.terminate(pid)`, then confirm
+                   `dead` (bounded wait);
+                 - `dead`: drop the entry;
+                 - `unknown`: **keep** the entry and never signal it.
+              7. **Lease.** Remove `lease.json` only if no owned browser remains. Otherwise rewrite it with
+                 only the uncertain entries; it is then a "possible orphan" record. Re-running the reconciler
+                 later is a no-op for steps 3 to 5 and retries step 6.
+              8. **Log and release.** Append `reconciled {by: 'host' | 'cli' | 'list' | 'stop', evidence:
 
-    'event' | 'manifest' | 'owner_lost', reaped, uncertain}`to`runtime.jsonl`through
-`runtime-record.ts`. Release the lock.
+        'event' | 'manifest' | 'owner_lost', reaped, uncertain}`to`runtime.jsonl`through
+
+    `runtime-record.ts`. Release the lock.
 
   - **Legacy path** (no lease):
     - a `.lock` with a pid only: `processExists(pid) === false` reconciles. A live PID returns
@@ -930,7 +931,7 @@ tests/commands/list-reconcile.spec.ts` passes;
 process.execPath, workerPath})`.** 1. Exclusively create the launch file (`wx`, `0600`) in `launch.dir`. 2. Call `spawn(nodePath, [workerPath, '--launch', file], {cwd: invocation.cwd, env, detached:
 true, shell: false, stdio: 'ignore', windowsHide: true})`, then `child.unref()`. 3. Return `{pid, identity}`, with the identity captured through `identifyProcess`.
 
-                Apply any mitigation the S2 report requires, for example Job-object breakaway on Windows.
+                        Apply any mitigation the S2 report requires, for example Job-object breakaway on Windows.
 
 - [ ] **Unit Tests** (`launch.spec.ts`, `result-sink.spec.ts`, `spawn.spec.ts`):
   - **Launch validation:**

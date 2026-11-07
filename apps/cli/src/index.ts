@@ -1,37 +1,11 @@
 import { AGENT_PROTOCOL_VERSION } from '@yantra/agent';
 import { PROTOCOL_VERSION as CORE_PROTOCOL_VERSION } from '@yantra/core';
 import { PROTOCOL_VERSION } from '@yantra/protocol';
-import { Command, CommanderError } from 'commander';
+import { CommanderError } from 'commander';
 
-import { registerAskCommand, type AskRuntime } from './commands/ask.js';
-import { makeAuditCommand } from './commands/audit.js';
-import { makeBrowserCommand } from './commands/browser.js';
-import { makeConfigCommand } from './commands/config.js';
-import { makeConfirmCommand } from './commands/confirm.js';
-import { makeDaemonCommand } from './commands/daemon.js';
-import { registerDoCommand, type DoRuntime } from './commands/do.js';
-import { makeDoctorCommand } from './commands/doctor.js';
-import { makeInitCommand } from './commands/init.js';
-import { makeLintCommand } from './commands/lint.js';
-import { makeListCommand } from './commands/list.js';
-import { makeModelCommand } from './commands/model.js';
-import { makeOpenCommand } from './commands/open.js';
-import { makePrefsCommand } from './commands/prefs.js';
-import { makeProfileCommand } from './commands/profile.js';
-import { makeReportCommand } from './commands/report.js';
-import { registerResearchCommand, type ResearchRuntime } from './commands/research.js';
-import { makeResumeCommand } from './commands/resume.js';
-import { makeRunCommand } from './commands/run.js';
-import {
-  makeScheduleCommand,
-  makeSchedulesCommand,
-  makeUnscheduleCommand,
-} from './commands/schedule.js';
-import { makeSecretCommand } from './commands/secret.js';
-import { makeShowCommand } from './commands/show.js';
-import { makeSitesCommand, type SitesRuntime } from './commands/sites.js';
-import { makeTemplateCommand, type TemplateCommandRuntime } from './commands/template.js';
-import { makeUsageCommand } from './commands/usage.js';
+import { buildProgram, type CliRunOptions } from './program.js';
+
+export { buildProgram, type CliRunOptions } from './program.js';
 
 // Re-exported so the consolidated FEAT-015 render suite can snapshot the
 // terminal Brief renderer at the same seam the CLI uses.
@@ -53,21 +27,12 @@ export { CLIConnectorIO } from './connector-io.js';
 export { TerminalRenderer } from './render/terminal.js';
 export { exitCodeForDoOutcome } from './commands/do.js';
 
-export interface CliRunOptions {
-  readonly askRuntime?: Partial<AskRuntime>;
-  readonly researchRuntime?: Partial<ResearchRuntime>;
-  readonly doRuntime?: Partial<DoRuntime>;
-  readonly sitesRuntime?: Partial<SitesRuntime>;
-  readonly templateRuntime?: Partial<TemplateCommandRuntime>;
-}
-
 /**
  * CLI entrypoint.
  *
- * Registers every subcommand on a single commander program, parses argv,
- * and translates commander/CommanderError into the documented exit-code
- * contract (`0` success, `1` validation, `2` execution, `3` env, `4`
- * user-handoff).
+ * Builds the commander program ({@link buildProgram}), parses argv, and
+ * translates commander/CommanderError into the documented exit-code contract
+ * (`0` success, `1` validation, `2` execution, `3` env, `4` user-handoff).
  */
 export const run = async (
   argv: readonly string[] = process.argv.slice(2),
@@ -80,40 +45,7 @@ export const run = async (
     return 0;
   }
 
-  const program = new Command();
-  program
-    .name('yantra')
-    .description('Yantra — AI-orchestrated browser automation, local-first')
-    .version(`${PROTOCOL_VERSION} (yantra cli)`)
-    .showHelpAfterError();
-
-  registerAskCommand(program, options.askRuntime);
-  registerResearchCommand(program, options.researchRuntime);
-  registerDoCommand(program, options.doRuntime);
-  program.addCommand(makeRunCommand());
-  program.addCommand(makeConfirmCommand());
-  program.addCommand(makeConfigCommand());
-  program.addCommand(makeSecretCommand());
-  program.addCommand(makeResumeCommand());
-  program.addCommand(makeScheduleCommand());
-  program.addCommand(makeSchedulesCommand());
-  program.addCommand(makeUnscheduleCommand());
-  program.addCommand(makeDaemonCommand());
-  program.addCommand(makeLintCommand());
-  program.addCommand(makeListCommand());
-  program.addCommand(makeModelCommand());
-  program.addCommand(makeOpenCommand());
-  program.addCommand(makeShowCommand());
-  program.addCommand(makeUsageCommand());
-  program.addCommand(makeProfileCommand());
-  program.addCommand(makePrefsCommand());
-  program.addCommand(makeSitesCommand(options.sitesRuntime));
-  program.addCommand(makeTemplateCommand(options.templateRuntime));
-  program.addCommand(makeDoctorCommand());
-  program.addCommand(makeAuditCommand());
-  program.addCommand(makeReportCommand());
-  program.addCommand(makeInitCommand());
-  program.addCommand(makeBrowserCommand());
+  const program = buildProgram(options);
 
   try {
     await program.parseAsync([...argv], { from: 'user' });

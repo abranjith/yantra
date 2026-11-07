@@ -1,0 +1,13 @@
+Usage: yantra browser use [options] <source>
+
+Select which browser Yantra launches and persist it. Validates the path; never
+launches a browser or checks for updates
+
+Arguments:
+  source                        auto, managed, or system
+
+Options:
+  --path <absolute-executable>  custom external executable (only with `system`)
+  --json                        emit the committed selection as JSON (default:
+                                false)
+  -h, --help                    display help for command

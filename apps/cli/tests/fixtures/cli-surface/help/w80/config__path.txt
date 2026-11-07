@@ -1,0 +1,5 @@
+Usage: yantra config path [options]
+
+Options:
+  --json      emit JSON (default: false)
+  -h, --help  display help for command

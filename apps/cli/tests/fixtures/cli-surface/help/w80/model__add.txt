@@ -1,0 +1,11 @@
+Usage: yantra model add [options] <id>
+
+Options:
+  --provider <provider>
+  --base-url <url>
+  --api-key-ref <reference>
+  --input <kinds>            comma-separated: text,image (default: "text")
+  --force                    replace an existing provider/id pair (default:
+                             false)
+  --json                     emit JSON (default: false)
+  -h, --help                 display help for command

@@ -1,0 +1,7 @@
+Usage: yantra audit [options] <run-id>
+
+Render a run directory as a readable audit story
+
+Options:
+  --json      emit JSON instead of prose (default: false)
+  -h, --help  display help for command

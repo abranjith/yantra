@@ -6,9 +6,11 @@ import {
   type ConfigRef,
   type KeychainProvider,
 } from '@yantra/core';
-import { Command, CommanderError } from 'commander';
+import { type Command, CommanderError } from 'commander';
 import prompts from 'prompts';
 
+import { createRegisteredCommand } from '../registry/build-command-tree.js';
+import { handler } from '../registry/handler.js';
 import { CLI_JSON_SCHEMA_VERSION } from '../render/json.js';
 
 interface SecretOptions {
@@ -26,26 +28,21 @@ export interface SecretRuntime {
 }
 
 export function makeSecretCommand(input?: Partial<SecretRuntime>): Command {
+  return createRegisteredCommand('secret', secretHandlers(input));
+}
+
+/** Handlers for the `secret` family, bound by registry id. */
+export function secretHandlers(input?: Partial<SecretRuntime>) {
   const runtime = runtimeWithDefaults(input);
-  const command = new Command('secret').description('Manage credentials in the OS keychain');
-  command
-    .command('set')
-    .argument('<key>')
-    .argument('[value]')
-    .option('--json', 'emit JSON', false)
-    .action((key: string, value: string | undefined, options: SecretOptions) =>
-      runSet(key, value, options, runtime),
-    );
-  command
-    .command('list')
-    .option('--json', 'emit JSON', false)
-    .action((options: SecretOptions) => runList(options, runtime));
-  command
-    .command('rm')
-    .argument('<key>')
-    .option('--json', 'emit JSON', false)
-    .action((key: string, options: SecretOptions) => runRemove(key, options, runtime));
-  return command;
+  return {
+    'secret.set': handler((args, options: SecretOptions) =>
+      runSet(args[0] as string, args[1] as string | undefined, options, runtime),
+    ),
+    'secret.list': handler((_args, options: SecretOptions) => runList(options, runtime)),
+    'secret.rm': handler((args, options: SecretOptions) =>
+      runRemove(args[0] as string, options, runtime),
+    ),
+  } as const;
 }
 
 async function runSet(

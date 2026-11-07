@@ -20,8 +20,11 @@
 
 import { workflowsRoot, FileWorkflowStore, nextFireIso, type NotifyTarget } from '@yantra/core';
 import type { ParamArg } from '@yantra/core/workflow/replay';
-import { Command } from 'commander';
+import { type Command } from 'commander';
 
+import { createRegisteredCommand } from '../registry/build-command-tree.js';
+import { fromAction } from '../registry/handler.js';
+import type { HandlerArgs } from '../registry/handler.js';
 import { makeStderrLogger } from '../runtime.js';
 import { openScheduleStore } from '../schedule-store.js';
 
@@ -49,10 +52,6 @@ interface UnscheduleOptions {
   readonly debug?: boolean;
 }
 
-function collect(value: string, previous: string[]): string[] {
-  return [...previous, value];
-}
-
 /** Parses `key=value` CLI pairs into ParamArgs (registration re-validates). */
 function parseParamArgs(raw: readonly string[] | undefined): ParamArg[] {
   const out: ParamArg[] = [];
@@ -68,28 +67,13 @@ function parseParamArgs(raw: readonly string[] | undefined): ParamArg[] {
 
 /** `yantra schedule <workflow> --cron "<expr>"` — register a recurring run. */
 export function makeScheduleCommand(): Command {
-  const cmd = new Command('schedule');
+  return createRegisteredCommand('schedule', scheduleHandlers());
+}
 
-  cmd
-    .description('Register a recurring unattended run of a saved workflow')
-    .argument('<workflow-name>', 'Name of the saved workflow to schedule')
-    .requiredOption('--cron <expr>', 'Cron expression (e.g. "0 8 * * 1")')
-    .option(
-      '-p, --params <key=value...>',
-      'Workflow parameter (repeatable)',
-      collect,
-      [] as string[],
-    )
-    .option('--params-file <path>', 'YAML/JSON file of parameter key-value pairs')
-    .option('--notify <target>', 'Notification sink: desktop | file | none', 'desktop')
-    .option(
-      '--on-confirm <policy>',
-      'Confirmation policy — only "pause-and-notify" is accepted',
-      'pause-and-notify',
-    )
-    .option('--json', 'Emit JSON summary to stdout', false)
-    .option('--debug', 'Verbose logging to stderr', false)
-    .action(async (workflowName: string, options: ScheduleOptions) => {
+/** Handlers for `schedule`, bound by registry id; each is its former commander action, unchanged. */
+export function scheduleHandlers() {
+  return {
+    schedule: fromAction(async (workflowName: string, options: ScheduleOptions) => {
       const logger = makeStderrLogger(options.debug === true);
 
       // `--on-confirm` accepts only the safe value — reject anything else at
@@ -169,84 +153,73 @@ export function makeScheduleCommand(): Command {
       } finally {
         handle.close();
       }
-    });
-
-  return cmd;
+    }),
+  };
 }
 
-/** `yantra schedules [--json]` — list registered schedules with next fires. */
-export function makeSchedulesCommand(): Command {
-  const cmd = new Command('schedules');
+/** `yantra schedules [--json]` — list registered schedules with next fires (registry entry `schedules`). */
+export async function schedulesHandler(
+  _args: HandlerArgs,
+  options: SchedulesOptions,
+): Promise<void> {
+  const logger = makeStderrLogger(options.debug === true);
 
-  cmd
-    .description('List registered schedules')
-    .option('--json', 'Emit JSON array to stdout', false)
-    .option('--debug', 'Verbose logging to stderr', false)
-    .action(async (options: SchedulesOptions) => {
-      const logger = makeStderrLogger(options.debug === true);
+  const handle = await openScheduleStore(logger);
+  if (handle === null) {
+    if (options.json === true) {
+      process.stdout.write('[]\n');
+      process.exit(0);
+    }
+    process.stderr.write('note: the local index is unavailable — no schedules to show.\n');
+    process.exit(0);
+    return;
+  }
 
-      const handle = await openScheduleStore(logger);
-      if (handle === null) {
-        if (options.json === true) {
-          process.stdout.write('[]\n');
-          process.exit(0);
-        }
-        process.stderr.write('note: the local index is unavailable — no schedules to show.\n');
-        process.exit(0);
-        return;
-      }
+  try {
+    const listed = await handle.store.list();
+    if (!listed.isOk) {
+      process.stderr.write(`Error: ${listed.error.message}\n`);
+      process.exit(2);
+      return;
+    }
 
-      try {
-        const listed = await handle.store.list();
-        if (!listed.isOk) {
-          process.stderr.write(`Error: ${listed.error.message}\n`);
-          process.exit(2);
-          return;
-        }
+    // Recompute the authoritative next fire for display (the stored
+    // next_fire_at is an advisory cache).
+    const now = new Date();
+    const rows = listed.value.map((s) => ({
+      ...s,
+      nextFireAt: s.enabled ? nextFireIso(s.cronExpr, now) : null,
+      pendingConfirmation: s.lastStatus === 'pending-confirmation',
+    }));
 
-        // Recompute the authoritative next fire for display (the stored
-        // next_fire_at is an advisory cache).
-        const now = new Date();
-        const rows = listed.value.map((s) => ({
-          ...s,
-          nextFireAt: s.enabled ? nextFireIso(s.cronExpr, now) : null,
-          pendingConfirmation: s.lastStatus === 'pending-confirmation',
-        }));
+    if (options.json === true) {
+      process.stdout.write(`${JSON.stringify(rows, null, 2)}\n`);
+      process.exit(0);
+      return;
+    }
 
-        if (options.json === true) {
-          process.stdout.write(`${JSON.stringify(rows, null, 2)}\n`);
-          process.exit(0);
-          return;
-        }
+    if (rows.length === 0) {
+      process.stdout.write('No schedules registered. Use `yantra schedule <workflow> --cron`.\n');
+      process.exit(0);
+      return;
+    }
 
-        if (rows.length === 0) {
-          process.stdout.write(
-            'No schedules registered. Use `yantra schedule <workflow> --cron`.\n',
-          );
-          process.exit(0);
-          return;
-        }
-
-        process.stdout.write(renderSchedulesTable(rows));
-        process.exit(0);
-      } finally {
-        handle.close();
-      }
-    });
-
-  return cmd;
+    process.stdout.write(renderSchedulesTable(rows));
+    process.exit(0);
+  } finally {
+    handle.close();
+  }
 }
 
 /** `yantra unschedule <id>` — remove a schedule by id. */
 export function makeUnscheduleCommand(): Command {
-  const cmd = new Command('unschedule');
+  return createRegisteredCommand('unschedule', unscheduleHandlers());
+}
 
-  cmd
-    .description('Remove a registered schedule')
-    .argument('<id>', 'Schedule id (from `yantra schedules`)')
-    .option('--json', 'Emit JSON summary to stdout', false)
-    .option('--debug', 'Verbose logging to stderr', false)
-    .action(async (id: string, options: UnscheduleOptions) => {
+/** Handlers for `unschedule`, bound by registry id; each is its former commander action, unchanged. */
+export function unscheduleHandlers() {
+  return {
+    unschedule: fromAction(async (id: string, options: UnscheduleOptions) => {
       const logger = makeStderrLogger(options.debug === true);
 
       const handle = await openScheduleStore(logger);
@@ -283,9 +256,8 @@ export function makeUnscheduleCommand(): Command {
       } finally {
         handle.close();
       }
-    });
-
-  return cmd;
+    }),
+  };
 }
 
 interface ScheduleDisplayRow {

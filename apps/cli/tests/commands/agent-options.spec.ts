@@ -1,15 +1,16 @@
 import { AGENT_INTERACTION_MESSAGES } from '@yantra/agent';
 import type { EffectivePreference, EffectivePreferences } from '@yantra/core';
+import {
+  COMMAND_REGISTRY_INPUT,
+  validateCommandRegistry,
+  type OptionGroupId,
+} from '@yantra/protocol';
 import { Command } from 'commander';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
   DEFAULT_AGENT_MODEL,
   DEFAULT_AGENT_PROVIDER,
-  addAgentBudgetOptions,
-  addAgentModelOptions,
-  addAgentOptions,
-  addNoLlmOption,
   parseDuration,
   resolveAgentInvocation,
 } from '../../src/agent-options.js';
@@ -18,6 +19,42 @@ import { registerDoCommand } from '../../src/commands/do.js';
 import { registerResearchCommand } from '../../src/commands/research.js';
 import { makeResumeCommand } from '../../src/commands/resume.js';
 import { makeRunCommand } from '../../src/commands/run.js';
+import { createRegisteredCommand } from '../../src/registry/build-command-tree.js';
+
+/** The groups every full agentic run registers, in registration order. */
+const AGENT_OPTIONS: readonly OptionGroupId[] = [
+  'agent-model',
+  'agent-budget',
+  'no-llm',
+  'screenshots',
+];
+
+/**
+ * A probe command carrying only the given registry option groups, generated
+ * exactly as every real command is (FEAT-062 replaced the hand-written
+ * registrars with group data).
+ */
+function probe(...groups: readonly OptionGroupId[]): Command {
+  const registry = validateCommandRegistry({
+    ...COMMAND_REGISTRY_INPUT,
+    commands: [
+      {
+        kind: 'leaf',
+        id: 'probe',
+        path: ['probe'],
+        description: '',
+        registration: 'added',
+        options: groups.map((group) => ({ group })),
+        execution: { default: 'read' },
+        effect: 'none',
+        danger: { level: 'none' },
+        exit_codes: [{ code: 0, meaning: 'success' }],
+        json: { flag: null, shape: 'none', schema: null },
+      },
+    ],
+  });
+  return createRegisteredCommand('probe', { probe: () => undefined }, registry).exitOverride();
+}
 
 const available = {
   probeCredential: () => Promise.resolve({ available: true, authSource: 'environment' }),
@@ -65,7 +102,7 @@ describe('@no-llm shared agent options', () => {
   });
 
   it('registers the complete surface without Commander defaults', () => {
-    const command = addAgentOptions(new Command('probe'));
+    const command = probe(...AGENT_OPTIONS);
     expect(command.options.map((option) => option.long)).toEqual([
       '--provider',
       '--model',
@@ -83,13 +120,13 @@ describe('@no-llm shared agent options', () => {
   });
 
   it('composes the complete surface from the named groups, in the same order', () => {
-    const composed = addAgentOptions(new Command('composed'))
+    const composed = probe(...AGENT_OPTIONS)
       .options.map((option) => option.long)
       .filter((long): long is string => long !== undefined);
     const byGroup = [
-      ...addAgentModelOptions(new Command('model')).options,
-      ...addAgentBudgetOptions(new Command('budget')).options,
-      ...addNoLlmOption(new Command('no-llm')).options,
+      ...probe('agent-model').options,
+      ...probe('agent-budget').options,
+      ...probe('no-llm').options,
     ]
       .map((option) => option.long)
       .filter((long): long is string => long !== undefined);
@@ -102,13 +139,9 @@ describe('@no-llm shared agent options', () => {
     // not that every command must offer every flag.
     const description = (command: Command): readonly string[] =>
       command.options.map((option) => `${String(option.long)} ${option.description}`);
-    const composed = description(addAgentOptions(new Command('composed')));
+    const composed = description(probe(...AGENT_OPTIONS));
 
-    for (const group of [
-      addAgentModelOptions(new Command('model')),
-      addAgentBudgetOptions(new Command('budget')),
-      addNoLlmOption(new Command('no-llm')),
-    ]) {
+    for (const group of [probe('agent-model'), probe('agent-budget'), probe('no-llm')]) {
       for (const spelling of description(group)) {
         expect(composed).toContain(spelling);
       }
@@ -116,11 +149,11 @@ describe('@no-llm shared agent options', () => {
   });
 
   it.each([
-    ['model', addAgentModelOptions],
-    ['budget', addAgentBudgetOptions],
-    ['no-llm', addNoLlmOption],
-  ])('registers the %s group without Commander defaults', (name, register) => {
-    const command = register(new Command(name));
+    ['model', 'agent-model'],
+    ['budget', 'agent-budget'],
+    ['no-llm', 'no-llm'],
+  ] as const)('registers the %s group without Commander defaults', (_name, group) => {
+    const command = probe(group);
 
     expect(command.options.length).toBeGreaterThan(0);
     expect(command.options.every((option) => option.defaultValue === undefined)).toBe(true);
@@ -320,15 +353,15 @@ describe('@no-llm shared agent options', () => {
   });
 
   it('stores --no-screenshots using Commander negation semantics and leaves absence unset', () => {
-    const absent = addAgentOptions(new Command('probe').exitOverride());
+    const absent = probe(...AGENT_OPTIONS);
     absent.parse([], { from: 'user' });
     expect(absent.opts()).toMatchObject({ screenshots: true });
 
-    const suppressed = addAgentOptions(new Command('probe').exitOverride());
+    const suppressed = probe(...AGENT_OPTIONS);
     suppressed.parse(['--no-screenshots'], { from: 'user' });
     expect(suppressed.opts()).toMatchObject({ screenshots: false });
 
-    const positive = addAgentOptions(new Command('probe').exitOverride());
+    const positive = probe(...AGENT_OPTIONS);
     expect(() => positive.parse(['--screenshots'], { from: 'user' })).toThrowError(
       expect.objectContaining({ code: 'commander.unknownOption' }),
     );

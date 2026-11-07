@@ -1,0 +1,51 @@
+Usage: yantra ask [options] <query>
+
+Answer a question from the web as a synthesized Brief.
+
+Arguments:
+  query                          question to answer from web sources
+
+Options:
+  --provider <name>              agent model provider
+  --model <id>                   provider-scoped model id
+  --thinking <level>             provider reasoning level
+  --auth-secret <ref>            runtime model-key secret reference
+  --max-duration <duration>      whole-run wall-clock duration
+  --max-tokens <n>               cumulative provider token ceiling
+  --tool-timeout <duration>      timeout for one tool call
+  --tool-retries <n>             retries after an identical tool failure
+  --confirm-timeout <duration>   maximum live consent wait
+  --no-llm                       force the deterministic no-model path
+  --no-screenshots               no screenshots this run (vision assist and
+                                 saved captures)
+  --browser <source>             browser source for this invocation (auto,
+                                 managed, or system)
+  --browser-path <path>          absolute path to a Chrome or Chromium
+                                 executable
+  --json                         shorthand for --format json (default: false)
+  --detail <level>               terminal disclosure level (default:
+                                 prefs.defaults.detail) (choices: "overview",
+                                 "standard", "full")
+  --format <format>              output format sent to stdout (choices:
+                                 "terminal", "md", "html", "json", default:
+                                 "terminal")
+  --length <length>              synthesis length budget (default:
+                                 prefs.defaults.length) (choices: "short",
+                                 "medium", "long")
+  --open                         open the generated brief.html in the default
+                                 browser
+  --template <name|tag|path>     render the result with a saved name, tag, or
+                                 Markdown template path
+  --no-cache                     disable cache reads/writes
+  --no-color                     disable ANSI color output
+  --max-sources <n>              maximum sources to fetch
+  --search-provider <provider>   search provider (default: auto walks tavily ->
+                                 brave -> duckduckgo); tavily/brave require API
+                                 keys, google/duckduckgo scrape (google is
+                                 opt-in) (choices: "auto", "google",
+                                 "duckduckgo", "brave", "tavily")
+  --limit <count>                number of sources to consider (default: "3")
+  --fetch-timeout <ms>           per-fetch timeout in ms (default: "30000")
+  --pipeline-timeout <duration>  deterministic pipeline timeout (for example
+                                 100s) (default: "100s")
+  -h, --help                     display help for command

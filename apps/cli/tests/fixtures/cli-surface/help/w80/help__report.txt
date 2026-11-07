@@ -1,0 +1,8 @@
+Usage: yantra report [options] <run-id>
+
+Open or print a run's report.md
+
+Options:
+  --open      open report.md in $EDITOR (or platform default) (default: false)
+  --json      emit the markdown wrapped in a JSON envelope (default: false)
+  -h, --help  display help for command

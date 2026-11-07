@@ -1,0 +1,12 @@
+{
+  "argv": [
+    "model",
+    "add",
+    "--provider",
+    "value"
+  ],
+  "exitCode": 1,
+  "code": "commander.missingArgument",
+  "stdout": "",
+  "stderr": "error: missing required argument 'id'\n"
+}

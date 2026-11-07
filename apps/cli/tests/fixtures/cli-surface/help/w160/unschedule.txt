@@ -1,0 +1,11 @@
+Usage: yantra unschedule [options] <id>
+
+Remove a registered schedule
+
+Arguments:
+  id          Schedule id (from `yantra schedules`)
+
+Options:
+  --json      Emit JSON summary to stdout (default: false)
+  --debug     Verbose logging to stderr (default: false)
+  -h, --help  display help for command

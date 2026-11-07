@@ -1,0 +1,10 @@
+{
+  "argv": [
+    "profile",
+    "extra"
+  ],
+  "exitCode": 1,
+  "code": "commander.excessArguments",
+  "stdout": "",
+  "stderr": "error: too many arguments for 'profile'. Expected 0 arguments but got 1.\n"
+}

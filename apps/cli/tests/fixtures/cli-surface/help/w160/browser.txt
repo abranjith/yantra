@@ -1,0 +1,16 @@
+Usage: yantra browser [options] [command]
+
+Manage Yantra-owned browser installations
+
+Options:
+  -h, --help              display help for command
+
+Commands:
+  install [options]       Download current Chrome for Testing Stable into Yantra-managed storage
+  list [options]          List the browsers Yantra can use on this machine, with the current selection. Local only: no network, launch, install, or update check
+  use [options] <source>  Select which browser Yantra launches and persist it. Validates the path; never launches a browser or checks for updates
+  check [options]         Run a fresh local compatibility check against the selected browser, using isolated synthetic pages. No network: this does not look for
+                          a newer browser
+  update [options]        Replace the Yantra-managed browser with current Chrome for Testing Stable. This is the only command that checks whether a newer
+                          browser exists; use --dry-run to report availability and download nothing
+  help [command]          display help for command

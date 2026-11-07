@@ -1,0 +1,10 @@
+Usage: yantra template show [options] <name>
+
+Print a saved template and its parsed slots.
+
+Arguments:
+  name        saved template name
+
+Options:
+  --json      emit a stable JSON envelope (default: false)
+  -h, --help  display help for command

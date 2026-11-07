@@ -1,0 +1,10 @@
+Usage: yantra usage [options]
+
+Summarize task volume and cost from the history index
+
+Options:
+  --type <type>   filter by task type (ask|research|run|do)
+  --since <when>  only tasks since a date (YYYY-MM-DD) or age (e.g. 7d, 24h)
+  --json          emit JSON instead of a table (default: false)
+  --debug         verbose logging on stderr (default: false)
+  -h, --help      display help for command

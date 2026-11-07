@@ -1,0 +1,26 @@
+Usage: yantra resume [options] <run-id>
+
+Resume a previously failed or paused workflow run
+
+Arguments:
+  run-id                        Run ID to resume (from the run directory name)
+
+Options:
+  --provider <name>             agent model provider
+  --model <id>                  provider-scoped model id
+  --thinking <level>            provider reasoning level
+  --auth-secret <ref>           runtime model-key secret reference
+  --max-duration <duration>     whole-run wall-clock duration
+  --max-tokens <n>              cumulative provider token ceiling
+  --tool-timeout <duration>     timeout for one tool call
+  --tool-retries <n>            retries after an identical tool failure
+  --confirm-timeout <duration>  maximum live consent wait
+  --no-llm                      force the deterministic no-model path
+  --no-screenshots              no screenshots this run (vision assist and saved captures)
+  --browser <source>            browser source for this invocation (auto, managed, or system)
+  --browser-path <path>         absolute path to a Chrome or Chromium executable
+  --json                        Emit JSON summary to stdout (default: false)
+  --debug                       Emit verbose debug logging to stderr (default: false)
+  --open                        open the generated brief.html in the default browser (default: false)
+  --force                       Skip the user-consent check for scope-violation / ethics-refused failures (default: false)
+  -h, --help                    display help for command

@@ -1,0 +1,11 @@
+{
+  "argv": [
+    "config",
+    "validate",
+    "extra"
+  ],
+  "exitCode": 1,
+  "code": "commander.excessArguments",
+  "stdout": "",
+  "stderr": "error: too many arguments for 'validate'. Expected 0 arguments but got 1.\n"
+}

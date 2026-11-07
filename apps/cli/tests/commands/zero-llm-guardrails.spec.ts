@@ -14,6 +14,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { COMMAND_REGISTRY, expandOptions, findLeaf } from '@yantra/protocol';
 import { describe, expect, it } from 'vitest';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -71,7 +72,13 @@ describe('@no-llm the interactive run path is workflow-declared only', () => {
   });
 
   it('offers --no-llm as a veto and no --llm opt-in', () => {
-    expect(source).toContain('addAgentOptions');
+    // FEAT-062: `run` is generated from its registry entry, so the surface is
+    // asserted on the registry data rather than on registration source.
+    const run = findLeaf(['run']);
+    expect(run).toBeDefined();
+    const longs = expandOptions(run!, COMMAND_REGISTRY.option_groups).map((option) => option.long);
+    expect(longs).toContain('--no-llm');
+    expect(longs).not.toContain('--llm');
     expect(source).not.toMatch(/new Option\(\s*'--llm'/);
   });
 });

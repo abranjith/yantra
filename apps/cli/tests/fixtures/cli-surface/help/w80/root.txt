@@ -1,0 +1,37 @@
+Usage: yantra [options] [command]
+
+Yantra — AI-orchestrated browser automation, local-first
+
+Options:
+  -V, --version                           output the version number
+  -h, --help                              display help for command
+
+Commands:
+  ask [options] <query>                   Answer a question from the web as a synthesized Brief.
+  research [options] <topic>              Deep, multi-hop research on a topic, returned as a long-form Brief.
+  do|discover [options] <goal>            Run a multi-turn web agent that uses Yantra tools and publishes a Brief.
+  run [options] <workflow-name>           Execute a saved workflow
+  confirm [options] <run-id> <decision>   Grant or deny a pending confirmation for a parked run
+  config                                  Inspect and update installation configuration
+  secret                                  Manage credentials in the OS keychain
+  resume [options] <run-id>               Resume a previously failed or paused workflow run
+  schedule [options] <workflow-name>      Register a recurring unattended run of a saved workflow
+  schedules [options]                     List registered schedules
+  unschedule [options] <id>               Remove a registered schedule
+  daemon                                  Manage the local scheduler service
+  lint [options] <file>                   Lint a workflow YAML file for errors and best-practice violations
+  list [options] [target]                 List saved workflows or recent runs
+  model                                   Manage the installed model registry
+  open [options] [run-id]                 Open a run's saved artifact
+  show [options] <target>                 Display a saved workflow or run
+  usage [options]                         Summarize task volume and cost from the history index
+  profile [options]                       Show your effective personalization profile and its provenance
+  prefs [options] [action] [key] [value]  Manage personalization preferences (machine layer + merged view)
+  sites                                   Inspect and curate local website ranks
+  template                                Create, validate, save, inspect, and remove report templates.
+  doctor [options]                        Diagnose the local environment for Yantra
+  audit [options] <run-id>                Render a run directory as a readable audit story
+  report [options] <run-id>               Open or print a run's report.md
+  init [options]                          Create or update ~/.yantra/config.yaml
+  browser                                 Manage Yantra-owned browser installations
+  help [command]                          display help for command

@@ -8,8 +8,10 @@ import {
   type DomainRankStore,
   type Logger,
 } from '@yantra/core';
-import { Command, CommanderError } from 'commander';
+import { type Command, CommanderError } from 'commander';
 
+import { createRegisteredCommand } from '../registry/build-command-tree.js';
+import { handler } from '../registry/handler.js';
 import { CLI_JSON_SCHEMA_VERSION } from '../render/json.js';
 import { makeStderrLogger } from '../runtime.js';
 
@@ -30,33 +32,21 @@ export interface SitesRuntime {
 }
 
 export function makeSitesCommand(runtime?: Partial<SitesRuntime>): Command {
+  return createRegisteredCommand('sites', sitesHandlers(runtime));
+}
+
+/** Handlers for the `sites` family, bound by registry id. */
+export function sitesHandlers(runtime?: Partial<SitesRuntime>) {
   const resolved = runtimeWithDefaults(runtime);
-  const command = new Command('sites').description('Inspect and curate local website ranks');
-
-  command
-    .command('list')
-    .description('List ranked domains')
-    .option('--json', 'emit JSON', false)
-    .option('--debug', 'verbose logging on stderr', false)
-    .action(async (options: SitesOptions) => runList(options, resolved));
-
-  command
-    .command('add')
-    .description('Add or promote a user-curated domain')
-    .argument('<domain>', 'hostname such as example.com')
-    .option('--json', 'emit JSON', false)
-    .option('--debug', 'verbose logging on stderr', false)
-    .action(async (domain: string, options: SitesOptions) => runAdd(domain, options, resolved));
-
-  command
-    .command('remove')
-    .description('Remove a domain from local ranking')
-    .argument('<domain>', 'hostname such as example.com')
-    .option('--json', 'emit JSON', false)
-    .option('--debug', 'verbose logging on stderr', false)
-    .action(async (domain: string, options: SitesOptions) => runRemove(domain, options, resolved));
-
-  return command;
+  return {
+    'sites.list': handler((_args, options: SitesOptions) => runList(options, resolved)),
+    'sites.add': handler((args, options: SitesOptions) =>
+      runAdd(args[0] as string, options, resolved),
+    ),
+    'sites.remove': handler((args, options: SitesOptions) =>
+      runRemove(args[0] as string, options, resolved),
+    ),
+  } as const;
 }
 
 async function runList(options: SitesOptions, runtime: SitesRuntime): Promise<void> {

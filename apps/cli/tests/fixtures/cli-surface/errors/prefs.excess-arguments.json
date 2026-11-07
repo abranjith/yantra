@@ -1,0 +1,13 @@
+{
+  "argv": [
+    "prefs",
+    "arg1",
+    "arg2",
+    "arg3",
+    "extra"
+  ],
+  "exitCode": 1,
+  "code": "commander.excessArguments",
+  "stdout": "",
+  "stderr": "error: too many arguments for 'prefs'. Expected 3 arguments but got 4.\n"
+}

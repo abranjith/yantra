@@ -1,0 +1,12 @@
+Usage: yantra daemon [options] [command]
+
+Manage the local scheduler service
+
+Options:
+  -h, --help        display help for command
+
+Commands:
+  start [options]   Start the scheduler daemon
+  stop [options]    Stop the running scheduler daemon
+  status [options]  Report scheduler daemon status
+  help [command]    display help for command

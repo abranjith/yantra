@@ -106,6 +106,77 @@ semantic validators, and its build emits JSON Schema under `packages/protocol/ge
 the generated protocol reference. This lets CLI, agent, core, stored workflows, and artifacts
 share one validation vocabulary.
 
+The command registry (FEAT-062) lives in `src/commands/` and is also published as the subpath
+`@yantra/protocol/commands`. Its schemas (`schema.ts`) describe every command as data: path,
+arguments, options with input kinds, commander defaults, precedence chains and applicability, an
+option-dependent execution class, effect, danger, relations, exit codes and the `--json` result.
+`validateCommandRegistry()` applies the Zod shape and then the cross-entry rules the shape cannot
+express, throwing `CommandRegistryError` with the entry id and the named rule. `flags.ts` holds
+commander's flag grammar, so each option's `long`, `short`, `value`, `negatable` and `attribute`
+are checked against its help-visible `flags` string. `executionClassFor()` evaluates the ordered
+execution rules (first match wins) and falls back to the default. The directory imports nothing but
+`zod` and `src/utils/`, and a boundary test walks the built module graph, so browser bundles can
+load the registry without filesystem code. `command-registry.json` is emitted with the other JSON
+Schemas.
+
+`CommandInvocation` (`invocation.ts`, emitted as `command-invocation.json`) is what was requested:
+a ULID `invocation_id` (the launch idempotency key), the canonical `path` with aliases resolved,
+the `argv` tokens after the path exactly as given, and an absolute `cwd` (checked syntactically for
+POSIX, drive-letter and UNC forms, without `node:path`). `parseInvocation(argv, { cwd })` parses
+the tokens after the program name exactly as the generated commander tree would, and returns a
+`Result`: on success the leaf entry, arguments by name, options by attribute with commander
+defaults applied (as `opts()` returns them), the attributes the user actually set (`explicit`)
+and the execution class; on failure a typed `ParseError` with commander's own message, the
+offending token's index and, for unknown commands and options, a close suggestion. It mirrors
+commander 14's two-level algorithm rather than approximating it: the root sees every token first
+(so `-V` anywhere before `--` is a version request), an unknown option switches the remaining
+tokens to the subcommand for re-parsing, a variadic option keeps consuming operands until the next
+option, negative numbers are operands only in leaves, and errors are raised in commander's order
+(missing values and invalid choices while parsing, then help, mandatory options, unknown options,
+arguments). A root-level `--` before the path is kept at the front of `argv`, so the invocation
+re-parses identically. `apps/cli/tests/registry/parse-parity.spec.ts` checks agreement with the
+real tree for every leaf, 200 fast-check runs each over valid and near-valid argv.
+
+`formatInvocation(invocation, shell, { program })` (`format.ts`) is the CLI twin: the command line
+the app shows and copies. It is for display only; workers are spawned shell-free.
+`defaultShellFor(platform)` picks PowerShell on Windows and POSIX elsewhere. Each token is
+quoted for its shell:
+
+- **posix**: bare when it matches `[A-Za-z0-9_@%+=:,./-]+`, otherwise single-quoted with `'` as
+  `'\''`.
+- **powershell** (5.1): PowerShell passes a native argument unchanged unless it holds unquoted
+  whitespace, which it wraps in `"…"` without escaping anything, and it drops an empty string. So a
+  value is first encoded for the child's MSVCRT parse (`"` as `\"`, backslashes before a quote
+  doubled, trailing backslashes doubled when the value will be wrapped) and then written as a
+  single-quoted literal; an empty value becomes `'""'`, and `--`, `@…`, `,` and non-ASCII are
+  always quoted. A quoted program runs through the call operator, `& '<path>'`.
+- **cmd**: double-quoted when the token holds whitespace or `&|<>()^,;=`, with the same backslash
+  rule. A line break, `"`, `%` or a control character cannot be carried, so the result is
+  `{ ok: false, reason: 'shell_unrepresentable' }` with a detail naming the token and the reason.
+
+Whatever the shell, a value for a `secret-input` argument or option (today `secret set [value]`)
+is refused with `secret_input`; when a secret-taking command does not parse, the formatter refuses
+rather than guess where the value is. `tests/commands/format.property.spec.ts` round-trips valid
+argv for every leaf over an adversarial alphabet through reference models of each shell
+(`shell-tokenizers.ts`: POSIX word splitting; PowerShell's tokenizer, its legacy native-argument
+passing and the MSVCRT parse; cmd's caret and metacharacter pass, then MSVCRT) and asserts the
+re-parse equals the original.
+
+The real shells are the authority. `e2e/command-format-shells.spec.ts` runs a corpus of one
+invocation per leaf plus values built to break quoting (quotes, `$`, `$(…)`, backticks, `%`,
+`%PATH%`, `^`, `!`, `&|<>`, a line break, the empty argument, a leading dash after `--`, trailing
+backslashes, tabs, `@`, brackets and Unicode) through bash (Git Bash on Windows), Windows
+PowerShell 5.1 and cmd. Each command runs through launchers shaped like the npm/pnpm cmd-shim
+templates and through `node <absolute path>`, against `e2e/fixtures/argv-echo`, which writes the
+argv it received to a file so no console code page can alter it. Verified on Windows 11 with all
+three shells, every value arrives intact, except where the formatter marks cmd unavailable. A
+missing shell is skipped with the reason in the test name; on Linux and macOS only bash runs.
+One limitation is inherent and asserted: if PowerShell runs the `.cmd` launcher explicitly
+(`yantra.cmd …`), Windows re-reads the line through cmd, which expands a `%NAME%` pair and ends
+the command at a line break. PowerShell's own resolution of `yantra` picks the `.ps1` launcher,
+which carries everything, and because the formatter wraps quoted PowerShell values in literal
+double quotes, `& | < > ^` and a lone `%` survive the `.cmd` route too.
+
 ### `packages/core`
 
 `@yantra/core` contains provider-independent domain and infrastructure services:
@@ -2332,6 +2403,131 @@ The principal execution surfaces are:
 | Agentic `ask`, `research`, `do` | Agent `runAgenticTask()`               | One fresh model session with capability-filtered, policy-wrapped Yantra tools and validated publication.             |
 | `run`, `resume`                 | Core `RunOrchestrator`                 | Validated, finite workflow-to-plan replay; optional output synthesis cannot steer execution.                         |
 | `daemon`                        | Core `SchedulerDaemon` plus CLI wiring | Polls local schedules and invokes the same workflow orchestrator with a fail-closed unattended confirmation gateway. |
+
+#### Command registry and program construction
+
+`src/program.ts` owns `buildProgram(options)`, which constructs the complete commander tree without
+parsing anything. `run()` in `src/index.ts` keeps only the no-argument banner, the parse, and the
+CommanderError-to-exit-code mapping. The root applies `showHelpAfterError()` before any command is
+registered, because the setting is inherited only by commands created with `program.command()`
+(today `ask`, `research` and `do`), never by commands attached with `addCommand`. That difference
+is user-visible, which is why the registry records each command's `registration` style.
+
+The terminal surface is pinned by characterization goldens under
+`apps/cli/tests/fixtures/cli-surface/`, captured once from the pre-registry tree by
+`apps/cli/scripts/capture-cli-surface.ts` and never regenerated by later work:
+
+- `help/w80/` and `help/w160/`: `--help` for the root, every group and every leaf, plus
+  `yantra help <top-level>`, at fixed widths with colors off;
+- `errors/`: stderr text, commander error code and exit code for an unknown option, a missing
+  required argument and one excess positional per leaf, a group invoked without a subcommand, and an
+  unknown top-level command;
+- `version.txt`.
+
+`tests/registry/cli-surface.spec.ts` rebuilds every file from `buildProgram` through the same
+capture module (`tests/registry/surface.ts`) and compares bytes, printing a unified diff of the
+first difference. The capture replaces leaf actions with a stub, so an error case that parses
+cleanly is recorded as `action-invoked` instead of running a command. The goldens are LF-only and
+listed in `.prettierignore`. `tests/registry/walk-tree.ts` enumerates the tree through commander's
+public API only: 59 command paths, 7 groups and 52 leaves.
+
+The registry data lives in `packages/protocol/src/commands/`: `groups.ts` holds the six named
+option groups (`agent-model`, `agent-budget`, `agent-turn`, `no-llm`, `screenshots`,
+`browser-selection`) with the old registrars' exact flags, descriptions and order, each option
+carrying its precedence chain (for example `--model`: flag → `YANTRA_AGENT_MODEL` → preference
+`agent.model` → `claude-haiku-4-5`; `--browser`: flag → config `browser.source` → `auto`).
+`entries/*.ts` hold the commands by family, authored through `entries/builders.ts`, which derives
+what commander derives (long, short, attribute, value kind, path) so a data file states only
+human decisions. `registry.ts` assembles them in root-help order as `COMMAND_REGISTRY` and exports
+`LeafCommandId`, `findCommand` (alias-aware) and `findLeaf`. Each leaf has an execution class:
+read-class commands (`list`, `show`, `audit`, `report`, `usage`, `schedules`, `profile`,
+`config path|list|get|validate`, `model list`, `sites list`, `template list|show`,
+`daemon status`, `browser list`) resolve to `read`; `doctor` is `read` unless `--agent-smoke` is
+present, which makes it `run`. `tests/registry/tree-agreement.spec.ts` keeps the data truthful by
+comparing every entry with the live command at its path: kind, description, aliases, arguments,
+option flags in order, descriptions, commander defaults, parser choices, mandatory and repeatable.
+
+`buildProgram` generates the tree with `buildCommandTree` (`src/registry/build-command-tree.ts`).
+For each top-level family, a family on `UNMIGRATED_COMMANDS` (`src/registry/unmigrated.ts`, a dated
+allowlist owned by FEAT-070) is registered by its legacy factory; every other family is generated
+from its registry entry. Generation reproduces the hand-written registration exactly: `new Option`
+with the flags and description, `.default()` only when a commander default is declared,
+`.choices()` only for parser-enforced enums, the shared `collect` parser for repeatable options,
+`makeOptionMandatory()`, aliases, `addHelpText('after', …)`, and the registration style. Leaves are
+bound by id to the handler table from `buildHandlers()` (`src/registry/handlers.ts`), whose
+`satisfies Record<LeafCommandId, …>` makes an unbound leaf a typecheck error; a generated leaf
+without a function binding throws `CommandRegistryError` (`missing-handler`) at startup. A handler
+is commander-shaped, `(args, options, command)`, so FEAT-072 can swap the binding for terminal and
+worker adapters without touching the generator. `buildProgram(options, handlers)` accepts a
+substitute table, which the parse-parity tests use for recording stubs.
+
+The run-class commands (`ask`, `research`, `do`, `run`, `resume`) and `doctor` reference the
+groups in their registration order, so help order is unchanged: `do` is `agent-model`,
+`agent-budget`, `no-llm`, `screenshots`, `agent-turn`, `browser-selection`, then its own options.
+The hand-written registrars (`addAgentOptions` and its parts, `addNoBrowseOption`) are gone;
+`agent-options.ts` keeps only resolution (`resolveAgentInvocation`, `parseDuration`).
+Command-specific chains are declared where commands read preferences: `ask --detail` (preference
+`defaults.detail`, then `standard`), `--length` (`defaults.length`, then `medium`) and
+`--search-provider` (`defaults.search_provider`, then `auto`). `research` reads no preference for
+these; its commander defaults are the effective defaults, and the registry says so. `research
+--no-browse` resolves through `agent.research_browse`, and `--no-screenshots` only suppresses the
+stored `context.screenshots` grant. `tests/registry/precedence.spec.ts` drives every option with an
+`env` or `preference` step through the resolver its command calls and checks that the environment
+alone, the preference alone and the declared default each produce the declared result, that the
+environment outranks the preference, and that the flag overrides both; it also checks that the
+`YANTRA_AGENT_*`/`LLM_PROVIDER` names the registry declares are exactly those the resolver reads.
+Applicability is declared too: model, budget and turn options apply only in `llm` mode,
+`--pipeline-timeout` only on the deterministic path, and `--detail` only when `--format` is
+`terminal`. Relations record only what the CLI enforces: `--browser-path` with a `--browser` other
+than `system`, `--template` with `--no-llm` (on `ask` and `research`) and `report --open` with
+`--json`.
+
+The settings families carry the classes that are not plain workers. `secret set|list|rm` are
+`in-process-secure`: the host performs them itself so a value never travels in argv, and
+`secret set [value]` has input kind `secret-input`, which the formatter refuses to render. Two
+commands are `adapter` class, meaning an app-side adapter replaces the generated form:
+`config edit` (`config-edit-yaml`, a raw-YAML editor with validation instead of `$EDITOR`) and
+`init` (`init-onboarding`, executing as `mutate` over the shared init service). `config data-dir`
+is an `exemption` under plan decision D15: relocation moves the directory holding the host's own
+lock, queue and sockets, so the app shows the steps instead of running it. `prefs` is the
+option-dependent case: `read` by default, `mutate` when the action is `set` or `approve` or when
+`--forget` is present. Removals (`config unset`, `secret rm`, `model rm`, `sites remove`), `--force`,
+`--reset`, `--forget` and `config data-dir --no-move` carry `danger: confirm`.
+
+Every family is now generated: the registry holds all 59 command paths (7 groups, 52 leaves) and
+`UNMIGRATED_COMMANDS` is empty. The legacy path in `buildCommandTree` remains for a family that
+ever has to be built by hand again; such a family needs a dated allowlist entry with a reason, and
+the list may only shrink. `tests/registry/completeness.spec.ts` asserts both directions (every
+live path has an entry, every entry a live path, in the same order), that every leaf has an
+execution class, and, at runtime, that every leaf id is bound to a function. Families with several
+subcommands (`template`, `daemon`, `browser`) keep their former commander actions verbatim in a
+handler table (`templateHandlers`, …), adapted by `fromAction` from commander's positional
+`(…args, options, command)` form. The remaining classes: `browser install` and `browser update` are
+`exclusive` (`browser update --dry-run` is `read` through a rule), `browser check` is `run`,
+`browser use`, `template new|lint|save|remove`, `lint`, `schedule` and `unschedule` are `mutate`,
+`confirm` is `mutate` with the `confirm-inbox` adapter (D12), `open` uses `open-result-view`, and
+`daemon start|stop` use `daemon-control`, executing as `mutate`.
+
+Three integrity rules keep the data honest. `tests/registry/option-consumers.spec.ts` requires a
+consumer for every registered option, found with the TypeScript compiler API in the handler's
+module or a module it imports directly: an inline option must be read (`options.x`, `opts.x`,
+`options['x']` or destructured), and a group option needs its resolver called and its marker
+read (`resolveAgentInvocation` plus `.model`/`.auth` for `agent-model`, `.budgets` for
+`agent-budget`, `.screenshots` for `screenshots`, `resolveBrowserSelectionOverride` for
+`browser-selection`). Verified dead controls sit in its dated `KNOWN_DEAD_OPTIONS` list (today the
+`run`/`resume` budget flags and `--no-screenshots`, `run --template`, which is read only to refuse,
+and `confirm --debug`), mirrored in `.spec-lite/TODO.md`. The list may only shrink: an entry whose
+option gains a consumer fails the suite, as does a refused option whose refusal text disappears.
+In protocol, a lexical guard requires `danger: confirm` on every `rm`, `remove`, `unset`,
+`unschedule` and `stop` leaf and every `--force`, `--reset` and `--forget` option, and a spelling
+rule requires group flags to be used through their group reference; `init --provider` and
+`model add --provider` are the documented exceptions, being different ideas under the same word.
+
+To add or change a command: edit its entry first (the agreement test keeps data and tree honest),
+put the action body in an exported handler in the command's module, and bind it in
+`buildHandlers`. A factory that other code still composes (for example `makeListCommand` or
+`makeBrowserCommand`) is a one-line wrapper around `createRegisteredCommand`, so it is generated as
+well.
 
 ### `packages/ui` (Drshya)
 

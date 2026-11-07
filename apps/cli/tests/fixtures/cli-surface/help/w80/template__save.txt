@@ -1,0 +1,14 @@
+Usage: yantra template save [options] <path>
+
+Validate and save a Markdown template in the local library.
+
+Arguments:
+  path                  template Markdown path
+
+Options:
+  --name <name>         saved name (defaults to frontmatter or filename)
+  --tags <a,b>          replace frontmatter tags
+  --description <text>  replace the frontmatter description
+  --force               overwrite an existing template (default: false)
+  --json                emit a stable JSON envelope (default: false)
+  -h, --help            display help for command

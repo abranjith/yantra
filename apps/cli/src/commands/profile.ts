@@ -12,9 +12,9 @@
  */
 
 import { profilePath } from '@yantra/core';
-import { Command } from 'commander';
 
 import { loadEffectivePreferences } from '../preferences.js';
+import type { HandlerArgs } from '../registry/handler.js';
 import { CLI_JSON_SCHEMA_VERSION } from '../render/json.js';
 import { makeStderrLogger } from '../runtime.js';
 
@@ -23,47 +23,38 @@ interface ProfileOptions {
   readonly debug?: boolean;
 }
 
-export function makeProfileCommand(): Command {
-  const cmd = new Command('profile');
+/** `yantra profile`: bound to the `profile` registry entry. */
+export async function profileHandler(_args: HandlerArgs, options: ProfileOptions): Promise<void> {
+  const logger = makeStderrLogger(options.debug === true);
+  const effective = await loadEffectivePreferences(logger);
 
-  cmd
-    .description('Show your effective personalization profile and its provenance')
-    .option('--json', 'emit JSON', false)
-    .option('--debug', 'verbose logging on stderr', false)
-    .action(async (options: ProfileOptions) => {
-      const logger = makeStderrLogger(options.debug === true);
-      const effective = await loadEffectivePreferences(logger);
+  const rows = [...effective.values()].sort((a, b) => a.key.localeCompare(b.key));
 
-      const rows = [...effective.values()].sort((a, b) => a.key.localeCompare(b.key));
+  if (options.json === true) {
+    process.stdout.write(
+      `${JSON.stringify({
+        schemaVersion: CLI_JSON_SCHEMA_VERSION,
+        kind: 'profile',
+        profilePath: profilePath(),
+        preferences: rows,
+      })}\n`,
+    );
+    process.exit(0);
+  }
 
-      if (options.json === true) {
-        process.stdout.write(
-          `${JSON.stringify({
-            schemaVersion: CLI_JSON_SCHEMA_VERSION,
-            kind: 'profile',
-            profilePath: profilePath(),
-            preferences: rows,
-          })}\n`,
-        );
-        process.exit(0);
-      }
+  process.stdout.write(`Profile file: ${profilePath()} (yours to edit)\n\n`);
+  if (rows.length === 0) {
+    process.stdout.write('No preferences resolved.\n');
+    process.exit(0);
+  }
 
-      process.stdout.write(`Profile file: ${profilePath()} (yours to edit)\n\n`);
-      if (rows.length === 0) {
-        process.stdout.write('No preferences resolved.\n');
-        process.exit(0);
-      }
-
-      const keyWidth = Math.max(...rows.map((r) => r.key.length));
-      for (const row of rows) {
-        const approval = row.source === 'learned' && !row.approved ? ' [pending approval]' : '';
-        process.stdout.write(
-          `${row.key.padEnd(keyWidth)}  ${JSON.stringify(row.value)}  ` +
-            `(${row.provenance})${approval}\n`,
-        );
-      }
-      process.exit(0);
-    });
-
-  return cmd;
+  const keyWidth = Math.max(...rows.map((r) => r.key.length));
+  for (const row of rows) {
+    const approval = row.source === 'learned' && !row.approved ? ' [pending approval]' : '';
+    process.stdout.write(
+      `${row.key.padEnd(keyWidth)}  ${JSON.stringify(row.value)}  ` +
+        `(${row.provenance})${approval}\n`,
+    );
+  }
+  process.exit(0);
 }

@@ -1,0 +1,10 @@
+{
+  "argv": [
+    "schedules",
+    "--definitely-unknown"
+  ],
+  "exitCode": 1,
+  "code": "commander.unknownOption",
+  "stdout": "",
+  "stderr": "error: unknown option '--definitely-unknown'\n"
+}

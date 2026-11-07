@@ -1,0 +1,11 @@
+Usage: yantra browser check [options]
+
+Run a fresh local compatibility check against the selected browser, using
+isolated synthetic pages. No network: this does not look for a newer browser
+
+Options:
+  --browser <source>     browser source for this invocation (auto, managed, or
+                         system)
+  --browser-path <path>  absolute path to a Chrome or Chromium executable
+  --json                 emit the compatibility report as JSON (default: false)
+  -h, --help             display help for command

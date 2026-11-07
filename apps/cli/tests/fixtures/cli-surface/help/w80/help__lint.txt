@@ -1,0 +1,11 @@
+Usage: yantra lint [options] <file>
+
+Lint a workflow YAML file for errors and best-practice violations
+
+Arguments:
+  file        Path to the workflow YAML file
+
+Options:
+  --strict    Promote warnings to errors (default: false)
+  --json      Output lint report as JSON to stdout (default: false)
+  -h, --help  display help for command

@@ -1,0 +1,17 @@
+Usage: yantra config [options] [command]
+
+Inspect and update installation configuration
+
+Options:
+  -h, --help                   display help for command
+
+Commands:
+  path [options]
+  list [options]
+  get [options] <key>
+  set [options] <key> <value>
+  unset [options] <key>
+  edit [options]
+  validate [options]
+  data-dir [options] [path]
+  help [command]               display help for command

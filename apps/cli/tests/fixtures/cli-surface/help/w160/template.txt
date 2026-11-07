@@ -1,0 +1,15 @@
+Usage: yantra template [options] [command]
+
+Create, validate, save, inspect, and remove report templates.
+
+Options:
+  -h, --help                     display help for command
+
+Commands:
+  new [options] <name>           Create a starter template covering every slot kind.
+  lint [options] <name-or-path>  Parse a saved template or Markdown path and print its slot manifest.
+  save [options] <path>          Validate and save a Markdown template in the local library.
+  list [options]                 List valid saved report templates.
+  show [options] <name>          Print a saved template and its parsed slots.
+  remove [options] <name>        Delete a saved report template.
+  help [command]                 display help for command

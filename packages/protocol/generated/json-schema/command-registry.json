@@ -1,0 +1,1047 @@
+{
+  "$ref": "#/definitions/CommandRegistry",
+  "definitions": {
+    "CommandRegistry": {
+      "type": "object",
+      "properties": {
+        "registry_version": {
+          "type": "number",
+          "const": 1,
+          "description": "Bumped on any breaking shape change."
+        },
+        "program": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "const": "yantra"
+            },
+            "description": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Root help description."
+            }
+          },
+          "required": [
+            "name",
+            "description"
+          ],
+          "additionalProperties": false,
+          "description": "Root command metadata. The version string stays runtime-derived in the CLI."
+        },
+        "option_groups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "enum": [
+                  "agent-model",
+                  "agent-budget",
+                  "agent-turn",
+                  "no-llm",
+                  "screenshots",
+                  "browser-selection"
+                ],
+                "description": "Identifier of a named, reusable option group."
+              },
+              "options": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "flags": {
+                      "type": "string",
+                      "minLength": 2,
+                      "description": "The exact commander flags string, e.g. \"-p, --params <key=value...>\"."
+                    },
+                    "long": {
+                      "type": "string",
+                      "pattern": "^\\-\\-",
+                      "description": "Long flag, e.g. \"--params\"."
+                    },
+                    "short": {
+                      "type": "string",
+                      "pattern": "^-[A-Za-z0-9]$",
+                      "description": "Short flag, e.g. \"-p\"."
+                    },
+                    "attribute": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Commander attribute name (\"params\"; \"llm\" for \"--no-llm\")."
+                    },
+                    "value": {
+                      "type": "string",
+                      "enum": [
+                        "none",
+                        "required",
+                        "optional"
+                      ],
+                      "description": "Whether the option takes no value, a required value or an optional value."
+                    },
+                    "variadic": {
+                      "type": "boolean",
+                      "default": false,
+                      "description": "Whether one occurrence takes several values."
+                    },
+                    "negatable": {
+                      "type": "boolean",
+                      "default": false,
+                      "description": "Whether this is a \"--no-x\" negation."
+                    },
+                    "repeatable": {
+                      "type": "boolean",
+                      "default": false,
+                      "description": "Whether repeated occurrences accumulate (the CLI attaches its collect parser)."
+                    },
+                    "description": {
+                      "type": "string",
+                      "description": "Help-visible description."
+                    },
+                    "default": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/definitions/CommandRegistry/properties/option_groups/items/properties/options/items/properties/default"
+                          }
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": {
+                            "$ref": "#/definitions/CommandRegistry/properties/option_groups/items/properties/options/items/properties/default"
+                          }
+                        }
+                      ],
+                      "description": "Commander parse default that help shows as \"(default: …)\". Absent means none. The effective default is the last precedence step."
+                    },
+                    "mandatory": {
+                      "type": "boolean",
+                      "default": false,
+                      "description": "Registered with requiredOption."
+                    },
+                    "input": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "text"
+                            }
+                          },
+                          "required": [
+                            "kind"
+                          ],
+                          "additionalProperties": false,
+                          "description": "Free text."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "bool"
+                            }
+                          },
+                          "required": [
+                            "kind"
+                          ],
+                          "additionalProperties": false,
+                          "description": "A switch (a flag that takes no value)."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "duration"
+                            }
+                          },
+                          "required": [
+                            "kind"
+                          ],
+                          "additionalProperties": false,
+                          "description": "A duration such as 90s, 15m or bare milliseconds."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "workflow-ref"
+                            }
+                          },
+                          "required": [
+                            "kind"
+                          ],
+                          "additionalProperties": false,
+                          "description": "The name of a saved workflow."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "template-ref"
+                            }
+                          },
+                          "required": [
+                            "kind"
+                          ],
+                          "additionalProperties": false,
+                          "description": "A saved report template name, tag or Markdown path."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "run-ref"
+                            }
+                          },
+                          "required": [
+                            "kind"
+                          ],
+                          "additionalProperties": false,
+                          "description": "A run id."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "secret-input"
+                            }
+                          },
+                          "required": [
+                            "kind"
+                          ],
+                          "additionalProperties": false,
+                          "description": "A secret value. Never rendered into a copyable command or written to argv."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "enum"
+                            },
+                            "choices": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "minItems": 1,
+                              "description": "Allowed values, in help order."
+                            },
+                            "enforced_by": {
+                              "type": "string",
+                              "enum": [
+                                "parser",
+                                "handler"
+                              ],
+                              "description": "parser: commander rejects other values and help lists the choices; handler: the command validates the value itself."
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "choices",
+                            "enforced_by"
+                          ],
+                          "additionalProperties": false,
+                          "description": "One of a closed set of values."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "number"
+                            },
+                            "integer": {
+                              "type": "boolean",
+                              "description": "Whether only integers are meaningful."
+                            },
+                            "min": {
+                              "type": "number",
+                              "description": "Smallest meaningful value, when bounded."
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "integer"
+                          ],
+                          "additionalProperties": false,
+                          "description": "A number, passed as text on the command line."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "const": "path"
+                            },
+                            "target": {
+                              "type": "string",
+                              "enum": [
+                                "file",
+                                "dir"
+                              ],
+                              "description": "Whether the path names a file or a directory."
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "target"
+                          ],
+                          "additionalProperties": false,
+                          "description": "A filesystem path."
+                        }
+                      ],
+                      "description": "How a generated form collects this value."
+                    },
+                    "precedence": {
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "source": {
+                                "type": "string",
+                                "const": "flag"
+                              }
+                            },
+                            "required": [
+                              "source"
+                            ],
+                            "additionalProperties": false,
+                            "description": "The flag as typed."
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "source": {
+                                "type": "string",
+                                "const": "env"
+                              },
+                              "name": {
+                                "type": "string",
+                                "pattern": "^[A-Z][A-Z0-9_]*$",
+                                "description": "Environment variable name only."
+                              },
+                              "equals": {
+                                "type": "string",
+                                "description": "When present, the step applies only when the variable equals this value."
+                              }
+                            },
+                            "required": [
+                              "source",
+                              "name"
+                            ],
+                            "additionalProperties": false,
+                            "description": "An environment variable."
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "source": {
+                                "type": "string",
+                                "const": "preference"
+                              },
+                              "key": {
+                                "type": "string",
+                                "minLength": 1,
+                                "description": "Dotted key in profile.yaml."
+                              }
+                            },
+                            "required": [
+                              "source",
+                              "key"
+                            ],
+                            "additionalProperties": false,
+                            "description": "A stored preference (profile.yaml)."
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "source": {
+                                "type": "string",
+                                "const": "config"
+                              },
+                              "key": {
+                                "type": "string",
+                                "minLength": 1,
+                                "description": "Dotted key in config.yaml."
+                              }
+                            },
+                            "required": [
+                              "source",
+                              "key"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Installation configuration (config.yaml)."
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "source": {
+                                "type": "string",
+                                "const": "default"
+                              },
+                              "value": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "boolean"
+                                  },
+                                  {
+                                    "type": "null"
+                                  },
+                                  {
+                                    "type": "array",
+                                    "items": {
+                                      "$ref": "#/definitions/CommandRegistry/properties/option_groups/items/properties/options/items/properties/default"
+                                    }
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "$ref": "#/definitions/CommandRegistry/properties/option_groups/items/properties/options/items/properties/default"
+                                    }
+                                  }
+                                ],
+                                "description": "The pinned effective default."
+                              },
+                              "note": {
+                                "type": "string",
+                                "description": "Why the default is what it is, when not obvious."
+                              }
+                            },
+                            "required": [
+                              "source",
+                              "value"
+                            ],
+                            "additionalProperties": false,
+                            "description": "The pinned default, used when no earlier step supplies a value."
+                          }
+                        ],
+                        "description": "One step of the effective-value resolution chain."
+                      },
+                      "minItems": 1,
+                      "description": "How the effective value resolves, in order."
+                    },
+                    "applicability": {
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "option": {
+                                "type": "string",
+                                "pattern": "^\\-\\-",
+                                "description": "Long flag of the option."
+                              },
+                              "present": {
+                                "type": "boolean",
+                                "const": true,
+                                "description": "Holds when the user set the option."
+                              }
+                            },
+                            "required": [
+                              "option",
+                              "present"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "option": {
+                                "type": "string",
+                                "pattern": "^\\-\\-",
+                                "description": "Long flag of the option."
+                              },
+                              "equals": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "boolean"
+                                  },
+                                  {
+                                    "type": "null"
+                                  },
+                                  {
+                                    "type": "array",
+                                    "items": {
+                                      "$ref": "#/definitions/CommandRegistry/properties/option_groups/items/properties/options/items/properties/default"
+                                    }
+                                  },
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "$ref": "#/definitions/CommandRegistry/properties/option_groups/items/properties/options/items/properties/default"
+                                    }
+                                  }
+                                ],
+                                "description": "Holds when the parsed value deep-equals this value."
+                              }
+                            },
+                            "required": [
+                              "option",
+                              "equals"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "argument": {
+                                "type": "string",
+                                "minLength": 1,
+                                "description": "Argument name."
+                              },
+                              "in": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "minItems": 1,
+                                "description": "Holds when the argument value is one of these."
+                              }
+                            },
+                            "required": [
+                              "argument",
+                              "in"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "mode": {
+                                "type": "string",
+                                "enum": [
+                                  "llm",
+                                  "deterministic"
+                                ],
+                                "description": "Holds when the invocation resolves to this mode."
+                              }
+                            },
+                            "required": [
+                              "mode"
+                            ],
+                            "additionalProperties": false
+                          }
+                        ],
+                        "description": "A predicate over one parsed invocation."
+                      },
+                      "minItems": 1,
+                      "description": "When the option has an effect; all conditions must hold."
+                    },
+                    "danger": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "level": {
+                              "type": "string",
+                              "const": "none"
+                            }
+                          },
+                          "required": [
+                            "level"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "level": {
+                              "type": "string",
+                              "const": "confirm"
+                            },
+                            "reason": {
+                              "type": "string",
+                              "minLength": 1,
+                              "description": "What the user is confirming, in CLI vocabulary."
+                            }
+                          },
+                          "required": [
+                            "level",
+                            "reason"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ],
+                      "description": "Option-level danger, e.g. --force."
+                    }
+                  },
+                  "required": [
+                    "flags",
+                    "long",
+                    "attribute",
+                    "value",
+                    "description",
+                    "input"
+                  ],
+                  "additionalProperties": false,
+                  "description": "One command-line option."
+                },
+                "minItems": 1,
+                "description": "Options in registration order."
+              }
+            },
+            "required": [
+              "id",
+              "options"
+            ],
+            "additionalProperties": false,
+            "description": "A named, reusable option set."
+          },
+          "description": "Named option groups."
+        },
+        "commands": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "group"
+                  },
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Dotted path, e.g. \"config.data-dir\". Equals path.join(\".\")."
+                  },
+                  "path": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]*$"
+                    },
+                    "minItems": 1,
+                    "description": "Command tokens from the root."
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Help-visible description."
+                  },
+                  "help_after": {
+                    "type": "string",
+                    "description": "Text added with addHelpText('after', …)."
+                  },
+                  "registration": {
+                    "type": "string",
+                    "enum": [
+                      "subcommand",
+                      "added"
+                    ],
+                    "description": "subcommand: created with parent.command() and inherits parent settings such as showHelpAfterError; added: new Command() plus addCommand, which does not."
+                  }
+                },
+                "required": [
+                  "kind",
+                  "id",
+                  "path",
+                  "description",
+                  "registration"
+                ],
+                "additionalProperties": false,
+                "description": "A command with subcommands and no action."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "leaf"
+                  },
+                  "id": {
+                    "$ref": "#/definitions/CommandRegistry/properties/commands/items/anyOf/0/properties/id"
+                  },
+                  "path": {
+                    "$ref": "#/definitions/CommandRegistry/properties/commands/items/anyOf/0/properties/path"
+                  },
+                  "description": {
+                    "$ref": "#/definitions/CommandRegistry/properties/commands/items/anyOf/0/properties/description"
+                  },
+                  "help_after": {
+                    "$ref": "#/definitions/CommandRegistry/properties/commands/items/anyOf/0/properties/help_after"
+                  },
+                  "registration": {
+                    "$ref": "#/definitions/CommandRegistry/properties/commands/items/anyOf/0/properties/registration"
+                  },
+                  "aliases": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "default": [],
+                    "description": "Alternative names, e.g. \"discover\"."
+                  },
+                  "arguments": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "Argument name as commander shows it, e.g. \"run-id\"."
+                        },
+                        "description": {
+                          "type": "string",
+                          "description": "Help-visible description (may be empty)."
+                        },
+                        "required": {
+                          "type": "boolean",
+                          "description": "\"<x>\" when true, \"[x]\" when false."
+                        },
+                        "variadic": {
+                          "type": "boolean",
+                          "default": false,
+                          "description": "Whether it collects all remaining operands."
+                        },
+                        "default": {
+                          "$ref": "#/definitions/CommandRegistry/properties/option_groups/items/properties/options/items/properties/default",
+                          "description": "Commander parse default for an optional argument, shown in help."
+                        },
+                        "input": {
+                          "$ref": "#/definitions/CommandRegistry/properties/option_groups/items/properties/options/items/properties/input"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "description",
+                        "required",
+                        "input"
+                      ],
+                      "additionalProperties": false,
+                      "description": "One positional argument."
+                    },
+                    "default": [],
+                    "description": "Ordered positionals."
+                  },
+                  "options": {
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "group": {
+                              "$ref": "#/definitions/CommandRegistry/properties/option_groups/items/properties/id"
+                            }
+                          },
+                          "required": [
+                            "group"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "$ref": "#/definitions/CommandRegistry/properties/option_groups/items/properties/options/items"
+                        }
+                      ],
+                      "description": "A reference to an option group, or an inline option."
+                    },
+                    "default": [],
+                    "description": "Ordered options and group references."
+                  },
+                  "execution": {
+                    "type": "object",
+                    "properties": {
+                      "default": {
+                        "type": "string",
+                        "enum": [
+                          "run",
+                          "read",
+                          "mutate",
+                          "exclusive",
+                          "in-process-secure",
+                          "adapter",
+                          "exemption"
+                        ],
+                        "description": "Class when no rule matches."
+                      },
+                      "rules": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "when": {
+                              "$ref": "#/definitions/CommandRegistry/properties/option_groups/items/properties/options/items/properties/applicability/items"
+                            },
+                            "class": {
+                              "type": "string",
+                              "enum": [
+                                "run",
+                                "read",
+                                "mutate",
+                                "exclusive",
+                                "in-process-secure",
+                                "adapter",
+                                "exemption"
+                              ],
+                              "description": "How a surface executes the command: run (detached worker, slot counted), read (host, in-process), mutate (short-lived worker under locks), exclusive (blocks run starts), in-process-secure (value never in argv), adapter (an app-side adapter replaces the generated surface), exemption (a reviewed decision keeps it terminal-only)."
+                            }
+                          },
+                          "required": [
+                            "when",
+                            "class"
+                          ],
+                          "additionalProperties": false,
+                          "description": "When `when` holds, the command executes as `class`. The first matching rule wins."
+                        },
+                        "default": [],
+                        "description": "Ordered rules; the first match wins."
+                      },
+                      "adapter": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "enum": [
+                              "init-onboarding",
+                              "open-result-view",
+                              "config-edit-yaml",
+                              "daemon-control",
+                              "confirm-inbox"
+                            ],
+                            "description": "Identifier of an app-side adapter for an exceptional command."
+                          },
+                          "executes_as": {
+                            "$ref": "#/definitions/CommandRegistry/properties/commands/items/anyOf/1/properties/execution/properties/rules/items/properties/class",
+                            "description": "The class the adapter itself executes the command as."
+                          },
+                          "note": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "What the adapter does instead of a generated form."
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "note"
+                        ],
+                        "additionalProperties": false,
+                        "description": "Required when any reachable class is adapter."
+                      },
+                      "exemption": {
+                        "type": "object",
+                        "properties": {
+                          "decision": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "The plan decision that grants the exemption."
+                          },
+                          "reason": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Why the command stays terminal-only."
+                          }
+                        },
+                        "required": [
+                          "decision",
+                          "reason"
+                        ],
+                        "additionalProperties": false,
+                        "description": "Required when any reachable class is exemption."
+                      }
+                    },
+                    "required": [
+                      "default"
+                    ],
+                    "additionalProperties": false,
+                    "description": "The execution class, possibly option-dependent."
+                  },
+                  "effect": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "local",
+                      "external"
+                    ],
+                    "description": "Maximum effect: none (read only), local (writes Yantra-owned state), external (contacts websites, providers or download servers)."
+                  },
+                  "danger": {
+                    "$ref": "#/definitions/CommandRegistry/properties/option_groups/items/properties/options/items/properties/danger"
+                  },
+                  "relations": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "requires",
+                            "conflicts"
+                          ]
+                        },
+                        "option": {
+                          "type": "string",
+                          "pattern": "^\\-\\-",
+                          "description": "Long flag the relation constrains."
+                        },
+                        "with": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "pattern": "^\\-\\-"
+                          },
+                          "minItems": 1,
+                          "description": "Long flags it requires or conflicts with."
+                        },
+                        "note": {
+                          "type": "string",
+                          "description": "The precise enforced rule, when narrower than the kind."
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "option",
+                        "with"
+                      ],
+                      "additionalProperties": false,
+                      "description": "A requires/conflicts relation the CLI already enforces."
+                    },
+                    "default": []
+                  },
+                  "exit_codes": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "number",
+                          "enum": [
+                            0,
+                            1,
+                            2,
+                            3,
+                            4
+                          ],
+                          "description": "0 success, 1 validation, 2 execution, 3 environment, 4 user handoff."
+                        },
+                        "meaning": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "What this code means for this command."
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "meaning"
+                      ],
+                      "additionalProperties": false,
+                      "description": "One exit code the command can return."
+                    },
+                    "minItems": 1,
+                    "description": "Exit codes the command can return."
+                  },
+                  "json": {
+                    "type": "object",
+                    "properties": {
+                      "flag": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "const": "--json"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "\"--json\" when the command registers it."
+                      },
+                      "shape": {
+                        "type": "string",
+                        "enum": [
+                          "document",
+                          "ndjson",
+                          "envelope",
+                          "none"
+                        ],
+                        "description": "One JSON document, newline-delimited events, an envelope, or no JSON output."
+                      },
+                      "schema": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "description": "Exported protocol schema name, or null when not yet described."
+                      }
+                    },
+                    "required": [
+                      "flag",
+                      "shape",
+                      "schema"
+                    ],
+                    "additionalProperties": false,
+                    "description": "What the command emits under --json."
+                  }
+                },
+                "required": [
+                  "kind",
+                  "id",
+                  "path",
+                  "description",
+                  "registration",
+                  "execution",
+                  "effect",
+                  "danger",
+                  "exit_codes",
+                  "json"
+                ],
+                "additionalProperties": false,
+                "description": "An executable command."
+              }
+            ],
+            "description": "A group or an executable leaf."
+          },
+          "description": "Entries in root-help order: each group is followed by its subcommands."
+        }
+      },
+      "required": [
+        "registry_version",
+        "program",
+        "option_groups",
+        "commands"
+      ],
+      "additionalProperties": false,
+      "description": "The complete Yantra command surface."
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

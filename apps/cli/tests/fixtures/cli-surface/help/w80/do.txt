@@ -1,0 +1,38 @@
+Usage: yantra do|discover [options] <goal>
+
+Run a multi-turn web agent that uses Yantra tools and publishes a Brief.
+
+Arguments:
+  goal                          browser or web goal to accomplish
+
+Options:
+  --provider <name>             agent model provider
+  --model <id>                  provider-scoped model id
+  --thinking <level>            provider reasoning level
+  --auth-secret <ref>           runtime model-key secret reference
+  --max-duration <duration>     whole-run wall-clock duration
+  --max-tokens <n>              cumulative provider token ceiling
+  --tool-timeout <duration>     timeout for one tool call
+  --tool-retries <n>            retries after an identical tool failure
+  --confirm-timeout <duration>  maximum live consent wait
+  --no-llm                      force the deterministic no-model path
+  --no-screenshots              no screenshots this run (vision assist and saved
+                                captures)
+  --turn-timeout <duration>     thinking time allowed in one provider turn
+  --browser <source>            browser source for this invocation (auto,
+                                managed, or system)
+  --browser-path <path>         absolute path to a Chrome or Chromium executable
+  --allow-host <host>           restrict outbound work to a host (repeatable)
+                                (default: [])
+  --save-as <name>              on success, promote the browser trace into a
+                                saved, replayable workflow
+  --json                        emit progress and outcome as NDJSON (default:
+                                false)
+  --open                        open the generated brief.html in the default
+                                browser (default: false)
+  --template <name|tag|path>    render the result with a saved name, tag, or
+                                Markdown template path
+  -h, --help                    display help for command
+
+Protect user-supplied values from the model with `@{value}` or `@password{value}`. Malformed markers are validation errors (exit 1).
+

@@ -1,0 +1,9 @@
+{
+  "argv": [
+    "model"
+  ],
+  "exitCode": 1,
+  "code": "commander.help",
+  "stdout": "",
+  "stderr": "Usage: yantra model [options] [command]\n\nManage the installed model registry\n\nOptions:\n  -h, --help              display help for command\n\nCommands:\n  list [options]\n  add [options] <id>\n  rm [options] <id>\n  default [options] <id>\n  help [command]          display help for command\n"
+}

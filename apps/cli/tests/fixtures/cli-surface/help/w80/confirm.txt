@@ -1,0 +1,12 @@
+Usage: yantra confirm [options] <run-id> <decision>
+
+Grant or deny a pending confirmation for a parked run
+
+Arguments:
+  run-id      The run id with a pending confirmation
+  decision    grant | deny
+
+Options:
+  --json      Emit JSON summary to stdout (default: false)
+  --debug     Verbose logging to stderr (default: false)
+  -h, --help  display help for command

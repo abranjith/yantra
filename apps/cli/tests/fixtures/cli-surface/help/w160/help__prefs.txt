@@ -1,0 +1,14 @@
+Usage: yantra prefs [options] [action] [key] [value]
+
+Manage personalization preferences (machine layer + merged view)
+
+Arguments:
+  action          get | set | list | approve
+  key             dotted preference key (e.g. defaults.detail)
+  value           value (for set)
+
+Options:
+  --json          emit JSON (default: false)
+  --debug         verbose logging on stderr (default: false)
+  --forget <key>  delete a preference value (privacy control)
+  -h, --help      display help for command

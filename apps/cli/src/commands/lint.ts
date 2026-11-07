@@ -1,6 +1,9 @@
 import { loadWorkflow, lint } from '@yantra/core';
 import type { LintReport, LintFinding } from '@yantra/core';
-import { Command } from 'commander';
+import { type Command } from 'commander';
+
+import { createRegisteredCommand } from '../registry/build-command-tree.js';
+import { fromAction } from '../registry/handler.js';
 
 function formatFinding(finding: LintFinding): string {
   const severity = finding.severity.toUpperCase().padEnd(7);
@@ -27,14 +30,13 @@ function printReport(report: LintReport): void {
 }
 
 export function makeLintCommand(): Command {
-  const cmd = new Command('lint');
+  return createRegisteredCommand('lint', lintHandlers());
+}
 
-  cmd
-    .description('Lint a workflow YAML file for errors and best-practice violations')
-    .argument('<file>', 'Path to the workflow YAML file')
-    .option('--strict', 'Promote warnings to errors', false)
-    .option('--json', 'Output lint report as JSON to stdout', false)
-    .action(async (file: string, options: { strict: boolean; json: boolean }) => {
+/** Handlers for `lint`, bound by registry id; each is its former commander action, unchanged. */
+export function lintHandlers() {
+  return {
+    lint: fromAction(async (file: string, options: { strict: boolean; json: boolean }) => {
       const loadResult = await loadWorkflow(file);
 
       if (!loadResult.isOk) {
@@ -74,7 +76,6 @@ export function makeLintCommand(): Command {
       }
 
       process.exit(0);
-    });
-
-  return cmd;
+    }),
+  };
 }

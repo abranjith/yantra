@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "model",
+    "add",
+    "--provider",
+    "value",
+    "arg1",
+    "extra"
+  ],
+  "exitCode": 1,
+  "code": "commander.excessArguments",
+  "stdout": "",
+  "stderr": "error: too many arguments for 'add'. Expected 1 argument but got 2.\n"
+}

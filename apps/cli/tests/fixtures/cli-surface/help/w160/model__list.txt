@@ -1,0 +1,5 @@
+Usage: yantra model list [options]
+
+Options:
+  --json      emit JSON (default: false)
+  -h, --help  display help for command
