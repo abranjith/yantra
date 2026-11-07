@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { mkdir, open, rename, rm } from 'node:fs/promises';
+import { link, mkdir, open, rename, rm } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
@@ -12,6 +12,8 @@ export interface AtomicWriteOptions {
   readonly mode?: number;
   /** Flush staged bytes before publication (used by durable manifests). */
   readonly fsync?: boolean;
+  /** Atomically publish only if the final name does not already exist. */
+  readonly exclusive?: boolean;
 }
 
 /**
@@ -38,7 +40,10 @@ export async function writeFileAtomic(
     }
     for (let attempt = 0; ; attempt++) {
       try {
-        await rename(temporary, path);
+        // A hard link publishes the complete staged inode and fails with EEXIST
+        // instead of replacing an immutable receipt. Both names are siblings.
+        if (options.exclusive) await link(temporary, path);
+        else await rename(temporary, path);
         break;
       } catch (error) {
         const code = (error as NodeJS.ErrnoException).code;

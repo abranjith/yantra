@@ -95,7 +95,11 @@ export async function runWorkerInvocation(
     invocationId: invocation.invocation_id,
     signal: controller.signal,
     isInteractive: () => channel.attended(),
-    settings: new SettingsResolver(env),
+    settings: new SettingsResolver(env, undefined, {
+      cwd: invocation.cwd,
+      surface: 'worker',
+      invocationId: invocation.invocation_id,
+    }),
     logger: makeStderrLogger(true, stderr),
     output: {
       stdout,

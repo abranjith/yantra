@@ -27,19 +27,19 @@
     },
     {
       "path": "apps/cli/src/adapters/worker/channel.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
     {
       "path": "apps/cli/src/adapters/worker/in-memory-channel.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
     {
       "path": "apps/cli/src/adapters/worker/worker-adapter.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
@@ -218,6 +218,12 @@
       "task": "TASK-006"
     },
     {
+      "path": "apps/cli/src/registry/dead-options.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "apps/cli/src/registry/handler.ts",
       "status": "M",
       "role": "implement",
@@ -242,6 +248,12 @@
       "task": "TASK-006"
     },
     {
+      "path": "apps/cli/tests/adapters/settings-resolver.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "apps/cli/tests/adapters/terminal-adapter.spec.ts",
       "status": "A",
       "role": "implement",
@@ -249,7 +261,7 @@
     },
     {
       "path": "apps/cli/tests/adapters/worker-adapter.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
@@ -261,7 +273,7 @@
     },
     {
       "path": "apps/cli/tests/characterization/adapter-parity.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
@@ -938,6 +950,12 @@
       "task": "TASK-001"
     },
     {
+      "path": "apps/cli/tests/characterization/receipt-canary.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "apps/cli/tests/characterization/scenarios.ts",
       "status": "A",
       "role": "implement",
@@ -966,6 +984,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/tests/registry/option-consumers.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "apps/cli/tests/render/brief-dispatch.spec.ts",
@@ -998,10 +1022,22 @@
       "task": "TASK-002"
     },
     {
+      "path": "docs/features/diagnostics-and-audit.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "docs/features/report-templates.md",
       "status": "M",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "docs/features/research.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "docs/features/saved-workflows.md",
@@ -1026,6 +1062,18 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "packages/agent/src/runtime/orchestrator.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/agent/tests/runtime/orchestrator.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "packages/core/src/_lint-fixtures/fixed-temp-name.ts",
@@ -1124,6 +1172,18 @@
       "task": "TASK-003"
     },
     {
+      "path": "packages/core/src/receipt/execution-receipt.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/core/src/receipt/index.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "packages/core/src/report-template/store.ts",
       "status": "M",
       "role": "implement",
@@ -1140,6 +1200,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/research/types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "packages/core/src/scheduler/daemon.ts",
@@ -1176,6 +1242,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/audit/report-builder.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "packages/core/tests/boundary-rules.spec.ts",
@@ -1244,6 +1316,12 @@
       "task": "TASK-003"
     },
     {
+      "path": "packages/core/tests/receipt/execution-receipt.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "packages/core/tests/report-template/render.spec.ts",
       "status": "M",
       "role": "implement",
@@ -1254,6 +1332,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/research/research-loop.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "packages/core/tests/scheduler/fire-runner.spec.ts",
@@ -1275,9 +1359,15 @@
     },
     {
       "path": "packages/protocol/generated/json-schema/command-result.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
+    },
+    {
+      "path": "packages/protocol/generated/json-schema/execution-receipt.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "packages/protocol/src/commands/entries/browser.ts",
@@ -1305,15 +1395,27 @@
     },
     {
       "path": "packages/protocol/src/schemas/command-result.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
     {
-      "path": "packages/protocol/tests/command-result.spec.ts",
+      "path": "packages/protocol/src/schemas/execution-receipt.ts",
       "status": "U",
       "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/protocol/tests/command-result.spec.ts",
+      "status": "A",
+      "role": "implement",
       "task": "TASK-007"
+    },
+    {
+      "path": "packages/protocol/tests/execution-receipt.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
     }
   ],
   "excluded": [

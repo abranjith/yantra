@@ -2,6 +2,8 @@ import { appendFile, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import {
+  writeExecutionReceipt,
+  type ExecutionReceiptDraft,
   AgentBrowserController,
   BlocklistImpl,
   BrowserFallbackFetcher,
@@ -307,6 +309,7 @@ export const DEFAULT_AGENT_BUDGETS: AgentBudgetConfig = {
 
 /** Public input for one run. Each call creates a new run and provider session. */
 export interface AgenticTaskRequest {
+  readonly receipt?: ExecutionReceiptDraft;
   readonly goal: string;
   /** Least-privilege command preset; defaults to the existing `do` behavior. */
   readonly profile?: CommandTaskProfile;
@@ -569,6 +572,15 @@ export async function runAgenticTask(
           },
         }),
   });
+
+  if (request.receipt) {
+    const written = await writeExecutionReceipt(created.runDir, request.receipt);
+    await appendFile(
+      join(created.runDir, 'runtime.jsonl'),
+      `${JSON.stringify({ schema_version: 1, event: 'settings_receipt_written', path: written.path, setting_count: written.receipt.settings.length })}\n`,
+      { encoding: 'utf8', mode: 0o600 },
+    );
+  }
 
   // Deterministic pre-flight: a goal that needs the user's location, with no
   // location available, cannot be answered honestly. Refuse it here — the run

@@ -19,6 +19,7 @@
 import type { Brief } from '@yantra/protocol';
 
 import type { BriefArtifactPaths } from '../brief/write-artifacts.js';
+import type { ExecutionReceiptDraft } from '../receipt/execution-receipt.js';
 import type { SynthesisLength, SynthesisScope } from '../synthesis/types.js';
 
 /**
@@ -97,6 +98,7 @@ export type TerminationReason = 'coverage_met' | 'max_hops' | 'no_novel_queries'
 
 /** Options controlling one research run. */
 export interface ResearchOptions {
+  readonly receipt?: ExecutionReceiptDraft;
   /** The research topic (raw user input). */
   readonly topic: string;
   /** Budget caps for this run. */

@@ -11,6 +11,8 @@ import { resolve } from 'node:path';
 import { COMMAND_REGISTRY, expandOptions, type LeafEntry } from '@yantra/protocol';
 import { describe, expect, it } from 'vitest';
 
+import { DEAD_OPTION_TODO as TODO, KNOWN_DEAD_OPTIONS } from '../../src/registry/dead-options.js';
+
 import { factsOf, handlerFacts, isConsumed, mergeFacts } from './option-consumers.js';
 
 const commandsDir = resolve(import.meta.dirname, '..', '..', 'src', 'commands');
@@ -22,83 +24,7 @@ function handlerModule(entry: LeafEntry): string {
   return resolve(commandsDir, `${file}.ts`);
 }
 
-/** A hand-verified option the CLI registers but does not act on. */
-interface KnownDeadOption {
-  readonly command: string;
-  readonly option: string;
-  readonly since: string;
-  /**
-   * `unread`: no consumer exists. `refused`: the handler reads the option only
-   * to reject it; `evidence` is the refusal text, which must still be present.
-   */
-  readonly kind: 'unread' | 'refused';
-  readonly evidence: string;
-  readonly todo: string;
-}
-
-const TODO = 'TODO.md: wire or remove dead run/resume/confirm controls (FEAT-062)';
-
-const SINCE = '2026-11-03';
-const RUN_BUDGETS = 'run.ts passes `budgets: {}` to the synthesis runtime';
-const RESUME_BUDGETS = 'resume.ts resolves the agent but never reads `.budgets`';
-const BUDGET_FLAGS = [
-  '--max-duration',
-  '--max-tokens',
-  '--tool-timeout',
-  '--tool-retries',
-  '--confirm-timeout',
-] as const;
-
-export const KNOWN_DEAD_OPTIONS: readonly KnownDeadOption[] = [
-  ...BUDGET_FLAGS.map((option) => ({
-    command: 'run',
-    option,
-    since: SINCE,
-    kind: 'unread' as const,
-    evidence: RUN_BUDGETS,
-    todo: TODO,
-  })),
-  {
-    command: 'run',
-    option: '--no-screenshots',
-    since: SINCE,
-    kind: 'unread',
-    evidence: 'run.ts never reads `screenshots`; replay captures no vision screenshots',
-    todo: TODO,
-  },
-  {
-    command: 'run',
-    option: '--template',
-    since: SINCE,
-    kind: 'refused',
-    evidence: 'templates are not yet supported on run',
-    todo: TODO,
-  },
-  ...BUDGET_FLAGS.map((option) => ({
-    command: 'resume',
-    option,
-    since: SINCE,
-    kind: 'unread' as const,
-    evidence: RESUME_BUDGETS,
-    todo: TODO,
-  })),
-  {
-    command: 'resume',
-    option: '--no-screenshots',
-    since: SINCE,
-    kind: 'unread',
-    evidence: 'resume.ts never reads `screenshots`',
-    todo: TODO,
-  },
-  {
-    command: 'confirm',
-    option: '--debug',
-    since: SINCE,
-    kind: 'unread',
-    evidence: 'confirm.ts declares `debug` in ConfirmOptions and never reads it',
-    todo: TODO,
-  },
-];
+export { KNOWN_DEAD_OPTIONS } from '../../src/registry/dead-options.js';
 
 const leaves = COMMAND_REGISTRY.commands.filter(
   (entry): entry is LeafEntry => entry.kind === 'leaf',

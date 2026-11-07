@@ -1,0 +1,315 @@
+{
+  "$ref": "#/definitions/ExecutionReceipt",
+  "definitions": {
+    "ExecutionReceipt": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "type": "number",
+          "const": 1
+        },
+        "run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "written_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "yantra_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "invoked_by": {
+          "type": "string",
+          "enum": [
+            "terminal",
+            "worker",
+            "daemon"
+          ]
+        },
+        "invocation_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "command": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "cwd": {
+          "type": "string"
+        },
+        "settings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string",
+                "minLength": 1
+              },
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/ExecutionReceipt/properties/settings/items/properties/value"
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": {
+                      "$ref": "#/definitions/ExecutionReceipt/properties/settings/items/properties/value"
+                    }
+                  }
+                ],
+                "description": "Any JSON value."
+              },
+              "source": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "flag"
+                      }
+                    },
+                    "required": [
+                      "kind"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "env"
+                      },
+                      "name": {
+                        "type": "string",
+                        "pattern": "^[A-Z][A-Z0-9_]*$"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "name"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "preference"
+                      },
+                      "key": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "key"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "config"
+                      },
+                      "key": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "key"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "schedule"
+                      }
+                    },
+                    "required": [
+                      "kind"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "workflow"
+                      }
+                    },
+                    "required": [
+                      "kind"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "default"
+                      }
+                    },
+                    "required": [
+                      "kind"
+                    ],
+                    "additionalProperties": false
+                  }
+                ],
+                "description": "The source of an effective non-secret setting; environment names only."
+              }
+            },
+            "required": [
+              "key",
+              "value",
+              "source"
+            ],
+            "additionalProperties": false,
+            "description": "An effective non-secret setting and its provenance."
+          },
+          "description": "Effective settings, sorted by key; no secrets or unrelated environment."
+        },
+        "content": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "workflow",
+                  "workflow_locators",
+                  "template",
+                  "params_file"
+                ]
+              },
+              "path": {
+                "$ref": "#/definitions/ExecutionReceipt/properties/cwd",
+                "description": "Absolute path read at invocation start."
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$",
+                "description": "Streamed SHA-256 of the exact content."
+              }
+            },
+            "required": [
+              "kind",
+              "path",
+              "sha256"
+            ],
+            "additionalProperties": false,
+            "description": "A content identity at execution start."
+          }
+        },
+        "browser": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "selection": {
+                  "type": "object",
+                  "properties": {
+                    "source": {
+                      "type": "string",
+                      "enum": [
+                        "auto",
+                        "managed",
+                        "system"
+                      ]
+                    },
+                    "executablePath": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/definitions/ExecutionReceipt/properties/cwd"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "executablePath"
+                  ],
+                  "additionalProperties": false
+                },
+                "source": {
+                  "$ref": "#/definitions/ExecutionReceipt/properties/settings/items/properties/source"
+                }
+              },
+              "required": [
+                "selection",
+                "source"
+              ],
+              "additionalProperties": false,
+              "description": "Browser selection at start; no profile contents or installation telemetry."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Browser selection at start; no profile contents or installation telemetry."
+        }
+      },
+      "required": [
+        "schema_version",
+        "run_id",
+        "sequence",
+        "written_at",
+        "yantra_version",
+        "invoked_by",
+        "invocation_id",
+        "command",
+        "cwd",
+        "settings",
+        "content",
+        "browser"
+      ],
+      "additionalProperties": false,
+      "description": "Immutable execution settings and content identities for one run start or resume."
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

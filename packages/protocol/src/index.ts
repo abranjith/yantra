@@ -252,3 +252,5 @@ export * from './commands/index.js';
 export type ProtocolVersion = typeof PROTOCOL_VERSION;
 
 export { CommandResultMessageSchema, type CommandResultMessage } from './schemas/command-result.js';
+
+export * from './schemas/execution-receipt.js';

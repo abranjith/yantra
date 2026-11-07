@@ -50,6 +50,7 @@ import {
   safeRecordRankSignal,
 } from '../ranking/recording.js';
 import type { RankSignalSink } from '../ranking/types.js';
+import { writeExecutionReceipt } from '../receipt/execution-receipt.js';
 import { DeterministicSynthesizer } from '../synthesis/deterministic.js';
 import type { SourceFailure, Synthesizer } from '../synthesis/types.js';
 
@@ -182,6 +183,17 @@ export class ResearchLoop {
     emit({ kind: 'task_started', task_id: taskId, at: this.clock().toISOString() });
 
     try {
+      if (options.receipt) {
+        const written = await writeExecutionReceipt(runDir, options.receipt);
+        this.deps.logger.info(
+          {
+            event: 'settings_receipt_written',
+            path: written.path,
+            setting_count: written.receipt.settings.length,
+          },
+          'settings_receipt_written',
+        );
+      }
       while (true) {
         const checkpoint = budget.checkpoint();
         if (!checkpoint.isOk) {

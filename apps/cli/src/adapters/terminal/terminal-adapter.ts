@@ -23,7 +23,11 @@ export function createTerminalContext(options: TerminalOptions = {}): CommandCon
   const stdout = options.stdout ?? process.stdout;
   const stderr = options.stderr ?? process.stderr;
   const tty = options.isTty ?? process.stdin.isTTY === true;
-  const settings = new SettingsResolver(options.env ?? process.env);
+  const settings = new SettingsResolver(options.env ?? process.env, undefined, {
+    cwd: options.cwd ?? process.cwd(),
+    surface: 'terminal',
+    invocationId: null,
+  });
   return {
     surface: 'terminal',
     cwd: options.cwd ?? process.cwd(),

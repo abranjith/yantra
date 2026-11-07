@@ -659,7 +659,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
 
 ### TASK-008: Execution receipts, settings provenance and the canary (research first)
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - Add `ExecutionReceiptSchema` (and its parts) to protocol and regenerate.
   - Create `packages/core/src/receipt/execution-receipt.ts`:
     - `writeExecutionReceipt` (atomic, 0600; `sequence 0` creates `execution-receipt.json` exclusively;
@@ -679,7 +679,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
     `settings_receipt_written` to `runtime.jsonl`; the deterministic path logs it through the logger.
   - `invoked_by` comes from the adapter (`terminal` or `worker`) and `invocation_id` from the
     invocation.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Protocol: valid and invalid receipts; `source.kind: 'env'` requires `name`; `sha256` must be
     64-character hex.
   - Core:
@@ -701,7 +701,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
     and `written_at`.
   - The audit and report builders tolerate the new `runtime.jsonl` line kind; an existing
     `report-builder` test fixture gains one.
-- [ ] **Documentation Update**: Invoke **Document** update mode for
+- [x] **Documentation Update**: Invoke **Document** update mode for
       `docs/features/diagnostics-and-audit.md` (what the receipt records and never records) and
       `docs/features/research.md`.
 - **Verify**:
@@ -961,7 +961,7 @@ tests/setup` passes; `init.ts`, `init-wizard.ts` and `init-context-prompts.ts` a
 - [x] TASK-005: Persistent browser-profile exclusivity
 - [x] TASK-006: Command context, terminal adapter and purity lint; migrate `research`
 - [x] TASK-007: Worker adapter, result transport and `research` parity
-- [ ] TASK-008: Execution receipts, settings provenance and the canary (research first)
+- [x] TASK-008: Execution receipts, settings provenance and the canary (research first)
 - [ ] TASK-009: Migrate `ask` and `do` (agentic run class) with receipts and abort
 - [ ] TASK-010: Migrate `run` and `resume` with receipts in the replay path
 - [ ] TASK-011: Daemon, scheduling and `confirm`: migration plus daemon-fire receipts

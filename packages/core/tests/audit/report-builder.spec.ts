@@ -274,7 +274,7 @@ describe('@no-llm report builder — agentic runs', () => {
     await writeAgenticRun(runDir, []);
     await writeFile(
       join(runDir, 'runtime.jsonl'),
-      `${JSON.stringify({ run_id: 'agentic-run', event: 'browser_ready' })}\n`,
+      `${JSON.stringify({ run_id: 'agentic-run', event: 'browser_ready' })}\n${JSON.stringify({ schema_version: 1, event: 'settings_receipt_written', path: 'execution-receipt.json', setting_count: 2 })}\n`,
       'utf8',
     );
 

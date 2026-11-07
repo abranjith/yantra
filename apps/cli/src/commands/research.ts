@@ -6,6 +6,11 @@ import {
   type ActiveReportTemplate,
 } from '@yantra/agent';
 import {
+  ConfigBrowserSelectionReader,
+  FileTemplateStore,
+  templatesRoot,
+  contentIdentity,
+  type ExecutionReceiptDraft,
   BlocklistImpl,
   BrowserFallbackFetcher,
   DeterministicSynthesizer,
@@ -35,7 +40,12 @@ import {
   type SynthesisLength,
   UserInputMarkerError,
 } from '@yantra/core';
-import { SCHEMA_VERSION, validateBrief, validateTemplatedReport } from '@yantra/protocol';
+import {
+  COMMAND_REGISTRY,
+  SCHEMA_VERSION,
+  validateBrief,
+  validateTemplatedReport,
+} from '@yantra/protocol';
 import { CommanderError, type Command } from 'commander';
 
 import {
@@ -135,11 +145,14 @@ export function makeResearchHandler(
   return handler(
     async (args: HandlerArgs, options: ResearchCommandOptions, command: Command): Promise<void> => {
       const [topicArg] = args as readonly [string];
+      const registryEntry = COMMAND_REGISTRY.commands.find((entry) => entry.id === 'research');
+      if (registryEntry?.kind === 'leaf') context.settings.bind(registryEntry, command);
 
       // A conflicting `--browser` pair is a validation failure, resolved before
       // any loop or provider session exists.
       const browserSelection = resolveBrowserSelectionOverride(options);
       const effective = await resolvedRuntime.resolveDefaults();
+      context.settings.usePreferences(effective);
       const agent = await resolvedRuntime.resolveAgent(
         'research',
         options,
@@ -186,6 +199,63 @@ export function makeResearchHandler(
         );
       }
 
+      const configuredBrowser =
+        browserSelection === undefined
+          ? await new ConfigBrowserSelectionReader().read()
+          : undefined;
+      const selection = browserSelection ??
+        configuredBrowser ?? { source: 'auto' as const, executablePath: null };
+      const templatePath =
+        template?.path ??
+        (template?.name ? new FileTemplateStore(templatesRoot()).pathFor(template.name) : null);
+      const content = templatePath ? [await contentIdentity('template', templatePath)] : [];
+      const effectiveSettings: Readonly<Record<string, unknown>> = {
+        depth: invocation.options.budget.maxHops,
+        maxSources: invocation.options.budget.maxSources,
+        llm: !invocation.options.noLlm,
+        format,
+        detail,
+        length: invocation.options.length,
+        searchProvider: invocation.searchProvider,
+        perQueryLimit: invocation.options.perQueryLimit,
+        fetchTimeout: invocation.options.perFetchTimeoutMs,
+        pipelineTimeout: invocation.options.budget.maxWallClockMs,
+        maxLlmCalls: invocation.options.budget.maxLlmCalls,
+      };
+      for (const [key, value] of Object.entries(effectiveSettings))
+        await context.settings.effective(key, value);
+      context.settings.record(
+        'browse',
+        browse.enabled,
+        browse.source === 'preference'
+          ? { kind: 'preference', key: 'agent.research_browse' }
+          : { kind: browse.source },
+      );
+      if (options.json) context.settings.record('format', format, { kind: 'flag' });
+      if (agent.mode === 'llm') {
+        await context.settings.effective('provider', agent.model.provider);
+        await context.settings.effective('model', agent.model.id);
+        await context.settings.effective('thinking', agent.model.thinking ?? null);
+      }
+      const browserSource = browserSelection
+        ? { kind: 'flag' as const }
+        : configuredBrowser
+          ? { kind: 'config' as const, key: 'browser.source' }
+          : { kind: 'default' as const };
+      context.settings.record('browser', selection.source, browserSource);
+      context.settings.record('browserPath', selection.executablePath, browserSource);
+      const receipt = await context.settings.draftReceipt(['research'], {
+        content,
+        browser: {
+          selection,
+          source: browserSelection
+            ? { kind: 'flag' }
+            : configuredBrowser
+              ? { kind: 'config', key: 'browser.source' }
+              : { kind: 'default' },
+        },
+      });
+
       // Resolved before the try so a bad --provider/--model is a validation
       // failure (exit 1) rather than being reclassified as an execution failure
       // by the catch below. Skipped entirely in deterministic mode, which never
@@ -218,6 +288,7 @@ export function makeResearchHandler(
             resolveAmbientContext(effective),
             browserSelection,
             browse,
+            receipt,
           );
           return;
         }
@@ -227,7 +298,7 @@ export function makeResearchHandler(
           ),
           ...(browserSelection === undefined ? {} : { selection: browserSelection }),
         });
-        const result: ResearchRunResult = await loop.run(invocation.options);
+        const result: ResearchRunResult = await loop.run({ ...invocation.options, receipt });
 
         renderBrief(context, result, { format, detail, options });
 
@@ -390,6 +461,7 @@ async function runAgenticResearch(
   ambient: ResolvedAmbientContext,
   browserSelection: BrowserSelection | undefined,
   browse: ResearchBrowseResolution,
+  receipt: ExecutionReceiptDraft,
 ): Promise<void> {
   const renderOpts: ConnectorRenderOpts = {
     json: format === 'json',
@@ -414,6 +486,8 @@ async function runAgenticResearch(
   const outcome = await runtime.runTask(
     {
       goal: topic,
+      receipt,
+      signal: context.signal,
       model: agent.model,
       ...(agent.thinkingSource === undefined ? {} : { thinkingSource: agent.thinkingSource }),
       auth: agent.auth,
