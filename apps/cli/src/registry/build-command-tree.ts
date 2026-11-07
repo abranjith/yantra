@@ -91,10 +91,10 @@ function configureLeaf(
     command.addOption(option);
   }
   if (entry.help_after !== undefined) command.addHelpText('after', entry.help_after);
-  command.action((...params: unknown[]) => {
+  command.action(async (...params: unknown[]) => {
     const commandArg = params.at(-1) as Command;
     const options = params.at(-2) as Record<string, unknown>;
-    return bound(params.slice(0, -2), options, commandArg);
+    await bound(params.slice(0, -2), options, commandArg);
   });
 }
 

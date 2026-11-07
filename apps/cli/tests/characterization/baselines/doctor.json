@@ -1,6 +1,6 @@
 {
   "stdout": "Usage: yantra doctor [options]\n\nDiagnose the local environment for Yantra\n\nOptions:\n  --provider <name>    agent model provider\n  --model <id>         provider-scoped model id\n  --thinking <level>   provider reasoning level\n  --auth-secret <ref>  runtime model-key secret reference\n  --no-llm             force the deterministic no-model path\n  --json               emit JSON output (default: false)\n  --refresh            re-probe the environment instead of reusing the cached\n                       probe (agent and configuration checks always run fresh)\n                       (default: false)\n  --agent-smoke        run a live agent provider smoke test instead of the\n                       offline checks (default: false)\n  -h, --help           display help for command\n",
-  "stderr": "intercepted exit 0\n",
+  "stderr": "",
   "exitCode": 0,
   "tree": {}
 }

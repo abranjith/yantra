@@ -60,13 +60,14 @@ import {
 import { PROTOCOL_VERSION } from '@yantra/protocol';
 import { type Command, CommanderError } from 'commander';
 
+import { CLIConnectorIO } from '../adapters/terminal/connector.js';
+import { buildRenderOpts } from '../adapters/terminal/connector.js';
 import {
   resolveAgentInvocation,
   type AgentInvocation,
   type AgentModelOptions,
   type NoLlmOption,
 } from '../agent-options.js';
-import { CLIConnectorIO, buildRenderOpts } from '../connector-io.js';
 import { noLlmReason, readGlobalFlags } from '../global-flags.js';
 import { loadEffectivePreferences } from '../preferences.js';
 import { createRegisteredCommand } from '../registry/build-command-tree.js';

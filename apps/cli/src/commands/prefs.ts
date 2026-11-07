@@ -63,7 +63,7 @@ export async function prefsHandler(args: HandlerArgs, options: PrefsOptions): Pr
     string | undefined,
   ];
 
-  const logger = makeStderrLogger(options.debug === true);
+  const logger = makeStderrLogger(options.debug === true, process.stderr);
 
   // `--forget` is an action modifier usable without a positional action.
   if (options.forget !== undefined) {

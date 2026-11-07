@@ -8,6 +8,8 @@
 
 import type { Command } from 'commander';
 
+import type { CommandResult } from '../context/command-context.js';
+
 /** Positional argument values in declaration order (`undefined` for an absent optional). */
 export type HandlerArgs = readonly unknown[];
 
@@ -16,7 +18,7 @@ export type Handler = (
   args: HandlerArgs,
   options: Readonly<Record<string, unknown>>,
   command: Command,
-) => Promise<void> | void;
+) => Promise<void | CommandResult> | void | CommandResult;
 
 /**
  * Marks a leaf whose top-level family is still built by its legacy factory
@@ -31,8 +33,12 @@ export type HandlerBinding = Handler | typeof LEGACY_ONLY;
  * Adapts a commander-style action, `(arg1, …, argN, options, command)`, into a
  * {@link Handler}. Lets a migrated family keep its action bodies verbatim.
  */
-export function fromAction(action: (...params: never[]) => Promise<void> | void): Handler {
-  const call = action as (...params: unknown[]) => Promise<void> | void;
+export function fromAction(
+  action: (...params: never[]) => Promise<void | CommandResult> | void | CommandResult,
+): Handler {
+  const call = action as (
+    ...params: unknown[]
+  ) => Promise<void | CommandResult> | void | CommandResult;
   return (args, options, command) => call(...args, options, command);
 }
 
@@ -42,7 +48,11 @@ export function fromAction(action: (...params: never[]) => Promise<void> | void)
  * and this is the single place that bridges the two.
  */
 export function handler<TOptions extends object>(
-  fn: (args: HandlerArgs, options: TOptions, command: Command) => Promise<void> | void,
+  fn: (
+    args: HandlerArgs,
+    options: TOptions,
+    command: Command,
+  ) => Promise<void | CommandResult> | void | CommandResult,
 ): Handler {
   return fn as unknown as Handler;
 }

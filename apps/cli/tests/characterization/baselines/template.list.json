@@ -1,6 +1,6 @@
 {
   "stdout": "Usage: yantra template list [options]\n\nList valid saved report templates.\n\nOptions:\n  --tag <tag>  show only templates carrying this tag\n  --json       emit a stable JSON envelope (default: false)\n  -h, --help   display help for command\n",
-  "stderr": "intercepted exit 0\n",
+  "stderr": "",
   "exitCode": 0,
   "tree": {}
 }

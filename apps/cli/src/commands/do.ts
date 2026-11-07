@@ -25,12 +25,12 @@ import {
 import { validateTemplatedReport } from '@yantra/protocol';
 import { CommanderError, type Command } from 'commander';
 
+import { CLIConnectorIO } from '../adapters/terminal/connector.js';
 import { resolveAgentInvocation, type AgentOptions } from '../agent-options.js';
 import {
   resolveBrowserSelectionOverride,
   type BrowserSelectionOptions,
 } from '../browser-options.js';
-import { CLIConnectorIO } from '../connector-io.js';
 import { recordTaskHistory } from '../history.js';
 import { openArtifact } from '../open-artifact.js';
 import { loadEffectivePreferences, resolveAmbientContext } from '../preferences.js';

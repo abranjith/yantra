@@ -13,7 +13,6 @@ import {
   FollowUpQueryGenerator,
   HttpFetcher,
   HybridContentFetcher,
-  InteractiveInstallOfferGateway,
   createSelectedBrowserProvider,
   type BrowserRuntimeOptions,
   type BrowserSelection,
@@ -36,9 +35,13 @@ import {
   type SynthesisLength,
   UserInputMarkerError,
 } from '@yantra/core';
-import { validateBrief, validateTemplatedReport } from '@yantra/protocol';
+import { SCHEMA_VERSION, validateBrief, validateTemplatedReport } from '@yantra/protocol';
 import { CommanderError, type Command } from 'commander';
 
+import {
+  createTerminalContext,
+  type TerminalOptions,
+} from '../adapters/terminal/terminal-adapter.js';
 import {
   parseDuration,
   resolveAgentInvocation,
@@ -49,14 +52,10 @@ import {
   resolveBrowserSelectionOverride,
   type BrowserSelectionOptions,
 } from '../browser-options.js';
-import { CLIConnectorIO, agentFailureLine } from '../connector-io.js';
+import { agentFailureLine } from '../connector-io.js';
+import type { CommandContext } from '../context/command-context.js';
 import { recordTaskHistory } from '../history.js';
-import { openArtifact } from '../open-artifact.js';
-import {
-  loadEffectivePreferences,
-  resolveAmbientContext,
-  type ResolvedAmbientContext,
-} from '../preferences.js';
+import { resolveAmbientContext, type ResolvedAmbientContext } from '../preferences.js';
 import { attachRegistered } from '../registry/build-command-tree.js';
 import { handler, type Handler, type HandlerArgs } from '../registry/handler.js';
 import { renderGoalEcho } from '../render/goal-echo.js';
@@ -103,9 +102,6 @@ export interface ResearchInvocation {
 }
 
 export interface ResearchRuntime {
-  readonly env: NodeJS.ProcessEnv;
-  readonly stdout: NodeJS.WritableStream;
-  readonly stderr: NodeJS.WritableStream;
   readonly createLoop: (
     invocation: ResearchInvocation,
     browser?: BrowserRuntimeOptions,
@@ -113,7 +109,6 @@ export interface ResearchRuntime {
   readonly resolveDefaults: () => Promise<EffectivePreferences>;
   readonly runTask: typeof runAgenticTask;
   readonly resolveAgent: typeof resolveAgentInvocation;
-  readonly isTty: boolean;
   readonly resolveTemplate: (ref: string) => Promise<ActiveReportTemplate>;
   readonly recordHistory: (runId: string) => Promise<void>;
 }
@@ -125,14 +120,18 @@ export interface ResearchRuntime {
  */
 export function registerResearchCommand(
   program: Command,
-  runtime?: Partial<ResearchRuntime>,
+  runtime?: Partial<ResearchRuntime> & TerminalOptions,
+  context?: CommandContext,
 ): void {
-  attachRegistered(program, 'research', { research: makeResearchHandler(runtime) });
+  attachRegistered(program, 'research', { research: makeResearchHandler(runtime, context) });
 }
 
 /** The `research` handler over an injectable runtime, bound to the `research` registry entry. */
-export function makeResearchHandler(runtime?: Partial<ResearchRuntime>): Handler {
-  const resolvedRuntime = runtimeWithDefaults(runtime);
+export function makeResearchHandler(
+  runtime?: Partial<ResearchRuntime> & TerminalOptions,
+  context: CommandContext = createTerminalContext(runtime),
+): Handler {
+  const resolvedRuntime = runtimeWithDefaults(context, runtime);
   return handler(
     async (args: HandlerArgs, options: ResearchCommandOptions, command: Command): Promise<void> => {
       const [topicArg] = args as readonly [string];
@@ -144,11 +143,11 @@ export function makeResearchHandler(runtime?: Partial<ResearchRuntime>): Handler
       const agent = await resolvedRuntime.resolveAgent(
         'research',
         options,
-        resolvedRuntime.env,
+        context.settings.env(),
         effective,
       );
       if (agent.mode === 'no-llm' && agent.reason === 'unavailable') {
-        resolvedRuntime.stderr.write(
+        context.output.stderr.write(
           `warning: model ${agent.model.provider}/${agent.model.id} is unavailable because no credential resolved; ` +
             'configure provider auth or pass --auth-secret <ref>; using deterministic research\n',
         );
@@ -157,14 +156,14 @@ export function makeResearchHandler(runtime?: Partial<ResearchRuntime>): Handler
       const format = resolveFormat(options);
       const detail = (options.detail ?? 'standard') as BriefDetailLevel;
       if (options.template !== undefined && invocation.options.noLlm) {
-        resolvedRuntime.stderr.write(`${TEMPLATE_LLM_GUARD}\n`);
+        context.output.stderr.write(`${TEMPLATE_LLM_GUARD}\n`);
         throw new CommanderError(1, 'yantra.template.llm-required', TEMPLATE_LLM_GUARD);
       }
       const template =
         options.template === undefined
           ? undefined
           : await resolvedRuntime.resolveTemplate(options.template).catch((error: unknown) => {
-              resolvedRuntime.stderr.write(
+              context.output.stderr.write(
                 `${error instanceof Error ? error.message : String(error)}\n`,
               );
               throw error;
@@ -174,7 +173,7 @@ export function makeResearchHandler(runtime?: Partial<ResearchRuntime>): Handler
         (command.getOptionValueSource('detail') === 'cli' ||
           command.getOptionValueSource('length') === 'cli')
       ) {
-        resolvedRuntime.stderr.write(
+        context.output.stderr.write(
           'warning: --detail and --length do not affect template-defined report structure\n',
         );
       }
@@ -182,7 +181,7 @@ export function makeResearchHandler(runtime?: Partial<ResearchRuntime>): Handler
       // A scripted `--no-browse` must keep working when credentials go
       // missing, so the deterministic path warns and continues.
       if (agent.mode === 'no-llm' && options.browse === false) {
-        resolvedRuntime.stderr.write(
+        context.output.stderr.write(
           'warning: --no-browse has no effect on deterministic research, which never opens a browsing session\n',
         );
       }
@@ -191,7 +190,7 @@ export function makeResearchHandler(runtime?: Partial<ResearchRuntime>): Handler
       // failure (exit 1) rather than being reclassified as an execution failure
       // by the catch below. Skipped entirely in deterministic mode, which never
       // constructs a provider session.
-      resolvedRuntime.stderr.write(
+      context.output.stderr.write(
         `research: search-provider=${invocation.searchProvider ?? 'auto'} ` +
           `depth=${invocation.options.budget.maxHops} max-sources=${invocation.options.budget.maxSources} ` +
           `no-llm=${invocation.options.noLlm} detail=${detail} format=${format}` +
@@ -201,7 +200,7 @@ export function makeResearchHandler(runtime?: Partial<ResearchRuntime>): Handler
           '\n',
       );
       // The goal exactly as received, so a shell-rewritten argument is visible.
-      resolvedRuntime.stderr.write(renderGoalEcho(topicArg));
+      context.output.stderr.write(renderGoalEcho(topicArg));
 
       try {
         // Deterministic selection is resolved before any agent/provider setup.
@@ -213,6 +212,7 @@ export function makeResearchHandler(runtime?: Partial<ResearchRuntime>): Handler
             detail,
             options,
             resolvedRuntime,
+            context,
             template,
             agent,
             resolveAmbientContext(effective),
@@ -222,26 +222,25 @@ export function makeResearchHandler(runtime?: Partial<ResearchRuntime>): Handler
           return;
         }
         const loop = await resolvedRuntime.createLoop(invocation, {
-          installOfferGateway:
-            resolvedRuntime.isTty && format !== 'json'
-              ? new InteractiveInstallOfferGateway({ sink: resolvedRuntime.stderr })
-              : null,
+          installOfferGateway: context.gateways.installOffer(
+            context.isInteractive({ json: format === 'json' }),
+          ),
           ...(browserSelection === undefined ? {} : { selection: browserSelection }),
         });
         const result: ResearchRunResult = await loop.run(invocation.options);
 
-        renderBrief(resolvedRuntime, result, { format, detail, options });
+        renderBrief(context, result, { format, detail, options });
 
         if (options.open === true && result.artifacts !== null) {
-          openArtifact(result.artifacts.htmlPath);
+          context.openExternal(result.artifacts.htmlPath);
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (error instanceof UserInputMarkerError) {
-          resolvedRuntime.stderr.write(`research validation failed: ${message}\n`);
+          context.output.stderr.write(`research validation failed: ${message}\n`);
           throw new CommanderError(1, 'yantra.research.invalid-user-input-marker', message);
         }
-        resolvedRuntime.stderr.write(`research failed: ${message}\n`);
+        context.output.stderr.write(`research failed: ${message}\n`);
         throw new CommanderError(2, 'yantra.research.failed', message);
       }
     },
@@ -250,24 +249,32 @@ export function makeResearchHandler(runtime?: Partial<ResearchRuntime>): Handler
 
 /** Renders the Brief through the unified connector dispatch (same as `ask`). */
 function renderBrief(
-  runtime: ResearchRuntime,
+  context: CommandContext,
   result: ResearchRunResult,
   view: { format: BriefOutputFormat; detail: BriefDetailLevel; options: ResearchCommandOptions },
 ): void {
-  const renderer = view.format === 'json' ? new JSONRenderer() : new TerminalRenderer();
-  const io = new CLIConnectorIO(renderer);
-  const stdout = runtime.stdout as NodeJS.WriteStream;
+  if (view.format === 'json') {
+    context.output.json({
+      schemaVersion: SCHEMA_VERSION,
+      kind: 'brief',
+      brief: result.brief,
+      artifacts: result.artifacts,
+    });
+    return;
+  }
+  const renderer = new TerminalRenderer();
+  const io = context.connector(renderer);
 
   const opts: ConnectorRenderOpts = {
-    json: view.format === 'json',
+    json: false,
     debug: false,
-    noColor: resolveNoColor(view.options, runtime),
-    stream: runtime.stdout,
-    errStream: runtime.stderr,
+    noColor: resolveNoColor(view.options, context),
+    stream: context.output.stdout,
+    errStream: context.output.stderr,
     briefDetail: view.detail,
     briefFormat: view.format,
     suppressOpenHint: view.options.open === true,
-    ...(typeof stdout.columns === 'number' ? { width: stdout.columns } : {}),
+    ...(context.output.columns === null ? {} : { width: context.output.columns }),
   };
 
   io.renderResult({ kind: 'brief', brief: result.brief, artifacts: result.artifacts }, opts);
@@ -282,6 +289,7 @@ function renderBrief(
 export async function createDefaultResearchLoop(
   invocation: ResearchInvocation,
   browser: BrowserRuntimeOptions = {},
+  env: Readonly<NodeJS.ProcessEnv> = {},
 ): Promise<ResearchLoop> {
   const logger = noopLogger;
 
@@ -319,7 +327,7 @@ export async function createDefaultResearchLoop(
   const searchConfig = await loadSearchConfig();
   const resolved = await resolveSearchProvider({
     explicitProvider: invocation.searchProvider,
-    env: process.env,
+    env,
     config: searchConfig,
     deps: { keychain, pages, ethicsGate: askEthicsGate, logger },
   });
@@ -345,19 +353,26 @@ export async function createDefaultResearchLoop(
   });
 }
 
-function runtimeWithDefaults(runtime?: Partial<ResearchRuntime>): ResearchRuntime {
+function runtimeWithDefaults(
+  context: CommandContext,
+  runtime?: Partial<ResearchRuntime>,
+): ResearchRuntime {
   return {
-    env: runtime?.env ?? process.env,
-    stdout: runtime?.stdout ?? process.stdout,
-    stderr: runtime?.stderr ?? process.stderr,
-    createLoop: runtime?.createLoop ?? createDefaultResearchLoop,
-    resolveDefaults: runtime?.resolveDefaults ?? (() => loadEffectivePreferences()),
+    createLoop:
+      runtime?.createLoop ??
+      ((invocation, browser) =>
+        createDefaultResearchLoop(invocation, browser, context.settings.env())),
+    resolveDefaults: runtime?.resolveDefaults ?? (() => context.settings.preferences()),
     runTask: runtime?.runTask ?? runAgenticTaskWithRankSink,
     resolveAgent: runtime?.resolveAgent ?? resolveAgentInvocation,
-    isTty: runtime?.isTty ?? process.stdin.isTTY === true,
     resolveTemplate:
       runtime?.resolveTemplate ??
-      ((ref) => resolveTemplateRef(ref, { isTty: runtime?.isTty ?? process.stdin.isTTY === true })),
+      ((ref) =>
+        resolveTemplateRef(ref, {
+          isTty: context.isInteractive({}),
+          cwd: context.cwd,
+          choose: (choices) => context.input.choose(choices),
+        })),
     recordHistory: runtime?.recordHistory ?? ((runId) => recordTaskHistory(runId)),
   };
 }
@@ -369,29 +384,29 @@ async function runAgenticResearch(
   detail: BriefDetailLevel,
   options: ResearchCommandOptions,
   runtime: ResearchRuntime,
+  context: CommandContext,
   template: ActiveReportTemplate | undefined,
   agent: Extract<AgentInvocation, { readonly mode: 'llm' }>,
   ambient: ResolvedAmbientContext,
   browserSelection: BrowserSelection | undefined,
   browse: ResearchBrowseResolution,
 ): Promise<void> {
-  const stdout = runtime.stdout as NodeJS.WriteStream;
   const renderOpts: ConnectorRenderOpts = {
     json: format === 'json',
     debug: false,
-    noColor: resolveNoColor(options, runtime),
-    stream: runtime.stdout,
-    errStream: runtime.stderr,
+    noColor: resolveNoColor(options, context),
+    stream: context.output.stdout,
+    errStream: context.output.stderr,
     briefDetail: detail,
     briefFormat: format,
     suppressOpenHint: options.open === true,
-    ...(typeof stdout.columns === 'number' ? { width: stdout.columns } : {}),
+    ...(context.output.columns === null ? {} : { width: context.output.columns }),
   };
-  const connector = new CLIConnectorIO(
+  const connector = context.connector(
     format === 'json' ? new JSONRenderer() : new TerminalRenderer(),
     {
       renderOpts,
-      interactive: runtime.isTty && format !== 'json',
+      interactive: context.isInteractive({ json: format === 'json' }),
       suppressPublishedOutcome: true,
     },
   );
@@ -410,10 +425,9 @@ async function runAgenticResearch(
       connector,
     },
     {
-      browserInstallOfferGateway:
-        runtime.isTty && format !== 'json'
-          ? new InteractiveInstallOfferGateway({ sink: runtime.stderr })
-          : null,
+      browserInstallOfferGateway: context.gateways.installOffer(
+        context.isInteractive({ json: format === 'json' }),
+      ),
       ...(browserSelection === undefined ? {} : { browserSelection }),
     },
   );
@@ -425,7 +439,7 @@ async function runAgenticResearch(
     const parsed = validateTemplatedReport(raw);
     if (!parsed.isOk) throw new Error('The agent published an invalid templated report artifact.');
     const renderer = format === 'json' ? new JSONRenderer() : new TerminalRenderer();
-    new CLIConnectorIO(renderer).renderResult(
+    context.connector(renderer).renderResult(
       {
         kind: 'templated_report',
         report: parsed.value,
@@ -441,13 +455,13 @@ async function runAgenticResearch(
     const parsed = validateBrief(raw);
     if (!parsed.isOk) throw new Error('The agent published an invalid Brief artifact.');
     renderBrief(
-      runtime,
+      context,
       { brief: parsed.value, artifacts: null, hops: [], terminationReason: 'coverage_met' },
       { format, detail, options },
     );
   }
   await runtime.recordHistory(outcome.runId);
-  if (options.open === true) openArtifact(outcome.brief.htmlPath);
+  if (options.open === true) context.openExternal(outcome.brief.htmlPath);
 }
 
 function buildInvocation(
@@ -489,14 +503,14 @@ function resolveFormat(options: ResearchCommandOptions): BriefOutputFormat {
   return format === 'md' || format === 'html' || format === 'json' ? format : 'terminal';
 }
 
-function resolveNoColor(options: ResearchCommandOptions, runtime: ResearchRuntime): boolean {
+function resolveNoColor(options: ResearchCommandOptions, context: CommandContext): boolean {
   if (options.color === false) {
     return true;
   }
-  if (runtime.env.NO_COLOR !== undefined && runtime.env.NO_COLOR !== '') {
+  if (context.settings.env().NO_COLOR !== undefined && context.settings.env().NO_COLOR !== '') {
     return true;
   }
-  return (runtime.stdout as NodeJS.WriteStream).isTTY !== true;
+  return !context.output.colorCapable;
 }
 
 function parseLength(raw: string | undefined): SynthesisLength {

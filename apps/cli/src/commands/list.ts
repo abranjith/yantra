@@ -16,7 +16,8 @@ import { LocalRunStore, type RunSummary } from '@yantra/core/workflow/replay';
 import { COMMAND_REGISTRY } from '@yantra/protocol';
 import type { Command } from 'commander';
 
-import { CLIConnectorIO, buildRenderOpts } from '../connector-io.js';
+import { CLIConnectorIO } from '../adapters/terminal/connector.js';
+import { buildRenderOpts } from '../adapters/terminal/connector.js';
 import { readGlobalFlags } from '../global-flags.js';
 import { openHistory } from '../history.js';
 import { createRegisteredCommand } from '../registry/build-command-tree.js';
@@ -50,7 +51,7 @@ export async function listHandler(args: HandlerArgs, options: ListOptions): Prom
   const renderer =
     options.json === true || flags.json ? new JSONRenderer() : new TerminalRenderer();
   const connector = new CLIConnectorIO(renderer);
-  const logger: Logger = makeStderrLogger(options.debug === true);
+  const logger: Logger = makeStderrLogger(options.debug === true, process.stderr);
   const renderOpts = buildRenderOpts({
     ...flags,
     json: options.json === true || flags.json,

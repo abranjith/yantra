@@ -1,6 +1,6 @@
 {
   "stdout": "Usage: yantra daemon [options] [command]\n\nManage the local scheduler service\n\nOptions:\n  -h, --help        display help for command\n\nCommands:\n  start [options]   Start the scheduler daemon\n  stop [options]    Stop the running scheduler daemon\n  status [options]  Report scheduler daemon status\n  help [command]    display help for command\n",
-  "stderr": "intercepted exit 0\n",
+  "stderr": "",
   "exitCode": 0,
   "tree": {}
 }

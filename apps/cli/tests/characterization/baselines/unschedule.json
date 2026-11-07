@@ -1,6 +1,6 @@
 {
   "stdout": "Usage: yantra unschedule [options] <id>\n\nRemove a registered schedule\n\nArguments:\n  id          Schedule id (from `yantra schedules`)\n\nOptions:\n  --json      Emit JSON summary to stdout (default: false)\n  --debug     Verbose logging to stderr (default: false)\n  -h, --help  display help for command\n",
-  "stderr": "intercepted exit 0\n",
+  "stderr": "",
   "exitCode": 0,
   "tree": {}
 }

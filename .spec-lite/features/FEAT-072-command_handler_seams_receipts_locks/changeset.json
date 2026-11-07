@@ -2,6 +2,48 @@
   "vcs": "git",
   "files": [
     {
+      "path": "apps/cli/src/_lint-fixtures/impure-handler.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/adapters/terminal/connector.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/adapters/terminal/prompts.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/adapters/terminal/terminal-adapter.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/bin.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/commands/ask.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/commands/audit.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
       "path": "apps/cli/src/commands/browser.ts",
       "status": "M",
       "role": "implement",
@@ -14,10 +56,34 @@
       "task": "TASK-002"
     },
     {
+      "path": "apps/cli/src/commands/daemon.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/commands/do.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/commands/doctor.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
       "path": "apps/cli/src/commands/init.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "apps/cli/src/commands/list.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
     },
     {
       "path": "apps/cli/src/commands/model.ts",
@@ -30,6 +96,24 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "apps/cli/src/commands/profile.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/commands/report.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/commands/research.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
     },
     {
       "path": "apps/cli/src/commands/resume.ts",
@@ -56,10 +140,100 @@
       "task": "TASK-004"
     },
     {
+      "path": "apps/cli/src/commands/show.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/commands/sites.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/commands/usage.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/connector-io.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/context/command-context.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/context/settings-resolver.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/execute.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/program.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/registry/build-command-tree.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/registry/handler.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/registry/handlers.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
       "path": "apps/cli/src/resource-busy.ts",
       "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "apps/cli/src/runtime.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/tests/adapters/terminal-adapter.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/tests/boundaries/handler-purity.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
     },
     {
       "path": "apps/cli/tests/characterization/baselines/ask.deterministic.json",
@@ -758,6 +932,24 @@
       "task": "TASK-004"
     },
     {
+      "path": "apps/cli/tests/connector-io.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/tests/render/brief-dispatch.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/tests/render/templated-report.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
       "path": "apps/cli/tests/resource-busy.spec.ts",
       "status": "A",
       "role": "implement",
@@ -969,7 +1161,7 @@
     },
     {
       "path": "packages/core/tests/browser/profile-lease.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },

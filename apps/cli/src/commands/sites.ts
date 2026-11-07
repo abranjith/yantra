@@ -108,7 +108,7 @@ async function withStore(
   runtime: SitesRuntime,
   action: (store: DomainRankStore) => void,
 ): Promise<void> {
-  const handle = await runtime.openStore(makeStderrLogger(options.debug === true));
+  const handle = await runtime.openStore(makeStderrLogger(options.debug === true, process.stderr));
   if (handle === null) fail(runtime, 'site ranking index unavailable — run `yantra doctor`', 3);
   try {
     action(handle.store);

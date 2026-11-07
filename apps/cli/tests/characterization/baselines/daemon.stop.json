@@ -1,6 +1,6 @@
 {
   "stdout": "Usage: yantra daemon stop [options]\n\nStop the running scheduler daemon\n\nOptions:\n  --debug     Verbose logging to stderr (default: false)\n  -h, --help  display help for command\n",
-  "stderr": "intercepted exit 0\n",
+  "stderr": "",
   "exitCode": 0,
   "tree": {}
 }

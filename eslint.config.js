@@ -167,6 +167,70 @@ export const DRSHYA_STYLE_SELECTORS = [
   },
 ];
 
+/** Shrink-only migration list, introduced 2026-11-03; removed at TASK-015. */
+export const HANDLER_PURITY_MIGRATION_ALLOWLIST = [
+  'apps/cli/src/commands/ask.ts',
+  'apps/cli/src/commands/audit.ts',
+  'apps/cli/src/commands/browser.ts',
+  'apps/cli/src/commands/config.ts',
+  'apps/cli/src/commands/confirm.ts',
+  'apps/cli/src/commands/daemon.ts',
+  'apps/cli/src/commands/do.ts',
+  'apps/cli/src/commands/doctor.ts',
+  'apps/cli/src/commands/init-context-prompts.ts',
+  'apps/cli/src/commands/init-wizard.ts',
+  'apps/cli/src/commands/init.ts',
+  'apps/cli/src/commands/lint.ts',
+  'apps/cli/src/commands/list.ts',
+  'apps/cli/src/commands/model.ts',
+  'apps/cli/src/commands/open.ts',
+  'apps/cli/src/commands/prefs.ts',
+  'apps/cli/src/commands/profile.ts',
+  'apps/cli/src/commands/report.ts',
+  'apps/cli/src/commands/resume.ts',
+  'apps/cli/src/commands/run.ts',
+  'apps/cli/src/commands/schedule.ts',
+  'apps/cli/src/commands/secret.ts',
+  'apps/cli/src/commands/show.ts',
+  'apps/cli/src/commands/sites.ts',
+  'apps/cli/src/commands/template.ts',
+  'apps/cli/src/commands/usage.ts',
+  'apps/cli/src/global-flags.ts',
+  'apps/cli/src/open-artifact.ts',
+  'apps/cli/src/render/brief-terminal.ts',
+  'apps/cli/src/render/types.ts',
+  'apps/cli/src/synthesis-llm.ts',
+  'apps/cli/src/template-ref.ts',
+];
+export const HANDLER_PURITY_SELECTORS = [
+  {
+    selector:
+      'MemberExpression[object.name="process"][property.name=/^(exit|exitCode|stdin|stdout|stderr|env|cwd|chdir|on|once|off|argv|kill)$/]',
+    message: 'Handler purity: use CommandContext instead of process capabilities.',
+  },
+  {
+    selector:
+      'MemberExpression[object.name="process"][computed=true][property.value=/^(exit|exitCode|stdin|stdout|stderr|env|cwd|chdir|on|once|off|argv|kill)$/]',
+    message: 'Handler purity: use CommandContext instead of process capabilities.',
+  },
+  {
+    selector: 'MemberExpression[property.name="isTTY"]',
+    message: 'Handler purity: use context.isInteractive or output.colorCapable.',
+  },
+  {
+    selector: 'NewExpression[callee.name="CLIConnectorIO"]',
+    message: 'Handler purity: use context.connector.',
+  },
+  {
+    selector: 'MemberExpression[object.name="console"]',
+    message: 'Handler purity: use context.output or logger.',
+  },
+  {
+    selector: 'ImportDeclaration[source.value="prompts"]',
+    message: 'Handler purity: use context.input.',
+  },
+];
+
 export default tseslint.config(
   {
     ignores: [
@@ -397,6 +461,18 @@ export default tseslint.config(
     rules: {
       ...tseslint.configs.disableTypeChecked.rules,
       '@typescript-eslint/no-unused-vars': 'off',
+    },
+  },
+
+  {
+    files: ['apps/cli/src/**/*.ts'],
+    ignores: [
+      'apps/cli/src/adapters/terminal/**/*.ts',
+      'apps/cli/src/bin.ts',
+      ...HANDLER_PURITY_MIGRATION_ALLOWLIST,
+    ],
+    rules: {
+      'no-restricted-syntax': ['error', ...SITE_SPECIFIC_SELECTORS, ...HANDLER_PURITY_SELECTORS],
     },
   },
 

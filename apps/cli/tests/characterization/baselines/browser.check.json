@@ -1,6 +1,6 @@
 {
   "stdout": "Usage: yantra browser check [options]\n\nRun a fresh local compatibility check against the selected browser, using\nisolated synthetic pages. No network: this does not look for a newer browser\n\nOptions:\n  --browser <source>     browser source for this invocation (auto, managed, or\n                         system)\n  --browser-path <path>  absolute path to a Chrome or Chromium executable\n  --json                 emit the compatibility report as JSON (default: false)\n  -h, --help             display help for command\n",
-  "stderr": "intercepted exit 0\n",
+  "stderr": "",
   "exitCode": 0,
   "tree": {}
 }

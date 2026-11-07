@@ -25,7 +25,7 @@ interface ProfileOptions {
 
 /** `yantra profile`: bound to the `profile` registry entry. */
 export async function profileHandler(_args: HandlerArgs, options: ProfileOptions): Promise<void> {
-  const logger = makeStderrLogger(options.debug === true);
+  const logger = makeStderrLogger(options.debug === true, process.stderr);
   const effective = await loadEffectivePreferences(logger);
 
   const rows = [...effective.values()].sort((a, b) => a.key.localeCompare(b.key));

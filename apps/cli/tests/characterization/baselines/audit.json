@@ -1,6 +1,6 @@
 {
   "stdout": "Usage: yantra audit [options] <run-id>\n\nRender a run directory as a readable audit story\n\nOptions:\n  --json      emit JSON instead of prose (default: false)\n  -h, --help  display help for command\n",
-  "stderr": "intercepted exit 0\n",
+  "stderr": "",
   "exitCode": 0,
   "tree": {}
 }

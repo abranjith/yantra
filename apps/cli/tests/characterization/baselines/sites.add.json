@@ -1,6 +1,6 @@
 {
   "stdout": "Usage: yantra sites add [options] <domain>\n\nAdd or promote a user-curated domain\n\nArguments:\n  domain      hostname such as example.com\n\nOptions:\n  --json      emit JSON (default: false)\n  --debug     verbose logging on stderr (default: false)\n  -h, --help  display help for command\n",
-  "stderr": "intercepted exit 0\n",
+  "stderr": "",
   "exitCode": 0,
   "tree": {}
 }

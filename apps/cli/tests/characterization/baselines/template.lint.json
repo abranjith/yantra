@@ -1,6 +1,6 @@
 {
   "stdout": "Usage: yantra template lint [options] <name-or-path>\n\nParse a saved template or Markdown path and print its slot manifest.\n\nArguments:\n  name-or-path  saved name or Markdown file path\n\nOptions:\n  --json        emit a stable JSON envelope (default: false)\n  -h, --help    display help for command\n",
-  "stderr": "intercepted exit 0\n",
+  "stderr": "",
   "exitCode": 0,
   "tree": {}
 }

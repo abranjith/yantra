@@ -30,7 +30,7 @@ const TASK_TYPES = new Set<TaskType>(['ask', 'research', 'run', 'do']);
 
 /** `yantra usage`: bound to the `usage` registry entry. */
 export async function usageHandler(_args: HandlerArgs, options: UsageOptions): Promise<void> {
-  const logger = makeStderrLogger(options.debug === true);
+  const logger = makeStderrLogger(options.debug === true, process.stderr);
 
   const filter: UsageRollupFilter = {};
   if (options.type !== undefined) {

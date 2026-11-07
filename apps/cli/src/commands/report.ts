@@ -14,7 +14,8 @@ import { join } from 'node:path';
 
 import { LocalRunStore } from '@yantra/core/workflow/replay';
 
-import { CLIConnectorIO, buildRenderOpts } from '../connector-io.js';
+import { CLIConnectorIO } from '../adapters/terminal/connector.js';
+import { buildRenderOpts } from '../adapters/terminal/connector.js';
 import { readGlobalFlags } from '../global-flags.js';
 import type { HandlerArgs } from '../registry/handler.js';
 import { JSONRenderer } from '../render/json.js';

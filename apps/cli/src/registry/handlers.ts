@@ -33,6 +33,7 @@ import { showHandler } from '../commands/show.js';
 import { sitesHandlers } from '../commands/sites.js';
 import { templateHandlers } from '../commands/template.js';
 import { usageHandler } from '../commands/usage.js';
+import type { CommandContext } from '../context/command-context.js';
 import type { CliRunOptions } from '../program.js';
 
 import { handler, type HandlerBinding } from './handler.js';
@@ -44,10 +45,11 @@ import { handler, type HandlerBinding } from './handler.js';
  */
 export function buildHandlers(
   options: CliRunOptions = {},
+  context?: CommandContext,
 ): Readonly<Record<LeafCommandId, HandlerBinding>> {
   return {
     ask: makeAskHandler(options.askRuntime),
-    research: makeResearchHandler(options.researchRuntime),
+    research: makeResearchHandler(options.researchRuntime, context),
     do: makeDoHandler(options.doRuntime),
     run: handler(runHandler),
     resume: handler(resumeHandler),

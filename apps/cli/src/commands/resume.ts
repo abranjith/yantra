@@ -60,7 +60,7 @@ export function makeResumeCommand(): Command {
 export async function resumeHandler(args: HandlerArgs, options: ResumeOptions): Promise<void> {
   const [runId] = args as readonly [string];
 
-  const logger = makeStderrLogger(options.debug === true);
+  const logger = makeStderrLogger(options.debug === true, process.stderr);
   logger.info({ runId }, 'yantra resume: starting');
   let closeRuntime = (): void => undefined;
 

@@ -44,6 +44,7 @@ import {
 import { validateBrief, validateTemplatedReport, type TemplatedReport } from '@yantra/protocol';
 import { CommanderError, type Command } from 'commander';
 
+import { CLIConnectorIO } from '../adapters/terminal/connector.js';
 import {
   parseDuration,
   resolveAgentInvocation,
@@ -54,7 +55,7 @@ import {
   resolveBrowserSelectionOverride,
   type BrowserSelectionOptions,
 } from '../browser-options.js';
-import { CLIConnectorIO, agentFailureLine } from '../connector-io.js';
+import { agentFailureLine } from '../connector-io.js';
 import { recordTaskHistory } from '../history.js';
 import { openArtifact } from '../open-artifact.js';
 import {

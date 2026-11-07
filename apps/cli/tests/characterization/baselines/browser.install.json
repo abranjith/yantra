@@ -1,6 +1,6 @@
 {
   "stdout": "Usage: yantra browser install [options]\n\nDownload current Chrome for Testing Stable into Yantra-managed storage\n\nOptions:\n  --yes       accept the download without prompting (default: false)\n  --json      emit exactly one JSON outcome (default: false)\n  -h, --help  display help for command\n",
-  "stderr": "intercepted exit 0\n",
+  "stderr": "",
   "exitCode": 0,
   "tree": {}
 }

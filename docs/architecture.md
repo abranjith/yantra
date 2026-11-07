@@ -2338,8 +2338,9 @@ relative link it allows beside its `http(s)`-only rule. The wording is shared by
 
 ### `apps/cli`
 
-`@yantra/cli` is the executable composition root. `src/bin.ts` delegates to the Commander program
-in `src/index.ts`, which registers the public command surface. Commands parse and validate input,
+`@yantra/cli` is the executable composition root. `src/bin.ts` delegates to `runTerminal` in
+`src/adapters/terminal/terminal-adapter.ts`; the package's `src/index.ts` keeps `run()` as a
+compatibility wrapper around that same entry point. Commands parse and validate input,
 merge flags/environment/profile defaults, choose deterministic or agentic execution before
 constructing a provider, build runtime dependencies, render terminal or machine output, record
 best-effort history, and map outcomes to exit codes. The CLI does not implement a second agent
@@ -2407,8 +2408,8 @@ The principal execution surfaces are:
 #### Command registry and program construction
 
 `src/program.ts` owns `buildProgram(options)`, which constructs the complete commander tree without
-parsing anything. `run()` in `src/index.ts` keeps only the no-argument banner, the parse, and the
-CommanderError-to-exit-code mapping. The root applies `showHelpAfterError()` before any command is
+parsing anything. `executeCommand(argv, context)` in `src/execute.ts` owns the no-argument banner,
+parsing, output routing, and error-to-result mapping. The root applies `showHelpAfterError()` before any command is
 registered, because the setting is inherited only by commands created with `program.command()`
 (today `ask`, `research` and `do`), never by commands attached with `addCommand`. That difference
 is user-visible, which is why the registry records each command's `registration` style.
@@ -2529,6 +2530,72 @@ put the action body in an exported handler in the command's module, and bind it 
 `makeBrowserCommand`) is a one-line wrapper around `createRegisteredCommand`, so it is generated as
 well.
 
+#### Command context and terminal adapter
+
+FEAT-072 TASK-006 introduces an explicit invocation boundary in
+`src/context/command-context.ts`. `CommandContext` carries the surface, working directory,
+invocation ID, abort signal, output sinks and JSON methods, input collector, settings resolver,
+logger, connector factory, confirmation/install-offer gateways, and external-artifact opener.
+`CommandResult` carries an exit code, including cancellation code 130; `CommandFailure` carries a
+safe diagnostic, code, optional remediation, and whether the handler already rendered it.
+
+```mermaid
+flowchart LR
+  Bin[bin.ts or index.ts run] --> Terminal[runTerminal]
+  Terminal --> Context[createTerminalContext]
+  Terminal --> Execute[executeCommand]
+  Context --> Execute
+  Execute --> Tree[Generated commander tree]
+  Tree --> Research[research handler with context]
+  Tree --> Legacy[Other handlers awaiting context migration]
+  Research --> Services[Core or agent runtime]
+  Research --> IO[Context output and gateways]
+```
+
+`runTerminal` owns the process signal listeners: SIGINT and SIGTERM abort its controller, and the
+listeners are removed in `finally`. `createTerminalContext` supplies process defaults while
+allowing streams, environment, TTY state, working directory, and signal to be injected. Its
+interactive predicate is stdin TTY and non-JSON output. It creates terminal prompts, sink-backed
+logging and confirmation/install-offer gateways, exposes output width and color capability, and
+opens artifacts through the existing desktop opener. `bin.ts` applies the returned exit code to
+the process.
+
+`executeCommand` binds each registry leaf to its invocation's settings resolver before calling
+the handler. It builds the same generated tree through `buildProgram`, recursively routes
+commander's `writeOut` and `writeErr` to the supplied sinks, enables `exitOverride()`, and returns
+the handler's result. `ResourceBusyError` becomes exit 3 with a `busy` JSON envelope or a human
+diagnostic; `CommandFailure` preserves its code and avoids duplicate diagnostics; commander help
+is success and other commander failures retain their exit code. Unexpected errors produce a
+diagnostic and exit 2. This boundary is shared execution plumbing; the remaining legacy handler
+bindings still use their existing process dependencies.
+
+`SettingsResolver` snapshots and freezes the supplied environment, memoizes effective preferences,
+and binds to the parsed registry entry and commander command. `option(name)` walks that option's
+declared precedence, recording the selected value and source; `record` supports composite
+resolutions and `recorded()` returns the ledger sorted by key. Receipt drafting and persistence
+are later work, so this ledger does not yet produce an execution receipt.
+
+`research` is the first command migrated to this context. Its runtime seam retains the loop,
+agent/model resolution, template resolution, history, and execution dependencies; output,
+environment, interactivity, connector construction, install offers, and artifact opening now
+come from the context. Default template resolution receives its working directory and chooser
+from the context. Deterministic Brief JSON uses `output.json`; both research paths render through
+the injected streams and connector factory. Existing command-specific preference and agent
+resolvers remain in use with the context's environment snapshot and memoized preferences.
+
+`CommandConnectorIO` in `src/connector-io.ts` holds shared event and result rendering. The terminal
+`CLIConnectorIO` subclass lives in `src/adapters/terminal/connector.ts`, where its readline consent
+prompt uses stdin and the configured diagnostic stream. This keeps the terminal confirmation
+mechanism at the adapter boundary. A worker adapter and its result transport are not implemented
+at this stage; a `worker` context surface is a contract for the next migration step.
+
+The handler-purity block in `eslint.config.js` applies to `apps/cli/src/**/*.ts`, except `bin.ts`,
+the terminal adapter directory, and `HANDLER_PURITY_MIGRATION_ALLOWLIST`. It combines the existing
+site-token restrictions with selectors rejecting process capabilities, `isTTY`, direct
+`CLIConnectorIO` construction, console access, and `prompts` imports. The allowlist is dated
+2026-11-03, is shrink-only during migration, and is scheduled for removal in TASK-015.
+`research.ts` is already absent; the rule does not yet establish purity for every command.
+
 #### Terminal behavior characterization
 
 `apps/cli/tests/characterization/terminal-baseline.spec.ts` adds an `@no-llm` baseline of the
@@ -2553,8 +2620,8 @@ print an extra error that the terminal never emits. Deterministic `ask` and `res
 existing runtime seams with a canonical Brief and stub pipeline or loop; the other rows exercise
 local operations and refusals without network, model, or Chrome work. Expected results live in
 `characterization/baselines/*.json`; `CAPTURE_TERMINAL_BASELINES=1` explicitly recaptures them.
-This captures today's terminal behavior while command handlers still retain their current
-process dependencies.
+This captures terminal behavior during the incremental context migration; handlers other than
+`research` still retain their current process dependencies.
 
 ### `packages/ui` (Drshya)
 

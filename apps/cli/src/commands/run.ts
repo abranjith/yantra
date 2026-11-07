@@ -43,6 +43,7 @@ import type { Brief } from '@yantra/protocol';
 import { validateBrief } from '@yantra/protocol';
 import { type Command } from 'commander';
 
+import { CLIConnectorIO } from '../adapters/terminal/connector.js';
 import {
   resolveAgentInvocation,
   type AgentInvocationDependencies,
@@ -53,7 +54,6 @@ import {
   resolveBrowserSelectionOverride,
   type BrowserSelectionOptions,
 } from '../browser-options.js';
-import { CLIConnectorIO } from '../connector-io.js';
 import { recordTaskHistory } from '../history.js';
 import { openArtifact } from '../open-artifact.js';
 import { loadEffectivePreferences } from '../preferences.js';
@@ -106,7 +106,7 @@ export async function runHandler(args: HandlerArgs, options: RunOptions): Promis
     );
     process.exit(1);
   }
-  const logger = makeStderrLogger(options.debug === true);
+  const logger = makeStderrLogger(options.debug === true, process.stderr);
   logger.info({ workflowName }, 'yantra run: starting');
   let closeRuntime = (): void => undefined;
 

@@ -266,13 +266,16 @@ async function openRateLimitStore(
   }
 }
 
-export function makeStderrLogger(debug: boolean): Logger {
+export function makeStderrLogger(
+  debug: boolean,
+  sink: Pick<NodeJS.WritableStream, 'write'>,
+): Logger {
   if (!debug) return noopLogger;
   return {
-    info: (obj, msg) => process.stderr.write(`[info]  ${msg ?? ''} ${stringify(obj)}\n`),
-    warn: (obj, msg) => process.stderr.write(`[warn]  ${msg ?? ''} ${stringify(obj)}\n`),
-    error: (obj, msg) => process.stderr.write(`[error] ${msg ?? ''} ${stringify(obj)}\n`),
-    debug: (obj, msg) => process.stderr.write(`[debug] ${msg ?? ''} ${stringify(obj)}\n`),
+    info: (obj, msg) => sink.write(`[info]  ${msg ?? ''} ${stringify(obj)}\n`),
+    warn: (obj, msg) => sink.write(`[warn]  ${msg ?? ''} ${stringify(obj)}\n`),
+    error: (obj, msg) => sink.write(`[error] ${msg ?? ''} ${stringify(obj)}\n`),
+    debug: (obj, msg) => sink.write(`[debug] ${msg ?? ''} ${stringify(obj)}\n`),
   };
 }
 

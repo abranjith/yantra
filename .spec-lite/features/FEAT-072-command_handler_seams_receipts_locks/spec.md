@@ -102,10 +102,10 @@ instead of re-implementing them. The CLI benefits directly too: a `yantra config
     already recorded in `runtime.jsonl` by FEAT-047 and is not duplicated here.
 - **CommandResultMessage** (`@yantra/protocol`, `schemas/command-result.ts`): the worker result
   transport. FEAT-064 frames it on the run socket.
-  - `{type: 'result', exit_code: 0|1|2|3|4, envelope: JSON | null, text: string | null}`. `envelope` is
+  - `{type: 'result', exit_code: 0|1|2|3|4|130, envelope: JSON | null, text: string | null}`. `envelope` is
     the object the terminal would print under `--json`. `text` is the human output when the handler
     emitted no envelope, capped at 64 KiB with a truncation marker.
-  - `{type: 'error', exit_code: 1|2|3|4, code: string, message: string, remediation: string | null}`.
+  - `{type: 'error', exit_code: 1|2|3|4|130, code: string, message: string, remediation: string | null}`.
 - **ResourceLockOwner** (core, `<resource>.lock.owner.json`, 0600). The sidecar written after a lock is
   acquired and removed before it is released. `proper-lockfile` stores no holder, so this sidecar is how
   a `busy` response describes the holder.
@@ -565,9 +565,11 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
   - In an e2e `cli-commands` case, two `yantra run <cookies-auto-workflow>` processes against a local
     fixture server: one exits 3 with `busy` on stderr.
 
+> User clarification (2026-11-06): preserve cancellation exit code 130 on both terminal and worker surfaces, including the worker result schema.
+
 ### TASK-006: Command context, terminal adapter and purity lint; migrate `research`
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - Create `context/command-context.ts`, `context/settings-resolver.ts` (with `option`, `env`,
     `preferences` and `record`; receipt drafting comes in TASK-008) and `execute.ts`.
   - `executeCommand` builds FEAT-062's generated program and binds handlers to the context. It sets
@@ -588,7 +590,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
   - Add the handler-purity ESLint block (scope, selectors and the site-selector merge as in §3), the
     `_lint-fixtures/impure-handler.ts` fixture, and `HANDLER_PURITY_MIGRATION_ALLOWLIST` dated
     2026-11-03, listing every file not yet migrated.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - `terminal-adapter.spec.ts`:
     - `--help` and parse errors route through the output sinks byte-identically to the TASK-001
       baseline;
@@ -601,7 +603,12 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
     - every non-allowlisted file under `apps/cli/src` is clean;
     - the allowlist contains only files that exist.
   - The TASK-001 `research` baselines are unchanged.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/architecture.md` (handler
+
+  > DEVIATION: help baselines no longer contain the synthetic `intercepted exit 0` stderr line.
+  > It was emitted by the original harness throwing from its `process.exit` spy and the old
+  > runner catching that test exception. The real CLI never printed it. Help stdout remains byte-identical.
+
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/architecture.md` (handler
       seams, the terminal adapter and the purity rule).
 - **Verify**:
   - `npx turbo run lint typecheck` passes.
@@ -644,7 +651,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
     - terminal non-TTY versus worker unattended give identical normalized run trees and exit codes;
     - terminal non-TTY `--json` stdout versus worker envelope are deep-equal;
     - a failing loop gives identical exit 2 on both.
-  - Protocol: the schema round-trips, and `exit_code` outside 0 to 4 is rejected.
+  - Protocol: the schema round-trips, and `exit_code` outside 0 to 4 and 130 is rejected.
 - [ ] **Documentation Update**: Invoke **Document** update mode for `docs/architecture.md` (the worker
       adapter and result transport) and `docs/protocol-spec.md` (generated).
 - **Verify**: `pnpm --filter @yantra/protocol verify` passes; the parity spec passes for the `research`
@@ -915,7 +922,7 @@ tests/setup` passes; `init.ts`, `init-wizard.ts` and `init-context-prompts.ts` a
   - Handlers signal failure with `CommandFailure` (exit code, code, message, remediation) or the typed
     domain errors that already exist (`BrowserInstallOfferDeclinedError`,
     `BrowserManagedInstallError`, `ResourceBusyError`).
-  - `executeCommand` is the single mapper to exit codes 0 to 4 (memory → Error Handling). `busy` is
+  - `executeCommand` is the single mapper to exit codes 0 to 4 and 130 (user cancellation) (memory → Error Handling). `busy` is
     exit 3 (environment) with the holder's description. A lock failure that is not contention (for
     example `EACCES`) propagates as an execution failure; it is never reported as `busy`.
   - Custom errors carry safe, actionable context and are never swallowed. `onCompromised` is the one
@@ -952,7 +959,7 @@ tests/setup` passes; `init.ts`, `init-wizard.ts` and `init-context-prompts.ts` a
 - [x] TASK-003: Locked `profile.yaml` writes and the concurrent-writer evidence (I1)
 - [x] TASK-004: Workflow, template and schedule-registry locks; core fixed-temp lint rule
 - [x] TASK-005: Persistent browser-profile exclusivity
-- [ ] TASK-006: Command context, terminal adapter and purity lint; migrate `research`
+- [x] TASK-006: Command context, terminal adapter and purity lint; migrate `research`
 - [ ] TASK-007: Worker adapter, result transport and `research` parity
 - [ ] TASK-008: Execution receipts, settings provenance and the canary (research first)
 - [ ] TASK-009: Migrate `ask` and `do` (agentic run class) with receipts and abort

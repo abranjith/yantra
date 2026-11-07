@@ -70,7 +70,7 @@ export function daemonHandlers() {
 
 /** Runs the daemon in the foreground, blocking until SIGTERM/SIGINT. */
 async function runForeground(debug: boolean): Promise<void> {
-  const logger = makeStderrLogger(debug);
+  const logger = makeStderrLogger(debug, process.stderr);
   const built = await buildDaemon(logger);
   if (built === null) {
     process.stderr.write('Error: the local index is unavailable — cannot start the daemon.\n');
@@ -135,7 +135,7 @@ async function spawnDetached(): Promise<void> {
 
 /** Signals the lock-holder PID and waits (bounded) for the lock to free. */
 async function stopDaemon(debug: boolean): Promise<void> {
-  const logger = makeStderrLogger(debug);
+  const logger = makeStderrLogger(debug, process.stderr);
   const lock = new FileDaemonLock();
   const info = await lock.probe();
   if (info?.pid == null) {
@@ -172,7 +172,7 @@ async function stopDaemon(debug: boolean): Promise<void> {
 
 /** Prints the daemon status (running?, pid, schedules, next fires). */
 async function reportStatus(json: boolean, debug: boolean): Promise<void> {
-  const logger = makeStderrLogger(debug);
+  const logger = makeStderrLogger(debug, process.stderr);
   const built = await buildDaemon(logger);
   if (built === null) {
     const empty = {

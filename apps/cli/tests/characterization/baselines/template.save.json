@@ -1,6 +1,6 @@
 {
   "stdout": "Usage: yantra template save [options] <path>\n\nValidate and save a Markdown template in the local library.\n\nArguments:\n  path                  template Markdown path\n\nOptions:\n  --name <name>         saved name (defaults to frontmatter or filename)\n  --tags <a,b>          replace frontmatter tags\n  --description <text>  replace the frontmatter description\n  --force               overwrite an existing template (default: false)\n  --json                emit a stable JSON envelope (default: false)\n  -h, --help            display help for command\n",
-  "stderr": "intercepted exit 0\n",
+  "stderr": "",
   "exitCode": 0,
   "tree": {}
 }

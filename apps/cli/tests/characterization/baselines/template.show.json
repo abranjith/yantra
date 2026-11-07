@@ -1,6 +1,6 @@
 {
   "stdout": "Usage: yantra template show [options] <name>\n\nPrint a saved template and its parsed slots.\n\nArguments:\n  name        saved template name\n\nOptions:\n  --json      emit a stable JSON envelope (default: false)\n  -h, --help  display help for command\n",
-  "stderr": "intercepted exit 0\n",
+  "stderr": "",
   "exitCode": 0,
   "tree": {}
 }

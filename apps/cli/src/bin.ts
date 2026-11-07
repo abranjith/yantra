@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import { run } from './index.js';
+import { runTerminal } from './adapters/terminal/terminal-adapter.js';
 
-void run()
+void runTerminal(process.argv.slice(2))
   .then((exitCode) => {
     if (exitCode !== 0) {
       process.exitCode = exitCode;

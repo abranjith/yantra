@@ -1,9 +1,5 @@
-import { AGENT_PROTOCOL_VERSION } from '@yantra/agent';
-import { PROTOCOL_VERSION as CORE_PROTOCOL_VERSION } from '@yantra/core';
-import { PROTOCOL_VERSION } from '@yantra/protocol';
-import { CommanderError } from 'commander';
-
-import { buildProgram, type CliRunOptions } from './program.js';
+import { runTerminal } from './adapters/terminal/terminal-adapter.js';
+import { type CliRunOptions } from './program.js';
 
 export { buildProgram, type CliRunOptions } from './program.js';
 
@@ -23,38 +19,10 @@ export {
   type AgentOptions,
 } from './agent-options.js';
 export { loadEffectivePreferences } from './preferences.js';
-export { CLIConnectorIO } from './connector-io.js';
+export { CLIConnectorIO } from './adapters/terminal/connector.js';
 export { TerminalRenderer } from './render/terminal.js';
 export { exitCodeForDoOutcome } from './commands/do.js';
 
-/**
- * CLI entrypoint.
- *
- * Builds the commander program ({@link buildProgram}), parses argv, and
- * translates commander/CommanderError into the documented exit-code contract
- * (`0` success, `1` validation, `2` execution, `3` env, `4` user-handoff).
- */
-export const run = async (
-  argv: readonly string[] = process.argv.slice(2),
-  options: CliRunOptions = {},
-): Promise<number> => {
-  if (argv.length === 0) {
-    process.stdout.write(
-      `yantra (protocol=${PROTOCOL_VERSION}, core=${CORE_PROTOCOL_VERSION}, agent=${AGENT_PROTOCOL_VERSION})\n`,
-    );
-    return 0;
-  }
-
-  const program = buildProgram(options);
-
-  try {
-    await program.parseAsync([...argv], { from: 'user' });
-    return 0;
-  } catch (error) {
-    if (error instanceof CommanderError) {
-      return error.code === 'commander.helpDisplayed' ? 0 : error.exitCode;
-    }
-    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-    return 2;
-  }
-};
+/** Compatibility entrypoint; process defaults belong to bin.ts. */
+export const run = (argv: readonly string[], options: CliRunOptions = {}): Promise<number> =>
+  runTerminal(argv, options);

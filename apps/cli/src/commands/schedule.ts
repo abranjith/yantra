@@ -75,7 +75,7 @@ export function makeScheduleCommand(): Command {
 export function scheduleHandlers() {
   return {
     schedule: fromAction(async (workflowName: string, options: ScheduleOptions) => {
-      const logger = makeStderrLogger(options.debug === true);
+      const logger = makeStderrLogger(options.debug === true, process.stderr);
 
       // `--on-confirm` accepts only the safe value — reject anything else at
       // parse time (plan §6: "no auto-confirm code path to misconfigure").
@@ -170,7 +170,7 @@ export async function schedulesHandler(
   _args: HandlerArgs,
   options: SchedulesOptions,
 ): Promise<void> {
-  const logger = makeStderrLogger(options.debug === true);
+  const logger = makeStderrLogger(options.debug === true, process.stderr);
 
   const handle = await openScheduleStore(logger);
   if (handle === null) {
@@ -228,7 +228,7 @@ export function makeUnscheduleCommand(): Command {
 export function unscheduleHandlers() {
   return {
     unschedule: fromAction(async (id: string, options: UnscheduleOptions) => {
-      const logger = makeStderrLogger(options.debug === true);
+      const logger = makeStderrLogger(options.debug === true, process.stderr);
 
       const handle = await openScheduleStore(logger);
       if (handle === null) {

@@ -1,6 +1,6 @@
 {
   "stdout": "Usage: yantra model rm [options] <id>\n\nOptions:\n  --force     remove even when selected as default (default: false)\n  --json      emit JSON (default: false)\n  -h, --help  display help for command\n",
-  "stderr": "intercepted exit 0\n",
+  "stderr": "",
   "exitCode": 0,
   "tree": {}
 }
