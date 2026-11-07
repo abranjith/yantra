@@ -57,7 +57,7 @@ describe('@no-llm terminal adapter', () => {
             },
           },
         ),
-      ).toEqual({ exitCode: code });
+      ).toMatchObject({ exitCode: code });
       expect(h.err()).toBe('safe failure\n');
     }
   });

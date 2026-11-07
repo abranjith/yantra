@@ -2530,7 +2530,7 @@ put the action body in an exported handler in the command's module, and bind it 
 `makeBrowserCommand`) is a one-line wrapper around `createRegisteredCommand`, so it is generated as
 well.
 
-#### Command context and terminal adapter
+#### Command context, terminal adapter, and worker adapter
 
 FEAT-072 TASK-006 introduces an explicit invocation boundary in
 `src/context/command-context.ts`. `CommandContext` carries the surface, working directory,
@@ -2542,14 +2542,17 @@ safe diagnostic, code, optional remediation, and whether the handler already ren
 ```mermaid
 flowchart LR
   Bin[bin.ts or index.ts run] --> Terminal[runTerminal]
+  Invocation[CommandInvocation and WorkerChannel] --> Worker[runWorkerInvocation]
   Terminal --> Context[createTerminalContext]
   Terminal --> Execute[executeCommand]
   Context --> Execute
+  Worker --> Execute
   Execute --> Tree[Generated commander tree]
   Tree --> Research[research handler with context]
   Tree --> Legacy[Other handlers awaiting context migration]
   Research --> Services[Core or agent runtime]
   Research --> IO[Context output and gateways]
+  Worker --> Completion[Validated result or error completion]
 ```
 
 `runTerminal` owns the process signal listeners: SIGINT and SIGTERM abort its controller, and the
@@ -2566,8 +2569,9 @@ commander's `writeOut` and `writeErr` to the supplied sinks, enables `exitOverri
 the handler's result. `ResourceBusyError` becomes exit 3 with a `busy` JSON envelope or a human
 diagnostic; `CommandFailure` preserves its code and avoids duplicate diagnostics; commander help
 is success and other commander failures retain their exit code. Unexpected errors produce a
-diagnostic and exit 2. This boundary is shared execution plumbing; the remaining legacy handler
-bindings still use their existing process dependencies.
+diagnostic and exit 2 with `command_failed` failure metadata. `CommandFailure` metadata also
+travels in the returned result for the worker adapter to encode. This boundary is shared execution
+plumbing; the remaining legacy handler bindings still use their existing process dependencies.
 
 `SettingsResolver` snapshots and freezes the supplied environment, memoizes effective preferences,
 and binds to the parsed registry entry and commander command. `option(name)` walks that option's
@@ -2586,8 +2590,40 @@ resolvers remain in use with the context's environment snapshot and memoized pre
 `CommandConnectorIO` in `src/connector-io.ts` holds shared event and result rendering. The terminal
 `CLIConnectorIO` subclass lives in `src/adapters/terminal/connector.ts`, where its readline consent
 prompt uses stdin and the configured diagnostic stream. This keeps the terminal confirmation
-mechanism at the adapter boundary. A worker adapter and its result transport are not implemented
-at this stage; a `worker` context surface is a contract for the next migration step.
+mechanism at the adapter boundary.
+
+FEAT-072 TASK-007 adds `runWorkerInvocation` in `src/adapters/worker/worker-adapter.ts`. It
+validates the requested path and argv through `parseInvocation`, then calls the same
+`executeCommand` and generated tree as the terminal. The worker context takes its working
+directory and invocation ID from `CommandInvocation` and snapshots the supplied environment;
+it does not change the process working directory. Registry classes `exemption` and
+`in-process-secure`, including `config data-dir` and `secret set`, are refused before handler
+execution with exit 1 and `not_worker_executable`.
+
+`WorkerChannel` is a transport-independent port for attendance, diagnostics, events, input,
+confirmation/install requests, cancellation, and completion. The worker's interactive predicate
+uses channel attendance, including for JSON commands. Attended prompts are forwarded through
+the channel with an abort signal; unattended input returns `null`, and unattended confirmation
+and install-offer gateways are absent. The shared connector denies unattended confirmations.
+Stdin collection returns `null`, editor requests return `false`, and external opening emits an
+`open: <path>` diagnostic. `InMemoryChannel` scripts attendance and answers, captures requests,
+diagnostics, events and completions, and exposes an idempotent cancellation trigger for tests
+and embeddings. FEAT-064 still owns the socket implementation and detached worker entry point.
+
+Worker stderr goes to channel diagnostics, `output.jsonLine` goes to channel events, and
+`output.json` captures the final structured envelope. Human stdout is retained separately with
+a 64 KiB UTF-8 byte cap, including an `[output truncated]` marker when needed. Completion is
+validated with protocol's `CommandResultMessageSchema` and sent through `channel.complete`:
+`result` carries `exit_code`, nullable `envelope`, and nullable `text`; `error` carries a nonzero
+`exit_code`, `code`, `message`, and nullable `remediation`. Parse failures use exit 1; unexpected
+execution failures use exit 2 and `command_failed`. Both variants preserve cancellation exit
+130 alongside the ordinary 0–4 exit codes, with 0 accepted only for `result`.
+
+Channel cancellation aborts the invocation signal only when the bound handler declares
+`honorsAbort: true`; otherwise the adapter emits `cancel_unsupported` without aborting the
+handler. The cancellation listener and output streams are disposed on completion. This adapter
+does not establish cancellation support or context purity for the remaining legacy handlers;
+`research` remains the first context migration, and execution receipt persistence remains pending.
 
 The handler-purity block in `eslint.config.js` applies to `apps/cli/src/**/*.ts`, except `bin.ts`,
 the terminal adapter directory, and `HANDLER_PURITY_MIGRATION_ALLOWLIST`. It combines the existing

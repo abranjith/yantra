@@ -35,7 +35,7 @@ export async function executeCommand(
         : async (args, opts, command) => {
             const entry = COMMAND_REGISTRY.commands.find((e) => e.id === id);
             if (entry?.kind === 'leaf') context.settings.bind(entry, command);
-            const value = await fn(args, opts, command);
+            const value = await fn(args, opts, command, context);
             if (value) result = value;
           },
     ]),
@@ -76,13 +76,23 @@ export async function executeCommand(
         context.output.stderr.write(
           `${error.message}${error.remediation ? ` ${error.remediation}` : ''}\n`,
         );
-      return { exitCode: error.exitCode };
+      return {
+        exitCode: error.exitCode,
+        failure: { code: error.code, message: error.message, remediation: error.remediation },
+      };
     }
     if (error instanceof CommanderError)
       return {
         exitCode: (error.code === 'commander.helpDisplayed' ? 0 : error.exitCode) as ExitCode,
       };
     context.output.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-    return { exitCode: 2 };
+    return {
+      exitCode: 2,
+      failure: {
+        code: 'command_failed',
+        message: error instanceof Error ? error.message : String(error),
+        remediation: null,
+      },
+    };
   }
 }

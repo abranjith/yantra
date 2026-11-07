@@ -8,6 +8,11 @@ import type { SettingsResolver } from './settings-resolver.js';
 export type ExitCode = 0 | 1 | 2 | 3 | 4 | 130;
 export interface CommandResult {
   readonly exitCode: ExitCode;
+  readonly failure?: {
+    readonly code: string;
+    readonly message: string;
+    readonly remediation: string | null;
+  };
 }
 /** Safe failure metadata; a handler may already have rendered its diagnostic. */
 export class CommandFailure extends Error {

@@ -819,6 +819,16 @@ Example:
 }
 ```
 
+## CommandResultMessageSchema
+
+The final completion of a command executed on a worker surface.
+
+Example:
+
+```json
+"<value>"
+```
+
 ## Condition
 
 A predicate over one parsed invocation.

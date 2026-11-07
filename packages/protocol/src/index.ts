@@ -250,3 +250,5 @@ export { ActionId, BriefAction } from './schemas/action-evidence.js';
 // FEAT-062: the command registry, also published as `@yantra/protocol/commands`.
 export * from './commands/index.js';
 export type ProtocolVersion = typeof PROTOCOL_VERSION;
+
+export { CommandResultMessageSchema, type CommandResultMessage } from './schemas/command-result.js';

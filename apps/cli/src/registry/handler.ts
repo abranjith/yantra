@@ -8,17 +8,18 @@
 
 import type { Command } from 'commander';
 
-import type { CommandResult } from '../context/command-context.js';
+import type { CommandContext, CommandResult } from '../context/command-context.js';
 
 /** Positional argument values in declaration order (`undefined` for an absent optional). */
 export type HandlerArgs = readonly unknown[];
 
 /** The function bound to one leaf command. */
-export type Handler = (
+export type Handler = ((
   args: HandlerArgs,
   options: Readonly<Record<string, unknown>>,
   command: Command,
-) => Promise<void | CommandResult> | void | CommandResult;
+  context?: CommandContext,
+) => Promise<void | CommandResult> | void | CommandResult) & { readonly honorsAbort?: boolean };
 
 /**
  * Marks a leaf whose top-level family is still built by its legacy factory

@@ -3,27 +3,45 @@
   "files": [
     {
       "path": "apps/cli/src/_lint-fixtures/impure-handler.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
     {
       "path": "apps/cli/src/adapters/terminal/connector.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
     {
       "path": "apps/cli/src/adapters/terminal/prompts.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
     {
       "path": "apps/cli/src/adapters/terminal/terminal-adapter.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/adapters/worker/channel.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "apps/cli/src/adapters/worker/in-memory-channel.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "apps/cli/src/adapters/worker/worker-adapter.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "apps/cli/src/bin.ts",
@@ -165,19 +183,19 @@
     },
     {
       "path": "apps/cli/src/context/command-context.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
     {
       "path": "apps/cli/src/context/settings-resolver.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
     {
       "path": "apps/cli/src/execute.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
@@ -225,15 +243,27 @@
     },
     {
       "path": "apps/cli/tests/adapters/terminal-adapter.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
     {
-      "path": "apps/cli/tests/boundaries/handler-purity.spec.ts",
+      "path": "apps/cli/tests/adapters/worker-adapter.spec.ts",
       "status": "U",
       "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "apps/cli/tests/boundaries/handler-purity.spec.ts",
+      "status": "A",
+      "role": "implement",
       "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/tests/characterization/adapter-parity.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "apps/cli/tests/characterization/baselines/ask.deterministic.json",
@@ -980,6 +1010,12 @@
       "task": "TASK-004"
     },
     {
+      "path": "docs/protocol-spec.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
       "path": "e2e/cli-commands.spec.ts",
       "status": "M",
       "role": "implement",
@@ -1238,6 +1274,12 @@
       "task": "TASK-004"
     },
     {
+      "path": "packages/protocol/generated/json-schema/command-result.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
       "path": "packages/protocol/src/commands/entries/browser.ts",
       "status": "M",
       "role": "implement",
@@ -1248,6 +1290,30 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/src/emit/json-schema.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/protocol/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/protocol/src/schemas/command-result.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/protocol/tests/command-result.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
     }
   ],
   "excluded": [

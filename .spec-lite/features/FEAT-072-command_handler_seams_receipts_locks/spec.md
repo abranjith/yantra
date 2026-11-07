@@ -618,7 +618,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
 
 ### TASK-007: Worker adapter, result transport and `research` parity
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - Add `CommandResultMessageSchema` to protocol and regenerate the emitted artifacts.
   - Create `adapters/worker/channel.ts` and `in-memory-channel.ts`. The in-memory channel has
     scripted attendance, scripted confirmation, install and input answers, a `cancel()` trigger and
@@ -638,7 +638,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
     - on completion it sends `result` or `error` through `channel.complete`;
     - it refuses `exemption` and `in-process-secure` classes before parsing, with
       `error {exit_code:1, code:'not_worker_executable'}`.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - `worker-adapter.spec.ts`:
     - an unattended confirmation gateway is `null`;
     - an attended request reaches the channel and its answer is honored;
@@ -652,7 +652,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
     - terminal non-TTY `--json` stdout versus worker envelope are deep-equal;
     - a failing loop gives identical exit 2 on both.
   - Protocol: the schema round-trips, and `exit_code` outside 0 to 4 and 130 is rejected.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/architecture.md` (the worker
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/architecture.md` (the worker
       adapter and result transport) and `docs/protocol-spec.md` (generated).
 - **Verify**: `pnpm --filter @yantra/protocol verify` passes; the parity spec passes for the `research`
   rows.
@@ -960,7 +960,7 @@ tests/setup` passes; `init.ts`, `init-wizard.ts` and `init-context-prompts.ts` a
 - [x] TASK-004: Workflow, template and schedule-registry locks; core fixed-temp lint rule
 - [x] TASK-005: Persistent browser-profile exclusivity
 - [x] TASK-006: Command context, terminal adapter and purity lint; migrate `research`
-- [ ] TASK-007: Worker adapter, result transport and `research` parity
+- [x] TASK-007: Worker adapter, result transport and `research` parity
 - [ ] TASK-008: Execution receipts, settings provenance and the canary (research first)
 - [ ] TASK-009: Migrate `ask` and `do` (agentic run class) with receipts and abort
 - [ ] TASK-010: Migrate `run` and `resume` with receipts in the replay path
