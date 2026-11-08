@@ -6,6 +6,7 @@ import type { Plan } from '@yantra/protocol';
 import { PageSettler } from '../browser/page-settle.js';
 import type { BrowserSession, Logger, Page } from '../browser/types.js';
 import { openTaskEventBus } from '../run-events/mirroring-event-bus.js';
+import { RecordingConfirmationGateway } from '../run-events/recording-confirmation-gateway.js';
 import type { RunEventStream } from '../run-events/stream.js';
 
 import { InMemoryCaptureStore } from './capture-store.js';
@@ -118,7 +119,12 @@ export function createExecutionContext(opts: ExecutionContextOptions): Execution
     logger: opts.logger,
     clock,
     runDir: opts.runDir,
-    confirmationGateway: opts.confirmationGateway ?? null,
+    // FEAT-063: every consent wait (interactive or a daemon park) is recorded
+    // as intervention_raised / intervention_resolved in run-events.jsonl.
+    confirmationGateway:
+      opts.confirmationGateway && opts.runEvents
+        ? new RecordingConfirmationGateway(opts.confirmationGateway, opts.runEvents)
+        : (opts.confirmationGateway ?? null),
     confirmationStore: createConfirmationStore(opts.runDir),
     evidence: opts.evidence === undefined ? new ReplayEvidenceLedger() : opts.evidence,
   };

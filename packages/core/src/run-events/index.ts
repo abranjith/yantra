@@ -41,3 +41,9 @@ export {
   sourceFetchedEvent,
   type BudgetSnapshotDimension,
 } from './phase-fields.js';
+export {
+  RecordingConfirmationGateway,
+  requestDeadline,
+  type ConfirmationRequester,
+  type RecordingConfirmationOptions,
+} from './recording-confirmation-gateway.js';

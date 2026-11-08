@@ -245,6 +245,13 @@ The live **events** listed above are the ones rendered from the union.
 > The stream is passed on the run input (`AskQuery.runEvents`, `ResearchOptions.runEvents`), not the
 > pipeline dependencies, for the same per-run reason as TASK-007.
 
+> **DEVIATION** (TASK-009 → TASK-011, agent consent): wrapping the agent's `ConfirmationBridge`
+> needs the agent's `RunEventStream`, which only exists once TASK-011 threads a stream through the
+> orchestrator. TASK-009 ships `RecordingConfirmationGateway` (generic over the inner gateway's
+> outcome type, so it wraps the bridge unchanged) and wraps the executor's gateway; TASK-011 wraps
+> the bridge and carries the "non-interactive `do` records raised → resolved `timed_out`/`timeout`"
+> test in `run-events-emission.spec.ts`.
+
 ## 3. Files
 
 **Protocol (`packages/protocol`)**
@@ -674,7 +681,7 @@ FEAT-072` to this spec's State Tracking. The FEAT-072 implementer then calls the
 - [x] TASK-006: Implement `RunEventStream` with persist-before-publish, the pre-open buffer and degraded mode
 - [x] TASK-007: Deterministic replay (`run`, `resume`, daemon fires) writes `run-events.jsonl`
 - [x] TASK-008: Deterministic `ask`/`research` emit phase events, budget snapshots, artifacts and the outcome
-- [ ] TASK-009: Record every consent wait as `intervention_raised` / `intervention_resolved`
+- [x] TASK-009: Record every consent wait as `intervention_raised` / `intervention_resolved`
 - [ ] TASK-010: CLI renderers consume the union; `ask`/`research`/`run`/`resume` route their live output through the stream
 - [ ] TASK-011: Agentic runs (`do`, agentic `ask`/`research`) write their progress through the stream
 - [ ] TASK-012: `receipt_written` emission

@@ -309,7 +309,7 @@
     },
     {
       "path": "packages/core/src/run-events/phase-fields.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
@@ -318,6 +318,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/run-events/recording-confirmation-gateway.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
     },
     {
       "path": "packages/core/src/run-events/run-facts.ts",
@@ -345,13 +351,13 @@
     },
     {
       "path": "packages/core/tests/extraction/ask-run-events.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
     {
       "path": "packages/core/tests/research/research-run-events.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
@@ -363,7 +369,7 @@
     },
     {
       "path": "packages/core/tests/run-events/phase-fields.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
@@ -372,6 +378,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/tests/run-events/recording-confirmation-gateway.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
     },
     {
       "path": "packages/core/tests/run-events/run-facts.spec.ts",
