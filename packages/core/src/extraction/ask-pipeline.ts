@@ -8,7 +8,6 @@ import { appendNotice, generateUlid } from '@yantra/protocol';
 import { writeBriefArtifacts, type BriefArtifactPaths } from '../brief/write-artifacts.js';
 import { dataDir } from '../browser/paths.js';
 import type { Logger } from '../browser/types.js';
-import { JsonlEventBus } from '../executor/event-bus.js';
 import {
   domainFromUrl,
   rankReasonForFailureStage,
@@ -16,6 +15,10 @@ import {
 } from '../ranking/recording.js';
 import type { RankSignalSink } from '../ranking/types.js';
 import { writeExecutionReceipt } from '../receipt/execution-receipt.js';
+import { openTaskEventBus } from '../run-events/mirroring-event-bus.js';
+import { asToken, boundedQuery, sourceFetchedEvent } from '../run-events/phase-fields.js';
+import { abandonOwnedStream, emitArtifactSaved, runOutcomeEvent } from '../run-events/run-facts.js';
+import { RunEventStream } from '../run-events/stream.js';
 import type { Synthesizer } from '../synthesis/types.js';
 
 import { cacheKey, utcDayFrom } from './cache-key.js';
@@ -106,22 +109,28 @@ export class AskPipeline {
     const taskId = generateUlid();
     const startedAt = this.clock().toISOString();
     const runDir = join(this.runRootDir, runId);
-    const events = new JsonlEventBus(join(runDir, 'events.jsonl'));
-
-    const emit = (event: TaskEvent): void => {
-      events.publish(event);
-    };
+    // FEAT-063: the run's event stream. A caller-supplied one is already
+    // subscribed by its renderer; otherwise this run owns one.
+    const ownsRunEvents = query.runEvents === undefined;
+    const runEvents = query.runEvents ?? new RunEventStream({ logger: this.logger });
 
     let status: 'ok' | 'partial' | 'failed' = 'failed';
     let failureClass: FailureClass | null = null;
 
     await this.prepareRunDir(runDir);
+    await this.openRunEvents(runEvents, runDir, runId, taskId, query, startedAt);
+    const events = openTaskEventBus(runDir, runEvents);
+    const emit = (event: TaskEvent): void => {
+      events.publish(event);
+    };
     emit({ kind: 'task_started', task_id: taskId, at: this.clock().toISOString() });
 
     const normalizedQuery = query.normalized.trim() || query.raw.trim();
     const utcDay = utcDayFrom(startedAt);
     const providerName = query.searchProvider ?? this.searchProvider.name;
     const key = cacheKey(normalizedQuery, providerName, utcDay);
+    const phaseQuery = boundedQuery(normalizedQuery);
+    let threw = false;
 
     const controller = new AbortController();
     const budgetTimer = setTimeout(() => controller.abort(), query.pipelineBudgetMs);
@@ -144,6 +153,15 @@ export class AskPipeline {
       if (!query.noCache) {
         const cached = await this.cache.get(key);
         if (cached) {
+          runEvents.emit({
+            kind: 'search_completed',
+            hop_index: null,
+            provider: asToken(providerName),
+            query: phaseQuery,
+            result_count: cached.sources.length,
+            cached: true,
+            at: this.clock().toISOString(),
+          });
           status = cached.notices.length > 0 ? 'partial' : 'ok';
           const artifacts = await this.persist(
             runDir,
@@ -154,12 +172,14 @@ export class AskPipeline {
             status,
             cached,
           );
+          this.recordArtifacts(runEvents, runDir, artifacts);
           emit({
             kind: 'task_completed',
             task_id: taskId,
             outputs_keys: ['brief'],
             at: this.clock().toISOString(),
           });
+          this.recordOutcome(runEvents, runId, status);
           return { brief: cached, artifacts };
         }
       }
@@ -171,10 +191,22 @@ export class AskPipeline {
         emit,
         controller,
       );
+      runEvents.emit({
+        kind: 'search_completed',
+        hop_index: null,
+        provider: asToken(providerName),
+        query: phaseQuery,
+        result_count: candidates.length,
+        cached: false,
+        at: this.clock().toISOString(),
+      });
 
       const processed = await Promise.all(
-        candidates.map((result) =>
-          this.processSearchResult(result, query, runDir, taskId, emit, controller.signal),
+        candidates.map((result, index) =>
+          this.processSearchResult(result, query, runDir, taskId, emit, controller.signal, {
+            runEvents,
+            sourceIndex: index + 1,
+          }),
         ),
       );
 
@@ -192,6 +224,19 @@ export class AskPipeline {
       const failures = processed.flatMap((entry) =>
         entry.failure !== null ? [entry.failure] : [],
       );
+      runEvents.emit({
+        kind: 'extract_completed',
+        hop_index: null,
+        extracted: docs.length,
+        failed: failures.length,
+        at: this.clock().toISOString(),
+      });
+      runEvents.emit({
+        kind: 'synthesize_started',
+        strategy: query.noLlm ? 'deterministic' : 'llm',
+        sources_in: docs.length,
+        at: this.clock().toISOString(),
+      });
 
       const outcome = await this.synthesizer.synthesize(
         { query: normalizedQuery, docs, failures },
@@ -267,6 +312,7 @@ export class AskPipeline {
         status,
         brief,
       );
+      this.recordArtifacts(runEvents, runDir, artifacts);
 
       emit({
         kind: 'task_completed',
@@ -274,9 +320,11 @@ export class AskPipeline {
         outputs_keys: ['brief'],
         at: this.clock().toISOString(),
       });
+      this.recordOutcome(runEvents, runId, status);
 
       return { brief, artifacts };
     } catch (error) {
+      threw = true;
       failureClass = classifyFailure(error);
       const reportPath = join(runDir, 'report.md');
       emit({
@@ -288,13 +336,76 @@ export class AskPipeline {
       });
       await this.writeManifest(runDir, taskId, query, providerName, startedAt, 'failed');
       await writeFile(reportPath, this.failureReport(query, error), 'utf8');
-      throw toAskPipelineError(error, failureClass, runDir);
+      const failure = toAskPipelineError(error, failureClass, runDir);
+      await events.flush();
+      abandonOwnedStream(runEvents, ownsRunEvents, runId, error);
+      throw failure;
     } finally {
       clearTimeout(budgetTimer);
       await events.flush();
       await events.close();
+      if (!threw) runEvents.close();
       this.logger.info({ runId, status, failureClass }, 'ask pipeline finished');
     }
+  }
+
+  /**
+   * Opens the run's event log. One that cannot be opened is an environment
+   * failure before the run proceeds: the run is recorded as failed (manifest
+   * and report) and the typed error is rethrown.
+   */
+  private async openRunEvents(
+    runEvents: RunEventStream,
+    runDir: string,
+    runId: string,
+    taskId: string,
+    query: AskQuery,
+    startedAt: string,
+  ): Promise<void> {
+    try {
+      runEvents.open({ runDir, runId, logger: this.logger });
+    } catch (error) {
+      const providerName = query.searchProvider ?? this.searchProvider.name;
+      await this.writeManifest(runDir, taskId, query, providerName, startedAt, 'failed');
+      await writeFile(join(runDir, 'report.md'), this.failureReport(query, error), 'utf8');
+      throw error;
+    }
+  }
+
+  /** Records the persisted Brief files. */
+  private recordArtifacts(
+    runEvents: RunEventStream,
+    runDir: string,
+    artifacts: BriefArtifactPaths | null,
+  ): void {
+    if (artifacts === null) return;
+    const at = this.clock().toISOString();
+    for (const path of [artifacts.jsonPath, artifacts.mdPath, artifacts.htmlPath]) {
+      emitArtifactSaved(runEvents, runDir, path, 'brief', at);
+    }
+  }
+
+  /**
+   * Records the run's one outcome and closes the stream. A deterministic
+   * `ask` that saved a Brief exits 0: `fulfilled` with no notices, `partial`
+   * when the Brief carries notices (a source failed, the budget ran out).
+   */
+  private recordOutcome(
+    runEvents: RunEventStream,
+    runId: string,
+    status: 'ok' | 'partial' | 'failed',
+  ): void {
+    runEvents.emit(
+      runOutcomeEvent({
+        runId,
+        taskOutcome: status === 'ok' ? 'fulfilled' : 'partial',
+        terminationReason: null,
+        stopDetail: null,
+        exitCode: 0,
+        failureClass: null,
+        at: this.clock().toISOString(),
+      }),
+    );
   }
 
   /** Runs search, honoring the budget: an abort mid-search yields empty candidates. */
@@ -364,8 +475,11 @@ export class AskPipeline {
     taskId: string,
     emit: (event: TaskEvent) => void,
     signal: AbortSignal,
+    phase: { readonly runEvents: RunEventStream; readonly sourceIndex: number },
   ): Promise<ProcessedSource> {
     const stepId = `source-${result.rank}`;
+    const startedMs = this.clock().getTime();
+    let processed: ProcessedSource | null = null;
     emit({
       kind: 'step_started',
       task_id: taskId,
@@ -375,7 +489,7 @@ export class AskPipeline {
     });
 
     try {
-      return await processSource(
+      processed = await processSource(
         { ethicsGate: this.ethicsGate, fetcher: this.fetcher, extractor: this.extractor },
         result,
         {
@@ -393,6 +507,7 @@ export class AskPipeline {
             }),
         },
       );
+      return processed;
     } finally {
       emit({
         kind: 'step_completed',
@@ -401,6 +516,14 @@ export class AskPipeline {
         capture_keys: [`source:${result.rank}`],
         at: this.clock().toISOString(),
       });
+      phase.runEvents.emit(
+        sourceFetchedEvent(result.url, processed, {
+          hopIndex: null,
+          sourceIndex: phase.sourceIndex,
+          durationMs: Math.max(0, this.clock().getTime() - startedMs),
+          at: this.clock().toISOString(),
+        }),
+      );
     }
   }
 

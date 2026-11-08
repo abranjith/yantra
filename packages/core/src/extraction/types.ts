@@ -1,4 +1,5 @@
 import type { ExecutionReceiptDraft } from '../receipt/execution-receipt.js';
+import type { RunEventStream } from '../run-events/stream.js';
 import type { Sanitized } from '../sanitizer/brand.js';
 import type { SynthesisLength } from '../synthesis/types.js';
 
@@ -18,6 +19,13 @@ export type SearchProviderName = 'google' | 'duckduckgo' | 'brave' | 'tavily';
  */
 export interface AskQuery {
   readonly receipt?: ExecutionReceiptDraft;
+  /**
+   * The run's event stream (FEAT-063), created by the caller so its renderer
+   * can subscribe first. Omitted, the run constructs, opens and closes its own.
+   * When the run throws, a caller-supplied stream is left open for the caller
+   * to record the outcome with the exit code it returns.
+   */
+  readonly runEvents?: RunEventStream;
   readonly raw: string;
   readonly normalized: string;
   readonly limit: number;

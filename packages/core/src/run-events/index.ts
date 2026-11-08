@@ -21,7 +21,7 @@ export {
   type RunEventStreamOpenOptions,
   type RunEventSubscribeOptions,
 } from './stream.js';
-export { MirroringEventBus, openTaskEventBus } from './mirroring-event-bus.js';
+export { MirroringEventBus, mirrorOf, openTaskEventBus } from './mirroring-event-bus.js';
 export {
   abandonOwnedStream,
   emitArtifactSaved,
@@ -31,3 +31,13 @@ export {
   type ArtifactKind,
   type RunOutcomeFacts,
 } from './run-facts.js';
+export {
+  asToken,
+  boundedQuery,
+  budgetDimensions,
+  capText,
+  displayUrl,
+  stripControl,
+  sourceFetchedEvent,
+  type BudgetSnapshotDimension,
+} from './phase-fields.js';

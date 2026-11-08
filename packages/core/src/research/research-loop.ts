@@ -35,7 +35,6 @@ import { appendNotice, generateUlid } from '@yantra/protocol';
 import { writeBriefArtifacts, type BriefArtifactPaths } from '../brief/write-artifacts.js';
 import { dataDir } from '../browser/paths.js';
 import type { Logger } from '../browser/types.js';
-import { JsonlEventBus } from '../executor/event-bus.js';
 import type { AskEthicsGate } from '../extraction/ethics-adapter.js';
 import type { ContentFetcher } from '../extraction/fetcher.js';
 import type { Extractor } from '../extraction/readability.js';
@@ -51,6 +50,15 @@ import {
 } from '../ranking/recording.js';
 import type { RankSignalSink } from '../ranking/types.js';
 import { writeExecutionReceipt } from '../receipt/execution-receipt.js';
+import { openTaskEventBus } from '../run-events/mirroring-event-bus.js';
+import {
+  asToken,
+  boundedQuery,
+  budgetDimensions,
+  sourceFetchedEvent,
+} from '../run-events/phase-fields.js';
+import { abandonOwnedStream, emitArtifactSaved, runOutcomeEvent } from '../run-events/run-facts.js';
+import { RunEventStream } from '../run-events/stream.js';
 import { DeterministicSynthesizer } from '../synthesis/deterministic.js';
 import type { SourceFailure, Synthesizer } from '../synthesis/types.js';
 
@@ -155,8 +163,9 @@ export class ResearchLoop {
     const taskId = generateUlid();
     const startedAt = this.clock().toISOString();
     const runDir = join(this.runRootDir, runId);
-    const events = new JsonlEventBus(join(runDir, 'events.jsonl'));
-    const emit = (event: TaskEvent): void => events.publish(event);
+    // FEAT-063: the run's event stream; caller-supplied or owned by this run.
+    const ownsRunEvents = options.runEvents === undefined;
+    const runEvents = options.runEvents ?? new RunEventStream({ logger: this.deps.logger });
 
     const budget = new BudgetTracker(options.budget, { now: this.budgetNow });
     const pool = new SourcePool({ maxSources: options.budget.maxSources });
@@ -180,6 +189,20 @@ export class ResearchLoop {
     let prevCoverage = 0;
 
     await this.prepareRunDir(runDir);
+    try {
+      runEvents.open({ runDir, runId, logger: this.deps.logger });
+    } catch (error) {
+      // An unopenable log is an environment failure before the run proceeds.
+      await this.writeManifest(runDir, taskId, options, startedAt, 'failed');
+      await writeFile(join(runDir, 'report.md'), this.failureReport(options, error), 'utf8').catch(
+        () => undefined,
+      );
+      if (abortTimer) clearTimeout(abortTimer);
+      throw error;
+    }
+    const events = openTaskEventBus(runDir, runEvents);
+    const emit = (event: TaskEvent): void => events.publish(event);
+    let threw = false;
     emit({ kind: 'task_started', task_id: taskId, at: this.clock().toISOString() });
 
     try {
@@ -224,7 +247,13 @@ export class ResearchLoop {
           budget,
           controller.signal,
           runDir,
+          { runEvents, hopIndex },
         );
+        runEvents.emit({
+          kind: 'budget_snapshot',
+          dimensions: budgetDimensions(budget.snapshot(), options.budget),
+          at: this.clock().toISOString(),
+        });
         if (hopOutcome.budgetStop) {
           budgetStop = hopOutcome.budgetStop;
           terminationReason = hopOutcome.budgetStop.dimension;
@@ -312,6 +341,7 @@ export class ResearchLoop {
         emit,
         runDir,
         startedAt,
+        runEvents,
       );
 
       await this.writeResearchState(
@@ -324,9 +354,24 @@ export class ResearchLoop {
         outputs_keys: ['brief'],
         at: this.clock().toISOString(),
       });
+      // A research run that saved a Brief exits 0: `fulfilled` with no
+      // notices, `partial` when the Brief carries notices. `stop_detail` says
+      // why the loop stopped (coverage_met, max_hops, a budget dimension).
+      runEvents.emit(
+        runOutcomeEvent({
+          runId,
+          taskOutcome: brief.brief.notices.length > 0 ? 'partial' : 'fulfilled',
+          terminationReason: null,
+          stopDetail: asToken(terminationReason, 64),
+          exitCode: 0,
+          failureClass: null,
+          at: this.clock().toISOString(),
+        }),
+      );
 
       return { brief: brief.brief, artifacts: brief.artifacts, hops, terminationReason };
     } catch (error) {
+      threw = true;
       const failureClass = classifyFailure(error);
       const reportPath = join(runDir, 'report.md');
       emit({
@@ -340,6 +385,8 @@ export class ResearchLoop {
       await writeFile(reportPath, this.failureReport(options, error), 'utf8').catch(
         () => undefined,
       );
+      await events.flush();
+      abandonOwnedStream(runEvents, ownsRunEvents, runId, error);
       throw toResearchLoopError(error, failureClass, runDir);
     } finally {
       if (abortTimer) {
@@ -347,6 +394,7 @@ export class ResearchLoop {
       }
       await events.flush();
       await events.close();
+      if (!threw) runEvents.close();
       this.deps.logger.info({ runId, terminationReason }, 'research loop finished');
     }
   }
@@ -361,14 +409,16 @@ export class ResearchLoop {
     budget: BudgetTracker,
     signal: AbortSignal,
     runDir: string,
+    phase: { readonly runEvents: RunEventStream; readonly hopIndex: number },
   ): Promise<HopOutcome> {
-    const results = await this.search(queries, options, signal, extraNotices);
+    const results = await this.search(queries, options, signal, extraNotices, phase);
 
     let docsFetched = 0;
     let docsKept = 0;
+    let failed = 0;
     let budgetStop: BudgetExhausted | null = null;
 
-    for (const result of results) {
+    for (const [index, result] of results.entries()) {
       if (pool.isFull()) {
         break;
       }
@@ -378,6 +428,7 @@ export class ResearchLoop {
         break;
       }
 
+      const startedMs = this.clock().getTime();
       const processed = await processSource(
         {
           ethicsGate: this.deps.ethicsGate,
@@ -391,6 +442,14 @@ export class ResearchLoop {
           onFetchedHtml: (url, html) => this.writeFetchedHtml(runDir, url, html),
         },
       );
+      phase.runEvents.emit(
+        sourceFetchedEvent(result.url, processed, {
+          hopIndex: phase.hopIndex,
+          sourceIndex: index + 1,
+          durationMs: Math.max(0, this.clock().getTime() - startedMs),
+          at: this.clock().toISOString(),
+        }),
+      );
 
       if (processed.doc) {
         docsFetched += 1;
@@ -400,6 +459,7 @@ export class ResearchLoop {
           budget.recordSources(1);
         }
       } else if (processed.failure) {
+        failed += 1;
         failures.push(processed.failure);
         const reason = rankReasonForFailureStage(processed.failure.stage);
         if (reason !== null) {
@@ -412,6 +472,13 @@ export class ResearchLoop {
       }
     }
 
+    phase.runEvents.emit({
+      kind: 'extract_completed',
+      hop_index: phase.hopIndex,
+      extracted: docsFetched,
+      failed,
+      at: this.clock().toISOString(),
+    });
     return { resultsCount: results.length, docsFetched, docsKept, budgetStop };
   }
 
@@ -425,6 +492,7 @@ export class ResearchLoop {
     options: ResearchOptions,
     signal: AbortSignal,
     extraNotices: BriefNotice[],
+    phase: { readonly runEvents: RunEventStream; readonly hopIndex: number },
   ): Promise<readonly SearchResult[]> {
     const seen = new Set<string>();
     const combined: SearchResult[] = [];
@@ -457,6 +525,15 @@ export class ResearchLoop {
         });
         continue;
       }
+      phase.runEvents.emit({
+        kind: 'search_completed',
+        hop_index: phase.hopIndex,
+        provider: asToken(this.deps.searchProvider.name),
+        query: boundedQuery(query),
+        result_count: results.length,
+        cached: false,
+        at: this.clock().toISOString(),
+      });
 
       for (const result of results) {
         const identity = normalizeUrl(result.url);
@@ -484,7 +561,14 @@ export class ResearchLoop {
     emit: (event: TaskEvent) => void,
     runDir: string,
     startedAt: string,
+    runEvents: RunEventStream,
   ): Promise<{ brief: Brief; artifacts: BriefArtifactPaths | null }> {
+    runEvents.emit({
+      kind: 'synthesize_started',
+      strategy: options.noLlm ? 'deterministic' : 'llm',
+      sources_in: pool.size(),
+      at: this.clock().toISOString(),
+    });
     const outcome = await this.deps.synthesizer.synthesize(
       pool.toSynthesisInput(options.topic, failures),
       {
@@ -544,6 +628,12 @@ export class ResearchLoop {
     await this.writeManifest(runDir, taskId, options, startedAt, status);
     const written = await writeBriefArtifacts(runDir, brief);
     const artifacts = written.isOk ? written.value : null;
+    if (artifacts !== null) {
+      const at = this.clock().toISOString();
+      for (const path of [artifacts.jsonPath, artifacts.mdPath, artifacts.htmlPath]) {
+        emitArtifactSaved(runEvents, runDir, path, 'brief', at);
+      }
+    }
     if (!written.isOk) {
       this.deps.logger.warn(
         { runDir, error: written.error.message },

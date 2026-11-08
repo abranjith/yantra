@@ -260,10 +260,34 @@
       "task": "TASK-007"
     },
     {
+      "path": "packages/core/src/extraction/ask-pipeline.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/core/src/extraction/types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "packages/core/src/index.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/research/research-loop.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/core/src/research/types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "packages/core/src/run-events/index.ts",
@@ -284,6 +308,12 @@
       "task": "TASK-006"
     },
     {
+      "path": "packages/core/src/run-events/phase-fields.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "packages/core/src/run-events/reader.ts",
       "status": "A",
       "role": "implement",
@@ -291,7 +321,7 @@
     },
     {
       "path": "packages/core/src/run-events/run-facts.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
@@ -314,10 +344,28 @@
       "task": "TASK-007"
     },
     {
+      "path": "packages/core/tests/extraction/ask-run-events.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/core/tests/research/research-run-events.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "packages/core/tests/run-events/log.spec.ts",
       "status": "A",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/tests/run-events/phase-fields.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "packages/core/tests/run-events/reader.spec.ts",
@@ -327,7 +375,7 @@
     },
     {
       "path": "packages/core/tests/run-events/run-facts.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
@@ -345,7 +393,7 @@
     },
     {
       "path": "packages/core/tests/workflow/replay/run-events.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },

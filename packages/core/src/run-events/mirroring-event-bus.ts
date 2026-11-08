@@ -12,6 +12,7 @@ import type { TaskEvent } from '@yantra/protocol';
 import { JsonlEventBus } from '../executor/event-bus.js';
 import type { EventBus } from '../executor/types.js';
 
+import { boundedQuery } from './phase-fields.js';
 import type { RunEventStream } from './stream.js';
 
 export class MirroringEventBus implements EventBus {
@@ -26,7 +27,7 @@ export class MirroringEventBus implements EventBus {
   public publish(event: TaskEvent): void {
     if (this.closed) return;
     this.inner.publish(event);
-    this.stream.emit(event);
+    this.stream.emit(mirrorOf(event));
   }
 
   public flush(): Promise<void> {
@@ -42,6 +43,19 @@ export class MirroringEventBus implements EventBus {
     this.closed = true;
     return this.inner.close();
   }
+}
+
+/**
+ * The event as `run-events.jsonl` records it: identical, except that user text
+ * `events.jsonl` has always stored raw (research hop queries) passes through
+ * the same redaction and bounds as the phase events, so a credential typed
+ * into a topic never reaches the run-event log.
+ */
+export function mirrorOf(event: TaskEvent): TaskEvent {
+  if (event.kind === 'research_hop_completed') {
+    return { ...event, queries: event.queries.map(boundedQuery) };
+  }
+  return event;
 }
 
 /**

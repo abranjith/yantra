@@ -237,6 +237,14 @@ The live **events** listed above are the ones rendered from the union.
 > execution segment: a `task_resumed` begins a new segment in the same log (seq continues), which
 > ends in its own `run_outcome`.
 
+> **DEVIATION** (TASK-008, the `TaskEvent` mirror): the mirror is the same object except for one
+> field. `research_hop_completed.queries` has always stored the raw follow-up queries in
+> `events.jsonl`, so a credential typed into a topic would reach `run-events.jsonl` through the
+> mirror and break the canary acceptance item. The mirror (`mirrorOf`) passes those queries through
+> `boundedQuery`, the same redaction the phase events use. `events.jsonl` itself is unchanged.
+> The stream is passed on the run input (`AskQuery.runEvents`, `ResearchOptions.runEvents`), not the
+> pipeline dependencies, for the same per-run reason as TASK-007.
+
 ## 3. Files
 
 **Protocol (`packages/protocol`)**
@@ -665,7 +673,7 @@ FEAT-072` to this spec's State Tracking. The FEAT-072 implementer then calls the
 - [x] TASK-005: Implement the single-writer `RunEventLog` and reader, with tail recovery and fsync points
 - [x] TASK-006: Implement `RunEventStream` with persist-before-publish, the pre-open buffer and degraded mode
 - [x] TASK-007: Deterministic replay (`run`, `resume`, daemon fires) writes `run-events.jsonl`
-- [ ] TASK-008: Deterministic `ask`/`research` emit phase events, budget snapshots, artifacts and the outcome
+- [x] TASK-008: Deterministic `ask`/`research` emit phase events, budget snapshots, artifacts and the outcome
 - [ ] TASK-009: Record every consent wait as `intervention_raised` / `intervention_resolved`
 - [ ] TASK-010: CLI renderers consume the union; `ask`/`research`/`run`/`resume` route their live output through the stream
 - [ ] TASK-011: Agentic runs (`do`, agentic `ask`/`research`) write their progress through the stream
