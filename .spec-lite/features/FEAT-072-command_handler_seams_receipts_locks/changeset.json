@@ -9,7 +9,7 @@
     },
     {
       "path": "apps/cli/src/adapters/terminal/_lint-fixtures/impure-handler.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-015"
     },
@@ -33,7 +33,7 @@
     },
     {
       "path": "apps/cli/src/adapters/terminal/open-artifact.ts",
-      "status": "U",
+      "status": "R",
       "role": "implement",
       "task": "TASK-015"
     },
@@ -405,13 +405,13 @@
     },
     {
       "path": "apps/cli/tests/adapters/terminal-inputs.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-015"
     },
     {
       "path": "apps/cli/tests/adapters/terminal-signals.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-015"
     },
@@ -1137,7 +1137,7 @@
     },
     {
       "path": "apps/cli/tests/characterization/registry-parity.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-015"
     },
@@ -1509,7 +1509,7 @@
     },
     {
       "path": "packages/core/src/receipt/lock-options.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-015"
     },
