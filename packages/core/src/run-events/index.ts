@@ -14,3 +14,11 @@ export {
   type ReadRunEventsOptions,
   type RunEventsTail,
 } from './reader.js';
+export {
+  PRE_OPEN_BUFFER_LIMIT,
+  RunEventStream,
+  type RunEventListener,
+  type RunEventStreamOpenOptions,
+  type RunEventSubscribeOptions,
+} from './stream.js';
+export { MirroringEventBus, openTaskEventBus } from './mirroring-event-bus.js';

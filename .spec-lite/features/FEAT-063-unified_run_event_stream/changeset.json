@@ -261,37 +261,55 @@
     },
     {
       "path": "packages/core/src/run-events/index.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
     {
       "path": "packages/core/src/run-events/log.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/run-events/mirroring-event-bus.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
     },
     {
       "path": "packages/core/src/run-events/reader.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
     {
-      "path": "packages/core/tests/run-events/log.spec.ts",
+      "path": "packages/core/src/run-events/stream.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/tests/run-events/log.spec.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
     {
       "path": "packages/core/tests/run-events/reader.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
     {
-      "path": "packages/core/tests/run-events/support.ts",
+      "path": "packages/core/tests/run-events/stream.spec.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/tests/run-events/support.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },

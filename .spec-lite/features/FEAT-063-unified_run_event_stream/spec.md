@@ -649,7 +649,7 @@ FEAT-072` to this spec's State Tracking. The FEAT-072 implementer then calls the
 - [x] TASK-003: Promote `AgentProgressEvent` to `@yantra/protocol` and re-export it from `@yantra/agent`
 - [x] TASK-004: Define the `RunEvent` union, the `RunEventRecord` envelope and the line parser
 - [x] TASK-005: Implement the single-writer `RunEventLog` and reader, with tail recovery and fsync points
-- [ ] TASK-006: Implement `RunEventStream` with persist-before-publish, the pre-open buffer and degraded mode
+- [x] TASK-006: Implement `RunEventStream` with persist-before-publish, the pre-open buffer and degraded mode
 - [ ] TASK-007: Deterministic replay (`run`, `resume`, daemon fires) writes `run-events.jsonl`
 - [ ] TASK-008: Deterministic `ask`/`research` emit phase events, budget snapshots, artifacts and the outcome
 - [ ] TASK-009: Record every consent wait as `intervention_raised` / `intervention_resolved`
