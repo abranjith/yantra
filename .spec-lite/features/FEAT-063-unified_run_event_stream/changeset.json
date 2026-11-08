@@ -254,8 +254,50 @@
       "task": "TASK-003"
     },
     {
-      "path": "packages/protocol/generated/json-schema/agent-progress-event.json",
+      "path": "packages/core/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/run-events/index.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/run-events/log.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/run-events/reader.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/tests/run-events/log.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/tests/run-events/reader.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/tests/run-events/support.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/protocol/generated/json-schema/agent-progress-event.json",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
@@ -267,13 +309,13 @@
     },
     {
       "path": "packages/protocol/generated/json-schema/run-event-record.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/generated/json-schema/run-event.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
@@ -315,7 +357,7 @@
     },
     {
       "path": "packages/protocol/src/schemas/run-event.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
@@ -357,109 +399,109 @@
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/artifact_saved.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/assistant_text.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/budget_snapshot.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/capability_gap.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/checkpoint_saved.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/chrome_drift_warning.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/confirmation_requested.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/confirmation_resolved.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/contract_declared.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/discovery_cycle_completed.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/discovery_session_completed.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/event_omitted.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/extract_completed.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/goal_echo.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/human_handoff_requested.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/intervention_raised.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/intervention_resolved.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/llm_step_skipped.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
@@ -477,127 +519,127 @@
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/progress.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/receipt_written.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/recovery.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/research_hop_completed.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/run_outcome.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/run_warning.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/scope_violation.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/search_completed.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/source_fetched.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/step_completed.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/step_retry.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/step_started.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/synthesis_completed.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/synthesize_started.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/task_completed.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/task_failed.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/task_queued.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/task_resumed.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/task_started.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/tool_finished.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/tool_started.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
@@ -615,19 +657,19 @@
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/validation_failed.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/newer-writer.unknown-kind.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/run-event.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },

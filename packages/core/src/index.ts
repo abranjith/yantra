@@ -22,6 +22,7 @@ export * from './widgets/index.js';
 export * from './fill/index.js';
 export * from './config/index.js';
 export * from './locks/index.js';
+export * from './run-events/index.js';
 export * from './fs/atomic-write.js';
 export * from './retention/index.js';
 
