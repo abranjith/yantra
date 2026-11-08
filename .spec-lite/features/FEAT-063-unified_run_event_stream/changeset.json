@@ -9,225 +9,315 @@
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/ask.model-unavailable.terminal.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/ask.model-unavailable.terminal.stdout.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/ask.no-llm.json.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/ask.no-llm.json.stdout.ndjson",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/ask.no-llm.terminal.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/ask.no-llm.terminal.stdout.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/ask.template-guard.terminal.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/do.consent-denied.json.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/do.consent-denied.json.stdout.ndjson",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/do.failed.json.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/do.failed.json.stdout.ndjson",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/do.failed.terminal.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/do.failed.terminal.stdout.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/do.handoff.json.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/do.handoff.json.stdout.ndjson",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/do.handoff.terminal.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/do.handoff.terminal.stdout.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/do.published.json.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/do.published.json.stdout.ndjson",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/do.published.terminal.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/do.published.terminal.stdout.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/research.model-unavailable.json.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/research.model-unavailable.json.stdout.ndjson",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/research.no-browse-warning.terminal.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/research.no-browse-warning.terminal.stdout.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/research.no-llm.json.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/research.no-llm.json.stdout.ndjson",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/research.no-llm.terminal.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/research.no-llm.terminal.stdout.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/resume.success.json.stdout.ndjson",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/resume.success.terminal.stdout.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/run.failure.json.stdout.ndjson",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/run.failure.terminal.stdout.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/run.handoff.terminal.stdout.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/run.success.json.stdout.ndjson",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/fixtures/live-output/run.success.terminal.stdout.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/cli/tests/live-output-golden.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "docs/protocol-spec.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/generated/json-schema/confirmation-decision.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/generated/json-schema/task-event.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/src/schemas/confirmation.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/src/schemas/events.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/src/schemas/task-outcome.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/legacy/agent-manifests.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/legacy/agent-outcomes.jsonl",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/legacy/confirmations.jsonl",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/legacy/events.jsonl",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/owner-lost.agent-outcome.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/owner-lost.manifest.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/user-app.confirmation-resolved.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/user-app.decision.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/tests/schema-compat.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
     }
   ],
   "excluded": [

@@ -1,0 +1,8 @@
+{
+  "task_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "at": "2026-10-01T12:00:00.000Z",
+  "kind": "confirmation_resolved",
+  "confirmation_id": "01J00000000000000000000000",
+  "decision": "granted",
+  "decided_by": "user_app"
+}

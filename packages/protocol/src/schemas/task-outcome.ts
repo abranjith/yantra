@@ -35,9 +35,10 @@ export const TerminationReason = z
     'provider_failed',
     'stalled',
     'turn-timeout',
+    'owner_lost',
   ])
   .describe(
-    'Why the run stopped: stalled (no progress after recovery), turn-timeout (thinking limit), the model finished, a budget or the repeated-failure breaker ended it, a handoff was raised, the user aborted, or the provider failed. wall-clock-soft means the model finished after the exploration wind-down began.',
+    'Why the run stopped: stalled (no progress after recovery), turn-timeout (thinking limit), the model finished, a budget or the repeated-failure breaker ended it, a handoff was raised, the user aborted, or the provider failed. wall-clock-soft means the model finished after the exploration wind-down began. owner_lost means the process that owned the run died before writing a terminal result, and a reconciler recorded the end (FEAT-064). Added in FEAT-063: readable by new executables only.',
   );
 
 export type TerminationReason = z.infer<typeof TerminationReason>;

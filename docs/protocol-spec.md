@@ -841,7 +841,7 @@ Example:
 
 ## ConfirmationDecidedBy
 
-Who or what resolved the confirmation — no agent variant exists.
+Who or what resolved the confirmation — no agent variant exists. user_interactive: a person at the terminal prompt; user_cli_confirm: a person running `yantra confirm`; timeout: the bounded wait expired; user_app: a person answered in the Yantra app (FEAT-068; added in FEAT-063, readable by new executables only).
 
 Example:
 
@@ -2673,7 +2673,7 @@ Example:
 
 ## TerminationReason
 
-Why the run stopped: stalled (no progress after recovery), turn-timeout (thinking limit), the model finished, a budget or the repeated-failure breaker ended it, a handoff was raised, the user aborted, or the provider failed. wall-clock-soft means the model finished after the exploration wind-down began.
+Why the run stopped: stalled (no progress after recovery), turn-timeout (thinking limit), the model finished, a budget or the repeated-failure breaker ended it, a handoff was raised, the user aborted, or the provider failed. wall-clock-soft means the model finished after the exploration wind-down began. owner_lost means the process that owned the run died before writing a terminal result, and a reconciler recorded the end (FEAT-064). Added in FEAT-063: readable by new executables only.
 
 Example:
 

@@ -28,7 +28,8 @@
           "enum": [
             "user_interactive",
             "user_cli_confirm",
-            "timeout"
+            "timeout",
+            "user_app"
           ],
           "description": "Provenance of the decision — never agent."
         }

@@ -859,7 +859,8 @@
               "enum": [
                 "user_interactive",
                 "user_cli_confirm",
-                "timeout"
+                "timeout",
+                "user_app"
               ],
               "description": "Who or what resolved the confirmation — never agent."
             }
