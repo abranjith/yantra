@@ -96,6 +96,11 @@ export function templatesRoot(): string {
   return join(dataDir(), 'templates');
 }
 
+/** Shared lock target for validate-then-register schedule operations. */
+export function scheduleRegistryLockTarget(): string {
+  return join(dataDir(), 'schedules');
+}
+
 /** Returns the directory where Yantra configuration files live. */
 export function configDir(): string {
   return yantraHome();

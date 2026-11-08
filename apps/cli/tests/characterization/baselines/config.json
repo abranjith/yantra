@@ -1,0 +1,6 @@
+{
+  "stdout": "Usage: yantra config [options] [command]\n\nInspect and update installation configuration\n\nOptions:\n  -h, --help                   display help for command\n\nCommands:\n  path [options]\n  list [options]\n  get [options] <key>\n  set [options] <key> <value>\n  unset [options] <key>\n  edit [options]\n  validate [options]\n  data-dir [options] [path]\n  help [command]               display help for command\n",
+  "stderr": "",
+  "exitCode": 0,
+  "tree": {}
+}

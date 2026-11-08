@@ -25,7 +25,6 @@
  */
 
 import { join } from 'node:path';
-import { createInterface } from 'node:readline/promises';
 
 import {
   outcomeFirstLine,
@@ -101,6 +100,7 @@ export interface CliAgentConnectorOptions {
   ) => Promise<'granted' | 'denied'>;
   /** Command will render the published Brief itself using its selected format. */
   readonly suppressPublishedOutcome?: boolean;
+  readonly output?: { json(value: unknown): void; jsonLine(value: unknown): void };
 }
 
 /**
@@ -122,7 +122,7 @@ class NoopEventStream {
   }
 }
 
-export class CLIConnectorIO implements ConnectorIO {
+export class CommandConnectorIO implements ConnectorIO {
   readonly id: ConnectorId = 'cli';
   private readonly events = new NoopEventStream();
 
@@ -133,7 +133,7 @@ export class CLIConnectorIO implements ConnectorIO {
 
   /** True only for an explicitly interactive, non-JSON TTY command. */
   public get interactive(): boolean {
-    return this.agentOptions?.interactive === true && this.agentOptions.renderOpts.json === false;
+    return this.agentOptions?.interactive === true;
   }
 
   onEvent(handler: (event: TaskEvent) => void): () => void {
@@ -173,9 +173,9 @@ export class CLIConnectorIO implements ConnectorIO {
   public emitAgentEvent(event: AgentProgressEvent): void {
     const opts = this.requireAgentOptions();
     if (opts.json) {
-      opts.stream.write(
-        `${JSON.stringify({ schemaVersion: SCHEMA_VERSION, kind: 'agent_progress', event })}\n`,
-      );
+      const value = { schemaVersion: SCHEMA_VERSION, kind: 'agent_progress', event };
+      if (this.agentOptions?.output) this.agentOptions.output.jsonLine(value);
+      else opts.stream.write(`${JSON.stringify(value)}\n`);
       return;
     }
     switch (event.type) {
@@ -229,21 +229,7 @@ export class CLIConnectorIO implements ConnectorIO {
       return this.agentOptions.confirmationPrompt(request, signal);
     }
 
-    const opts = this.requireAgentOptions();
-    opts.errStream.write(
-      `\nConfirmation required\n` +
-        `  Action: ${request.action_kind}\n` +
-        `  Host: ${request.host}\n` +
-        `  Summary: ${request.description}\n` +
-        `  Consequence: ${request.consequence}\n`,
-    );
-    const readline = createInterface({ input: process.stdin, output: opts.errStream });
-    try {
-      const answer = await readline.question('Allow this action? [y/N] ', { signal });
-      return /^(y|yes)$/i.test(answer.trim()) ? 'granted' : 'denied';
-    } finally {
-      readline.close();
-    }
+    return 'denied';
   }
 
   /** Render the finalized terminal state exactly once. */
@@ -262,7 +248,8 @@ export class CLIConnectorIO implements ConnectorIO {
         artifacts: outcome.kind === 'published' ? outcome.artifacts : [],
         outcome,
       };
-      opts.stream.write(`${JSON.stringify(record)}\n`);
+      if (this.agentOptions?.output) this.agentOptions.output.json(record);
+      else opts.stream.write(`${JSON.stringify(record)}\n`);
       return;
     }
     switch (outcome.kind) {
@@ -289,15 +276,8 @@ export class CLIConnectorIO implements ConnectorIO {
   }
 
   private requireAgentOptions(): ConnectorRenderOpts {
-    return (
-      this.agentOptions?.renderOpts ?? {
-        json: false,
-        debug: false,
-        noColor: true,
-        stream: process.stdout,
-        errStream: process.stderr,
-      }
-    );
+    if (!this.agentOptions) throw new Error('Agent connector requires render options');
+    return this.agentOptions.renderOpts;
   }
 }
 
@@ -353,15 +333,15 @@ export function agentFailureLine(
 export function buildRenderOpts(
   flags: GlobalFlags,
   streams: {
-    readonly stdout?: NodeJS.WritableStream;
-    readonly stderr?: NodeJS.WritableStream;
-  } = {},
+    readonly stdout: NodeJS.WritableStream;
+    readonly stderr: NodeJS.WritableStream;
+  },
 ): ConnectorRenderOpts {
   return {
     json: flags.json,
     debug: flags.debug,
     noColor: flags.noColor,
-    stream: streams.stdout ?? process.stdout,
-    errStream: streams.stderr ?? process.stderr,
+    stream: streams.stdout,
+    errStream: streams.stderr,
   };
 }

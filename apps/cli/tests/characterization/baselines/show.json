@@ -1,0 +1,6 @@
+{
+  "stdout": "Usage: yantra show [options] <target>\n\nDisplay a saved workflow or run\n\nArguments:\n  target        Workflow name OR run-id\n\nOptions:\n  --workflow    force workflow lookup\n  --run         force run lookup\n  --events <n>  number of recent events to display for a run (default: \"20\")\n  --json        emit JSON instead of human-readable output (default: false)\n  -h, --help    display help for command\n",
+  "stderr": "",
+  "exitCode": 0,
+  "tree": {}
+}

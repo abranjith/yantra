@@ -1,0 +1,6 @@
+{
+  "stdout": "Usage: yantra lint [options] <file>\n\nLint a workflow YAML file for errors and best-practice violations\n\nArguments:\n  file        Path to the workflow YAML file\n\nOptions:\n  --strict    Promote warnings to errors (default: false)\n  --json      Output lint report as JSON to stdout (default: false)\n  -h, --help  display help for command\n",
+  "stderr": "",
+  "exitCode": 0,
+  "tree": {}
+}

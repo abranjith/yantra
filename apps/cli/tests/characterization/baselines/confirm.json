@@ -1,0 +1,6 @@
+{
+  "stdout": "Usage: yantra confirm [options] <run-id> <decision>\n\nGrant or deny a pending confirmation for a parked run\n\nArguments:\n  run-id      The run id with a pending confirmation\n  decision    grant | deny\n\nOptions:\n  --json      Emit JSON summary to stdout (default: false)\n  --debug     Verbose logging to stderr (default: false)\n  -h, --help  display help for command\n",
+  "stderr": "",
+  "exitCode": 0,
+  "tree": {}
+}

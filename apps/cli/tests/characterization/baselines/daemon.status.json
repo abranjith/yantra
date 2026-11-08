@@ -1,0 +1,6 @@
+{
+  "stdout": "Usage: yantra daemon status [options]\n\nReport scheduler daemon status\n\nOptions:\n  --json      Emit JSON status to stdout (default: false)\n  --debug     Verbose logging to stderr (default: false)\n  -h, --help  display help for command\n",
+  "stderr": "",
+  "exitCode": 0,
+  "tree": {}
+}

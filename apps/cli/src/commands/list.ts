@@ -16,8 +16,10 @@ import { LocalRunStore, type RunSummary } from '@yantra/core/workflow/replay';
 import { COMMAND_REGISTRY } from '@yantra/protocol';
 import type { Command } from 'commander';
 
-import { CLIConnectorIO, buildRenderOpts } from '../connector-io.js';
-import { readGlobalFlags } from '../global-flags.js';
+import { createTerminalContext } from '../adapters/terminal/terminal-adapter.js';
+import { buildRenderOpts } from '../connector-io.js';
+import { CommandFailure, type CommandContext } from '../context/command-context.js';
+import { commandFlags } from '../context/flags.js';
 import { openHistory } from '../history.js';
 import { createRegisteredCommand } from '../registry/build-command-tree.js';
 import { handler, type HandlerArgs } from '../registry/handler.js';
@@ -40,26 +42,30 @@ export function makeListCommand(): Command {
 }
 
 /** `yantra list [target]`: bound to the `list` registry entry. */
-export async function listHandler(args: HandlerArgs, options: ListOptions): Promise<void> {
+export async function listHandler(
+  args: HandlerArgs,
+  options: ListOptions,
+  _command?: Command,
+  context: CommandContext = createTerminalContext(),
+): Promise<void> {
   const [target] = args as readonly [string];
-  const flags = readGlobalFlags({
-    argv: process.argv,
-    env: process.env,
-    isTty: process.stdout.isTTY ?? false,
-  });
+  const flags = commandFlags(context, options);
   const renderer =
     options.json === true || flags.json ? new JSONRenderer() : new TerminalRenderer();
-  const connector = new CLIConnectorIO(renderer);
-  const logger: Logger = makeStderrLogger(options.debug === true);
-  const renderOpts = buildRenderOpts({
-    ...flags,
-    json: options.json === true || flags.json,
-  });
+  const connector = context.connector(renderer);
+  const logger: Logger = makeStderrLogger(options.debug === true, context.output.stderr);
+  const renderOpts = buildRenderOpts(
+    {
+      ...flags,
+      json: options.json === true || flags.json,
+    },
+    context.output,
+  );
 
   try {
     if (target !== 'workflows' && target !== 'runs') {
-      process.stderr.write(`Unknown target "${target}" (expected: workflows | runs)\n`);
-      process.exit(1);
+      context.output.stderr.write(`Unknown target "${target}" (expected: workflows | runs)\n`);
+      throw new CommandFailure(1, 'yantra.list.failed', '', null, true);
     }
 
     const limit = parseLimit(options.limit);
@@ -75,17 +81,19 @@ export async function listHandler(args: HandlerArgs, options: ListOptions): Prom
         modifiedAt: w.last_modified.toISOString(),
       }));
       connector.renderResult({ kind: 'list', items }, renderOpts);
-      process.exit(0);
+      return;
     }
 
-    const items = await listRuns(limit, options, logger);
+    const items = await listRuns(limit, options, logger, context);
     connector.renderResult({ kind: 'list', items }, renderOpts);
-    process.exit(0);
+    return;
   } catch (err) {
+    if (err instanceof CommandFailure) throw err;
+
     const message = err instanceof Error ? err.message : String(err);
     logger.error({ err: message }, 'list failed');
-    process.stderr.write(`Error: ${message}\n`);
-    process.exit(1);
+    context.output.stderr.write(`Error: ${message}\n`);
+    throw new CommandFailure(1, 'yantra.list.failed', '', null, true);
   }
 }
 
@@ -96,7 +104,12 @@ export async function listHandler(args: HandlerArgs, options: ListOptions): Prom
  * file scan alone (with a stderr hint) — the "delete index.db, list still
  * works" fallback (TASK-002 verify).
  */
-async function listRuns(limit: number, options: ListOptions, logger: Logger): Promise<ListItem[]> {
+async function listRuns(
+  limit: number,
+  options: ListOptions,
+  logger: Logger,
+  context: CommandContext,
+): Promise<ListItem[]> {
   const runStore = new LocalRunStore();
   const fileRuns = await runStore.listRuns({ limit: 500 });
 
@@ -107,7 +120,7 @@ async function listRuns(limit: number, options: ListOptions, logger: Logger): Pr
 
   const history = await openHistory(logger);
   if (history === null) {
-    process.stderr.write(
+    context.output.stderr.write(
       'note: history index unavailable — showing runs from files only ' +
         '(run `yantra doctor` to rebuild the index)\n',
     );

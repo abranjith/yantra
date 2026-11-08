@@ -4,8 +4,9 @@ import { join } from 'node:path';
 import { LocalRunStore } from '@yantra/core/workflow/replay';
 import { type Command, CommanderError } from 'commander';
 
+import { createTerminalContext } from '../adapters/terminal/terminal-adapter.js';
+import type { CommandContext } from '../context/command-context.js';
 import { openHistory, type OpenHistory } from '../history.js';
-import { openArtifact } from '../open-artifact.js';
 import { createRegisteredCommand } from '../registry/build-command-tree.js';
 import { fromAction } from '../registry/handler.js';
 import { CLI_JSON_SCHEMA_VERSION } from '../render/json.js';
@@ -28,44 +29,53 @@ export function makeOpenCommand(input?: Partial<OpenRuntime>): Command {
 }
 
 /** Handlers for `open`, bound by registry id; each is its former commander action, unchanged. */
-export function openHandlers(input?: Partial<OpenRuntime>) {
+export function openHandlers(
+  input?: Partial<OpenRuntime>,
+  context: CommandContext = createTerminalContext(),
+) {
   const runtime: OpenRuntime = {
     createRunStore: input?.createRunStore ?? (() => new LocalRunStore()),
     openHistory: input?.openHistory ?? (() => openHistory()),
-    launch: input?.launch ?? openArtifact,
+    launch:
+      input?.launch ??
+      ((path) => {
+        context.openExternal(path);
+        return true;
+      }),
   };
   return {
     open: fromAction((runId: string | undefined, options: OpenOptions) =>
-      runOpen(runId, options, runtime),
+      runOpen(context, runId, options, runtime),
     ),
   };
 }
 
 async function runOpen(
+  context: CommandContext,
   runId: string | undefined,
   options: OpenOptions,
   runtime: OpenRuntime,
 ): Promise<void> {
   const artifact = options.artifact ?? 'brief';
   if (!['brief', 'report', 'audit', 'dir'].includes(artifact))
-    fail(`unknown artifact "${artifact}"`);
+    fail(context, `unknown artifact "${artifact}"`);
   const store = runtime.createRunStore();
   const selected = runId ? await store.getRun(runId) : await newest(store, runtime);
-  if (!selected) fail(runId ? `run "${runId}" was not found` : 'no runs were found');
+  if (!selected) fail(context, runId ? `run "${runId}" was not found` : 'no runs were found');
   const path = await artifactPath(selected.runDir, artifact);
   if (!path) {
     const available = await availableArtifacts(selected.runDir);
     fail(
+      context,
       `run ${selected.manifest.runId} has no ${artifact} artifact; available: ${available.join(', ') || 'none'}`,
     );
   }
   const body = { runId: selected.manifest.runId, artifact, path };
   if (options.json)
-    process.stdout.write(
-      `${JSON.stringify({ schemaVersion: CLI_JSON_SCHEMA_VERSION, kind: 'open', ...body })}\n`,
-    );
-  else if (options.print) process.stdout.write(`${path}\n`);
-  else if (!runtime.launch(path)) fail(`could not launch the default application for ${path}`, 2);
+    context.output.json({ schemaVersion: CLI_JSON_SCHEMA_VERSION, kind: 'open', ...body });
+  else if (options.print) context.output.stdout.write(`${path}\n`);
+  else if (!runtime.launch(path))
+    fail(context, `could not launch the default application for ${path}`, 2);
 }
 
 async function newest(store: LocalRunStore, runtime: OpenRuntime) {
@@ -124,7 +134,7 @@ async function availableArtifacts(runDir: string): Promise<readonly string[]> {
   }
 }
 
-function fail(message: string, code = 1): never {
-  process.stderr.write(`Error: ${message}\n`);
+function fail(context: CommandContext, message: string, code = 1): never {
+  context.output.stderr.write(`Error: ${message}\n`);
   throw new CommanderError(code, 'yantra.open.failed', message);
 }

@@ -1,0 +1,6 @@
+{
+  "stdout": "Usage: yantra config data-dir [options] [path]\n\nOptions:\n  --force     allow a non-empty target (default: false)\n  --no-move   write the setting without moving content\n  --dry-run   print the relocation plan without changing anything (default:\n              false)\n  --json      emit JSON (default: false)\n  -h, --help  display help for command\n",
+  "stderr": "",
+  "exitCode": 0,
+  "tree": {}
+}

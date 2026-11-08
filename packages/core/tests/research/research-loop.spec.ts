@@ -215,6 +215,36 @@ afterEach(async () => {
 });
 
 describe('@no-llm research/research-loop', () => {
+  it('writes the receipt before invoking a search provider', async () => {
+    const runRootDir = await makeRunRoot();
+    const search: SearchProvider = {
+      name: 'duckduckgo',
+      search: async () => {
+        const directories = await import('node:fs/promises').then((fs) => fs.readdir(runRootDir));
+        const raw = JSON.parse(
+          await readFile(join(runRootDir, directories[0]!, 'execution-receipt.json'), 'utf8'),
+        ) as { command: string[] };
+        expect(raw.command).toEqual(['research']);
+        return [];
+      },
+    };
+    await makeLoop({ runRootDir, search }).run(
+      baseOptions({
+        receipt: {
+          schema_version: 1,
+          yantra_version: 'fixture',
+          invoked_by: 'terminal',
+          invocation_id: null,
+          command: ['research'],
+          cwd: runRootDir,
+          settings: [],
+          content: [],
+          browser: null,
+        },
+      }),
+    );
+  });
+
   it('produces a valid long-form Brief from a single depth-1 hop', async () => {
     const runRootDir = await makeRunRoot();
     const loop = makeLoop({ runRootDir });

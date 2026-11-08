@@ -167,6 +167,8 @@ The complete library surface is:
 
 Every library subcommand accepts `--json` and emits a stable schema-versioned JSON envelope. Human `lint` and `show` output truncates per-slot guidance to 32 code points and the document guidance line to about 72; their JSON output carries the complete text. An unguided template retains the four-column slot table without a guidance column.
 
+Saves and removals of the same template name coordinate through a process-safe lock. Yantra checks for an existing file while holding that lock: if two simultaneous saves target a new name without `--force`, one succeeds and the other reports a collision. Contents are never merged; use `--force` only when you intend to replace the saved template.
+
 ### Select a template for a run
 
 Use a saved name, tag, or local Markdown file:
@@ -213,11 +215,13 @@ report.md
 
 The `slots` object excludes the reserved `sources` value. Editing a saved template affects future runs; existing documents retain only the resolved identity and raw-content hash, not a private copy of the source template.
 
+Yantra stages all three `document.*` files in unique temporary siblings before renaming them into place. A write failure returns an error and cleans up the temporary files created by that attempt. The family is not a single transaction: if the rename phase fails, some final artifacts may already exist alongside the reported failure.
+
 Template parsing and reference errors are exit-1 validation failures. Common parse failures include malformed YAML; missing frontmatter delimiters; invalid or duplicate slot keys; unknown kinds or constraints; malformed/unclosed placeholders; empty templates; conflicting `sources`; tables without columns; invalid bounds; and malformed, dangling, duplicate, unsafe, or oversized guidance directives. Library `save` rejects invalid input before copying it and rejects collisions unless `--force` is supplied.
 
 ## Configuration and Permissions
 
-Saved files live under Yantra's data directory in `templates/<name>.md`: `%LOCALAPPDATA%\yantra\templates` on Windows, `$XDG_DATA_HOME/yantra/templates` when set on Linux/macOS, otherwise `~/.local/share/yantra/templates`. Writes use a sibling temporary file and rename it into place.
+Saved files live under Yantra's data directory in `templates/<name>.md`, by default `~/.yantra/data/templates` on every platform. The `YANTRA_HOME` override changes Yantra's home; a configured data-directory override changes where the library lives. Locked writes use a unique sibling temporary file (`<name>.md.<pid>.<random>.tmp`) and rename it into place.
 
 There are no template-specific credentials, network permissions, or roles. Running a template does require an available model and inherits the selected command's normal provider credentials, web/browser permissions, consent rules, budgets, sanitization, and artifact protections.
 
@@ -228,7 +232,7 @@ There are no template-specific credentials, network permissions, or roles. Runni
 - Templates cannot bind placeholders directly to workflow parameters, captures, dates, or other run data. All non-source slots are model-filled.
 - There is no remote template fetch, sharing service, registry, or library synchronization; path references and the saved library are local files.
 - Template mode has no deterministic fallback. Missing credentials, `--no-llm`, invalid slot publication, or failure to publish cannot degrade to a filled template.
-- `template list` intentionally omits unreadable, invalidly named, non-Markdown, and unparsable saved files. Run `template lint <name-or-path>` directly when a file unexpectedly disappears from the listing.
+- `template list` intentionally omits lock directories, lock-owner sidecars, temporary siblings, and unreadable, invalidly named, non-Markdown, or unparsable saved files. Run `template lint <name-or-path>` directly when a file unexpectedly disappears from the listing.
 - A whole-line comment beginning `<!-- guidance:` is reserved syntax, even if an older template intended it as an ordinary comment. It must bind to a later model-filled slot or be rewritten.
 - Fenced code blocks are not a parser escape hatch. Literal examples containing template syntax must avoid `{{ ... }}` and guidance-directive shapes.
 - Templates control presentation, not factual correctness. The evidence ledger proves which pages Yantra consulted; users should still verify consequential model-authored claims against the numbered sources.

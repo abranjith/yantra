@@ -3,7 +3,7 @@ import { Writable } from 'node:stream';
 import type { TemplatedReport } from '@yantra/protocol';
 import { describe, expect, it } from 'vitest';
 
-import { CLIConnectorIO } from '../../src/connector-io.js';
+import { CLIConnectorIO } from '../../src/adapters/terminal/connector.js';
 import { CLI_JSON_SCHEMA_VERSION, JSONRenderer } from '../../src/render/json.js';
 import { TerminalRenderer } from '../../src/render/terminal.js';
 import type { BriefOutputFormat, ConnectorRenderOpts } from '../../src/render/types.js';

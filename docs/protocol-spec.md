@@ -819,6 +819,16 @@ Example:
 }
 ```
 
+## CommandResultMessageSchema
+
+The final completion of a command executed on a worker surface.
+
+Example:
+
+```json
+"<value>"
+```
+
 ## Condition
 
 A predicate over one parsed invocation.
@@ -903,6 +913,26 @@ Example:
 
 ```json
 "reversible"
+```
+
+## ContentIdentitySchema
+
+A content identity at execution start.
+
+| Field  | Description                             |
+| ------ | --------------------------------------- |
+| kind   |                                         |
+| path   | Absolute path read at invocation start. |
+| sha256 | Streamed SHA-256 of the exact content.  |
+
+Example:
+
+```json
+{
+  "kind": "<kind>",
+  "path": "<path>",
+  "sha256": "<sha256>"
+}
 ```
 
 ## ContractRequirementOrigin
@@ -1179,6 +1209,44 @@ Example:
 
 ```json
 "run"
+```
+
+## ExecutionReceiptSchema
+
+Immutable execution settings and content identities for one run start or resume.
+
+| Field          | Description                                                                |
+| -------------- | -------------------------------------------------------------------------- |
+| schema_version |                                                                            |
+| run_id         |                                                                            |
+| sequence       |                                                                            |
+| written_at     |                                                                            |
+| yantra_version |                                                                            |
+| invoked_by     |                                                                            |
+| invocation_id  |                                                                            |
+| command        |                                                                            |
+| cwd            |                                                                            |
+| settings       | Effective settings, sorted by key; no secrets or unrelated environment.    |
+| content        |                                                                            |
+| browser        | Browser selection at start; no profile contents or installation telemetry. |
+
+Example:
+
+```json
+{
+  "schema_version": "<schema_version>",
+  "run_id": "<run_id>",
+  "sequence": "<sequence>",
+  "written_at": "<written_at>",
+  "yantra_version": "<yantra_version>",
+  "invoked_by": "<invoked_by>",
+  "invocation_id": "<invocation_id>",
+  "command": "<command>",
+  "cwd": "<cwd>",
+  "settings": "<settings>",
+  "content": "<content>",
+  "browser": "<browser>"
+}
 ```
 
 ## ExecutionRule
@@ -2007,6 +2075,44 @@ Example:
 }
 ```
 
+## ReceiptBrowserSelectionSchema
+
+Browser selection at start; no profile contents or installation telemetry.
+
+| Field     | Description                                                            |
+| --------- | ---------------------------------------------------------------------- |
+| selection |                                                                        |
+| source    | The source of an effective non-secret setting; environment names only. |
+
+Example:
+
+```json
+{
+  "selection": "<selection>",
+  "source": "<source>"
+}
+```
+
+## ReceiptSettingSchema
+
+An effective non-secret setting and its provenance.
+
+| Field  | Description                                                            |
+| ------ | ---------------------------------------------------------------------- |
+| key    |                                                                        |
+| value  | Any JSON value.                                                        |
+| source | The source of an effective non-secret setting; environment names only. |
+
+Example:
+
+```json
+{
+  "key": "<key>",
+  "value": "<value>",
+  "source": "<source>"
+}
+```
+
 ## RecordingDraftSchema
 
 The complete recording draft artifact produced by the recorder (FEAT-008)
@@ -2265,6 +2371,16 @@ Example:
 
 ```json
 "public"
+```
+
+## SettingSourceSchema
+
+The source of an effective non-secret setting; environment names only.
+
+Example:
+
+```json
+"<value>"
 ```
 
 ## Step

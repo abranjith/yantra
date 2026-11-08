@@ -16,9 +16,12 @@ import { join } from 'node:path';
 
 import { FileWorkflowStore, workflowsRoot } from '@yantra/core';
 import { LocalRunStore } from '@yantra/core/workflow/replay';
+import type { Command } from 'commander';
 
-import { CLIConnectorIO, buildRenderOpts } from '../connector-io.js';
-import { readGlobalFlags } from '../global-flags.js';
+import { createTerminalContext } from '../adapters/terminal/terminal-adapter.js';
+import { buildRenderOpts } from '../connector-io.js';
+import { CommandFailure, type CommandContext } from '../context/command-context.js';
+import { commandFlags } from '../context/flags.js';
 import type { HandlerArgs } from '../registry/handler.js';
 import { JSONRenderer } from '../render/json.js';
 import { TerminalRenderer } from '../render/terminal.js';
@@ -34,20 +37,24 @@ interface ShowOptions {
 }
 
 /** `yantra show`: bound to the `show` registry entry. */
-export async function showHandler(args: HandlerArgs, options: ShowOptions): Promise<void> {
+export async function showHandler(
+  args: HandlerArgs,
+  options: ShowOptions,
+  _command?: Command,
+  context: CommandContext = createTerminalContext(),
+): Promise<void> {
   const [target] = args as readonly [string];
-  const flags = readGlobalFlags({
-    argv: process.argv,
-    env: process.env,
-    isTty: process.stdout.isTTY ?? false,
-  });
+  const flags = commandFlags(context, options);
   const renderer =
     options.json === true || flags.json ? new JSONRenderer() : new TerminalRenderer();
-  const connector = new CLIConnectorIO(renderer);
-  const renderOpts = buildRenderOpts({
-    ...flags,
-    json: options.json === true || flags.json,
-  });
+  const connector = context.connector(renderer);
+  const renderOpts = buildRenderOpts(
+    {
+      ...flags,
+      json: options.json === true || flags.json,
+    },
+    context.output,
+  );
 
   try {
     const kind =
@@ -61,8 +68,8 @@ export async function showHandler(args: HandlerArgs, options: ShowOptions): Prom
       const store = new FileWorkflowStore(workflowsRoot());
       const loadResult = await store.load(target);
       if (!loadResult.isOk) {
-        process.stderr.write(`Workflow "${target}" could not be loaded.\n`);
-        process.exit(1);
+        context.output.stderr.write(`Workflow "${target}" could not be loaded.\n`);
+        throw new CommandFailure(1, 'yantra.show.failed', '', null, true);
       }
       const workflow = loadResult.value;
       const yaml = JSON.stringify(workflow, null, 2);
@@ -75,14 +82,14 @@ export async function showHandler(args: HandlerArgs, options: ShowOptions): Prom
       }
       const item: ShowItem = { kind: 'workflow', name: workflow.name, yaml, locatorCounts };
       connector.renderResult({ kind: 'show', item }, renderOpts);
-      process.exit(0);
+      return;
     }
 
     const runStore = new LocalRunStore();
     const run = await runStore.getRun(target);
     if (run === null) {
-      process.stderr.write(`Run "${target}" not found.\n`);
-      process.exit(1);
+      context.output.stderr.write(`Run "${target}" not found.\n`);
+      throw new CommandFailure(1, 'yantra.show.failed', '', null, true);
     }
     const events = await readRecentEvents(run.runDir, parseEventCount(options.events));
     const item: ShowItem = {
@@ -92,11 +99,13 @@ export async function showHandler(args: HandlerArgs, options: ShowOptions): Prom
       events,
     };
     connector.renderResult({ kind: 'show', item }, renderOpts);
-    process.exit(0);
+    return;
   } catch (err) {
+    if (err instanceof CommandFailure) throw err;
+
     const message = err instanceof Error ? err.message : String(err);
-    process.stderr.write(`Error: ${message}\n`);
-    process.exit(1);
+    context.output.stderr.write(`Error: ${message}\n`);
+    throw new CommandFailure(1, 'yantra.show.failed', '', null, true);
   }
 }
 

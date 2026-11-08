@@ -1,0 +1,6 @@
+{
+  "stdout": "Usage: yantra open [options] [run-id]\n\nOpen a run's saved artifact\n\nOptions:\n  --artifact <kind>  brief | report | audit | dir (default: \"brief\")\n  --print            print the resolved path without launching (default: false)\n  --json             emit JSON without launching (default: false)\n  -h, --help         display help for command\n",
+  "stderr": "",
+  "exitCode": 0,
+  "tree": {}
+}

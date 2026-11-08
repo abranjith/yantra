@@ -1,9 +1,12 @@
 /** Filesystem-backed local report-template library. */
 
-import { mkdir, readFile, readdir, rename, stat, unlink, writeFile } from 'node:fs/promises';
+import { readFile, readdir, stat, unlink } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 
 import type { TemplateManifest } from '@yantra/protocol';
+
+import { writeFileAtomic } from '../fs/atomic-write.js';
+import { withResourceLock, type ResourceLockOptions } from '../locks/resource-lock.js';
 
 import { parseTemplate } from './parse.js';
 
@@ -63,13 +66,16 @@ export class TemplateStoreError extends Error {
 /**
  * Atomic filesystem store for reusable Markdown report templates.
  *
- * Saved files live at `<root>/<name>.md`. Writes stage to a sibling `.tmp`
+ * Saved files live at `<root>/<name>.md`. Locked writes stage to a unique sibling `.tmp`
  * file and rename into place, and listing ignores unreadable or unparsable
  * Markdown so one damaged file cannot hide the rest of the library.
  */
 export class FileTemplateStore {
   /** Create a store rooted at the supplied templates directory. */
-  public constructor(private readonly root: string) {}
+  public constructor(
+    private readonly root: string,
+    private readonly lockOptions: ResourceLockOptions = {},
+  ) {}
 
   /** Return the path used for a validated saved name. */
   public pathFor(name: string): string {
@@ -94,20 +100,22 @@ export class FileTemplateStore {
     options: TemplateSaveOptions = {},
   ): Promise<string> {
     this.assertName(name);
-    if (options.force !== true && (await this.exists(name))) {
-      throw new TemplateCollisionError(name);
-    }
-    const finalPath = this.pathFor(name);
-    const tmpPath = `${finalPath}.tmp`;
-    try {
-      await mkdir(this.root, { recursive: true });
-      await writeFile(tmpPath, text, 'utf8');
-      await rename(tmpPath, finalPath);
-      return finalPath;
-    } catch (cause) {
-      await unlink(tmpPath).catch(() => undefined);
-      throw new TemplateStoreError('save', name, cause);
-    }
+    return await withResourceLock(
+      { kind: 'template', name },
+      async () => {
+        if (options.force !== true && (await this.exists(name))) {
+          throw new TemplateCollisionError(name);
+        }
+        const finalPath = this.pathFor(name);
+        try {
+          await writeFileAtomic(finalPath, text);
+          return finalPath;
+        } catch (cause) {
+          throw new TemplateStoreError('save', name, cause);
+        }
+      },
+      { ...this.lockOptions, targetPath: this.pathFor(name) },
+    );
   }
 
   /**
@@ -150,11 +158,17 @@ export class FileTemplateStore {
   /** Remove one saved template. */
   public async remove(name: string): Promise<void> {
     this.assertName(name);
-    try {
-      await unlink(this.pathFor(name));
-    } catch (cause) {
-      throw new TemplateStoreError('remove', name, cause);
-    }
+    await withResourceLock(
+      { kind: 'template', name },
+      async () => {
+        try {
+          await unlink(this.pathFor(name));
+        } catch (cause) {
+          throw new TemplateStoreError('remove', name, cause);
+        }
+      },
+      { ...this.lockOptions, targetPath: this.pathFor(name) },
+    );
   }
 
   /** Return true exactly when the saved template file exists. */

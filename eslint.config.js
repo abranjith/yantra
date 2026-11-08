@@ -93,6 +93,19 @@ export const SITE_SPECIFIC_SELECTORS = [
   },
 ];
 
+/** Core writers must stage to a unique sibling even when no RMW lock is needed. */
+export const FIXED_TEMP_SELECTORS = [
+  {
+    selector:
+      'TemplateLiteral[expressions.length=1] > TemplateElement[tail=true][value.raw=/^\\.[\\w.-]*tmp$/]',
+    message: 'Fixed temporary names are forbidden: use uniqueTempPath or writeFileAtomic.',
+  },
+  {
+    selector: "BinaryExpression[operator='+'][right.type='Literal'][right.value=/\\.tmp$/]",
+    message: 'Fixed temporary names are forbidden: use uniqueTempPath or writeFileAtomic.',
+  },
+];
+
 const DRSHYA_RULE = 'See plan_ui.md §9 and .spec-lite/memory.md -> General (Drshya).';
 
 /**
@@ -151,6 +164,35 @@ export const DRSHYA_STYLE_SELECTORS = [
   {
     selector: 'JSXAttribute[name.name="dangerouslySetInnerHTML"]',
     message: INNER_HTML_MESSAGE,
+  },
+];
+
+export const HANDLER_PURITY_SELECTORS = [
+  {
+    selector:
+      'MemberExpression[object.name="process"][property.name=/^(exit|exitCode|stdin|stdout|stderr|env|cwd|chdir|on|once|off|argv|kill)$/]',
+    message: 'Handler purity: use CommandContext instead of process capabilities.',
+  },
+  {
+    selector:
+      'MemberExpression[object.name="process"][computed=true][property.value=/^(exit|exitCode|stdin|stdout|stderr|env|cwd|chdir|on|once|off|argv|kill)$/]',
+    message: 'Handler purity: use CommandContext instead of process capabilities.',
+  },
+  {
+    selector: 'MemberExpression[property.name="isTTY"]',
+    message: 'Handler purity: use context.isInteractive or output.colorCapable.',
+  },
+  {
+    selector: 'NewExpression[callee.name="CLIConnectorIO"]',
+    message: 'Handler purity: use context.connector.',
+  },
+  {
+    selector: 'MemberExpression[object.name="console"]',
+    message: 'Handler purity: use context.output or logger.',
+  },
+  {
+    selector: 'ImportDeclaration[source.value="prompts"]',
+    message: 'Handler purity: use context.input.',
   },
 ];
 
@@ -331,6 +373,18 @@ export default tseslint.config(
     },
   },
 
+  {
+    files: ['packages/core/src/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-syntax': ['error', ...SITE_SPECIFIC_SELECTORS, ...FIXED_TEMP_SELECTORS],
+    },
+  },
+  {
+    // Tests may name sites as evidence, as before; staging names still must be unique.
+    files: ['packages/core/tests/**/*.{ts,tsx}'],
+    rules: { 'no-restricted-syntax': ['error', ...FIXED_TEMP_SELECTORS] },
+  },
+
   // Drshya styling (plan_ui.md §9; memory -> General): components style only
   // through semantic utilities. The token data directory is exempt from the
   // style selectors (it defines the colors), but stays under the site rule
@@ -372,6 +426,22 @@ export default tseslint.config(
     rules: {
       ...tseslint.configs.disableTypeChecked.rules,
       '@typescript-eslint/no-unused-vars': 'off',
+    },
+  },
+
+  {
+    files: ['apps/cli/src/**/*.ts'],
+    ignores: ['apps/cli/src/adapters/terminal/**/*.ts', 'apps/cli/src/bin.ts'],
+    rules: {
+      'no-restricted-syntax': ['error', ...SITE_SPECIFIC_SELECTORS, ...HANDLER_PURITY_SELECTORS],
+    },
+  },
+
+  // This negative fixture deliberately exercises the same rules as a handler.
+  {
+    files: ['apps/cli/src/adapters/terminal/_lint-fixtures/impure-handler.ts'],
+    rules: {
+      'no-restricted-syntax': ['error', ...SITE_SPECIFIC_SELECTORS, ...HANDLER_PURITY_SELECTORS],
     },
   },
 

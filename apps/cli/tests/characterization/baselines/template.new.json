@@ -1,0 +1,6 @@
+{
+  "stdout": "Usage: yantra template new [options] <name>\n\nCreate a starter template covering every slot kind.\n\nArguments:\n  name          saved template name\n\nOptions:\n  --tags <a,b>  comma-separated tags\n  --force       overwrite an existing template (default: false)\n  --json        emit a stable JSON envelope (default: false)\n  -h, --help    display help for command\n",
+  "stderr": "",
+  "exitCode": 0,
+  "tree": {}
+}

@@ -102,10 +102,10 @@ instead of re-implementing them. The CLI benefits directly too: a `yantra config
     already recorded in `runtime.jsonl` by FEAT-047 and is not duplicated here.
 - **CommandResultMessage** (`@yantra/protocol`, `schemas/command-result.ts`): the worker result
   transport. FEAT-064 frames it on the run socket.
-  - `{type: 'result', exit_code: 0|1|2|3|4, envelope: JSON | null, text: string | null}`. `envelope` is
+  - `{type: 'result', exit_code: 0|1|2|3|4|130, envelope: JSON | null, text: string | null}`. `envelope` is
     the object the terminal would print under `--json`. `text` is the human output when the handler
     emitted no envelope, capped at 64 KiB with a truncation marker.
-  - `{type: 'error', exit_code: 1|2|3|4, code: string, message: string, remediation: string | null}`.
+  - `{type: 'error', exit_code: 1|2|3|4|130, code: string, message: string, remediation: string | null}`.
 - **ResourceLockOwner** (core, `<resource>.lock.owner.json`, 0600). The sidecar written after a lock is
   acquired and removed before it is released. `proper-lockfile` stores no holder, so this sidecar is how
   a `busy` response describes the holder.
@@ -394,7 +394,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
 
 ### TASK-001: Characterization harness and pre-migration terminal baselines
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - Build `apps/cli/tests/characterization/harness.ts`:
     - `runTerminalScenario({argv, tty, stdin, env, home})` drives today's `run(argv)` with fake
       stdout and stderr, a TTY flag and a sandboxed `YANTRA_HOME` (with `resetPathCache()` before and
@@ -407,20 +407,26 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
     `AskRuntime`, a fake orchestrator for `run`/`resume`) so no network, model or Chrome is used.
   - Record baselines (`baselines/<command>.json`: stdout, stderr, exit code, tree) from the
     **current** code, then commit them.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - The harness normalizes a run-ID-bearing tree identically across two runs.
   - A deliberately changed stderr line fails the baseline comparison.
   - The `process.exit` interception reports the code and does not kill the Vitest worker.
   - Each scenario is `@no-llm` tagged.
-- [ ] **Documentation Update**: Invoke **Document** update mode for testing strategy in
+- [x] **Documentation Update**: Invoke **Document** update mode for testing strategy in
       `docs/architecture.md` (characterization baselines).
 - **Verify**: `cd apps/cli && npx vitest run tests/characterization/terminal-baseline.spec.ts` passes
   against unmodified source. Every command path in `yantra --help` (recursively) has at least one
   scenario; a test enumerates commander's tree to assert this.
 
+> Verification note: action captures use real subprocess exits as well as the throwing-spy
+> harness, because legacy handler catch blocks can catch the spy's exception. The `browser use`
+> action uses an injected browser resolver and compatibility reader; its initial baseline
+> accidentally contained this machine's Chrome path/version, corrected during TASK-002 to make
+> the external boundary deterministic. Production selection and output behavior are unchanged.
+
 ### TASK-002: Core resource-lock helper, unique temp files and locked `config.yaml` writes
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - Create `packages/core/src/fs/atomic-write.ts` (`uniqueTempPath`, `writeFileAtomic` with mode,
     optional fsync and temp cleanup on failure).
   - Create `packages/core/src/locks/resource-lock.ts`:
@@ -440,7 +446,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
   - Map `ResourceBusyError` to exit 3 in each touched command for now (TASK-006 centralizes this). On
     stderr print `message` plus `remediation`. Under `--json` emit
     `{schemaVersion, kind: <command kind>, status: 'busy', resource, holder}`.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - `writeFileAtomic` leaves no temp file on write or rename failure, and two concurrent writers use
     different temp names.
   - A second `withResourceLock` on the same resource waits and then succeeds when the first releases
@@ -452,7 +458,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
   - `mutateConfigDocument` still rejects malformed YAML and schema-invalid candidates (no write, lock
     released).
   - The `model add` read happens inside the lock (spy on the lock's `fn`).
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/configuration.md`
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/configuration.md`
       (locked writes, the `busy` response and exit 3).
 - **Verify**:
   - `cd packages/core && npx vitest run tests/locks tests/fs` passes.
@@ -462,7 +468,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
 
 ### TASK-003: Locked `profile.yaml` writes and the concurrent-writer evidence (I1)
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - Add `mutateProfile(fn)` under `withResourceLock({kind:'profile'})`. `saveProfile` uses
     `writeFileAtomic`.
   - Route `model default` (load, modify, save) through `mutateProfile`.
@@ -471,7 +477,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
   - Confirm that `prefs set/approve` write the SQLite preferences table (transactional) and **not**
     `profile.yaml`. Document this in a code comment so later `ui.*` keys (FEAT-061) know which path
     they take.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Write `packages/core/tests/locks/concurrent-writers.spec.ts`. It spawns N real child processes
     (`node` running a tiny script against built core), each setting a distinct config key, and N
     children each changing a distinct profile field through `mutateProfile`. All N changes must be
@@ -479,7 +485,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
   - Run the same test against the pre-change `<path>.tmp` implementation (kept as a test double) to
     show it does lose writes or fail with `ENOENT` on rename. The test documents the race it closes.
   - `model default` under a held profile lock produces `busy` exit 3.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/configuration.md`
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/configuration.md`
       (which file each writer locks).
 - **Verify**:
   - The concurrent-writer spec passes on Windows locally; the cross-OS matrix runs it in CI.
@@ -487,7 +493,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
 
 ### TASK-004: Workflow, template and schedule-registry locks; core fixed-temp lint rule
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - `FileWorkflowStore.save/delete` and the recorder store run under `{kind:'workflow', name}` with
     `uniqueTempPath`. The collision check (`exists`) moves **inside** the lock so two
     `do --save-as same-name` cannot both pass it.
@@ -507,7 +513,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
     Merge them with the shared site-token selectors in the same block, and add the
     `_lint-fixtures/fixed-temp-name.ts` fixture.
 
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Two concurrent `save(name)` calls without `force`: exactly one succeeds and the other gets
     `WorkflowCollisionError` (not a silent overwrite). The same holds for templates.
   - Listings skip lock directories and temp leftovers.
@@ -515,7 +521,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
   - `boundary-rules.spec.ts`: the fixture yields the fixed-temp lint message, the site-token fixture
     still yields its message (the merge did not drop it), and no file under `packages/core/src` (outside
     fixtures) violates the rule.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/saved-workflows.md`
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/saved-workflows.md`
       and `docs/features/report-templates.md` (concurrent saves are refused, not merged).
 - **Verify**:
   - `npx eslint packages/core` is clean.
@@ -525,7 +531,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
 
 ### TASK-005: Persistent browser-profile exclusivity
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - In `LocalProfileStore.resolve`, the `workflow` and `explicit` kinds call
     `acquireResourceLease({kind:'browser-profile', path})` with no retries, and attach the release to
     `ResolvedProfile.lease`. Ephemeral profiles are never locked. Chrome itself refuses two instances
@@ -536,7 +542,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
     with no retry inside the fire).
   - Export `probeResourceLock` for FEAT-065.
   - Do not change the managed-browser reservations.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Two `resolve({kind:'workflow', workflowName:'bank'})` calls: the second gets `ResourceBusyError`
     naming the first holder.
   - After the first session closes, a third resolve succeeds.
@@ -545,16 +551,25 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
   - The I1 case "browser install during a run" (characterization only, no code change):
     `browser install` while a managed-use reservation is held refuses as it does today. The test pins
     that existing behavior with the real `ManagedBrowserCoordinator` against a temp root.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/saved-workflows.md`
+
+  > DEVIATION: the existing managed installer returns `already-installed` without helper I/O
+  > when the ready installation is reusable during a run. It does not refuse that no-op.
+  > The characterization preserves that behavior and verifies that the real coordinator
+  > rejects a mutation claim with reason `active-use` while the reservation remains held.
+  > Managed-browser reservation and installer production code remain unchanged.
+
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/saved-workflows.md`
       (`cookies: auto` workflows run one at a time; second run is `busy`).
 - **Verify**:
   - `cd packages/core && npx vitest run tests/browser/profile-lease.spec.ts` passes.
   - In an e2e `cli-commands` case, two `yantra run <cookies-auto-workflow>` processes against a local
     fixture server: one exits 3 with `busy` on stderr.
 
+> User clarification (2026-11-06): preserve cancellation exit code 130 on both terminal and worker surfaces, including the worker result schema.
+
 ### TASK-006: Command context, terminal adapter and purity lint; migrate `research`
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - Create `context/command-context.ts`, `context/settings-resolver.ts` (with `option`, `env`,
     `preferences` and `record`; receipt drafting comes in TASK-008) and `execute.ts`.
   - `executeCommand` builds FEAT-062's generated program and binds handlers to the context. It sets
@@ -575,7 +590,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
   - Add the handler-purity ESLint block (scope, selectors and the site-selector merge as in §3), the
     `_lint-fixtures/impure-handler.ts` fixture, and `HANDLER_PURITY_MIGRATION_ALLOWLIST` dated
     2026-11-03, listing every file not yet migrated.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - `terminal-adapter.spec.ts`:
     - `--help` and parse errors route through the output sinks byte-identically to the TASK-001
       baseline;
@@ -588,7 +603,12 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
     - every non-allowlisted file under `apps/cli/src` is clean;
     - the allowlist contains only files that exist.
   - The TASK-001 `research` baselines are unchanged.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/architecture.md` (handler
+
+  > DEVIATION: help baselines no longer contain the synthetic `intercepted exit 0` stderr line.
+  > It was emitted by the original harness throwing from its `process.exit` spy and the old
+  > runner catching that test exception. The real CLI never printed it. Help stdout remains byte-identical.
+
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/architecture.md` (handler
       seams, the terminal adapter and the purity rule).
 - **Verify**:
   - `npx turbo run lint typecheck` passes.
@@ -598,7 +618,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
 
 ### TASK-007: Worker adapter, result transport and `research` parity
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - Add `CommandResultMessageSchema` to protocol and regenerate the emitted artifacts.
   - Create `adapters/worker/channel.ts` and `in-memory-channel.ts`. The in-memory channel has
     scripted attendance, scripted confirmation, install and input answers, a `cancel()` trigger and
@@ -618,7 +638,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
     - on completion it sends `result` or `error` through `channel.complete`;
     - it refuses `exemption` and `in-process-secure` classes before parsing, with
       `error {exit_code:1, code:'not_worker_executable'}`.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - `worker-adapter.spec.ts`:
     - an unattended confirmation gateway is `null`;
     - an attended request reaches the channel and its answer is honored;
@@ -631,15 +651,15 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
     - terminal non-TTY versus worker unattended give identical normalized run trees and exit codes;
     - terminal non-TTY `--json` stdout versus worker envelope are deep-equal;
     - a failing loop gives identical exit 2 on both.
-  - Protocol: the schema round-trips, and `exit_code` outside 0 to 4 is rejected.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/architecture.md` (the worker
+  - Protocol: the schema round-trips, and `exit_code` outside 0 to 4 and 130 is rejected.
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/architecture.md` (the worker
       adapter and result transport) and `docs/protocol-spec.md` (generated).
 - **Verify**: `pnpm --filter @yantra/protocol verify` passes; the parity spec passes for the `research`
   rows.
 
 ### TASK-008: Execution receipts, settings provenance and the canary (research first)
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - Add `ExecutionReceiptSchema` (and its parts) to protocol and regenerate.
   - Create `packages/core/src/receipt/execution-receipt.ts`:
     - `writeExecutionReceipt` (atomic, 0600; `sequence 0` creates `execution-receipt.json` exclusively;
@@ -659,7 +679,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
     `settings_receipt_written` to `runtime.jsonl`; the deterministic path logs it through the logger.
   - `invoked_by` comes from the adapter (`terminal` or `worker`) and `invocation_id` from the
     invocation.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Protocol: valid and invalid receipts; `source.kind: 'env'` requires `name`; `sha256` must be
     64-character hex.
   - Core:
@@ -681,7 +701,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
     and `written_at`.
   - The audit and report builders tolerate the new `runtime.jsonl` line kind; an existing
     `report-builder` test fixture gains one.
-- [ ] **Documentation Update**: Invoke **Document** update mode for
+- [x] **Documentation Update**: Invoke **Document** update mode for
       `docs/features/diagnostics-and-audit.md` (what the receipt records and never records) and
       `docs/features/research.md`.
 - **Verify**:
@@ -692,7 +712,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
 
 ### TASK-009: Migrate `ask` and `do` (agentic run class) with receipts and abort
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - Migrate `ask.ts` and `do.ts` to the context. `env`, `stdout`, `stderr` and `isTty` leave
     `AskRuntime` and `DoRuntime`.
   - `do` stops constructing `CLIConnectorIO` itself (`do.ts:170`) and uses `context.connector`. The
@@ -704,7 +724,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
   - Both commands draft receipts. Content identity covers `--template` (path plus SHA-256) and
     `--save-as` does not apply. The agent orchestrator writes the receipt before the location
     pre-flight, so even a refused run has one.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Parity rows:
     - `ask --no-llm`;
     - `ask` with a fake provider;
@@ -717,7 +737,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
   - The location-handoff run still writes a receipt.
   - The TASK-001 baselines for `ask` and `do` are unchanged; the existing `do-chaos` and
     `do-promotion` suites pass.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md`
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/agentic-tasks.md`
       and `docs/features/ask.md` (receipts; cancellation from the app).
 - **Verify**:
   - `cd apps/cli && npx vitest run tests/commands/ask.spec.ts tests/commands/do.spec.ts tests/commands/do-chaos.spec.ts tests/characterization`
@@ -726,7 +746,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
 
 ### TASK-010: Migrate `run` and `resume` with receipts in the replay path
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - Replace the 6 `process.exit` calls in `run.ts` and 5 in `resume.ts` with `CommandFailure` or a
     returned `CommandResult`, keeping every exit code:
     - template refusal → 1;
@@ -742,7 +762,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
     the workflow YAML, the `.locators.json` sidecar when present and `--params-file`. The
     `synthesis.use_llm` setting is recorded with source `workflow`.
   - Resume writes `execution-receipt.resume-<k>.json`.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Parity rows: a successful `run` (fake orchestrator), a failing `run` (exit 2), `run --json`
     (byte-identical envelope), and `resume` of a checkpointed fixture run.
   - Receipt content hashes match the fixture files.
@@ -750,13 +770,17 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
   - A workflow edited between submission and start shows a different `sha256` (the I2 "edited
     workflow" evidence).
   - The existing `run-outputs`, `run-synthesis` and `resume-synthesis` suites pass.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/saved-workflows.md`
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/saved-workflows.md`
       (receipts on runs and resumes).
 - **Verify**: The parity and baseline specs pass; `run.ts` and `resume.ts` are off the allowlist.
 
 ### TASK-011: Daemon, scheduling and `confirm`: migration plus daemon-fire receipts
 
-- [ ] **Implementation**:
+> Standing-memory compliance: daemon process control is an adapter capability backed by core. New
+> daemon owners record their process creation identity; stop refuses legacy or unverifiable owners
+> instead of signalling a bare PID. PID display and ordinary start/stop behavior remain compatible.
+
+- [x] **Implementation**:
   - Migrate `daemon.ts` (13 `process.exit` calls). The foreground `daemon start` awaits
     `context.signal` (`honorsAbort: true`) instead of never-resolving plus `process.exit` in signal
     handlers. SIGTERM and SIGINT are wired by the terminal adapter. `stop` and `status` return
@@ -766,7 +790,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
   - Daemon fires build a receipt draft: `invoked_by: daemon`, `invocation_id: null`, params with
     source `schedule`, and the workflow identity. It is passed through `FireRunDriver.run` into
     `RunRequest.receipt`. Fires stay hard zero-LLM; the guard is unchanged and asserted.
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - The `daemon start` foreground loop exits cleanly when the signal aborts.
   - A daemon fire over the fake orchestrator writes a receipt with `invoked_by: 'daemon'` and no
     model settings.
@@ -775,14 +799,14 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
     fixture (identical decision files and exit codes).
   - The TASK-001 baselines for these commands are unchanged.
   - e2e `scheduling.spec.ts` passes.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/scheduling.md`
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/scheduling.md`
       (daemon receipts).
 - **Verify**: `daemon.ts`, `schedule.ts`, `confirm.ts` and `daemon-runtime.ts` are off the allowlist;
   `cd e2e && npx vitest run scheduling.spec.ts` passes after `turbo run build`.
 
 ### TASK-012: Migrate the read-class commands
 
-- [ ] **Implementation**: Migrate these handlers to the context:
+- [x] **Implementation**: Migrate these handlers to the context:
   - `list`, `show`, `audit`, `report`, `usage`, `profile`;
   - `doctor`, including the `--agent-smoke` run path: its run directory (`doctor.ts:502`) gets a
     receipt, and its SIGINT handling moves to `context.signal` with `honorsAbort` when
@@ -793,20 +817,20 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
   Each `isTty: process.stdout.isTTY` becomes `context.output.colorCapable` or `columns`; each
   `process.exit` becomes a result or failure.
 
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Parity rows for each command in both `--json` and human mode where the command has both. Empty
     and populated sandboxed homes are covered.
   - `doctor --agent-smoke` (fake provider) writes a receipt.
   - The TASK-001 baselines are unchanged; the existing `doctor`, `usage`, `open` and `audit-builder`
     suites pass.
-- [ ] **Documentation Update**: Invoke **Document** update mode for
+- [x] **Documentation Update**: Invoke **Document** update mode for
       `docs/features/diagnostics-and-audit.md` (no behavior change; note the `doctor --agent-smoke`
       receipt).
 - **Verify**: These files are off the allowlist; the parity spec passes for every read row.
 
 ### TASK-013: Migrate the mutate-class commands
 
-- [ ] **Implementation**: Migrate these handlers:
+- [x] **Implementation**: Migrate these handlers:
   - `config set/unset/edit/data-dir`. `edit` launches `$EDITOR` only through a terminal-supplied
     `input.editor` capability; the worker refuses with a validation error naming the app's raw-YAML
     editor (FEAT-070). `data-dir` is an `exemption` and stays terminal-only.
@@ -820,7 +844,7 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
 
   Each locked write surfaces `busy` through `executeCommand`.
 
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Parity rows for each worker-executable mutate command, comparing the resulting `config.yaml`,
     `profile.yaml`, workflow, template and site files byte for byte.
   - The `secret` and `config data-dir` worker refusals.
@@ -828,14 +852,14 @@ typecheck` plus the affected suites. Rebuild core (`npx turbo run build --filter
   - A `busy` row: a held config lock gives exit 3 on both adapters with equal envelopes.
   - The existing `config`, `model`, `secret`, `sites`, `template`, `prefs-screenshots` and
     `browser-*` suites pass, and the TASK-001 baselines are unchanged.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/features/configuration.md`
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/features/configuration.md`
       and `docs/usage.md` (`busy` on every locked writer).
 - **Verify**: These files are off the allowlist; `cd e2e && npx vitest run cli-commands.spec.ts
 config-storage.spec.ts` passes after build.
 
 ### TASK-014: The `init` application service with a pluggable answer collector
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - Create `packages/core/src/setup/init-service.ts`:
     - `runInit({provider?, reset, yes, interactive}, collector, deps) → InitResult`, with these
       statuses: `already-initialized`, `written`, `invalid-provider`, `failed`;
@@ -849,7 +873,7 @@ config-storage.spec.ts` passes after build.
   - `commands/init.ts` becomes a thin handler: it builds the request from options, picks the collector
     from the context (terminal prompts when interactive; a defaults collector otherwise) and renders
     `InitResult` exactly as today (stdout lines and the `--json` envelope).
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - `init-service.spec.ts`: for each of `anthropic`, `ollama` and `none`, with and without a data dir,
     with grants on and off, and for search-key `stored`, `manual` and `skipped`, the service writes
     `config.yaml` and `profile.yaml` **byte-identical** to the TASK-001 baseline of today's wizard
@@ -859,14 +883,14 @@ config-storage.spec.ts` passes after build.
   - The search-key value never appears in any written file (canary).
   - A config lock held during `init` gives `busy`.
   - The existing `init-wizard` and `init-context-prompts` suites pass from their new location.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/quickstart.md` (init is
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/quickstart.md` (init is
       unchanged for users; note it is shared with app onboarding).
 - **Verify**: The `init` TASK-001 baselines are unchanged; `cd packages/core && npx vitest run
 tests/setup` passes; `init.ts`, `init-wizard.ts` and `init-context-prompts.ts` are off the allowlist.
 
 ### TASK-015: Empty the purity allowlist and run the full parity sweep
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - Remove `HANDLER_PURITY_MIGRATION_ALLOWLIST` (now empty) from `eslint.config.js`.
   - Make the remaining helpers clean: `commands/audit-builder.ts`, `auto-detect.ts`,
     `schedule-registration.ts`, `render/types.ts` (default streams move to the adapter),
@@ -874,11 +898,15 @@ tests/setup` passes; `init.ts`, `init-wizard.ts` and `init-context-prompts.ts` a
   - Add a test asserting the parity table covers every registry command path (registry enumeration,
     not a hand list), with `exemption` and `in-process-secure` paths asserted as worker-refused
     instead.
-- [ ] **Unit Tests**:
+    > Verification note: the existing profile-permission test now supplies the OS-lock boundary
+    > and a partial filesystem mock for lease publication. Its `0700` assertion is retained,
+    > with explicit lease-acquisition and release assertions.
+
+- [x] **Unit Tests**:
   - `handler-purity.spec.ts`: no allowlist exists, and `rg "process\.(exit|stdin|stdout|stderr)|isTTY|new CLIConnectorIO" apps/cli/src`
     matches only under `adapters/terminal/` and `bin.ts`.
   - Full `adapter-parity.spec.ts` and `terminal-baseline.spec.ts` pass.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/architecture.md` (final state
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/architecture.md` (final state
       of the seams; the exemption list).
 - **Verify**:
   - `npx turbo run lint typecheck` passes.
@@ -886,6 +914,15 @@ tests/setup` passes; `init.ts`, `init-wizard.ts` and `init-context-prompts.ts` a
   - The `e2e` suite passes after `turbo run build`, including `format.spec.ts` (the repo-wide lint
     gate).
 - **Depends on**: TASK-006 to TASK-014.
+
+> Final verification (2026-11-08): build, lint, and type checks passed across all seven
+> workspaces. The full Windows suite was exercised with models disabled, including all 114
+> terminal baselines and 590 task-fidelity checks. The initial full run reported one PowerShell
+> shell-copy failure after a roughly 5.7-hour interruption; the remaining copied commands had
+> not run. The affected case passed on retry, then the complete shell suite passed (9 passed,
+> 1 documented platform exemption). Other end-to-end checks passed, including repository-wide
+> lint. Scenario deadlines and assertions were retained. Live models and macOS/Linux were not
+> exercised in this session.
 
 ## 6. Cross-Cutting Concerns
 
@@ -902,7 +939,7 @@ tests/setup` passes; `init.ts`, `init-wizard.ts` and `init-context-prompts.ts` a
   - Handlers signal failure with `CommandFailure` (exit code, code, message, remediation) or the typed
     domain errors that already exist (`BrowserInstallOfferDeclinedError`,
     `BrowserManagedInstallError`, `ResourceBusyError`).
-  - `executeCommand` is the single mapper to exit codes 0 to 4 (memory → Error Handling). `busy` is
+  - `executeCommand` is the single mapper to exit codes 0 to 4 and 130 (user cancellation) (memory → Error Handling). `busy` is
     exit 3 (environment) with the holder's description. A lock failure that is not contention (for
     example `EACCES`) propagates as an execution failure; it is never reported as `busy`.
   - Custom errors carry safe, actionable context and are never swallowed. `onCompromised` is the one
@@ -934,20 +971,20 @@ tests/setup` passes; `init.ts`, `init-wizard.ts` and `init-context-prompts.ts` a
 
 ## 8. State Tracking
 
-- [ ] TASK-001: Characterization harness and pre-migration terminal baselines
-- [ ] TASK-002: Core resource-lock helper, unique temp files and locked `config.yaml` writes
-- [ ] TASK-003: Locked `profile.yaml` writes and the concurrent-writer evidence (I1)
-- [ ] TASK-004: Workflow, template and schedule-registry locks; core fixed-temp lint rule
-- [ ] TASK-005: Persistent browser-profile exclusivity
-- [ ] TASK-006: Command context, terminal adapter and purity lint; migrate `research`
-- [ ] TASK-007: Worker adapter, result transport and `research` parity
-- [ ] TASK-008: Execution receipts, settings provenance and the canary (research first)
-- [ ] TASK-009: Migrate `ask` and `do` (agentic run class) with receipts and abort
-- [ ] TASK-010: Migrate `run` and `resume` with receipts in the replay path
-- [ ] TASK-011: Daemon, scheduling and `confirm`: migration plus daemon-fire receipts
-- [ ] TASK-012: Migrate the read-class commands
-- [ ] TASK-013: Migrate the mutate-class commands
-- [ ] TASK-014: The `init` application service with a pluggable answer collector
-- [ ] TASK-015: Empty the purity allowlist and run the full parity sweep
+- [x] TASK-001: Characterization harness and pre-migration terminal baselines
+- [x] TASK-002: Core resource-lock helper, unique temp files and locked `config.yaml` writes
+- [x] TASK-003: Locked `profile.yaml` writes and the concurrent-writer evidence (I1)
+- [x] TASK-004: Workflow, template and schedule-registry locks; core fixed-temp lint rule
+- [x] TASK-005: Persistent browser-profile exclusivity
+- [x] TASK-006: Command context, terminal adapter and purity lint; migrate `research`
+- [x] TASK-007: Worker adapter, result transport and `research` parity
+- [x] TASK-008: Execution receipts, settings provenance and the canary (research first)
+- [x] TASK-009: Migrate `ask` and `do` (agentic run class) with receipts and abort
+- [x] TASK-010: Migrate `run` and `resume` with receipts in the replay path
+- [x] TASK-011: Daemon, scheduling and `confirm`: migration plus daemon-fire receipts
+- [x] TASK-012: Migrate the read-class commands
+- [x] TASK-013: Migrate the mutate-class commands
+- [x] TASK-014: The `init` application service with a pluggable answer collector
+- [x] TASK-015: Empty the purity allowlist and run the full parity sweep
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

@@ -44,6 +44,10 @@ executable.
 
 ## Initialize Yantra
 
+The CLI and app onboarding can use the same setup service, with each interface
+collecting its own answers. Terminal setup retains the prompts, files, and
+credential handling described below.
+
 For an interactive first run, use:
 
 ```console

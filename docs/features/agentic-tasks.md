@@ -8,6 +8,8 @@
 
 Each goal that passes deterministic input, credential, and location preflight creates one auditable Yantra run and one fresh model-provider session. The agent receives the goal, authoritative date/time/locale context, any granted user location, approved personalization, and only Yantra's registered tools. The runtime owns the reasoning loop, tool policy, budgets, publication requirement, and teardown; the CLI streams progress and renders the terminal outcome. A location preflight handoff is also recorded as a run, but opens no provider session.
 
+Terminal and worker execution use the same `do` handler. Its command context supplies settings, working directory, output, consent and browser-install prompts, template selection, and cancellation. The worker adapter uses a channel for prompts and results; an attended channel can request consent without a TTY. The per-run socket transport is future FEAT-064 integration. This handler migration adds no CLI flags or app Stop control.
+
 The governed scope rules keep the run on the requested task. The agent may choose how to accomplish a broad goal, but it must not add unrequested actions, substitute values found on a page for values the user supplied, retry an adverse outcome with different inputs, or run side experiments to explain a surprising result. Verification means checking that the requested action landed, not investigating beyond the goal.
 
 The prompt is versioned as `agent-v16` (recorded as `prompt_version` in `manifest.json`). It retains the governed scope rules and publication guidance for cited findings, tables, conditions, and unmet requirements. The `do` completion criteria teach the contract's action terms (see [Task contract](#task-contract)), the ten-field batch limit, page-order batching, continuation through the fill result's `progress`, how to deliver a requested screenshot (see [Requesting a screenshot](#requesting-a-screenshot)), and how to cite the actions it reports. The prompt also states the run's thinking limit. Beyond the scope rules above, it tells the agent:
@@ -692,7 +694,7 @@ If the ladder stops a run without a publication, the run fails with `AGENT_STALL
 | `--allow-host <host>`          | Restrict outbound work to a host; repeatable. With no values, the run still follows URL provenance and host-budget rules.                                                      |
 | `--save-as <name>`             | After a `fulfilled` run, attempt to promote the browser trace to a saved workflow. A `partial` run is not saved. Promotion failure does not change the run's outcome.          |
 | `--template <name\|tag\|path>` | Render into a saved template, tag, or Markdown template path instead of the default Brief.                                                                                     |
-| `--json`                       | Emit progress and the terminal outcome as newline-delimited JSON. It also makes the run non-interactive.                                                                       |
+| `--json`                       | Emit progress and the terminal outcome as newline-delimited JSON. It also makes terminal execution non-interactive; a worker uses channel attendance.                          |
 | `--no-screenshots`             | No screenshots this run: neither the local `browser_capture` nor Vision Assist is registered. A requested screenshot is disclosed as undeliverable and the run ends `partial`. |
 | `--no-llm`                     | Shared agent-option veto. `do` has no deterministic task executor, so this option exits with validation guidance instead of running the goal.                                  |
 
@@ -727,7 +729,7 @@ Run: <run-id>
 
 With more than three captures, the third line is followed by `+<n> more in <run-dir>/screenshots`. A screenshot the run could not take at all is disclosed earlier, on stderr; see [Requesting a screenshot](#requesting-a-screenshot).
 
-`--json` emits independently parseable NDJSON records and never opens an interactive consent prompt. Its terminal `agent_outcome` record carries `task_outcome`, `termination_reason`, and `artifacts` beside the full `outcome` object. `artifacts` lists every saved capture file as a generic artifact reference `{kind: "screenshot", path, sha256, mime_type: "image/png", bytes, width, height, sent_to_model: false}`, with run-relative paths, in capture order. It is empty for `ask`, `research`, and a `do` run that saved no capture.
+In the terminal, `--json` emits independently parseable NDJSON records and never opens an interactive consent prompt. Its terminal `agent_outcome` record carries `task_outcome`, `termination_reason`, and `artifacts` beside the full `outcome` object. `artifacts` lists every saved capture file as a generic artifact reference `{kind: "screenshot", path, sha256, mime_type: "image/png", bytes, width, height, sent_to_model: false}`, with run-relative paths, in capture order. It is empty for `ask`, `research`, and a `do` run that saved no capture. A worker sends structured events and results through its channel, where attendance determines whether consent is available, including with `--json`.
 
 With `--save-as`, a line after the outcome reports the promotion. A saved run that met a screenshot item reads `✓ Saved workflow "<name>" without its viewport screenshot step (no replay step captures a screenshot yet). Replay it with: yantra run <name>`. A partial run reads `⚠ Could not save workflow "<name>": Not saved: the run was partial (2 of 4 requirements met). Only a fulfilled run is saved as a workflow.`
 
@@ -736,11 +738,12 @@ A normal successful run writes a validated task Brief:
 ```text
 <yantra-data-dir>/runs/<run-id>/
   manifest.json
+  execution-receipt.json
   events.jsonl
   agent/<session>.jsonl
   tool-calls.jsonl
   confirmations.jsonl       # when confirmation activity exists
-  runtime.jsonl             # when the run built a runtime environment
+  runtime.jsonl             # receipt audit, then runtime diagnostics when built
   usage.json
   contract.json             # when a task contract was declared
   captures/                 # when extracted content exceeds inline limits
@@ -754,9 +757,11 @@ A normal successful run writes a validated task Brief:
 
 Template mode writes `document.json`, `document.md`, and `document.html` in place of `brief.*`. The authored Markdown structure remains engine-controlled while the model fills declared slots; see [Controlled publication and rendering](report-templates.md#controlled-publication-and-rendering). A failed publication may additionally write `result.md`, which is diagnostic and does not turn the failed run into a successful result.
 
+`execution-receipt.json` records what the command actually resolved: non-secret settings with their sources (flag, named environment variable, preference, configuration, or default), browser selection, Yantra version, working directory, and terminal or worker provenance, including the worker invocation ID when present. A selected template contributes its absolute path and SHA-256 content identity. The receipt contains neither credentials nor a full environment dump; a secret reference name may appear, but its resolved value does not. It is written once when the run directory is created, before location preflight, browser setup, or provider startup, so a location handoff retains a receipt. Command validation or unavailable credentials rejected before a run exists produce no receipt.
+
 `manifest.json` records the effective provider, model, reasoning level, credential source, prompt version/hash, tool-catalog hash, the Yantra version, the effective budgets without credential material, and both capture decisions (`agent.capture`), plus the run's `taskOutcome` and `terminationReason`. A partial run's `report.md` shows status `failed` with the outcome line as its message, and its `task_failed` event in `events.jsonl` carries `task_outcome`. `tool-calls.jsonl` is the stable, sanitized tool audit; `usage.json` retains reported turns, tokens, and cost, including partial usage on failed or aborted runs. Use `yantra audit <run-id>` for a structured audit and `yantra report <run-id>` for the operational report. See [Run artifacts](diagnostics-and-audit.md#run-artifacts).
 
-`runtime.jsonl` is local operator diagnostics for the run: which browser and driver it used, why that browser was selected, whether the compatibility evidence came from cache or a fresh probe, the safe class of any browser startup failure or unexpected tool failure, the search provider the run selected, and, by hostname only, each fetch escalated to the browser and each challenge page. It is never sent to the model, never part of the published result, and never an evidence source, and it holds no task or page URL, page text, profile path, full executable path, launch arguments, environment values, credentials, error messages, or stacks. `report.md` lists it under `## Audit Trail` only when it exists; a run that hands off before building an environment, such as the location pre-flight described above, has none. See [Run artifacts](diagnostics-and-audit.md#run-artifacts) for the field-level detail.
+`runtime.jsonl` starts with `settings_receipt_written`, recording the receipt path and setting count even on a location preflight handoff. If the run builds an environment, it also records local operator diagnostics: which browser and driver it used, why that browser was selected, whether compatibility evidence came from cache or a fresh probe, the safe class of any browser startup failure or unexpected tool failure, the search provider selected, and, by hostname only, each fetch escalated to the browser and each challenge page. It is never sent to the model, never part of the published result, and never an evidence source. Apart from the receipt path, it holds no task or page URL, page text, profile path, full executable path, launch arguments, environment values, credentials, error messages, or stacks. `report.md` lists it under `## Audit Trail` when it exists. See [Run artifacts](diagnostics-and-audit.md#run-artifacts) for the field-level detail.
 
 **A published document also carries notices the runtime derives from the run's own record.** This applies whether the agent published the Brief, the runtime assembled the fallback Brief, or a templated report was published. The runtime notices are appended after any notices the document already has, so the runtime-assembly notice stays first. They are built only from fixed phrase tables, counts, and hostnames, never from page or provider text, in this order:
 
@@ -780,7 +785,9 @@ A read answered from an earlier failure adds no second notice, and a challenge p
 |   `2` | The run was `partial` (a result was published, but a requirement is unmet or no contract was declared), or it failed, exhausted a fatal budget, or could not produce a valid publication. |
 |   `3` | Model credentials were unavailable during the command's offline preflight. No agent session is opened.                                                                                    |
 |   `4` | Yantra needs a user handoff, for example a missing required location, CAPTCHA, bot wall, ethics refusal, or denied protected action.                                                      |
-| `130` | The run was interrupted with Ctrl+C.                                                                                                                                                      |
+| `130` | The run was interrupted with Ctrl+C or cancelled through the worker channel.                                                                                                              |
+
+Terminal Ctrl+C (SIGINT) and worker-channel cancellation reach the same run abort signal. The runtime tears down the run, records an `aborted` outcome, and preserves exit code 130 through the adapter's result or error response.
 
 Startup and runtime errors use stable codes such as `AGENT_MODEL_NOT_FOUND`, `AGENT_AUTH_UNAVAILABLE`, `AGENT_PROVIDER_UNAVAILABLE`, `AGENT_SESSION_START_FAILED`, `AGENT_TOOL_FAILED`, `AGENT_BUDGET_EXHAUSTED`, and `AGENT_COMPLETION_MISSING`. Messages are sanitized and name a corrective action without exposing credentials. See [Errors and exit codes](diagnostics-and-audit.md#errors-and-exit-codes).
 
@@ -798,7 +805,7 @@ Outbound URLs are length-capped, HTTPS-only by default, scanned for credential-s
 
 Search, fetch, and navigation honor robots rules, the blocklist, rate limits, and site refusals. Yantra reports CAPTCHAs, bot walls, paywalls, and ethics blocks rather than evading them. Page and search content is always treated as untrusted data, not as instructions.
 
-Protected clicks such as buy, pay, purchase, book, order, submit, or confirm actions require consent. Filling a host-bound website secret also requires consent. An attended TTY run displays the action, host, and consequence and defaults to deny; the wait is bounded by `--confirm-timeout` and the remaining run duration. `--json`, piped/non-TTY execution, timeout, or absence of a consent surface fails closed. Decisions and tool calls retain confirmation linkage in the run audit. When the contract declares `effects.submit: "forbidden"`, a click that would submit a form is refused with `SUBMIT_FORBIDDEN` before any confirmation is requested; see [Engine-enforced no-submit](safety-and-privacy.md#engine-enforced-no-submit).
+Protected clicks such as buy, pay, purchase, book, order, submit, or confirm actions require consent. Filling a host-bound website secret also requires consent. An attended TTY run displays the action, host, and consequence and defaults to deny; the wait is bounded by `--confirm-timeout` and the remaining run duration. Terminal `--json` and piped/non-TTY execution have no consent prompt. An attended worker requests the decision through its channel, including with `--json`; an unattended worker denies it. Timeout or absence of a consent surface fails closed and requires a user handoff (exit 4). Decisions and tool calls retain confirmation linkage in the run audit. When the contract declares `effects.submit: "forbidden"`, a click that would submit a form is refused with `SUBMIT_FORBIDDEN` before any confirmation is requested; see [Engine-enforced no-submit](safety-and-privacy.md#engine-enforced-no-submit).
 
 Website secrets must carry trusted host metadata before `browser_fill_element` will resolve them. The plaintext exists only during that fill and is never returned to the model or audit output. For one-off values, explicit input markers offer run-scoped separation; for durable credentials, use keychain-backed secret references.
 

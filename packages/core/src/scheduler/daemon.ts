@@ -31,6 +31,8 @@ export interface FireResult {
   readonly runId: string | null;
   /** Terminal status of the fire. */
   readonly status: LastFireStatus;
+  /** An environment refusal may finish before a run directory is available. */
+  readonly reason?: 'busy';
 }
 
 /**

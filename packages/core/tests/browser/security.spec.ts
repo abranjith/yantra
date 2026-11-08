@@ -4,6 +4,7 @@
  * and launcher logging redaction.
  */
 import type * as NodeCrypto from 'node:crypto';
+import type * as NodeFs from 'node:fs/promises';
 import { chmod, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -17,7 +18,11 @@ import type {
 } from '../../src/browser/installation-types.js';
 import type * as Paths from '../../src/browser/paths.js';
 
-vi.mock('node:fs/promises', () => ({
+vi.mock('node:fs/promises', async (importOriginal) => ({
+  ...(await importOriginal<typeof NodeFs>()),
+  realpath: vi.fn(async (path) => String(path)),
+  open: vi.fn(async () => ({ writeFile: vi.fn(), chmod: vi.fn(), sync: vi.fn(), close: vi.fn() })),
+  rename: vi.fn(),
   access: vi.fn(),
   chmod: vi.fn(),
   mkdir: vi.fn(),
@@ -105,8 +110,13 @@ describe('@no-llm TASK-010 security hardening', () => {
       const { LocalProfileStore } = await import('../../src/browser/profile-store.js');
       mockAccess.mockRejectedValueOnce(new Error('ENOENT')); // dir does not exist yet
 
-      const store = new LocalProfileStore();
-      await store.resolve({ kind: 'workflow', workflowName: 'test-wf' });
+      const release = vi.fn(async () => undefined);
+      const lock = vi.fn(async () => release);
+      const store = new LocalProfileStore({ leaseOptions: { lock } });
+      const profile = await store.resolve({ kind: 'workflow', workflowName: 'test-wf' });
+      expect(lock).toHaveBeenCalledTimes(1);
+      await profile.lease?.release();
+      expect(release).toHaveBeenCalledTimes(1);
 
       expect(mockChmod).toHaveBeenCalledWith(
         join('/home/testuser/.local/share/yantra', 'profiles', 'test-wf'),

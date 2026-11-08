@@ -18,6 +18,7 @@ import type {
 import type { ProfileSpec } from '../../browser/types.js';
 import type { Checkpoint } from '../../executor/types.js';
 import type { EngineLocatorChain } from '../../locator/types.js';
+import type { ExecutionReceiptDraft } from '../../receipt/execution-receipt.js';
 
 export type { FailureClass, TaskOutcome, TerminationReason };
 
@@ -46,6 +47,7 @@ export interface RunBudgets {
 
 /** Top-level request constructed by the CLI from argv. */
 export interface RunRequest {
+  readonly receipt?: ExecutionReceiptDraft;
   readonly workflowName: string;
   /** Resolved (coerced) param values. */
   readonly params: Readonly<Record<string, unknown>>;

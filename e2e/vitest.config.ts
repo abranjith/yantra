@@ -7,11 +7,12 @@ export default defineConfig({
     include: ['**/*.spec.ts'],
     exclude: ['node_modules/**', 'dist/**'],
     globals: false,
-    // Real-Chrome suites and CLI SQLite suites are resource-heavy on the
-    // cross-package Turbo gate. Bound file concurrency so their behavioral
-    // deadlines measure the code instead of host CPU starvation.
+    // Repository-wide typed lint and real-Chrome scenarios are each resource-heavy.
+    // Run files serially so lint cannot starve a browser scenario of memory or CPU;
+    // each scenario retains its own behavioral deadline.
+    fileParallelism: false,
     minWorkers: 1,
-    maxWorkers: 4,
+    maxWorkers: 1,
     testTimeout: 15_000,
     hookTimeout: 15_000,
   },

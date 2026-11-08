@@ -5,11 +5,14 @@
  * Phase 2 will introduce `SqliteRecordingStore` that keeps the same interface.
  */
 
-import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { RecordingDraftSchema } from '@yantra/protocol';
+import { CapturedActionSchema, RecordingDraftSchema } from '@yantra/protocol';
 import type { CapturedAction, RecordingDraft } from '@yantra/protocol';
+
+import { writeFileAtomic } from '../../fs/atomic-write.js';
+import { withResourceLock } from '../../locks/resource-lock.js';
 
 // ---------------------------------------------------------------------------
 // Interface
@@ -61,18 +64,8 @@ export interface RecordingStore {
 // Implementation
 // ---------------------------------------------------------------------------
 
-/**
- * Maps `recordingId` → partial action list in-memory for fast appends.
- * Persisted to `draft.partial.json` after each append.
- */
-interface PartialState {
-  actions: CapturedAction[];
-  recordingDir: string;
-}
-
 export class FileSystemRecordingStore implements RecordingStore {
   private readonly cacheRoot: string;
-  private readonly partials = new Map<string, PartialState>();
 
   /**
    * @param cacheRoot - Root directory for recording dirs, e.g. `~/.yantra/cache`
@@ -94,25 +87,30 @@ export class FileSystemRecordingStore implements RecordingStore {
     const dir = this.recordingDir(recordingId);
     const profileDir = join(dir, 'profile');
 
-    await mkdir(profileDir, { recursive: true });
-
-    this.partials.set(recordingId, { actions: [], recordingDir: dir });
+    await this.withRecordingLock(recordingId, async () => {
+      await mkdir(profileDir, { recursive: true });
+    });
 
     return { recordingDir: dir, profileDir };
   }
 
   /** @inheritdoc */
   async appendAction(recordingId: string, action: CapturedAction): Promise<void> {
-    let state = this.partials.get(recordingId);
-    if (!state) {
-      // Re-hydrate if process restarted mid-session (rare)
+    await this.withRecordingLock(recordingId, async () => {
       const dir = this.recordingDir(recordingId);
-      state = { actions: [], recordingDir: dir };
-      this.partials.set(recordingId, state);
-    }
-
-    state.actions.push(action);
-    await this.writePartial(state);
+      await stat(dir);
+      const path = join(dir, 'draft.partial.json');
+      let actions: CapturedAction[];
+      try {
+        const partial = JSON.parse(await readFile(path, 'utf8')) as { actions: unknown };
+        actions = CapturedActionSchema.array().parse(partial.actions);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+        actions = [];
+      }
+      actions.push(action);
+      await writeFileAtomic(path, JSON.stringify({ actions }, null, 2));
+    });
   }
 
   /** @inheritdoc */
@@ -129,21 +127,20 @@ export class FileSystemRecordingStore implements RecordingStore {
     const draftPath = join(dir, 'draft.json');
     const content = JSON.stringify(parseResult.data, null, 2);
 
-    await writeFileAtomic(draftPath, content);
+    return await this.withRecordingLock(recordingId, async () => {
+      await stat(dir);
+      await writeFileAtomic(draftPath, content);
 
-    // Remove the partial draft (replaced by final)
-    const partialPath = join(dir, 'draft.partial.json');
-    await rm(partialPath, { force: true });
+      // Remove the partial draft (replaced by final)
+      const partialPath = join(dir, 'draft.partial.json');
+      await rm(partialPath, { force: true });
 
-    // Clean up in-memory state
-    this.partials.delete(recordingId);
-
-    return draftPath;
+      return draftPath;
+    });
   }
 
   /** @inheritdoc */
   async loadDraft(recordingId: string): Promise<RecordingDraft> {
-    const { readFile } = await import('node:fs/promises');
     const draftPath = join(this.recordingDir(recordingId), 'draft.json');
     const raw = await readFile(draftPath, 'utf8');
     const json: unknown = JSON.parse(raw);
@@ -152,41 +149,32 @@ export class FileSystemRecordingStore implements RecordingStore {
 
   /** @inheritdoc */
   async destroy(recordingId: string, opts: { keepProfile: boolean }): Promise<void> {
-    const dir = this.recordingDir(recordingId);
+    await this.withRecordingLock(recordingId, async () => {
+      const dir = this.recordingDir(recordingId);
 
-    if (opts.keepProfile) {
-      // Destroy everything except the profile subdir
-      const { readdir } = await import('node:fs/promises');
-      const entries = await readdir(dir).catch(() => [] as string[]);
-      await Promise.all(
-        entries
-          .filter((e) => e !== 'profile')
-          .map((e) => rm(join(dir, e), { recursive: true, force: true })),
-      );
-    } else {
-      await rm(dir, { recursive: true, force: true });
-    }
-
-    this.partials.delete(recordingId);
+      if (opts.keepProfile) {
+        // Destroy everything except the profile subdir
+        const { readdir } = await import('node:fs/promises');
+        const entries = await readdir(dir).catch(() => [] as string[]);
+        await Promise.all(
+          entries
+            .filter((e) => e !== 'profile')
+            .map((e) => rm(join(dir, e), { recursive: true, force: true })),
+        );
+      } else {
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
   }
 
   // ---------------------------------------------------------------------------
   // Private
   // ---------------------------------------------------------------------------
 
-  private async writePartial(state: PartialState): Promise<void> {
-    const partialPath = join(state.recordingDir, 'draft.partial.json');
-    const content = JSON.stringify({ actions: state.actions }, null, 2);
-    await writeFileAtomic(partialPath, content);
+  private async withRecordingLock<T>(recordingId: string, fn: () => Promise<T>): Promise<T> {
+    // A sibling lock survives destroy() removing the recording directory itself.
+    return await withResourceLock({ kind: 'workflow', name: recordingId.toLowerCase() }, fn, {
+      targetPath: this.recordingDir(recordingId),
+    });
   }
-}
-
-/**
- * Atomic write: write to `<path>.tmp` then rename to `<path>`.
- * Prevents half-written files on crash.
- */
-async function writeFileAtomic(path: string, content: string): Promise<void> {
-  const tmp = `${path}.tmp`;
-  await writeFile(tmp, content, 'utf8');
-  await rename(tmp, path);
 }

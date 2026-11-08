@@ -15,6 +15,8 @@ export {
   defaultProfile,
   flattenProfile,
   loadProfile,
+  mutateProfile,
+  ProfileMutationError,
   profilePath,
   profileSchema,
   saveProfile,

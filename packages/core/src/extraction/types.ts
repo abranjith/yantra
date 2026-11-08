@@ -1,3 +1,4 @@
+import type { ExecutionReceiptDraft } from '../receipt/execution-receipt.js';
 import type { Sanitized } from '../sanitizer/brand.js';
 import type { SynthesisLength } from '../synthesis/types.js';
 
@@ -16,6 +17,7 @@ export type SearchProviderName = 'google' | 'duckduckgo' | 'brave' | 'tavily';
  * Parsed ask query options used by the extraction pipeline.
  */
 export interface AskQuery {
+  readonly receipt?: ExecutionReceiptDraft;
   readonly raw: string;
   readonly normalized: string;
   readonly limit: number;

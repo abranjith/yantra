@@ -1,0 +1,6 @@
+{
+  "stdout": "{\"schemaVersion\":\"0.2\",\"kind\":\"sites\",\"status\":\"added\",\"record\":{\"domain\":\"fixture.example\",\"rank\":1,\"positiveSignals\":1,\"negativeSignals\":0,\"origin\":\"user\",\"firstSeenAt\":\"<time>\",\"lastSignalAt\":\"<time>\"}}\n",
+  "stderr": "",
+  "exitCode": 0,
+  "tree": {}
+}

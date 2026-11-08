@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import { access, chmod, mkdir, readdir, rm, stat } from 'node:fs/promises';
+import { access, chmod, mkdir, readdir, realpath, rm, stat } from 'node:fs/promises';
 import { isAbsolute, join, resolve } from 'node:path';
+
+import { acquireResourceLease, type ResourceLockOptions } from '../locks/resource-lock.js';
 
 import { chromeUserDataRoots } from './chrome-discovery.js';
 import { ProfilePathRefusedError } from './errors.js';
@@ -70,9 +72,14 @@ async function ensureDirWithPerms(dirPath: string): Promise<boolean> {
  */
 export class LocalProfileStore implements ProfileStore {
   private readonly logger: Logger | undefined;
+  private readonly leaseOptions: Omit<ResourceLockOptions, 'targetPath' | 'retries'>;
 
-  constructor(deps?: { logger?: Logger }) {
+  constructor(deps?: {
+    logger?: Logger;
+    leaseOptions?: Omit<ResourceLockOptions, 'targetPath' | 'retries'>;
+  }) {
     this.logger = deps?.logger;
+    this.leaseOptions = deps?.leaseOptions ?? {};
   }
 
   /**
@@ -93,7 +100,17 @@ export class LocalProfileStore implements ProfileStore {
         const targetPath = join(dataDir(), 'profiles', workflowName);
         assertNotInsideRealChromeProfile(targetPath);
         const createdNow = await ensureDirWithPerms(targetPath);
-        return { absolutePath: targetPath, kind: 'workflow', createdNow };
+        assertNotInsideRealChromeProfile(await realpath(targetPath));
+        const lease = await acquireResourceLease(
+          { kind: 'browser-profile', path: targetPath },
+          {
+            ...this.leaseOptions,
+            targetPath,
+            ...(this.logger === undefined ? {} : { logger: this.logger }),
+            retries: 0,
+          },
+        );
+        return { absolutePath: targetPath, kind: 'workflow', createdNow, lease };
       }
 
       case 'ephemeral': {
@@ -132,7 +149,17 @@ export class LocalProfileStore implements ProfileStore {
           }
         }
 
-        return { absolutePath: targetPath, kind: 'explicit', createdNow: false };
+        assertNotInsideRealChromeProfile(await realpath(targetPath));
+        const lease = await acquireResourceLease(
+          { kind: 'browser-profile', path: targetPath },
+          {
+            ...this.leaseOptions,
+            targetPath,
+            ...(this.logger === undefined ? {} : { logger: this.logger }),
+            retries: 0,
+          },
+        );
+        return { absolutePath: targetPath, kind: 'explicit', createdNow: false, lease };
       }
     }
   }
@@ -149,6 +176,8 @@ export class LocalProfileStore implements ProfileStore {
 
     const results: WorkflowProfileEntry[] = [];
     for (const name of entries) {
+      if (name.endsWith('.lock') || name.endsWith('.lock.owner.json') || name.endsWith('.tmp'))
+        continue;
       try {
         const p = join(root, name);
         const info = await stat(p);

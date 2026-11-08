@@ -7,27 +7,50 @@
  * platform, so `YANTRA_HOME` is the only variable that isolates these runs —
  * XDG and `%APPDATA%` are ignored by design.
  *
- * Bypasses `process.exit` by trapping it during each command invocation.
- * The CLI handlers call `process.exit(<code>)` directly today; future work
- * (TASK-001's CommandOutcome plumbing) will let commands return outcomes
- * for cleaner testing.
+ * Captures the terminal adapter result and output for each invocation.
  */
 
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { createServer, type ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Writable } from 'node:stream';
+import { fileURLToPath } from 'node:url';
 
 import { run } from '@yantra/cli';
-import { resetPathCache } from '@yantra/core';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { probeResourceLock, resetPathCache } from '@yantra/core';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { serveFixtureSite } from './fixtures/serve.js';
+import { listen, serveFixtureSite } from './fixtures/serve.js';
 
 interface InvocationResult {
   readonly exitCode: number;
   readonly stdout: string;
   readonly stderr: string;
+}
+
+function startCli(argv: readonly string[], home: string) {
+  const entry = fileURLToPath(new URL('../apps/cli/dist/bin.js', import.meta.url));
+  const child = spawn(process.execPath, [entry, ...argv], {
+    env: { ...process.env, YANTRA_HOME: home, LLM_PROVIDER: 'none' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
+  });
+  let stdout = '';
+  let stderr = '';
+  child.stdout.on('data', (chunk: Buffer) => {
+    stdout += chunk.toString();
+  });
+  child.stderr.on('data', (chunk: Buffer) => {
+    stderr += chunk.toString();
+  });
+  const done = new Promise<InvocationResult>((resolve, reject) => {
+    child.once('error', reject);
+    child.once('close', (exitCode) => resolve({ exitCode: exitCode ?? 2, stdout, stderr }));
+  });
+  return { child, done };
 }
 
 async function invoke(argv: readonly string[]): Promise<InvocationResult> {
@@ -77,10 +100,11 @@ async function invoke(argv: readonly string[]): Promise<InvocationResult> {
   };
 
   try {
-    await run(argv).catch((err: unknown) => {
+    const result = await run(argv).catch((err: unknown) => {
       if (err instanceof Error && err.message === '__cli_exit__') return;
       throw err;
     });
+    if (!exited && typeof result === 'number') exitCode = result;
   } finally {
     process.stdout.write = originalOut;
     process.stderr.write = originalErr;
@@ -147,6 +171,114 @@ describe('@no-llm cli commands e2e', () => {
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr).toContain('not found');
   });
+
+  it('refuses a second CLI process using the same persistent browser profile', async () => {
+    const held = new Set<ServerResponse>();
+    let released = false;
+    const server = createServer((request, response) => {
+      response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      if (request.url === '/held' && !released) {
+        held.add(response);
+        response.once('close', () => held.delete(response));
+      } else response.end('<!doctype html><title>Profile lease fixture</title>');
+    });
+    const port = await listen(server);
+    const workflows = join(tmpHome, 'data', 'workflows');
+    const profile = join(tmpHome, 'data', 'profiles', 'profile-busy');
+    const children: ReturnType<typeof startCli>[] = [];
+    try {
+      await mkdir(workflows, { recursive: true });
+      await writeFile(
+        join(workflows, 'profile-busy.yaml'),
+        [
+          'version: 1',
+          'name: profile-busy',
+          'description: Persistent profile contention fixture',
+          'security_class: public',
+          'cookies: auto',
+          'steps:',
+          `  - navigate: http://127.0.0.1:${port}/held`,
+          '',
+        ].join('\n'),
+      );
+      const first = startCli(
+        ['run', 'profile-busy', '--json', '--no-llm', '--browser', 'system'],
+        tmpHome,
+      );
+      children.push(first);
+      await Promise.race([
+        vi.waitFor(
+          async () => {
+            expect((await probeResourceLock({ kind: 'browser-profile', path: profile }))?.pid).toBe(
+              first.child.pid,
+            );
+          },
+          { timeout: 20_000, interval: 50 },
+        ),
+        first.done.then((result) => {
+          throw new Error(`First CLI exited before holding its profile: ${JSON.stringify(result)}`);
+        }),
+      ]);
+      const second = startCli(['run', 'profile-busy', '--no-llm', '--browser', 'system'], tmpHome);
+      children.push(second);
+      const refused = await second.done;
+      expect(refused.exitCode).toBe(3);
+      expect(refused.stderr).toContain('is busy');
+      expect(refused.stderr).toContain('Try again when it finishes.');
+      released = true;
+      for (const response of held)
+        response.end('<!doctype html><title>Profile lease fixture</title>');
+      expect((await first.done).exitCode).toBe(0);
+
+      const runs = join(tmpHome, 'data', 'runs');
+      const rows = await Promise.all(
+        (await readdir(runs)).map(async (id) => ({
+          id,
+          manifest: JSON.parse(await readFile(join(runs, id, 'manifest.json'), 'utf8')) as {
+            status: string;
+          },
+        })),
+      );
+      for (const row of rows) {
+        const receipt = JSON.parse(
+          await readFile(join(runs, row.id, 'execution-receipt.json'), 'utf8'),
+        ) as {
+          run_id: string;
+          sequence: number;
+          settings: { key: string; value: unknown }[];
+          content: { kind: string; path: string; sha256: string }[];
+        };
+        expect(receipt.run_id).toBe(row.id);
+        expect(receipt.sequence).toBe(0);
+        expect(receipt.settings.find((setting) => setting.key === 'synthesis.use_llm')?.value).toBe(
+          false,
+        );
+        const workflow = receipt.content.find((identity) => identity.kind === 'workflow');
+        expect(workflow).toBeDefined();
+        expect(workflow!.sha256).toBe(
+          createHash('sha256')
+            .update(await readFile(workflow!.path))
+            .digest('hex'),
+        );
+      }
+      const failed = rows.find((row) => row.manifest.status === 'failed');
+      expect(failed).toBeDefined();
+      expect(await readFile(join(runs, failed!.id, 'report.md'), 'utf8')).toContain('is busy');
+    } finally {
+      released = true;
+      for (const response of held)
+        response.end('<!doctype html><title>Profile lease fixture</title>');
+      for (const invocation of children) {
+        if (invocation.child.exitCode === null && invocation.child.signalCode === null)
+          invocation.child.kill();
+        await invocation.done.catch(() => undefined);
+      }
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => {
+        server.close(() => resolve());
+      });
+    }
+  }, 60_000);
 
   it('loads and replays a pre-agentic workflow while preserving audit access to an old run', async () => {
     const fixture = await serveFixtureSite();

@@ -60,3 +60,5 @@ export {
   type Notifier,
   type SinkNotifierDeps,
 } from './notify.js';
+
+export { NodeDaemonProcessControl, type CommandProcessControl } from './process-control.js';

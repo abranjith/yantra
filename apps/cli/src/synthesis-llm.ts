@@ -94,7 +94,7 @@ const NON_RETRYABLE_CODES = new Set([
  * @example
  * const llm = createSynthesisLlm({
  *   provider: new PiAgentProvider(), // no customTools → pure completion
- *   model, auth, runId, runDir, cwd: process.cwd(), logger,
+ *   model, auth, runId, runDir, cwd: workingDirectory, logger,
  * });
  * new LlmSynthesizer({ llm, prompt: YANTRA_SYNTHESIS_PROMPT, deterministic });
  */

@@ -9,6 +9,7 @@ import type { OwnedBrowserProcess } from '../../src/browser/launcher.js';
 import type { BrowserProcessSupervisor } from '../../src/browser/process-lifecycle.js';
 import { LocalBrowserSession } from '../../src/browser/session.js';
 import type { Logger, ProfileStore, ResolvedProfile } from '../../src/browser/types.js';
+import type { ResourceLease } from '../../src/locks/resource-lock.js';
 
 vi.mock('../../src/locator/injected-host.js', () => ({
   PuppeteerInjectedScriptHost: vi.fn().mockImplementation(() => ({})),
@@ -61,6 +62,7 @@ interface Fixture {
 function makeFixture(
   opts: {
     profileKind?: ResolvedProfile['kind'];
+    profileLease?: ResourceLease;
     pages?: { url: () => string }[];
     shutdownError?: Error;
     cleanupError?: Error;
@@ -119,6 +121,7 @@ function makeFixture(
     absolutePath: '/tmp/yantra-profile',
     kind: opts.profileKind ?? 'ephemeral',
     createdNow: true,
+    ...(opts.profileLease === undefined ? {} : { lease: opts.profileLease }),
   };
 
   const profileStore: ProfileStore = {
@@ -259,6 +262,43 @@ describe('@no-llm LocalBrowserSession newIsolatedPage (FEAT-050)', () => {
 });
 
 describe('@no-llm LocalBrowserSession close', () => {
+  function lease(): ResourceLease & { release: ReturnType<typeof vi.fn> } {
+    return {
+      owner: {
+        pid: 1234,
+        command: 'fixture',
+        started_at: '2026-11-06T12:00:00.000Z',
+        surface: 'terminal',
+      },
+      release: vi.fn(async () => undefined),
+    };
+  }
+
+  it('releases a persistent profile once after the owned process stops', async () => {
+    const profileLease = lease();
+    const fixture = makeFixture({ profileKind: 'workflow', profileLease });
+    await Promise.all([fixture.session.close(), fixture.session.close()]);
+    expect(profileLease.release).toHaveBeenCalledOnce();
+    expect(fixture.cleaned).toEqual([]);
+  });
+
+  it('keeps the persistent lease when process shutdown cannot establish exit', async () => {
+    const profileLease = lease();
+    const fixture = makeFixture({
+      profileKind: 'explicit',
+      profileLease,
+      shutdownError: new Error('process still running'),
+    });
+    await expect(fixture.session.close()).rejects.toThrow('process still running');
+    expect(profileLease.release).not.toHaveBeenCalled();
+  });
+
+  it('releases a persistent profile after an unexpected child exit', async () => {
+    const profileLease = lease();
+    const fixture = makeFixture({ profileKind: 'workflow', profileLease });
+    fixture.child.exit(1);
+    await vi.waitFor(() => expect(profileLease.release).toHaveBeenCalledOnce());
+  });
   it('delegates process supervision rather than signalling directly', async () => {
     const fixture = makeFixture();
 

@@ -1,212 +1,108 @@
-import { mkdir, rename, stat, writeFile } from 'node:fs/promises';
-import { dirname, isAbsolute, win32 } from 'node:path';
+import { runInit, type InitAnswerCollector } from '@yantra/core';
+import type { Command } from 'commander';
 
-import {
-  configPath,
-  defaultConfig,
-  defaultProfile,
-  profilePath,
-  redactConfigRefs,
-  saveProfile,
-  type YantraConfig,
-} from '@yantra/core';
-import { type Command } from 'commander';
-import { stringify } from 'yaml';
-
+import type {
+  ContextGrantAnswers,
+  ContextGrantDeps,
+} from '../adapters/terminal/init-context-prompts.js';
+import type { InitWizardAnswers, InitWizardDeps } from '../adapters/terminal/init-wizard.js';
+import { createTerminalContext } from '../adapters/terminal/terminal-adapter.js';
+import type { CommandContext } from '../context/command-context.js';
+import { resourceOptions } from '../context/resource-options.js';
 import { createRegisteredCommand } from '../registry/build-command-tree.js';
-import { handler, type Handler, type HandlerArgs } from '../registry/handler.js';
+import { handler, type Handler } from '../registry/handler.js';
 import { CLI_JSON_SCHEMA_VERSION } from '../render/json.js';
-
-import {
-  collectContextGrants,
-  defaultContextGrantAnswers,
-  type ContextGrantAnswers,
-  type ContextGrantDeps,
-} from './init-context-prompts.js';
-import { runInitWizard, type InitWizardAnswers, type InitWizardDeps } from './init-wizard.js';
-
 interface InitOptions {
   readonly provider?: string;
   readonly reset?: boolean;
   readonly json?: boolean;
   readonly yes?: boolean;
 }
-
 export interface InitDeps {
   readonly isTty?: boolean;
   readonly collect?: (deps?: ContextGrantDeps) => Promise<ContextGrantAnswers>;
   readonly wizard?: (deps?: InitWizardDeps) => Promise<InitWizardAnswers>;
 }
-
-const ALLOWED_PROVIDERS = new Set(['anthropic', 'ollama', 'none']);
-
 export function makeInitCommand(deps: InitDeps = {}): Command {
   return createRegisteredCommand('init', { init: makeInitHandler(deps) });
 }
-
-/** The `init` handler over injectable prompts, bound to the `init` registry entry. */
-export function makeInitHandler(deps: InitDeps = {}): Handler {
-  return handler(async (_args: HandlerArgs, options: InitOptions): Promise<void> => {
-    try {
-      const target = configPath();
-      await mkdir(dirname(target), { recursive: true, mode: 0o700 });
-      const alreadyExists = await fileExists(target);
-      if (alreadyExists && options.reset !== true) {
-        if (options.json)
-          process.stdout.write(
-            `${JSON.stringify({ schemaVersion: CLI_JSON_SCHEMA_VERSION, kind: 'init', status: 'already-initialized', configPath: target })}\n`,
-          );
-        else process.stdout.write(`Already initialized at ${target}. Pass --reset to rewrite.\n`);
-        process.exit(0);
-      }
-      if (alreadyExists) await rename(target, `${target}.bak.${Date.now()}`);
-
-      const interactive = shouldPrompt(options, deps);
-      const requestedProvider = (options.provider ?? 'none').toLowerCase();
-      if (!ALLOWED_PROVIDERS.has(requestedProvider)) {
-        process.stderr.write(
-          `Unknown provider "${requestedProvider}" (expected: anthropic | ollama | none)\n`,
-        );
-        process.exit(1);
-      }
-      const answers =
-        interactive && options.provider === undefined
-          ? await (deps.wizard ?? runInitWizard)()
-          : defaultsFor(requestedProvider as InitWizardAnswers['provider']);
-      if (answers.dataDir && !(isAbsolute(answers.dataDir) || win32.isAbsolute(answers.dataDir)))
-        throw new Error('the data directory must be absolute');
-      if (answers.dataDir) await mkdir(answers.dataDir, { recursive: true, mode: 0o700 });
-
-      const config = buildConfig(answers);
-      await writeFile(target, stringify(serializable(config)), { encoding: 'utf8', mode: 0o600 });
-
-      const profileTarget = profilePath();
-      const writingProfile = options.reset === true || !(await fileExists(profileTarget));
-      let grants = defaultContextGrantAnswers();
-      if (writingProfile) {
-        if (interactive) grants = await (deps.collect ?? collectContextGrants)();
-        const profile = defaultProfile();
-        await saveProfile(
-          {
-            ...profile,
-            locale: { ...profile.locale, city: grants.city },
-            context: { ...profile.context, location: grants.grants.location },
-            agent: {
-              ...profile.agent,
-              provider: answers.provider === 'none' ? null : answers.provider,
-              model: answers.modelId,
-            },
-          },
-          profileTarget,
-        );
-      }
-
+export function makeInitHandler(
+  deps: InitDeps = {},
+  context: CommandContext = createTerminalContext(),
+): Handler {
+  return handler(async (_args, options: InitOptions) => {
+    const collector: InitAnswerCollector = {
+      providerAnswers: () => (deps.wizard ? deps.wizard() : context.initAnswers.providerAnswers()),
+      contextGrants: () => (deps.collect ? deps.collect() : context.initAnswers.contextGrants()),
+    };
+    const result = await runInit(
+      {
+        ...(options.provider === undefined ? {} : { provider: options.provider }),
+        reset: options.reset === true,
+        yes: options.yes === true,
+        interactive:
+          (deps.isTty ?? context.isInteractive({ json: options.json === true })) &&
+          options.json !== true,
+      },
+      collector,
+      { lockOptions: resourceOptions(context, 'init') },
+    );
+    if (result.status === 'already-initialized') {
       if (options.json)
-        process.stdout.write(
-          `${JSON.stringify({ schemaVersion: CLI_JSON_SCHEMA_VERSION, kind: 'init', status: 'written', configPath: target, provider: answers.provider, searchKey: answers.searchKey.status })}\n`,
+        context.output.json({
+          schemaVersion: CLI_JSON_SCHEMA_VERSION,
+          kind: 'init',
+          status: result.status,
+          configPath: result.configPath,
+        });
+      else
+        context.output.stdout.write(
+          `Already initialized at ${result.configPath}. Pass --reset to rewrite.\n`,
         );
-      else {
-        process.stdout.write(`Wrote ${target}\n`);
-        if (writingProfile) {
-          process.stdout.write(`Wrote ${profileTarget}\n`);
-          process.stdout.write(
-            grants.grants.location
-              ? 'Location sharing: on. Change it with `yantra prefs set context.location false`.\n'
-              : 'Location sharing: off. Change it with `yantra prefs set context.location true`.\n',
-          );
-        }
-        if (answers.searchKey.status === 'stored')
-          process.stdout.write(
-            `Stored ${answers.searchKey.provider}.api_key in the OS keychain; web search will use ${answers.searchKey.provider}.\n`,
-          );
-        else if (answers.searchKey.status === 'manual')
-          process.stdout.write(
-            `The OS keychain is unavailable, so the search key was not stored. Store it later with \`${answers.searchKey.command}\`.\n`,
-          );
-        process.stdout.write('Next: yantra model list; yantra secret list; yantra config path\n');
-      }
-      process.exit(0);
-    } catch (error) {
-      process.stderr.write(
-        `init failed: ${error instanceof Error ? error.message : String(error)}\n`,
-      );
-      process.exit(1);
+      return { exitCode: 0 as const };
     }
+    if (result.status === 'invalid-provider') {
+      context.output.stderr.write(
+        `Unknown provider "${result.provider}" (expected: anthropic | ollama | none)\n`,
+      );
+      return { exitCode: 1 as const };
+    }
+    if (result.status === 'failed') {
+      context.output.stderr.write(`init failed: ${result.message}\n`);
+      return { exitCode: 1 as const };
+    }
+    if (options.json)
+      context.output.json({
+        schemaVersion: CLI_JSON_SCHEMA_VERSION,
+        kind: 'init',
+        status: 'written',
+        configPath: result.configPath,
+        provider: result.provider,
+        searchKey: result.searchKey.status,
+      });
+    else {
+      context.output.stdout.write(`Wrote ${result.configPath}\n`);
+      if (result.writingProfile) {
+        context.output.stdout.write(`Wrote ${result.profilePath}\n`);
+        context.output.stdout.write(
+          result.grants.grants.location
+            ? 'Location sharing: on. Change it with `yantra prefs set context.location false`.\n'
+            : 'Location sharing: off. Change it with `yantra prefs set context.location true`.\n',
+        );
+      }
+      if (result.searchKey.status === 'stored')
+        context.output.stdout.write(
+          `Stored ${result.searchKey.provider}.api_key in the OS keychain; web search will use ${result.searchKey.provider}.\n`,
+        );
+      else if (result.searchKey.status === 'manual')
+        context.output.stdout.write(
+          `The OS keychain is unavailable, so the search key was not stored. Store it later with \`${result.searchKey.command}\`.\n`,
+        );
+      context.output.stdout.write(
+        'Next: yantra model list; yantra secret list; yantra config path\n',
+      );
+    }
+
+    return { exitCode: 0 as const };
   });
-}
-
-function defaultsFor(provider: InitWizardAnswers['provider']): InitWizardAnswers {
-  if (provider === 'anthropic')
-    return {
-      provider,
-      modelId: 'claude-opus-4-7',
-      baseUrl: null,
-      apiKey: { kind: 'env', name: 'ANTHROPIC_API_KEY' },
-      dataDir: null,
-      searchKey: { status: 'skipped' },
-    };
-  if (provider === 'ollama')
-    return {
-      provider,
-      modelId: 'llama3.1:8b',
-      baseUrl: 'http://localhost:11434',
-      apiKey: null,
-      dataDir: null,
-      searchKey: { status: 'skipped' },
-    };
-  return {
-    provider: 'none',
-    modelId: null,
-    baseUrl: null,
-    apiKey: null,
-    dataDir: null,
-    searchKey: { status: 'skipped' },
-  };
-}
-
-function buildConfig(answers: InitWizardAnswers): YantraConfig {
-  const base = defaultConfig();
-  return {
-    ...base,
-    paths: { ...base.paths, data_dir: answers.dataDir },
-    models:
-      answers.provider === 'none' || !answers.modelId
-        ? []
-        : [
-            {
-              id: answers.modelId,
-              provider: answers.provider,
-              base_url: answers.baseUrl,
-              api_key: answers.apiKey,
-              input: ['text'],
-            },
-          ],
-  };
-}
-
-function serializable(config: YantraConfig): unknown {
-  const raw = redactConfigRefs(config) as Record<string, unknown>;
-  const models = (raw.models as Record<string, unknown>[]).map((model) =>
-    Object.fromEntries(
-      Object.entries(model).filter(
-        ([key, value]) => !((key === 'api_key' || key === 'base_url') && value === null),
-      ),
-    ),
-  );
-  return { ...raw, models };
-}
-
-function shouldPrompt(options: InitOptions, deps: InitDeps): boolean {
-  return (
-    (deps.isTty ?? process.stdin.isTTY === true) && options.json !== true && options.yes !== true
-  );
-}
-
-async function fileExists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-    return true;
-  } catch {
-    return false;
-  }
 }

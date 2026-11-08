@@ -113,4 +113,65 @@ describe('@no-llm managed installation concurrency', () => {
     expect(outcome).toMatchObject({ status: 'failed', error: { code: 'operation-in-progress' } });
     expect(helper.run).not.toHaveBeenCalled();
   });
+
+  it('preserves no-op installation and refuses mutations with a real managed-use reservation', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'yantra-install-use-'));
+    roots.push(root);
+    const record = {
+      schemaVersion: 1 as const,
+      installationId: 'active',
+      browser: 'chrome' as const,
+      platform: 'linux' as const,
+      buildId: '150.0.0.0',
+      cacheRootRelative: 'installation-active',
+      executableRelative: 'chrome/linux-150.0.0.0/chrome-linux64/chrome',
+      verifiedAt: '2026-09-14T00:00:00.000Z',
+    };
+    const state = {
+      readReady: async () => ({ status: 'ready' as const, record }),
+      readInventory: async () => ({ ready: { status: 'ready' as const, record }, orphans: [] }),
+    };
+    const self = { pid: process.pid, startToken: 'fixture-creation-token' };
+    const coordinator = new LocalManagedCoordinator({
+      managedState: state,
+      coordinationRoot: () => join(root, 'coordination'),
+      operationPath: () => join(root, 'operation.json'),
+      selfIdentity: async () => self,
+      liveness: {
+        identify: async () => self,
+        check: async (identity) =>
+          identity.pid === self.pid && identity.startToken === self.startToken ? 'alive' : 'dead',
+      },
+    });
+    const reservation = await coordinator.reserveUse(record);
+    const helper = { run: vi.fn() };
+    try {
+      const service = new LocalManagedInstallService({
+        state,
+        coordinator,
+        root: () => root,
+        helper,
+        candidateProbe: { probeManagedCandidate: vi.fn() },
+      });
+      const outcome = await service.install({
+        trigger: 'explicit-command',
+        consent: {
+          granted: true,
+          source: 'cli-accept-flag',
+          grantedAt: '2026-09-14T00:00:00.000Z',
+          destinationRoot: root,
+          approximateBytes: 1,
+          targetBuildId: null,
+          replaces: null,
+        },
+      });
+      expect(outcome).toMatchObject({ status: 'already-installed' });
+      expect(helper.run).not.toHaveBeenCalled();
+      await expect(
+        coordinator.claimMutation('fixture-install', 'installation-candidate'),
+      ).rejects.toMatchObject({ context: { reason: 'active-use' } });
+    } finally {
+      await reservation.markNeverSpawned();
+    }
+  });
 });

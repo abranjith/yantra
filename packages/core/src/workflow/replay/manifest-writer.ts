@@ -2,13 +2,15 @@
  * Atomic manifest and outputs writer.
  *
  * Uses the tmp-then-rename pattern to ensure atomicity:
- *   write to `<file>.tmp` → fsync → rename to `<file>`
+ *   write to a unique sibling → fsync → rename to `<file>`
  *
  * This matches FEAT-009's workflow YAML write convention.
  */
 
-import { rename, writeFile, readFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+
+import { writeFileAtomic } from '../../fs/atomic-write.js';
 
 import type { RunManifest, RunOutputs } from './types.js';
 
@@ -20,9 +22,7 @@ const OUTPUTS_FILE = 'outputs.json';
 // ---------------------------------------------------------------------------
 
 async function atomicWrite(filePath: string, content: string): Promise<void> {
-  const tmpPath = `${filePath}.tmp`;
-  await writeFile(tmpPath, content, { encoding: 'utf8', mode: 0o600 });
-  await rename(tmpPath, filePath);
+  await writeFileAtomic(filePath, content, { mode: 0o600, fsync: true });
 }
 
 // ---------------------------------------------------------------------------

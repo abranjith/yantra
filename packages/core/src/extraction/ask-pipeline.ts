@@ -15,6 +15,7 @@ import {
   safeRecordRankSignal,
 } from '../ranking/recording.js';
 import type { RankSignalSink } from '../ranking/types.js';
+import { writeExecutionReceipt } from '../receipt/execution-receipt.js';
 import type { Synthesizer } from '../synthesis/types.js';
 
 import { cacheKey, utcDayFrom } from './cache-key.js';
@@ -129,6 +130,17 @@ export class AskPipeline {
     }
 
     try {
+      if (query.receipt) {
+        const written = await writeExecutionReceipt(runDir, query.receipt);
+        this.logger.info(
+          {
+            event: 'settings_receipt_written',
+            path: written.path,
+            setting_count: written.receipt.settings.length,
+          },
+          'settings_receipt_written',
+        );
+      }
       if (!query.noCache) {
         const cached = await this.cache.get(key);
         if (cached) {

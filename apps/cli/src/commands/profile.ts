@@ -12,7 +12,10 @@
  */
 
 import { profilePath } from '@yantra/core';
+import type { Command } from 'commander';
 
+import { createTerminalContext } from '../adapters/terminal/terminal-adapter.js';
+import { type CommandContext } from '../context/command-context.js';
 import { loadEffectivePreferences } from '../preferences.js';
 import type { HandlerArgs } from '../registry/handler.js';
 import { CLI_JSON_SCHEMA_VERSION } from '../render/json.js';
@@ -24,37 +27,40 @@ interface ProfileOptions {
 }
 
 /** `yantra profile`: bound to the `profile` registry entry. */
-export async function profileHandler(_args: HandlerArgs, options: ProfileOptions): Promise<void> {
-  const logger = makeStderrLogger(options.debug === true);
+export async function profileHandler(
+  _args: HandlerArgs,
+  options: ProfileOptions,
+  _command?: Command,
+  context: CommandContext = createTerminalContext(),
+): Promise<void> {
+  const logger = makeStderrLogger(options.debug === true, context.output.stderr);
   const effective = await loadEffectivePreferences(logger);
 
   const rows = [...effective.values()].sort((a, b) => a.key.localeCompare(b.key));
 
   if (options.json === true) {
-    process.stdout.write(
-      `${JSON.stringify({
-        schemaVersion: CLI_JSON_SCHEMA_VERSION,
-        kind: 'profile',
-        profilePath: profilePath(),
-        preferences: rows,
-      })}\n`,
-    );
-    process.exit(0);
+    context.output.json({
+      schemaVersion: CLI_JSON_SCHEMA_VERSION,
+      kind: 'profile',
+      profilePath: profilePath(),
+      preferences: rows,
+    });
+    return;
   }
 
-  process.stdout.write(`Profile file: ${profilePath()} (yours to edit)\n\n`);
+  context.output.stdout.write(`Profile file: ${profilePath()} (yours to edit)\n\n`);
   if (rows.length === 0) {
-    process.stdout.write('No preferences resolved.\n');
-    process.exit(0);
+    context.output.stdout.write('No preferences resolved.\n');
+    return;
   }
 
   const keyWidth = Math.max(...rows.map((r) => r.key.length));
   for (const row of rows) {
     const approval = row.source === 'learned' && !row.approved ? ' [pending approval]' : '';
-    process.stdout.write(
+    context.output.stdout.write(
       `${row.key.padEnd(keyWidth)}  ${JSON.stringify(row.value)}  ` +
         `(${row.provenance})${approval}\n`,
     );
   }
-  process.exit(0);
+  return;
 }

@@ -1,0 +1,6 @@
+{
+  "stdout": "",
+  "stderr": "`--dry-run` reports availability and changes nothing, so there is nothing for `--yes` to accept. Use one or the other.\n",
+  "exitCode": 1,
+  "tree": {}
+}

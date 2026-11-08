@@ -1,0 +1,6 @@
+{
+  "stdout": "",
+  "stderr": "`do` runs a web agent and requires a model; use `ask --no-llm` or `research --no-llm` for deterministic web research.\n",
+  "exitCode": 1,
+  "tree": {}
+}

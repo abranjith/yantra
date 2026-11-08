@@ -24,8 +24,8 @@ import { prefsHandler } from '../commands/prefs.js';
 import { profileHandler } from '../commands/profile.js';
 import { reportHandler } from '../commands/report.js';
 import { makeResearchHandler } from '../commands/research.js';
-import { resumeHandler } from '../commands/resume.js';
-import { runHandler } from '../commands/run.js';
+import { makeResumeHandler } from '../commands/resume.js';
+import { makeRunHandler } from '../commands/run.js';
 import { schedulesHandler } from '../commands/schedule.js';
 import { scheduleHandlers, unscheduleHandlers } from '../commands/schedule.js';
 import { secretHandlers } from '../commands/secret.js';
@@ -33,6 +33,7 @@ import { showHandler } from '../commands/show.js';
 import { sitesHandlers } from '../commands/sites.js';
 import { templateHandlers } from '../commands/template.js';
 import { usageHandler } from '../commands/usage.js';
+import type { CommandContext } from '../context/command-context.js';
 import type { CliRunOptions } from '../program.js';
 
 import { handler, type HandlerBinding } from './handler.js';
@@ -44,34 +45,35 @@ import { handler, type HandlerBinding } from './handler.js';
  */
 export function buildHandlers(
   options: CliRunOptions = {},
+  context?: CommandContext,
 ): Readonly<Record<LeafCommandId, HandlerBinding>> {
   return {
-    ask: makeAskHandler(options.askRuntime),
-    research: makeResearchHandler(options.researchRuntime),
-    do: makeDoHandler(options.doRuntime),
-    run: handler(runHandler),
-    resume: handler(resumeHandler),
+    ask: makeAskHandler(options.askRuntime, context),
+    research: makeResearchHandler(options.researchRuntime, context),
+    do: makeDoHandler(options.doRuntime, context),
+    run: makeRunHandler(options.replayRuntime, context),
+    resume: makeResumeHandler(options.replayRuntime, context),
     schedules: handler(schedulesHandler),
     list: handler(listHandler),
     show: handler(showHandler),
     usage: handler(usageHandler),
     profile: handler(profileHandler),
-    doctor: makeDoctorHandler(),
+    doctor: makeDoctorHandler(options.doctorRuntime, context),
     audit: handler(auditHandler),
     report: handler(reportHandler),
-    ...configHandlers(),
-    ...secretHandlers(),
-    ...modelHandlers(),
+    ...configHandlers(undefined, context),
+    ...secretHandlers(undefined, context),
+    ...modelHandlers(context),
     prefs: handler(prefsHandler),
-    ...sitesHandlers(options.sitesRuntime),
-    init: makeInitHandler(),
-    ...confirmHandlers(),
-    ...scheduleHandlers(),
-    ...unscheduleHandlers(),
-    ...daemonHandlers(),
-    ...lintHandlers(),
-    ...openHandlers(),
-    ...templateHandlers(options.templateRuntime),
-    ...browserHandlers(),
+    ...sitesHandlers(options.sitesRuntime, context),
+    init: makeInitHandler(undefined, context),
+    ...confirmHandlers(context),
+    ...scheduleHandlers(context),
+    ...unscheduleHandlers(context),
+    ...daemonHandlers(options.daemonRuntime, context),
+    ...lintHandlers(context),
+    ...openHandlers(undefined, context),
+    ...templateHandlers(options.templateRuntime, context),
+    ...browserHandlers(options.browserRuntime, context),
   } satisfies Record<LeafCommandId, HandlerBinding>;
 }

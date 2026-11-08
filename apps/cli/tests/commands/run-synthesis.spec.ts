@@ -1,3 +1,8 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { createTerminalContext } from '../../src/adapters/terminal/terminal-adapter.js';
+import { makeRunCommand, resolveRunSynthesis } from '../../src/commands/run.js';
+import { executeCommand } from '../../src/execute.js';
 // @no-llm
 /**
  * `yantra run` synthesis flags (FEAT-FP-001, TASK-006).
@@ -13,10 +18,6 @@
  * declared `synthesis.use_llm`. That laziness lives in the core stage and is
  * covered by `packages/core/tests/workflow/replay/synthesize.spec.ts`.
  */
-
-import { afterEach, describe, expect, it, vi } from 'vitest';
-
-import { makeRunCommand, resolveRunSynthesis } from '../../src/commands/run.js';
 
 describe('@no-llm resolveRunSynthesis', () => {
   it('leaves the decision to the workflow when no flag is passed', async () => {
@@ -141,8 +142,8 @@ describe('@no-llm yantra run flag surface', () => {
     }) as never);
 
     await expect(
-      makeRunCommand().parseAsync(['weekly', '--template', 'exec-brief'], { from: 'user' }),
-    ).rejects.toThrow('exit:1');
+      executeCommand(['run', 'weekly', '--template', 'exec-brief'], createTerminalContext()),
+    ).resolves.toMatchObject({ exitCode: 1 });
     expect(stderr).toBe(
       'templates are not yet supported on run; see docs/features/report-templates.md\n',
     );

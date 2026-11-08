@@ -12,6 +12,10 @@ Source spec: [spec.md](.spec-lite/features/FEAT-061-drshya_foundations/spec.md)
 
 ## Browser Runtime
 
+**FEAT-072 — Persistent Browser-Profile Exclusivity** _(updated: 2026-11-08 by implement)_
+Source spec: [spec.md](.spec-lite/features/FEAT-072-command_handler_seams_receipts_locks/spec.md)
+A workflow or explicitly selected persistent cookie profile admits one run at a time, including callers using different paths to the same directory. A competing run gets immediate `busy` with exit 3; ephemeral profiles remain independent. The lease is released after the owned browser stops and is retained when shutdown cannot prove that it stopped.
+
 **FEAT-050 — Shared Background Page Pool** _(updated: 2026-10-13 by implement)_
 Source spec: [spec.md](.spec-lite/features/FEAT-050-run_scoped_acquisition/spec.md)
 Every SERP scrape and fetch fallback in an agentic run borrows a page from one lazily launched headless browser instead of launching its own Chrome: each use gets a fresh isolated browser context (no cookies or storage shared between reads), at most two pages are open at once with FIFO waiting, every use honors its timeout and abort signal (the context is closed, which cancels in-flight page work), and a crashed browser is relaunched once per run before failing typed. The pool closes after the task browser and before `run-health.json` is written. The timeout covers queueing, launch, page creation, callback work, and cleanup; cancellation prevents late callbacks and closes late-acquired resources without cancelling another borrower?s shared launch. The task browser stays separate (it may be headed, and holds the user-visible page), so a run starts at most two Chrome processes. `BrowserSession.newIsolatedPage()` opens the isolated contexts; the deterministic paths keep one launch per use through `launchPerUsePageSource`, now with the same honest deadline.
@@ -35,6 +39,10 @@ Source spec: [spec.md](.spec-lite/features/FEAT-044-managed_stable_installation/
 ---
 
 ## Configuration & Storage
+
+**FEAT-072 — Shared-Resource Locks and Execution Receipts** _(updated: 2026-11-08 by implement)_
+Source spec: [spec.md](.spec-lite/features/FEAT-072-command_handler_seams_receipts_locks/spec.md)
+Concurrent configuration, profile, workflow, template, and schedule-registration writers serialize updates through shared resource locks. File contention waits about five seconds before reporting `busy` with exit 3 and safe holder details; writes publish complete documents without sharing staging files. Run receipts and lock descriptions exclude credential values, raw command arguments, and unrelated environment variables, and a resume cannot replace the original receipt.
 
 **FEAT-043 — Data Directory Relocation with Managed Browsers** _(updated: 2026-09-13 by implement)_
 Source spec: [spec.md](.spec-lite/features/FEAT-043-browser_resolution_lifecycle/spec.md)
@@ -437,6 +445,10 @@ The **redactor** (`DefaultCaptureRedactor`) is the only code that reads `raw_val
 `runGeneratePlan()` implements the full generation loop: sanitizer guard → system-prompt assembly (tools sorted by name for canonical SHA-256 hash) → provider call → Zod schema validation → semantic validation (FEAT-002's `validateSemantics`) → bounded re-prompt (max `budget.maxCalls` retries, errors serialized as JSON-pointer paths). On repeated failure `dominantErrorCode()` picks the most-frequent validation error code and `resolveUserFacingHint()` maps it to an actionable message. `wrapWithAudit()` wraps any `LLMClient` to emit two `AgentJsonlEntry` records per call (request + response) with fields including `run_id`, `provider_id`, `system_prompt_hash`, `tool_calls`, token counts, `cost_estimate_usd`, `attempt`, and `outcome`. `estimateCostUsd()` covers Claude 4 and 3.5 model families. `Sanitized<T>` brand type plus LRU-registry `assertSanitized()` enforce runtime sanitization at the LLM call boundary. `InMemoryAuditWriter` and `InMemoryUsageWriter` are provided for testing without I/O.
 
 ## CLI Surface
+
+**FEAT-072 — Command Handler Seams, Execution Receipts & Shared-Resource Locks** _(updated: 2026-11-08 by implement)_
+Source spec: [spec.md](.spec-lite/features/FEAT-072-command_handler_seams_receipts_locks/spec.md)
+Terminal and worker invocations share command behavior, diagnostics, JSON results, and cancellation exit 130 where cancellation is supported; workers report `cancel_unsupported` for replay handlers that cannot abort. Attended workers collect input and consent through their channel, while credential commands and data relocation remain confined to their designated secure or terminal surfaces, and worker config editing directs the app to its raw-YAML editor. Execution runs write immutable receipts containing effective non-secret settings and their sources, content hashes, browser selection, working directory, and version; resumes append numbered receipts. Initialization accepts pluggable answer collection while preserving existing terminal prompts and generated configuration/profile files.
 
 **FEAT-062 — Command Registry** _(updated: 2026-11-06 by implement)_
 Source spec: [spec.md](.spec-lite/features/FEAT-062-command_registry/spec.md)

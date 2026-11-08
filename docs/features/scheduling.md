@@ -22,6 +22,9 @@ each due replay under the current user's account.
 - Forces every scheduled fire and daemon-driven resume to be zero-LLM. If a
   completed workflow declares a `synthesis:` block, Yantra may still create its
   Brief with the deterministic synthesizer; no model session is opened.
+- Writes an immutable execution receipt for each scheduled run and a separate
+  numbered receipt when the daemon resumes a parked run. These record the
+  schedule-sourced parameters, zero-LLM policy, and file identities.
 - Prevents two runs of the same schedule from executing concurrently. On daemon
   startup, an occurrence that became due while the daemon was stopped is marked
   `missed` and is not fired as a startup catch-up job.
@@ -132,9 +135,16 @@ yantra daemon start --foreground
 ```
 
 Only one daemon can hold the scheduler lock. A second start is refused; a stale
-lock from a crashed process becomes reclaimable. `daemon stop` sends the holder
-a termination signal and waits up to about ten seconds for the lock to be
-released. The daemon itself waits for in-flight fires before releasing its lock.
+lock from a crashed process becomes reclaimable. Before sending a termination
+signal, `daemon stop` verifies the holder's recorded process creation identity,
+including its start token. A legacy PID-only owner, an unverifiable owner, or a
+PID now belonging to another process is never signalled. Stop such a daemon
+from its owning terminal.
+
+After signalling a verified owner, `daemon stop` waits up to about ten seconds
+for the lock to be released. A foreground daemon waits for cancellation from
+Ctrl+C or SIGTERM, stops the scheduler, and closes its open resources before
+returning. The scheduler waits for in-flight fires before releasing its lock.
 
 `daemon status --json` returns:
 
@@ -227,6 +237,23 @@ block can also produce deterministic `brief.json`, `brief.md`, and `brief.html`.
 See [Run artifacts](diagnostics-and-audit.md#run-artifacts) for the general
 layout.
 
+Each scheduled run writes `execution-receipt.json` at run creation, before
+browser work. The receipt records `invoked_by: "daemon"`, a null
+`invocation_id`, the `run` command, working directory, Yantra version, and browser
+selection with its source. Its settings include the registered `params`,
+`llm: false`, and the cron expression, all with `source.kind: "schedule"`.
+Available workflow YAML and locator sidecar files are identified by absolute
+path and SHA-256 hash. The original registration's parameter file is not read
+again for each fire: the receipt records the parameters stored in the schedule.
+
+When the daemon resumes a granted parked run, it leaves the original receipt
+unchanged and writes the next available `execution-receipt.resume-<k>.json`,
+starting at `k = 1`. That receipt records the resumed run's parameters and file
+identities; it does not repeat the cron setting. Both paths enforce hard
+zero-LLM execution and include no provider or model settings. Receipts contain
+no resolved secrets or full environment snapshot and are written with
+owner-only permissions where supported.
+
 The scheduling layer adds `schedule.json` after the outcome is known. The
 history row and this sidecar are best-effort additions: failure to write either
 does not change the completed browser run's outcome. Use:
@@ -247,15 +274,14 @@ The scheduler has no cloud service, scheduler account, or privilege escalation.
 It runs as the user who starts it and uses that user's saved workflows, Chrome
 profiles, data directory, and OS keychain access.
 
-The data directory is:
+The default data directory is `~/.yantra/data` on every platform. `YANTRA_HOME`
+changes the Yantra root; `paths.data_dir` in `config.yaml` or `YANTRA_DATA_DIR`
+can relocate the data directory.
 
-- `%LOCALAPPDATA%\yantra` on Windows;
-- `$XDG_DATA_HOME/yantra` when `XDG_DATA_HOME` is set on macOS or Linux; or
-- `~/.local/share/yantra` otherwise.
-
-Scheduling-specific state includes `index.db`, `daemon.lock`, `daemon.pid`, and
-`notifications.jsonl`. The lock and PID sidecar support single-instance status
-and stop operations. Secret values are not stored in schedule rows.
+Scheduling-specific state includes `index.db`, `daemon.lock`, `daemon.pid`,
+`daemon.pid.identity.json`, and `notifications.jsonl`. The lock, PID, and process
+identity sidecars support single-instance status and verified stop operations.
+Secret values are not stored in schedule rows.
 
 There is no launchd, systemd, or Windows Task Scheduler registration. The
 detached process does not automatically start at login or reboot; start it again

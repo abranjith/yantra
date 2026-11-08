@@ -17,23 +17,23 @@ import {
   type AgenticTaskOutcome,
   type PromotionResult,
 } from '@yantra/agent';
-import {
-  InteractiveInstallOfferGateway,
-  UserInputMarkerError,
-  type EffectivePreferences,
-} from '@yantra/core';
-import { validateTemplatedReport } from '@yantra/protocol';
+import { UserInputMarkerError, type EffectivePreferences } from '@yantra/core';
+import { COMMAND_REGISTRY, validateTemplatedReport } from '@yantra/protocol';
 import { CommanderError, type Command } from 'commander';
 
+import {
+  createTerminalContext,
+  type TerminalOptions,
+} from '../adapters/terminal/terminal-adapter.js';
 import { resolveAgentInvocation, type AgentOptions } from '../agent-options.js';
 import {
   resolveBrowserSelectionOverride,
   type BrowserSelectionOptions,
 } from '../browser-options.js';
-import { CLIConnectorIO } from '../connector-io.js';
+import type { CommandContext } from '../context/command-context.js';
+import { draftRunReceipt } from '../context/run-receipt.js';
 import { recordTaskHistory } from '../history.js';
-import { openArtifact } from '../open-artifact.js';
-import { loadEffectivePreferences, resolveAmbientContext } from '../preferences.js';
+import { resolveAmbientContext } from '../preferences.js';
 import { attachRegistered } from '../registry/build-command-tree.js';
 import { handler, type Handler, type HandlerArgs } from '../registry/handler.js';
 import { renderGoalEcho } from '../render/goal-echo.js';
@@ -56,10 +56,6 @@ interface DoOptions extends AgentOptions, BrowserSelectionOptions {
 /** Injectable CLI boundaries for hermetic command tests. */
 export interface DoRuntime {
   readonly runTask: typeof runAgenticTask;
-  readonly env: NodeJS.ProcessEnv;
-  readonly stdout: NodeJS.WritableStream;
-  readonly stderr: NodeJS.WritableStream;
-  readonly isTty: boolean;
   readonly resolveTemplate: (ref: string) => Promise<ActiveReportTemplate>;
   readonly recordHistory: (runId: string) => Promise<void>;
   readonly resolveDefaults: () => Promise<EffectivePreferences>;
@@ -67,15 +63,27 @@ export interface DoRuntime {
 }
 
 /** Register `do`/`discover` without introducing any agent loop in the CLI. */
-export function registerDoCommand(program: Command, runtime?: Partial<DoRuntime>): void {
-  attachRegistered(program, 'do', { do: makeDoHandler(runtime) });
+export function registerDoCommand(
+  program: Command,
+  runtime?: Partial<DoRuntime> & TerminalOptions,
+  context?: CommandContext,
+): void {
+  attachRegistered(program, 'do', { do: makeDoHandler(runtime, context) });
 }
 
 /** The `do` handler over an injectable runtime, bound to the `do` registry entry. */
-export function makeDoHandler(runtime?: Partial<DoRuntime>): Handler {
-  const resolved = runtimeWithDefaults(runtime);
-  return handler((args: HandlerArgs, options: DoOptions) =>
-    executeDo(args[0] as string, options, resolved),
+export function makeDoHandler(
+  runtime?: Partial<DoRuntime> & TerminalOptions,
+  context: CommandContext = createTerminalContext(runtime),
+): Handler {
+  const resolved = runtimeWithDefaults(context, runtime);
+  return Object.assign(
+    handler((args: HandlerArgs, options: DoOptions, command: Command) => {
+      const entry = COMMAND_REGISTRY.commands.find((e) => e.id === 'do');
+      if (entry?.kind === 'leaf') context.settings.bind(entry, command);
+      return executeDo(args[0] as string, options, resolved, context);
+    }),
+    { honorsAbort: true },
   );
 }
 
@@ -98,18 +106,24 @@ export function promotionLine(promotion: PromotionResult): string {
   return `✓ Saved workflow "${promotion.workflowName}"${omitted}. Replay it with: yantra run ${promotion.workflowName}\n${notes}`;
 }
 
-async function executeDo(goal: string, options: DoOptions, runtime: DoRuntime): Promise<void> {
+async function executeDo(
+  goal: string,
+  options: DoOptions,
+  runtime: DoRuntime,
+  context: CommandContext,
+): Promise<void> {
   // A conflicting `--browser` pair is a validation failure, resolved before any
   // provider session or run directory exists.
   const browserSelection = resolveBrowserSelectionOverride(options);
   const effective = await runtime.resolveDefaults();
-  const agent = await runtime.resolveAgent('do', options, runtime.env, effective);
+  context.settings.usePreferences(effective);
+  const agent = await runtime.resolveAgent('do', options, context.settings.env(), effective);
   if (agent.mode === 'no-llm') {
     if (agent.reason === 'unavailable') {
       const message =
         `No credentials available for provider "${agent.model.provider}". ` +
         'Set the provider API key, seed managed auth, or pass --auth-secret <ref>.';
-      runtime.stderr.write(`AGENT_AUTH_UNAVAILABLE: ${message}\n`);
+      context.output.stderr.write(`AGENT_AUTH_UNAVAILABLE: ${message}\n`);
       throw new CommanderError(3, 'AGENT_AUTH_UNAVAILABLE', message);
     }
     const message =
@@ -117,37 +131,43 @@ async function executeDo(goal: string, options: DoOptions, runtime: DoRuntime): 
         ? '`do` runs a web agent and requires a model; use `ask --no-llm` or ' +
           '`research --no-llm` for deterministic web research.'
         : TEMPLATE_LLM_GUARD;
-    runtime.stderr.write(`${message}\n`);
+    context.output.stderr.write(`${message}\n`);
     throw new CommanderError(1, 'yantra.do.llm-required', message);
   }
   const template =
     options.template === undefined
       ? undefined
       : await runtime.resolveTemplate(options.template).catch((error: unknown) => {
-          runtime.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+          context.output.stderr.write(
+            `${error instanceof Error ? error.message : String(error)}\n`,
+          );
           throw error;
         });
   // The goal exactly as received, before the agent starts, so a shell-rewritten
   // argument is visible. Same spelling as `ask` and `research`.
-  runtime.stderr.write(renderGoalEcho(goal));
+  context.output.stderr.write(renderGoalEcho(goal));
   const json = options.json === true;
   const renderOpts: ConnectorRenderOpts = {
     json,
     debug: false,
-    noColor: json || !runtime.isTty,
-    stream: runtime.stdout,
-    errStream: runtime.stderr,
+    noColor: json || !context.output.colorCapable,
+    stream: context.output.stdout,
+    errStream: context.output.stderr,
     suppressOpenHint: options.open === true,
   };
-  const connector = new CLIConnectorIO(json ? new JSONRenderer() : new TerminalRenderer(), {
+  const connector = context.connector(json ? new JSONRenderer() : new TerminalRenderer(), {
     renderOpts,
-    interactive: runtime.isTty && !json,
+    interactive: context.isInteractive({ json }),
     suppressPublishedOutcome: template !== undefined,
   });
-  const abort = new AbortController();
-  const onInterrupt = (): void => abort.abort('user-interrupt');
-  process.once('SIGINT', onInterrupt);
 
+  const allowedHosts = normalizeHosts(options.allowHost ?? []);
+  const receipt = await draftRunReceipt(context, ['do'], {
+    agent,
+    ...(template === undefined ? {} : { template }),
+    ...(browserSelection === undefined ? {} : { browser: browserSelection }),
+    settings: { allowHost: allowedHosts, saveAs: options.saveAs?.trim() ?? null },
+  });
   try {
     const saveAs = options.saveAs?.trim();
     // Resolve the least-privilege `do` profile explicitly (tool allowlist,
@@ -158,16 +178,17 @@ async function executeDo(goal: string, options: DoOptions, runtime: DoRuntime): 
     const outcome = await runtime.runTask(
       {
         goal,
+        receipt,
         profile,
         model: agent.model,
         ...(agent.thinkingSource === undefined ? {} : { thinkingSource: agent.thinkingSource }),
         auth: agent.auth,
         budgets: agent.budgets,
-        allowedHosts: normalizeHosts(options.allowHost ?? []),
+        allowedHosts,
         // A user is present only on an interactive TTY run (not --json / piped):
         // the agent prompt then says a user can approve protected actions but
         // cannot answer open-ended questions, instead of claiming "no user".
-        interactive: runtime.isTty && !json,
+        interactive: context.isInteractive({ json }),
         // Sensitive ambient facts the user granted. Passed on every agentic
         // command, not just `ask` — `do` sending none is what let a run infer a
         // city from its timezone.
@@ -176,13 +197,11 @@ async function executeDo(goal: string, options: DoOptions, runtime: DoRuntime): 
         ...(saveAs && saveAs.length > 0 ? { saveAs } : {}),
         ...(template === undefined ? {} : { template }),
         connector,
-        signal: abort.signal,
+        signal: context.signal,
       },
       {
-        browserInstallOfferGateway:
-          runtime.isTty && !json
-            ? new InteractiveInstallOfferGateway({ sink: runtime.stderr })
-            : null,
+        cwd: context.cwd,
+        browserInstallOfferGateway: context.gateways.installOffer(context.isInteractive({ json })),
         ...(browserSelection === undefined ? {} : { browserSelection }),
       },
     );
@@ -213,9 +232,10 @@ async function executeDo(goal: string, options: DoOptions, runtime: DoRuntime): 
     }
     if (!json && outcome.kind === 'published' && outcome.promotion) {
       const line = promotionLine(outcome.promotion);
-      runtime.stdout.write(line);
+      context.output.stdout.write(line);
     }
-    if (options.open === true && outcome.kind === 'published') openArtifact(outcome.brief.htmlPath);
+    if (options.open === true && outcome.kind === 'published')
+      context.openExternal(outcome.brief.htmlPath);
     const exitCode = exitCodeForDoOutcome(outcome);
     if (exitCode !== 0) {
       const word = taskOutcomeOf(outcome);
@@ -223,12 +243,10 @@ async function executeDo(goal: string, options: DoOptions, runtime: DoRuntime): 
     }
   } catch (error) {
     if (error instanceof UserInputMarkerError) {
-      runtime.stderr.write(`${error.message}\n`);
+      context.output.stderr.write(`${error.message}\n`);
       throw new CommanderError(1, 'yantra.do.invalid-user-input-marker', error.message);
     }
     throw error;
-  } finally {
-    process.removeListener('SIGINT', onInterrupt);
   }
 }
 
@@ -250,18 +268,19 @@ function clean(value: string): string {
   return value.trim();
 }
 
-function runtimeWithDefaults(runtime?: Partial<DoRuntime>): DoRuntime {
+function runtimeWithDefaults(context: CommandContext, runtime?: Partial<DoRuntime>): DoRuntime {
   return {
     runTask: runtime?.runTask ?? runAgenticTaskWithRankSink,
-    env: runtime?.env ?? process.env,
-    stdout: runtime?.stdout ?? process.stdout,
-    stderr: runtime?.stderr ?? process.stderr,
-    isTty: runtime?.isTty ?? process.stdin.isTTY === true,
     resolveTemplate:
       runtime?.resolveTemplate ??
-      ((ref) => resolveTemplateRef(ref, { isTty: runtime?.isTty ?? process.stdin.isTTY === true })),
-    recordHistory: runtime?.recordHistory ?? ((runId) => recordTaskHistory(runId)),
-    resolveDefaults: runtime?.resolveDefaults ?? (() => loadEffectivePreferences()),
+      ((ref) =>
+        resolveTemplateRef(ref, {
+          cwd: context.cwd,
+          isTty: context.isInteractive({}),
+          choose: (names) => context.input.choose(names),
+        })),
+    recordHistory: runtime?.recordHistory ?? recordTaskHistory,
+    resolveDefaults: runtime?.resolveDefaults ?? (() => context.settings.preferences()),
     resolveAgent: runtime?.resolveAgent ?? resolveAgentInvocation,
   };
 }

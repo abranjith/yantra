@@ -7,8 +7,9 @@ import {
   type KeychainProvider,
 } from '@yantra/core';
 import { type Command, CommanderError } from 'commander';
-import prompts from 'prompts';
 
+import { createTerminalContext } from '../adapters/terminal/terminal-adapter.js';
+import type { CommandContext } from '../context/command-context.js';
 import { createRegisteredCommand } from '../registry/build-command-tree.js';
 import { handler } from '../registry/handler.js';
 import { CLI_JSON_SCHEMA_VERSION } from '../render/json.js';
@@ -19,7 +20,9 @@ interface SecretOptions {
 
 export interface SecretRuntime {
   readonly env: NodeJS.ProcessEnv;
-  readonly stdin: NodeJS.ReadableStream;
+  readonly stdin?: NodeJS.ReadableStream;
+  readonly readInput?: () => Promise<string | null>;
+  readonly json?: (value: unknown) => void;
   readonly stdout: NodeJS.WritableStream;
   readonly stderr: NodeJS.WritableStream;
   readonly isTty: boolean;
@@ -32,8 +35,11 @@ export function makeSecretCommand(input?: Partial<SecretRuntime>): Command {
 }
 
 /** Handlers for the `secret` family, bound by registry id. */
-export function secretHandlers(input?: Partial<SecretRuntime>) {
-  const runtime = runtimeWithDefaults(input);
+export function secretHandlers(
+  input?: Partial<SecretRuntime>,
+  context: CommandContext = createTerminalContext(input),
+) {
+  const runtime = runtimeWithDefaults(context, input);
   return {
     'secret.set': handler((args, options: SecretOptions) =>
       runSet(args[0] as string, args[1] as string | undefined, options, runtime),
@@ -61,7 +67,7 @@ async function runSet(
   if (!(await keychain.isAvailable())) unavailable(runtime);
   const value = runtime.isTty
     ? await runtime.promptSecret(`Secret value for ${key}`)
-    : await readPiped(runtime.stdin);
+    : await runtime.readInput?.();
   if (!value) fail(runtime, 'secret value must not be empty');
   await keychain.set(YANTRA_KEYCHAIN_SERVICE, key, value);
   if (options.json) emit(runtime, 'secret.set', { status: 'set', key });
@@ -146,9 +152,7 @@ function unavailable(runtime: SecretRuntime): never {
 }
 
 function emit(runtime: SecretRuntime, kind: string, body: Record<string, unknown>): void {
-  runtime.stdout.write(
-    `${JSON.stringify({ schemaVersion: CLI_JSON_SCHEMA_VERSION, kind, ...body })}\n`,
-  );
+  runtime.json?.({ schemaVersion: CLI_JSON_SCHEMA_VERSION, kind, ...body });
 }
 
 function fail(runtime: SecretRuntime, message: string, code = 1): never {
@@ -156,19 +160,23 @@ function fail(runtime: SecretRuntime, message: string, code = 1): never {
   throw new CommanderError(code, 'yantra.secret.failed', message);
 }
 
-function runtimeWithDefaults(input?: Partial<SecretRuntime>): SecretRuntime {
+function runtimeWithDefaults(
+  context: CommandContext,
+  input?: Partial<SecretRuntime>,
+): SecretRuntime {
   return {
-    env: input?.env ?? process.env,
-    stdin: input?.stdin ?? process.stdin,
-    stdout: input?.stdout ?? process.stdout,
-    stderr: input?.stderr ?? process.stderr,
-    isTty: input?.isTty ?? process.stdin.isTTY ?? false,
+    env: input?.env ?? context.settings.env(),
+    stdout: input?.stdout ?? context.output.stdout,
+    stderr: input?.stderr ?? context.output.stderr,
+    isTty: input?.isTty ?? context.isInteractive({}),
+    readInput:
+      input?.readInput ??
+      (input?.stdin
+        ? () => readPiped(input.stdin!)
+        : async () => (await context.input.stdin())?.replace(/\r?\n$/u, '') ?? null),
+    json: (value) => context.output.json(value),
     createKeychain: input?.createKeychain ?? (() => createKeychainProvider()),
     promptSecret:
-      input?.promptSecret ??
-      (async (message) => {
-        const answer = await prompts({ type: 'password', name: 'value', message });
-        return typeof answer.value === 'string' ? answer.value : '';
-      }),
+      input?.promptSecret ?? (async (message) => (await context.input.password(message)) ?? ''),
   };
 }

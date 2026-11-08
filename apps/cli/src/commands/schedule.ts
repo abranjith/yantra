@@ -1,3 +1,5 @@
+import { resolve } from 'node:path';
+
 /**
  * `yantra schedule` / `yantra schedules` / `yantra unschedule` — register,
  * list, and remove recurring unattended workflow runs (FEAT-021 TASK-001).
@@ -22,13 +24,16 @@ import { workflowsRoot, FileWorkflowStore, nextFireIso, type NotifyTarget } from
 import type { ParamArg } from '@yantra/core/workflow/replay';
 import { type Command } from 'commander';
 
+import { createTerminalContext } from '../adapters/terminal/terminal-adapter.js';
+import type { CommandContext, CommandResult, ExitCode } from '../context/command-context.js';
+import { resourceOptions } from '../context/resource-options.js';
 import { createRegisteredCommand } from '../registry/build-command-tree.js';
 import { fromAction } from '../registry/handler.js';
 import type { HandlerArgs } from '../registry/handler.js';
 import { makeStderrLogger } from '../runtime.js';
 import { openScheduleStore } from '../schedule-store.js';
 
-import { validateRegistration } from './schedule-registration.js';
+import { withValidatedRegistration, withScheduleRegistryLock } from './schedule-registration.js';
 
 const NOTIFY_TARGETS: readonly NotifyTarget[] = ['desktop', 'file', 'none'];
 
@@ -71,88 +76,93 @@ export function makeScheduleCommand(): Command {
 }
 
 /** Handlers for `schedule`, bound by registry id; each is its former commander action, unchanged. */
-export function scheduleHandlers() {
+export function scheduleHandlers(context: CommandContext = createTerminalContext()) {
   return {
     schedule: fromAction(async (workflowName: string, options: ScheduleOptions) => {
-      const logger = makeStderrLogger(options.debug === true);
+      const logger = makeStderrLogger(options.debug === true, context.output.stderr);
 
       // `--on-confirm` accepts only the safe value — reject anything else at
       // parse time (plan §6: "no auto-confirm code path to misconfigure").
       if (options.onConfirm !== undefined && options.onConfirm !== 'pause-and-notify') {
-        process.stderr.write(
+        context.output.stderr.write(
           `Invalid --on-confirm "${options.onConfirm}": only "pause-and-notify" is accepted (scheduled runs never auto-confirm).\n`,
         );
-        process.exit(1);
+        return { exitCode: 1 as ExitCode };
       }
 
       const notify = options.notify ?? 'desktop';
       if (!NOTIFY_TARGETS.includes(notify as NotifyTarget)) {
-        process.stderr.write(
+        context.output.stderr.write(
           `Invalid --notify "${notify}": expected one of ${NOTIFY_TARGETS.join(' | ')}.\n`,
         );
-        process.exit(1);
+        return { exitCode: 1 as ExitCode };
       }
 
       let params: ParamArg[];
       try {
         params = parseParamArgs(options.params);
       } catch (err) {
-        process.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
-        process.exit(1);
-        return;
+        context.output.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
+        return { exitCode: 1 as ExitCode };
       }
 
       const workflowStore = new FileWorkflowStore(workflowsRoot());
-      const validated = await validateRegistration(
+      const validated = await withValidatedRegistration(
         {
           workflowName,
           cronExpr: options.cron!,
           params,
-          ...(options.paramsFile !== undefined ? { paramsFile: options.paramsFile } : {}),
+          ...(options.paramsFile !== undefined
+            ? { paramsFile: resolve(context.cwd, options.paramsFile) }
+            : {}),
           notifyTarget: notify as NotifyTarget,
         },
         workflowStore,
-      );
+        async (registration) => {
+          const handle = await openScheduleStore(logger);
+          if (handle === null) return null;
+          try {
+            return await handle.store.register(registration);
+          } finally {
+            handle.close();
+          }
+        },
+        { ...resourceOptions(context, 'schedule'), logger },
+      ).catch((error: unknown) => {
+        throw error;
+      });
 
       if (!validated.ok) {
-        process.stderr.write(`${validated.reason}\n`);
-        process.exit(1);
-        return;
+        context.output.stderr.write(`${validated.reason}\n`);
+        return { exitCode: 1 as ExitCode };
       }
 
-      const handle = await openScheduleStore(logger);
-      if (handle === null) {
-        process.stderr.write(
+      const registered = validated.value;
+      if (registered === null) {
+        context.output.stderr.write(
           'Error: the local index (index.db) is unavailable — cannot register a schedule.\n',
         );
-        process.exit(3);
-        return;
+        return { exitCode: 3 as ExitCode };
       }
 
-      try {
-        const registered = await handle.store.register(validated.registration);
-        if (!registered.isOk) {
-          process.stderr.write(`Error: ${registered.error.message}\n`);
-          process.exit(2);
-          return;
-        }
-        const schedule = registered.value;
-
-        if (options.json === true) {
-          process.stdout.write(`${JSON.stringify(schedule, null, 2)}\n`);
-        } else {
-          process.stdout.write(
-            `✓ Scheduled "${schedule.workflowName}" (${schedule.id})\n` +
-              `  cron:   ${schedule.cronExpr}\n` +
-              `  next:   ${schedule.nextFireAt ?? '—'}\n` +
-              `  notify: ${schedule.notifyTarget}\n` +
-              `\nStart the daemon to run it: yantra daemon start\n`,
-          );
-        }
-        process.exit(0);
-      } finally {
-        handle.close();
+      if (!registered.isOk) {
+        context.output.stderr.write(`Error: ${registered.error.message}\n`);
+        return { exitCode: 2 as ExitCode };
       }
+      const schedule = registered.value;
+
+      if (options.json === true) {
+        context.output.json(schedule, { indent: 2 });
+      } else {
+        context.output.stdout.write(
+          `✓ Scheduled "${schedule.workflowName}" (${schedule.id})\n` +
+            `  cron:   ${schedule.cronExpr}\n` +
+            `  next:   ${schedule.nextFireAt ?? '—'}\n` +
+            `  notify: ${schedule.notifyTarget}\n` +
+            `\nStart the daemon to run it: yantra daemon start\n`,
+        );
+      }
+      return { exitCode: 0 as ExitCode };
     }),
   };
 }
@@ -161,26 +171,26 @@ export function scheduleHandlers() {
 export async function schedulesHandler(
   _args: HandlerArgs,
   options: SchedulesOptions,
-): Promise<void> {
-  const logger = makeStderrLogger(options.debug === true);
+  _command?: Command,
+  context: CommandContext = createTerminalContext(),
+): Promise<CommandResult> {
+  const logger = makeStderrLogger(options.debug === true, context.output.stderr);
 
   const handle = await openScheduleStore(logger);
   if (handle === null) {
     if (options.json === true) {
-      process.stdout.write('[]\n');
-      process.exit(0);
+      context.output.json([]);
+      return { exitCode: 0 as ExitCode };
     }
-    process.stderr.write('note: the local index is unavailable — no schedules to show.\n');
-    process.exit(0);
-    return;
+    context.output.stderr.write('note: the local index is unavailable — no schedules to show.\n');
+    return { exitCode: 0 as ExitCode };
   }
 
   try {
     const listed = await handle.store.list();
     if (!listed.isOk) {
-      process.stderr.write(`Error: ${listed.error.message}\n`);
-      process.exit(2);
-      return;
+      context.output.stderr.write(`Error: ${listed.error.message}\n`);
+      return { exitCode: 2 as ExitCode };
     }
 
     // Recompute the authoritative next fire for display (the stored
@@ -193,19 +203,19 @@ export async function schedulesHandler(
     }));
 
     if (options.json === true) {
-      process.stdout.write(`${JSON.stringify(rows, null, 2)}\n`);
-      process.exit(0);
-      return;
+      context.output.json(rows, { indent: 2 });
+      return { exitCode: 0 as ExitCode };
     }
 
     if (rows.length === 0) {
-      process.stdout.write('No schedules registered. Use `yantra schedule <workflow> --cron`.\n');
-      process.exit(0);
-      return;
+      context.output.stdout.write(
+        'No schedules registered. Use `yantra schedule <workflow> --cron`.\n',
+      );
+      return { exitCode: 0 as ExitCode };
     }
 
-    process.stdout.write(renderSchedulesTable(rows));
-    process.exit(0);
+    context.output.stdout.write(renderSchedulesTable(rows));
+    return { exitCode: 0 as ExitCode };
   } finally {
     handle.close();
   }
@@ -217,42 +227,46 @@ export function makeUnscheduleCommand(): Command {
 }
 
 /** Handlers for `unschedule`, bound by registry id; each is its former commander action, unchanged. */
-export function unscheduleHandlers() {
+export function unscheduleHandlers(context: CommandContext = createTerminalContext()) {
   return {
     unschedule: fromAction(async (id: string, options: UnscheduleOptions) => {
-      const logger = makeStderrLogger(options.debug === true);
+      const logger = makeStderrLogger(options.debug === true, context.output.stderr);
 
       const handle = await openScheduleStore(logger);
       if (handle === null) {
-        process.stderr.write('Error: the local index is unavailable — cannot remove a schedule.\n');
-        process.exit(3);
-        return;
+        context.output.stderr.write(
+          'Error: the local index is unavailable — cannot remove a schedule.\n',
+        );
+        return { exitCode: 3 as ExitCode };
       }
 
       try {
-        const removed = await handle.store.remove(id);
+        const removed = await withScheduleRegistryLock(() => handle.store.remove(id), {
+          ...resourceOptions(context, 'unschedule'),
+          logger,
+        }).catch((error: unknown) => {
+          throw error;
+        });
         if (!removed.isOk) {
-          process.stderr.write(`Error: ${removed.error.message}\n`);
-          process.exit(2);
-          return;
+          context.output.stderr.write(`Error: ${removed.error.message}\n`);
+          return { exitCode: 2 as ExitCode };
         }
         if (!removed.value) {
           const message = `No schedule found with id "${id}".`;
           if (options.json === true) {
-            process.stdout.write(`${JSON.stringify({ removed: false, id }, null, 2)}\n`);
+            context.output.json({ removed: false, id }, { indent: 2 });
           } else {
-            process.stderr.write(`${message}\n`);
+            context.output.stderr.write(`${message}\n`);
           }
-          process.exit(1);
-          return;
+          return { exitCode: 1 as ExitCode };
         }
 
         if (options.json === true) {
-          process.stdout.write(`${JSON.stringify({ removed: true, id }, null, 2)}\n`);
+          context.output.json({ removed: true, id }, { indent: 2 });
         } else {
-          process.stdout.write(`✓ Removed schedule ${id}\n`);
+          context.output.stdout.write(`✓ Removed schedule ${id}\n`);
         }
-        process.exit(0);
+        return { exitCode: 0 as ExitCode };
       } finally {
         handle.close();
       }

@@ -1,0 +1,6 @@
+{
+  "stdout": "Usage: yantra sites list [options]\n\nList ranked domains\n\nOptions:\n  --json      emit JSON (default: false)\n  --debug     verbose logging on stderr (default: false)\n  -h, --help  display help for command\n",
+  "stderr": "",
+  "exitCode": 0,
+  "tree": {}
+}

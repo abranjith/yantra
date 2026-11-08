@@ -5,6 +5,7 @@ import { basename, extname, resolve } from 'node:path';
 
 import {
   FileTemplateStore,
+  ResourceBusyError,
   TemplateCollisionError,
   normalizeTemplateSlug,
   normalizeTemplateTags,
@@ -18,12 +19,16 @@ import type { TemplateManifest, TemplateSlot } from '@yantra/protocol';
 import { CommanderError, type Command } from 'commander';
 import { stringify } from 'yaml';
 
+import { createTerminalContext } from '../adapters/terminal/terminal-adapter.js';
+import type { CommandContext } from '../context/command-context.js';
+import { resourceOptions } from '../context/resource-options.js';
 import { createRegisteredCommand } from '../registry/build-command-tree.js';
 import { fromAction } from '../registry/handler.js';
 import { CLI_JSON_SCHEMA_VERSION } from '../render/json.js';
 
 /** Injectable boundaries for template-command unit tests. */
 export interface TemplateCommandRuntime {
+  readonly json?: (value: unknown) => void;
   /** Saved-template store. */
   readonly store: FileTemplateStore;
   /** Current working directory for relative paths. */
@@ -44,8 +49,11 @@ export function makeTemplateCommand(runtime?: Partial<TemplateCommandRuntime>): 
 }
 
 /** Handlers for `template`, bound by registry id; each is its former commander action, unchanged. */
-export function templateHandlers(runtime?: Partial<TemplateCommandRuntime>) {
-  const resolved = withDefaults(runtime);
+export function templateHandlers(
+  runtime?: Partial<TemplateCommandRuntime>,
+  context: CommandContext = createTerminalContext(runtime),
+) {
+  const resolved = withDefaults(context, runtime);
   return {
     'template.new': fromAction(
       async (rawName: string, options: JsonOption & { tags?: string; force?: boolean }) => {
@@ -60,6 +68,7 @@ export function templateHandlers(runtime?: Partial<TemplateCommandRuntime>) {
             resolved.stdout.write(`${path}\n`);
           }
         } catch (error) {
+          if (error instanceof ResourceBusyError) throw error;
           fail(resolved, errorMessage(error), 'yantra.template.new');
         }
       },
@@ -87,6 +96,7 @@ export function templateHandlers(runtime?: Partial<TemplateCommandRuntime>) {
           resolved.stdout.write(`${renderSlotTable(slots)}\n`);
         }
       } catch (error) {
+        if (error instanceof ResourceBusyError) throw error;
         if (error instanceof CommanderError) throw error;
         fail(resolved, errorMessage(error), 'yantra.template.lint');
       }
@@ -106,6 +116,7 @@ export function templateHandlers(runtime?: Partial<TemplateCommandRuntime>) {
         try {
           text = await readFile(path, 'utf8');
         } catch (error) {
+          if (error instanceof ResourceBusyError) throw error;
           fail(
             resolved,
             `Could not read template path ${path}: ${errorMessage(error)}`,
@@ -153,6 +164,7 @@ export function templateHandlers(runtime?: Partial<TemplateCommandRuntime>) {
             resolved.stdout.write(`Saved ${name} to ${savedPath}\n`);
           }
         } catch (error) {
+          if (error instanceof ResourceBusyError) throw error;
           fail(resolved, errorMessage(error), 'yantra.template.save');
         }
       },
@@ -228,18 +240,25 @@ export function templateHandlers(runtime?: Partial<TemplateCommandRuntime>) {
           writeJson(resolved, { kind: 'template_remove', name, removed: true });
         else resolved.stdout.write(`Removed ${name}.\n`);
       } catch (error) {
+        if (error instanceof ResourceBusyError) throw error;
         fail(resolved, errorMessage(error), 'yantra.template.remove');
       }
     }),
   };
 }
 
-function withDefaults(runtime?: Partial<TemplateCommandRuntime>): TemplateCommandRuntime {
+function withDefaults(
+  context: CommandContext,
+  runtime?: Partial<TemplateCommandRuntime>,
+): TemplateCommandRuntime {
   return {
-    store: runtime?.store ?? new FileTemplateStore(templatesRoot()),
-    cwd: runtime?.cwd ?? process.cwd(),
-    stdout: runtime?.stdout ?? process.stdout,
-    stderr: runtime?.stderr ?? process.stderr,
+    json: (value) => context.output.json(value),
+    store:
+      runtime?.store ??
+      new FileTemplateStore(templatesRoot(), resourceOptions(context, 'template')),
+    cwd: context.cwd,
+    stdout: context.output.stdout,
+    stderr: context.output.stderr,
   };
 }
 
@@ -426,9 +445,9 @@ function writeParseFailure(
 }
 
 function writeJson(runtime: TemplateCommandRuntime, payload: Record<string, unknown>): void {
-  runtime.stdout.write(
-    `${JSON.stringify({ schemaVersion: CLI_JSON_SCHEMA_VERSION, ...payload })}\n`,
-  );
+  const value = { schemaVersion: CLI_JSON_SCHEMA_VERSION, ...payload };
+  if (runtime.json) runtime.json(value);
+  else runtime.stdout.write(`${JSON.stringify(value)}\n`);
 }
 
 function fail(runtime: TemplateCommandRuntime, message: string, code: string): never {

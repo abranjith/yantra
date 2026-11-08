@@ -1,0 +1,8 @@
+{
+  "stdout": "{\"schemaVersion\":\"0.2\",\"kind\":\"template_new\",\"name\":\"fixture\",\"path\":\"<home>\\\\data\\\\templates\\\\fixture.md\",\"tags\":[]}\n",
+  "stderr": "",
+  "exitCode": 0,
+  "tree": {
+    "data/templates/fixture.md": "---\nname: fixture\ndescription: Describe the purpose of this report.\nguidance: Write for a busy reader and stay grounded in the collected sources.\ntags: []\n---\n# {{ title | text }}\n\n## Summary\n<!-- guidance: Lead with the main result and explain why it matters. -->\n{{ summary | markdown, max_words=200 }}\n\n## Highlights\n{{ highlights | list, min=1, max=5 }}\n\n## Metrics\n{{ metrics | table(Metric, Value) }}\n\n## Sources\n{{ sources }}\n"
+  }
+}

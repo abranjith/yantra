@@ -11,8 +11,6 @@
 
 import type { Brief, TaskEvent, TemplatedReport } from '@yantra/protocol';
 
-import type { GlobalFlags } from '../global-flags.js';
-
 /**
  * Terminal progressive-disclosure level. Declared here (not in
  * `brief-terminal.ts`) so the dependency-free `json.ts` path can reference it
@@ -45,16 +43,6 @@ export interface ConnectorRenderOpts {
   readonly width?: number;
   /** Suppress the post-render `yantra open` hint when the command already opened it. */
   readonly suppressOpenHint?: boolean;
-}
-
-export function renderOptsFromGlobals(flags: GlobalFlags): ConnectorRenderOpts {
-  return {
-    json: flags.json,
-    debug: flags.debug,
-    noColor: flags.noColor,
-    stream: process.stdout,
-    errStream: process.stderr,
-  };
 }
 
 /** A row in `yantra list` output. */

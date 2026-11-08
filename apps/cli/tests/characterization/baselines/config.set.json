@@ -1,0 +1,6 @@
+{
+  "stdout": "Usage: yantra config set [options] <key> <value>\n\nOptions:\n  --json      emit JSON (default: false)\n  -h, --help  display help for command\n",
+  "stderr": "",
+  "exitCode": 0,
+  "tree": {}
+}

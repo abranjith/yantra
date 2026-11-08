@@ -1,9 +1,12 @@
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Writable } from 'node:stream';
 
 import type { AgenticTaskOutcome, AgenticTaskRequest, ActiveReportTemplate } from '@yantra/agent';
-import { parseTemplate } from '@yantra/core';
+import { parseTemplate, resetPathCache } from '@yantra/core';
 import { Command } from 'commander';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveAgentInvocation } from '../../src/agent-options.js';
 import { registerAskCommand } from '../../src/commands/ask.js';
@@ -24,12 +27,25 @@ function capture() {
   };
 }
 
-function resolvedTemplate(): ActiveReportTemplate {
+let home: string;
+beforeEach(async () => {
+  home = await mkdtemp(join(tmpdir(), 'yantra-template-agentic-'));
+  vi.stubEnv('YANTRA_HOME', home);
+  resetPathCache();
+});
+afterEach(async () => {
+  vi.unstubAllEnvs();
+  resetPathCache();
+  await rm(home, { recursive: true, force: true });
+});
+async function resolvedTemplate(): Promise<ActiveReportTemplate> {
   const parsed = parseTemplate(
     '# {{ title | text }}\n\n## Summary\n{{ summary }}\n\n{{ sources }}',
   );
   if (!parsed.isOk) throw new Error('fixture template did not parse');
-  return { manifest: parsed.value, source: 'saved', path: null, name: 'fixture' };
+  const path = join(home, 'fixture.md');
+  await writeFile(path, '# {{ title | text }}\n\n## Summary\n{{ summary }}\n\n{{ sources }}');
+  return { manifest: parsed.value, source: 'saved', path, name: 'fixture' };
 }
 
 const failed: AgenticTaskOutcome = {
@@ -96,7 +112,7 @@ describe('@no-llm agentic template command wiring', () => {
         stdout: stdout.stream,
         stderr: stderr.stream,
         isTty: false,
-        resolveTemplate: () => Promise.resolve(resolvedTemplate()),
+        resolveTemplate: () => resolvedTemplate(),
         runTask,
         resolveAgent: (
           resolvedCommand: string,
@@ -121,6 +137,9 @@ describe('@no-llm agentic template command wiring', () => {
         program.parseAsync([command, 'goal', '--template', 'weekly'], { from: 'user' }),
       ).rejects.toMatchObject({ exitCode: 2 });
       expect(request.current?.template?.name).toBe('fixture');
+      expect(request.current?.receipt?.content).toEqual(
+        expect.arrayContaining([expect.objectContaining({ path: join(home, 'fixture.md') })]),
+      );
     },
   );
 });

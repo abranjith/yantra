@@ -1,4 +1,4 @@
-import { access, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -233,7 +233,7 @@ describe('@no-llm report-template artifacts', () => {
     await writeFile(target, 'occupied', 'utf8');
     const result = await writeReportArtifacts(target, document('# Report'));
     expect(result.isOk).toBe(false);
-    await expect(access(`${target}.tmp`)).rejects.toThrow();
+    expect(await readFile(target, 'utf8')).toBe('occupied');
     expect((await readdir(root)).some((name) => name.endsWith('.tmp'))).toBe(false);
   });
 });

@@ -260,21 +260,32 @@ export class LocalBrowserSession implements BrowserSession {
 
   private async runClose(): Promise<void> {
     this.closed = true;
+    let stopped = false;
     try {
       await this.launched.shutdown();
+      stopped = true;
     } finally {
       this.logger.info({ sessionId: this.id }, `browser session ${this.id} closed`);
-      await this.cleanupOwnedProfile('close');
+      await this.cleanupOwnedProfile('close', stopped);
     }
   }
 
-  /** Removes the ephemeral profile this session created, and nothing else. */
-  private async cleanupOwnedProfile(phase: 'close' | 'crash'): Promise<void> {
-    if (this.profile.kind !== 'ephemeral') return;
-    await this.profileStore
-      .cleanupEphemeral(this.profile.absolutePath)
-      .catch((e: unknown) =>
-        this.logger.warn({ err: e }, `Failed to cleanup ephemeral profile after ${phase}`),
-      );
+  /** Release persistent ownership after exit; remove only our ephemeral directory. */
+  private async cleanupOwnedProfile(phase: 'close' | 'crash', stopped = true): Promise<void> {
+    if (this.profile.kind === 'ephemeral')
+      await this.profileStore
+        .cleanupEphemeral(this.profile.absolutePath)
+        .catch((e: unknown) =>
+          this.logger.warn({ err: e }, `Failed to cleanup ephemeral profile after ${phase}`),
+        );
+    if (stopped)
+      await this.profile.lease
+        ?.release()
+        .catch((error: unknown) =>
+          this.logger.warn(
+            { error_class: error instanceof Error ? error.name : 'unknown' },
+            `Failed to release profile lease after ${phase}`,
+          ),
+        );
   }
 }

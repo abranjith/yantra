@@ -203,6 +203,7 @@ Deterministic runs create `<yantra-data-dir>/runs/<run-id>/` with:
 
 ```text
 manifest.json
+execution-receipt.json
 events.jsonl
 research-state.json
 fetched/*.html.txt
@@ -216,6 +217,22 @@ brief.html
 `research-state.json` is atomically replaced after each hop, so it contains the latest checkpoint: issued queries, fetch/keep counts, source identities and hashes, subtopic coverage, remaining budgets, and the final termination reason. Fetched HTML is retained locally for post-mortem inspection. Brief artifact writes are best-effort; a run can still succeed and render stdout if those three writes fail.
 
 Agentic runs use the shared run layout, including `manifest.json`, `events.jsonl`, provider session data under `agent/`, `tool-calls.jsonl`, `usage.json`, `run-health.json`, `contract.json` when a task contract was declared, captures for oversized extracted text, `report.md`, and the published `brief.*` or `document.*` artifacts. See [Run artifacts](diagnostics-and-audit.md#run-artifacts) and [Run Health](diagnostics-and-audit.md#run-health).
+
+### Execution receipt
+
+Both research paths write `execution-receipt.json` as soon as their run directory exists, before research work starts. Terminal and worker invocations use the same receipt format. This additive artifact is written atomically once and never overwritten; it does not change the Brief, report, or JSON output format.
+
+The receipt records:
+
+- the run ID, command path, working directory (`cwd`), Yantra version, and write time;
+- whether the invocation came from a terminal or worker (`invoked_by`), plus the worker's `invocation_id` when supplied;
+- effective non-secret settings, sorted by key, with their provenance: an explicit flag, an allowed environment variable's name, a preference or configuration key, or a default;
+- the selected template's absolute path and SHA-256 hash of its file bytes, when a template is used; and
+- the browser selection and its source at the start of the run. This describes the requested selection; browser launch diagnostics record the installation actually used.
+
+Settings include resolved research limits, output choices, model choices for agentic mode, and the browsing preference. Secret values and the full environment are excluded, as are secret-input options and known unused options. An `--auth-secret` reference may appear, but its resolved credential does not. Environment provenance names only variables allowed by the command's registered precedence rules.
+
+Agentic runs also append a `settings_receipt_written` record to `runtime.jsonl` with the receipt's `path` and `setting_count`; deterministic runs log the same information through their logger. The receipt remains available when later research work fails. A failure before the run directory is created produces no receipt.
 
 Invalid CLI choices and shared agent-option values exit as validation failures. Deterministic per-source failures and budget stops usually return exit 0 with notices. An unrecoverable loop/synthesis error, failed agent publication, provider-session failure, or user handoff is currently reported by the `research` command as an execution failure. In agentic mode that failure message leads with its outcome word: `Failed: <CODE>: <message>`, `Handoff: <blocker>: <next action>`, or `Aborted: <CODE>: <message>`. A published agentic research run is `fulfilled` whatever its contract gaps; its terminal and `--format json` output are unchanged. If an agent finishes without publishing but has both a draft and ledger evidence, the runtime first attempts to assemble and validate a fallback Brief using the same evidence resolution, condition reporting, anchoring verdict, and source split. Valid inline evidence IDs survive; unknown or old numeric citation markers are removed. Missing table or field requirements become gap notices, and the artifact records `metadata.deterministic_fallback_used: true`. Without enough material, the runtime preserves the final unvalidated response as diagnostic `result.md` and the command still fails.
 

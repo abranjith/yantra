@@ -3,11 +3,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { runAgentDiagnostics } from '@yantra/agent';
-import { loadConfig, loadProfile, resetPathCache } from '@yantra/core';
+import { acquireResourceLease, loadConfig, loadProfile, resetPathCache } from '@yantra/core';
 import { CommanderError } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createTerminalContext } from '../../src/adapters/terminal/terminal-adapter.js';
 import { makeModelCommand } from '../../src/commands/model.js';
+import { executeCommand } from '../../src/execute.js';
 import { loadEffectivePreferences } from '../../src/preferences.js';
 
 describe('@no-llm model command', () => {
@@ -111,4 +113,35 @@ describe('@no-llm model command', () => {
       delete process.env.MODEL_TEST_API_KEY;
     }
   });
+
+  it('preserves both model additions when commands write concurrently', async () => {
+    await Promise.all([
+      run(['add', 'first', '--provider', 'anthropic']),
+      run(['add', 'second', '--provider', 'anthropic']),
+    ]);
+    const loaded = await loadConfig();
+    expect(loaded.isOk && loaded.value.models.map((model) => model.id).sort()).toEqual([
+      'first',
+      'second',
+    ]);
+  });
+
+  it('returns busy exit 3 when the profile is locked during model default', async () => {
+    await run(['add', 'fixture-model', '--provider', 'anthropic']);
+    const lease = await acquireResourceLease({ kind: 'profile' });
+    stdout = [];
+    try {
+      await expect(
+        executeCommand(['model', 'default', 'fixture-model', '--json'], createTerminalContext()),
+      ).resolves.toMatchObject({ exitCode: 3 });
+      expect(JSON.parse(stdout.join(''))).toMatchObject({
+        kind: 'model.default',
+        status: 'busy',
+        resource: { kind: 'profile' },
+        holder: { pid: process.pid },
+      });
+    } finally {
+      await lease.release();
+    }
+  }, 10_000);
 });

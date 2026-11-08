@@ -1,0 +1,6 @@
+{
+  "stdout": "Usage: yantra browser use [options] <source>\n\nSelect which browser Yantra launches and persist it. Validates the path; never\nlaunches a browser or checks for updates\n\nArguments:\n  source                        auto, managed, or system\n\nOptions:\n  --path <absolute-executable>  custom external executable (only with `system`)\n  --json                        emit the committed selection as JSON (default:\n                                false)\n  -h, --help                    display help for command\n",
+  "stderr": "",
+  "exitCode": 0,
+  "tree": {}
+}

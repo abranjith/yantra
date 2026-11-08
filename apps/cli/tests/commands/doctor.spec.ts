@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Writable } from 'node:stream';
@@ -158,6 +158,11 @@ describe('doctor agent checks', () => {
     });
 
     expect(captured?.model).toEqual({ provider: 'ollama', id: 'llama3.1:8b' });
+    const receipt = JSON.parse(
+      await readFile(join(captured!.runDir, 'execution-receipt.json'), 'utf8'),
+    ) as { command: string[]; settings: { key: string; value: unknown }[] };
+    expect(receipt.command).toEqual(['doctor']);
+    expect(receipt.settings.find((setting) => setting.key === 'model')?.value).toBe('llama3.1:8b');
     expect(stdout.read()).toContain('Agent smoke: ollama/llama3.1:8b');
     expect(stderr.read()).toBe('');
   });

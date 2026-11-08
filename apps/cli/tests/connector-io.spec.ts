@@ -5,7 +5,9 @@ import { capabilityGapLine, type AgentProgressEvent, type AgenticTaskOutcome } f
 import type { ConfirmationRequest, TaskEvent } from '@yantra/protocol';
 import { describe, expect, it, vi } from 'vitest';
 
-import { CLIConnectorIO, agentFailureLine, buildRenderOpts } from '../src/connector-io.js';
+import { buildRenderOpts } from '../src/adapters/terminal/connector.js';
+import { CLIConnectorIO } from '../src/adapters/terminal/connector.js';
+import { agentFailureLine } from '../src/connector-io.js';
 import { JSONRenderer } from '../src/render/json.js';
 import { TerminalRenderer } from '../src/render/terminal.js';
 import type {

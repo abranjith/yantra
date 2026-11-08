@@ -15,6 +15,7 @@ import { parse as parseYaml } from 'yaml';
 
 import { loadConfig } from '../config/load.js';
 import { mutateConfigDocument } from '../config/write.js';
+import type { ResourceLockOptions } from '../locks/resource-lock.js';
 
 import type { BrowserSelection, BrowserSelectionReader } from './installation-types.js';
 import { configPath } from './paths.js';
@@ -95,10 +96,18 @@ async function hasBrowserBlock(path: string): Promise<boolean> {
  *
  * @throws {ConfigWriteError} when the resulting document is not schema-valid.
  */
-export function writeBrowserSelection(selection: BrowserSelection, path?: string): Promise<void> {
+export function writeBrowserSelection(
+  selection: BrowserSelection,
+  path?: string,
+  options: ResourceLockOptions = {},
+): Promise<void> {
   const executablePath = selection.source === 'system' ? selection.executablePath : null;
-  return mutateConfigDocument((document) => {
-    document.setIn([BROWSER_BLOCK, 'source'], selection.source);
-    document.setIn([BROWSER_BLOCK, 'executable_path'], executablePath);
-  }, path);
+  return mutateConfigDocument(
+    (document) => {
+      document.setIn([BROWSER_BLOCK, 'source'], selection.source);
+      document.setIn([BROWSER_BLOCK, 'executable_path'], executablePath);
+    },
+    path,
+    options,
+  );
 }

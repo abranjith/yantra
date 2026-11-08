@@ -26,7 +26,7 @@
  */
 
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, rename, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { Brief, BriefNotice, FailureClass, TaskEvent } from '@yantra/protocol';
@@ -43,12 +43,14 @@ import { SearchProviderError } from '../extraction/search/errors.js';
 import type { SearchProvider } from '../extraction/search/registry.js';
 import { processSource } from '../extraction/source-processor.js';
 import type { SearchResult } from '../extraction/types.js';
+import { writeFileAtomic } from '../fs/atomic-write.js';
 import {
   domainFromUrl,
   rankReasonForFailureStage,
   safeRecordRankSignal,
 } from '../ranking/recording.js';
 import type { RankSignalSink } from '../ranking/types.js';
+import { writeExecutionReceipt } from '../receipt/execution-receipt.js';
 import { DeterministicSynthesizer } from '../synthesis/deterministic.js';
 import type { SourceFailure, Synthesizer } from '../synthesis/types.js';
 
@@ -181,6 +183,17 @@ export class ResearchLoop {
     emit({ kind: 'task_started', task_id: taskId, at: this.clock().toISOString() });
 
     try {
+      if (options.receipt) {
+        const written = await writeExecutionReceipt(runDir, options.receipt);
+        this.deps.logger.info(
+          {
+            event: 'settings_receipt_written',
+            path: written.path,
+            setting_count: written.receipt.settings.length,
+          },
+          'settings_receipt_written',
+        );
+      }
       while (true) {
         const checkpoint = budget.checkpoint();
         if (!checkpoint.isOk) {
@@ -257,7 +270,6 @@ export class ResearchLoop {
 
         await this.writeResearchState(
           runDir,
-          hopIndex,
           this.snapshotState(options.topic, hops, pool, coverage, budget, null),
         );
 
@@ -304,7 +316,6 @@ export class ResearchLoop {
 
       await this.writeResearchState(
         runDir,
-        hops.length,
         this.snapshotState(options.topic, hops, pool, coverage, budget, terminationReason),
       );
       emit({
@@ -585,19 +596,9 @@ export class ResearchLoop {
     };
   }
 
-  private async writeResearchState(
-    runDir: string,
-    hopIndex: number,
-    state: ResearchState,
-  ): Promise<void> {
+  private async writeResearchState(runDir: string, state: ResearchState): Promise<void> {
     const finalPath = join(runDir, 'research-state.json');
-    const tmpPath = `${finalPath}.${hopIndex}.tmp`;
-    await writeFile(tmpPath, JSON.stringify(state, null, 2), 'utf8');
-    await rename(tmpPath, finalPath).catch(async () => {
-      // Rename can race across hops on some filesystems; a direct write is an
-      // acceptable fallback for a post-mortem artifact.
-      await writeFile(finalPath, JSON.stringify(state, null, 2), 'utf8').catch(() => undefined);
-    });
+    await writeFileAtomic(finalPath, JSON.stringify(state, null, 2));
   }
 
   private async writeFetchedHtml(runDir: string, url: string, html: string): Promise<void> {

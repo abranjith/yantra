@@ -4,8 +4,8 @@ import { validateBrief } from '@yantra/protocol';
 import { canonicalBrief } from '@yantra/test-helpers';
 import { describe, expect, it } from 'vitest';
 
-import { CLIConnectorIO } from '../../src/connector-io.js';
-import { openerFor } from '../../src/open-artifact.js';
+import { CLIConnectorIO } from '../../src/adapters/terminal/connector.js';
+import { openerFor } from '../../src/adapters/terminal/open-artifact.js';
 import { JSONRenderer } from '../../src/render/json.js';
 import { TerminalRenderer } from '../../src/render/terminal.js';
 import type { BriefArtifactPaths, ConnectorRenderOpts } from '../../src/render/types.js';

@@ -14,6 +14,18 @@ vi.mock('node:fs/promises', () => ({
   readdir: vi.fn(),
   rm: vi.fn(),
   stat: vi.fn(),
+  realpath: vi.fn(async (path: unknown) => String(path)),
+}));
+vi.mock('../../src/locks/resource-lock.js', () => ({
+  acquireResourceLease: vi.fn(async () => ({
+    owner: {
+      pid: 1234,
+      command: 'fixture',
+      started_at: '2026-11-06T12:00:00.000Z',
+      surface: 'terminal',
+    },
+    release: vi.fn(async () => undefined),
+  })),
 }));
 vi.mock('node:os', () => ({
   homedir: vi.fn(() => '/home/testuser'),
@@ -244,6 +256,17 @@ describe('@no-llm LocalProfileStore', () => {
   });
 
   describe('listWorkflowProfiles', () => {
+    it('ignores lock directories, owner sidecars and staging leftovers', async () => {
+      mockReaddir.mockResolvedValue([
+        'visible',
+        'visible.lock',
+        'visible.lock.owner.json',
+        'abandoned.tmp',
+      ] as unknown as Awaited<ReturnType<typeof readdir>>);
+      mockStat.mockResolvedValue(makeDirStat(new Date('2024-03-01')));
+      const result = await new LocalProfileStore().listWorkflowProfiles();
+      expect(result.map((entry) => entry.workflowName)).toEqual(['visible']);
+    });
     it('returns profiles sorted by lastModified desc', async () => {
       const profiles = ['wf-a', 'wf-b', 'wf-c'];
       mockReaddir.mockResolvedValue(profiles as unknown as Awaited<ReturnType<typeof readdir>>);

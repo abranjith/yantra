@@ -1,19 +1,28 @@
 import { COMMAND_REGISTRY, PROTOCOL_VERSION } from '@yantra/protocol';
 import { Command } from 'commander';
 
+import type { TerminalOptions } from './adapters/terminal/terminal-adapter.js';
 import type { AskRuntime } from './commands/ask.js';
+import type { BrowserCommandRuntime } from './commands/browser.js';
+import type { DaemonRuntime } from './commands/daemon.js';
 import type { DoRuntime } from './commands/do.js';
+import type { DoctorRuntime } from './commands/doctor.js';
 import type { ResearchRuntime } from './commands/research.js';
 import type { SitesRuntime } from './commands/sites.js';
 import type { TemplateCommandRuntime } from './commands/template.js';
+import type { ReplayRuntimeDependencies } from './context/replay-runtime.js';
 import { buildCommandTree, type HandlerTable } from './registry/build-command-tree.js';
 import { buildHandlers } from './registry/handlers.js';
 
 /** Injectable runtimes for the commands that accept them (hermetic tests). */
 export interface CliRunOptions {
-  readonly askRuntime?: Partial<AskRuntime>;
-  readonly researchRuntime?: Partial<ResearchRuntime>;
-  readonly doRuntime?: Partial<DoRuntime>;
+  readonly browserRuntime?: BrowserCommandRuntime;
+  readonly doctorRuntime?: Partial<DoctorRuntime> & TerminalOptions;
+  readonly daemonRuntime?: DaemonRuntime;
+  readonly replayRuntime?: ReplayRuntimeDependencies;
+  readonly askRuntime?: Partial<AskRuntime> & TerminalOptions;
+  readonly researchRuntime?: Partial<ResearchRuntime> & TerminalOptions;
+  readonly doRuntime?: Partial<DoRuntime> & TerminalOptions;
   readonly sitesRuntime?: Partial<SitesRuntime>;
   readonly templateRuntime?: Partial<TemplateCommandRuntime>;
 }

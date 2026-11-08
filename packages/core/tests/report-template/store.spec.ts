@@ -1,4 +1,4 @@
-import { mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -50,6 +50,27 @@ describe('@no-llm FileTemplateStore', () => {
 
   it('returns an empty list for a missing directory', async () => {
     await expect(store.list()).resolves.toEqual([]);
+  });
+
+  it('admits exactly one simultaneous save of the same name', async () => {
+    const outcomes = await Promise.allSettled([
+      store.save('contended', template('contended', '{{ first }}')),
+      store.save('contended', template('contended', '{{ second }}')),
+    ]);
+    expect(outcomes.filter((outcome) => outcome.status === 'fulfilled')).toHaveLength(1);
+    const rejected = outcomes.find((outcome) => outcome.status === 'rejected');
+    expect(rejected?.status === 'rejected' && rejected.reason).toBeInstanceOf(
+      TemplateCollisionError,
+    );
+  });
+
+  it('ignores lock directories, owner sidecars and abandoned unique staging files', async () => {
+    await store.save('visible', template('visible'));
+    const library = join(root, 'library');
+    await mkdir(join(library, 'hidden.md.lock'));
+    await writeFile(join(library, 'hidden.md.lock.owner.json'), '{}');
+    await writeFile(join(library, 'hidden.md.1234.abcd1234.tmp'), '{{ incomplete');
+    expect((await store.list()).map((entry) => entry.name)).toEqual(['visible']);
   });
 
   it('skips non-Markdown, invalid names, and unparsable templates', async () => {

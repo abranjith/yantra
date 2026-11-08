@@ -2338,8 +2338,9 @@ relative link it allows beside its `http(s)`-only rule. The wording is shared by
 
 ### `apps/cli`
 
-`@yantra/cli` is the executable composition root. `src/bin.ts` delegates to the Commander program
-in `src/index.ts`, which registers the public command surface. Commands parse and validate input,
+`@yantra/cli` is the executable composition root. `src/bin.ts` delegates to `runTerminal` in
+`src/adapters/terminal/terminal-adapter.ts`; the package's `src/index.ts` keeps `run()` as a
+compatibility wrapper around that same entry point. Commands parse and validate input,
 merge flags/environment/profile defaults, choose deterministic or agentic execution before
 constructing a provider, build runtime dependencies, render terminal or machine output, record
 best-effort history, and map outcomes to exit codes. The CLI does not implement a second agent
@@ -2407,8 +2408,8 @@ The principal execution surfaces are:
 #### Command registry and program construction
 
 `src/program.ts` owns `buildProgram(options)`, which constructs the complete commander tree without
-parsing anything. `run()` in `src/index.ts` keeps only the no-argument banner, the parse, and the
-CommanderError-to-exit-code mapping. The root applies `showHelpAfterError()` before any command is
+parsing anything. `executeCommand(argv, context)` in `src/execute.ts` owns the no-argument banner,
+parsing, output routing, and error-to-result mapping. The root applies `showHelpAfterError()` before any command is
 registered, because the setting is inherited only by commands created with `program.command()`
 (today `ask`, `research` and `do`), never by commands attached with `addCommand`. That difference
 is user-visible, which is why the registry records each command's `registration` style.
@@ -2457,8 +2458,9 @@ with the flags and description, `.default()` only when a commander default is de
 bound by id to the handler table from `buildHandlers()` (`src/registry/handlers.ts`), whose
 `satisfies Record<LeafCommandId, …>` makes an unbound leaf a typecheck error; a generated leaf
 without a function binding throws `CommandRegistryError` (`missing-handler`) at startup. A handler
-is commander-shaped, `(args, options, command)`, so FEAT-072 can swap the binding for terminal and
-worker adapters without touching the generator. `buildProgram(options, handlers)` accepts a
+is commander-shaped with an injected invocation context, `(args, options, command, context)`;
+factories can also close over that context. Terminal and worker adapters use the same bindings
+without changing the generator. `buildProgram(options, handlers)` accepts a
 substitute table, which the parse-parity tests use for recording stubs.
 
 The run-class commands (`ask`, `research`, `do`, `run`, `resume`) and `doctor` reference the
@@ -2528,6 +2530,215 @@ put the action body in an exported handler in the command's module, and bind it 
 `buildHandlers`. A factory that other code still composes (for example `makeListCommand` or
 `makeBrowserCommand`) is a one-line wrapper around `createRegisteredCommand`, so it is generated as
 well.
+
+#### Command context, terminal adapter, and worker adapter
+
+`src/context/command-context.ts` defines the invocation boundary shared by all command handlers.
+`CommandContext` carries the surface, working directory, invocation ID, abort signal, output sinks
+and JSON methods, input and initialization-answer collectors, settings resolver, logger, connector
+factory, confirmation/install-offer gateways, process-control capability, and external-artifact opener.
+`CommandResult` carries an exit code, including cancellation code 130; `CommandFailure` carries a
+safe diagnostic, code, optional remediation, and whether the handler already rendered it.
+
+```mermaid
+flowchart LR
+  Bin[bin.ts or index.ts run] --> Terminal[runTerminal]
+  Invocation[CommandInvocation and WorkerChannel] --> Worker[runWorkerInvocation]
+  Terminal --> Context[createTerminalContext]
+  Terminal --> Execute[executeCommand]
+  Context --> Execute
+  Worker --> Execute
+  Execute --> Tree[Generated commander tree]
+  Tree --> Handlers[All command handlers with context]
+  Handlers --> Services[Core or agent services]
+  Handlers --> IO[Context output, input, process control and gateways]
+  Services --> Receipts[Immutable execution receipts]
+  Services --> Locks[Core resource locks and atomic writes]
+  Worker --> Completion[Validated result or error completion]
+```
+
+`runTerminal` owns the process signal listeners: SIGINT and SIGTERM abort its controller when the
+selected handler declares `honorsAbort`; other commands retain conventional signal exits (130 and
+143 respectively). Listeners are removed in `finally`. `createTerminalContext` supplies process defaults while
+allowing streams, environment, TTY state, working directory, and signal to be injected. Its
+interactive predicate is stdin TTY and non-JSON output. It creates terminal prompts, sink-backed
+logging and confirmation/install-offer gateways, exposes output width and color capability, and
+opens artifacts through the desktop opener. `bin.ts` applies the returned exit code to the process.
+Direct terminal I/O, TTY inspection, prompting, process-signal wiring, and process defaults are
+confined to `src/adapters/terminal/` and `bin.ts`; handlers use the injected capabilities. Daemon
+spawn, inspection, and signalling go through core's `CommandProcessControl` port supplied by the adapters.
+
+`executeCommand` binds each registry leaf to its invocation's settings resolver before calling
+the handler. It builds the same generated tree through `buildProgram`, recursively routes
+commander's `writeOut` and `writeErr` to the supplied sinks, enables `exitOverride()`, and returns
+the handler's result. `ResourceBusyError` becomes exit 3 with a `busy` JSON envelope or a human
+diagnostic; `CommandFailure` preserves its code and avoids duplicate diagnostics; commander help
+is success and other commander failures retain their exit code. Unexpected errors produce a
+diagnostic and exit 2 with `command_failed` failure metadata. `CommandFailure` metadata also
+travels in the returned result for the worker adapter to encode. The same boundary covers read,
+mutate, run, and adapter-class commands.
+
+`SettingsResolver` snapshots and freezes the supplied environment, memoizes effective preferences,
+and binds to the parsed registry entry and commander command. `option(name)` walks that option's
+declared precedence, recording the selected value and source; `record` supports composite
+resolutions, `effective` records already-resolved values, and `recorded()` returns the ledger sorted
+by key. `draftReceipt` combines that ledger with the invocation metadata, input identities, and
+initial browser selection. Existing command-specific preference and agent resolvers remain in use
+with the context's environment snapshot and memoized preferences.
+
+Command runtime seams retain domain dependencies such as pipelines, loops, agent/model resolution,
+history, and template resolution. Output, environment, interactivity, connector construction,
+install offers, input, and artifact opening come from the context. Relative input and template
+paths resolve against its explicit working directory, including for workers launched elsewhere.
+Deterministic Brief JSON and other structured results use `output.json`.
+
+`CommandConnectorIO` in `src/connector-io.ts` holds shared event and result rendering. The terminal
+`CLIConnectorIO` subclass lives in `src/adapters/terminal/connector.ts`, where its readline consent
+prompt uses stdin and the configured diagnostic stream. This keeps the terminal confirmation
+mechanism at the adapter boundary.
+
+`runWorkerInvocation` in `src/adapters/worker/worker-adapter.ts`
+validates the requested path and argv through `parseInvocation`, then calls the same
+`executeCommand` and generated tree as the terminal. The worker context takes its working
+directory and invocation ID from `CommandInvocation` and snapshots the supplied environment;
+it does not change the process working directory. Registry classes `exemption` and
+`in-process-secure`, including `config data-dir` and `secret set`, are refused before handler
+execution with exit 1 and `not_worker_executable`. `config edit` separately refuses a worker with
+`config.editor.unavailable` and directs the caller to the app's raw-YAML editor; a terminal editor
+is invoked only through `context.input.editor`.
+
+`WorkerChannel` is a transport-independent port for attendance, diagnostics, events, input,
+confirmation/install requests, cancellation, and completion. The worker's interactive predicate
+uses channel attendance, including for JSON commands. Attended prompts are forwarded through
+the channel with an abort signal; unattended input returns `null`, and unattended confirmation
+and install-offer gateways are absent. The shared connector denies unattended confirmations.
+Stdin collection returns `null`, editor requests return `false`, and external opening emits an
+`open: <path>` diagnostic. `InMemoryChannel` scripts attendance and answers, captures requests,
+diagnostics, events and completions, and exposes an idempotent cancellation trigger for tests
+and embeddings. FEAT-064 still owns the socket implementation and detached worker entry point.
+
+Worker stderr goes to channel diagnostics, `output.jsonLine` goes to channel events, and
+`output.json` captures the final structured envelope. Human stdout is retained separately with
+a 64 KiB UTF-8 byte cap, including an `[output truncated]` marker when needed. Completion is
+validated with protocol's `CommandResultMessageSchema` and sent through `channel.complete`:
+`result` carries `exit_code`, nullable `envelope`, and nullable `text`; `error` carries a nonzero
+`exit_code`, `code`, `message`, and nullable `remediation`. Parse failures use exit 1; unexpected
+execution failures use exit 2 and `command_failed`. Both variants preserve cancellation exit
+130 alongside the ordinary 0–4 exit codes, with 0 accepted only for `result`. When a failing handler
+already emitted an envelope or human stdout, completion preserves that output as a `result` with its
+nonzero exit code; otherwise failure metadata becomes an `error` completion.
+
+Channel cancellation aborts the invocation signal only when the bound handler declares
+`honorsAbort: true`; otherwise the adapter emits `cancel_unsupported` without aborting the
+handler. The cancellation listener and output streams are disposed on completion. Agentic tasks
+and managed-browser install/update operations use the context signal; `doctor` declares abort support
+when `--agent-smoke` selects its live-provider path. Read-only operations do not gain cancellation
+merely by sharing the context.
+
+The handler-purity block in `eslint.config.js` applies to `apps/cli/src/**/*.ts`, except `bin.ts`,
+the terminal adapter directory. It combines the existing
+site-token restrictions with selectors rejecting process capabilities, `isTTY`, direct
+`CLIConnectorIO` construction, console access, and `prompts` imports. The migration allowlist has
+been removed. A negative fixture under the terminal adapter directory explicitly re-enables these
+rules to verify that each forbidden capability is rejected.
+
+#### Shared initialization service
+
+`packages/core/src/setup/init-service.ts` owns `runInit` and portable answer collection. The CLI
+handler supplies an `InitAnswerCollector` from `context.initAnswers`, then renders the typed result.
+The service handles existing installations, provider validation, default answers, reset backups,
+configuration creation, and profile preferences and context grants. Configuration and profile
+writes acquire their own resource locks; initialization is not a transaction across both files.
+Credential answers are references or are stored through the keychain boundary. The optional search
+key step returns a manual-storage instruction when the keychain is unavailable.
+
+Terminal collectors wrap terminal prompts. Worker collectors use the same core questionnaires
+with channel-backed select, text, password, and confirmation input. Non-interactive and JSON init
+select defaults; `--yes` also skips questions. The service has no terminal or provider SDK dependency.
+
+#### Execution receipts and shared-resource locks
+
+Task commands (`ask`, `research`, `do`), workflow replay (`run`), scheduled fires, and live
+`doctor --agent-smoke` supply an execution receipt once a run directory exists. Agentic execution
+writes it before location pre-flight and provider startup; deterministic pipelines and replay write
+it before their execution work. Resume and daemon pickup of a granted parked run publish a separate
+`execution-receipt.resume-<k>.json`, preserving the start receipt. Core's receipt argument remains
+optional for direct callers and older run readers.
+
+The versioned protocol record holds effective non-secret settings with provenance, the command and
+invocation surface/ID, explicit working directory, Yantra version, initial browser selection, and
+exact-byte SHA-256 identities for workflow, locator, template, or params-file inputs when present.
+`SettingsResolver.draftReceipt` excludes secret-input options, known dead options, and environment
+sources outside the registry's precedence chains; it never records the full environment or credentials.
+Daemon receipts mark scheduled parameters and zero-LLM execution with schedule provenance.
+
+Core's `writeExecutionReceipt` validates the record, sorts settings, flushes staged bytes, and
+publishes exclusively with owner-only file permissions where supported. A duplicate start receipt
+fails; concurrent resumes compete for the next free positive sequence. `writeFileAtomic` creates a
+unique sibling `<file>.<pid>.<random>.tmp` with exclusive open, then renames a mutable file or links
+an immutable receipt into place and removes the staging file. Atomic publication prevents partial
+files; resource locks protect complete read-modify-write operations from lost updates.
+
+`packages/core/src/locks/resource-lock.ts` supplies `withResourceLock`, `acquireResourceLease`, and
+`probeResourceLock` for configuration, profile, named workflow/template files, the schedule registry,
+and persistent browser profiles. Validated resource names stay inside their stores; persistent
+profile paths are canonicalized so directory aliases share a lease. Renewable `proper-lockfile`
+locks live beside each target as `<target>.lock`. Ordinary file mutations retry for about five
+seconds; persistent browser profiles refuse immediately and keep their lease until browser exit is
+verified or startup rolls back. Unverified shutdown retains ownership.
+Lock compromise logs a warning, and a compromised owner does not remove a successor's metadata.
+
+An owner-only `<target>.lock.owner.json` sidecar supplies advisory diagnostics: PID, command label,
+start timestamp, and surface. CLI labels contain the command path, never raw argv or credentials.
+Missing or malformed metadata does not unlock a resource, and the probe ignores an orphan sidecar
+without a live filesystem lock. The sidecar is not process-liveness authority. Busy contention
+becomes `ResourceBusyError`, then exit 3 and a `busy` envelope or human diagnostic at the shared
+command boundary. Store listings ignore lock directories, owner sidecars, and temporary files.
+
+```mermaid
+sequenceDiagram
+  participant Handler as Context-bound handler
+  participant Service as Core or agent service
+  participant Receipt as Receipt writer
+  participant Lock as Resource lease
+  participant Store as Local files
+  Handler->>Service: Resolved request and receipt draft
+  Service->>Store: Create or locate run directory
+  Service->>Receipt: Publish immutable start or resume receipt
+  Receipt->>Store: Exclusive atomic publication
+  Service->>Lock: Acquire shared resource when needed
+  Lock-->>Service: Lease or busy error
+  Service->>Store: Read, validate, and atomically replace under lease
+  Service->>Lock: Release after operation or browser-session cleanup
+```
+
+#### Terminal behavior characterization
+
+`apps/cli/tests/characterization/terminal-baseline.spec.ts` adds an `@no-llm` baseline of the
+current terminal boundary. It derives a `--help` scenario for every entry in `COMMAND_REGISTRY`
+and compares those paths with the recursive `walkCommandTree(buildProgram())` traversal, including
+groups and leaves. Each baseline records stdout, stderr, exit code, and the durable file tree
+under an isolated temporary `YANTRA_HOME`. The existing fixed-width help and parse-error goldens
+above continue to cover the registry surface.
+
+`harness.ts` resets the core path cache before and after an in-process invocation, temporarily
+captures stdout and stderr, supplies the stdin TTY flag, and restores the environment, TTY
+descriptor, process spies, and `process.exitCode` afterwards. Its throwing `process.exit` spy keeps
+the Vitest worker alive and records the requested exit code. `snapshotTree` traverses files in a
+stable order, uses relative paths, excludes SQLite database files and their WAL/SHM companions,
+and normalizes home paths, UUIDs, ISO timestamps, and JSON PID/duration counters. Self-checks pin
+normalization across separate trees, interception of an exit, and detection of changed stderr.
+
+Action rows in `scenarios.ts` use `runTerminalProcessScenario` to invoke the same `run(argv)` in
+a real Node child through `tsx`, capture its actual exit and streams, and snapshot its isolated
+home. This retains the actual terminal exit and stream behavior independently of in-process
+spies. Deterministic `ask` and `research` use the
+existing runtime seams with a canonical Brief and stub pipeline or loop; the other rows exercise
+local operations and refusals without network, model, or Chrome work. Expected results live in
+`characterization/baselines/*.json`; `CAPTURE_TERMINAL_BASELINES=1` explicitly recaptures them.
+Adapter-parity suites compare human and JSON output, exit codes, receipts, and normalized durable
+artifacts across terminal and worker contexts for agentic tasks, replay, scheduling, reads, mutations,
+and initialization. Secure and exempt commands are tested through their refusal contracts.
 
 ### `packages/ui` (Drshya)
 
@@ -3210,6 +3421,12 @@ separate validated model for personal preferences. Neither adds a SQLite migrati
 the config to prune expired run directories and cap `index.db.corrupt.*` backups during index
 startup.
 
+Execution receipts add immutable per-run files, not a database table: one start record and optional
+numbered resume records. Each record links invocation metadata and effective non-secret settings
+to content identities and initial browser selection. Resource-lock directories and their optional
+owner sidecars are coordination state beside the protected files, not canonical run evidence or
+process identity records. Configuration and profile remain separately locked documents.
+
 Interaction recovery adds no relational state. Its durable form is the bounded verdict array under
 a sanitized tool result's `details.attempted` in `tool-calls.jsonl`; plan objects, evidence, shared
 budget state, and ledgers are in-memory execution concepts. Audit/report readers accept both this
@@ -3381,6 +3598,7 @@ flowchart TD
   Replay --> RunDir[runs/run-id/ canonical artifacts]
   Publication --> RunDir
   Runtime --> RunDir
+  Receipt[Immutable start and resume receipts] --> RunDir
   RunDir --> History[index.db history cache]
   Schedule[index.db schedules] --> Replay
   Preferences[index.db preferences] --> Runtime

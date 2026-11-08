@@ -18,12 +18,13 @@
  *   yantra daemon stop
  */
 
-import { spawn } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 
-import { FileDaemonLock } from '@yantra/core';
+import { FileDaemonLock, type DaemonLock, type SchedulerDaemon, type Logger } from '@yantra/core';
 import { type Command } from 'commander';
 
+import { createTerminalContext } from '../adapters/terminal/terminal-adapter.js';
+import type { CommandContext, CommandResult, ExitCode } from '../context/command-context.js';
 import { createRegisteredCommand } from '../registry/build-command-tree.js';
 import { fromAction } from '../registry/handler.js';
 import { makeStderrLogger } from '../runtime.js';
@@ -49,111 +50,134 @@ export function makeDaemonCommand(): Command {
   return createRegisteredCommand('daemon', daemonHandlers());
 }
 
-/** Handlers for `daemon`, bound by registry id; each is its former commander action, unchanged. */
-export function daemonHandlers() {
+export interface DaemonRuntime {
+  readonly build?: (
+    logger: Logger,
+    cwd: string,
+  ) => Promise<{
+    readonly daemon: Pick<SchedulerDaemon, 'start' | 'stop' | 'status'>;
+    readonly close: () => void;
+  } | null>;
+  readonly lock?: DaemonLock;
+}
+export function daemonHandlers(
+  runtime: DaemonRuntime = {},
+  context: CommandContext = createTerminalContext(),
+) {
   return {
-    'daemon.start': fromAction(async (options: DaemonStartOptions) => {
-      if (options.foreground === true) {
-        await runForeground(options.debug === true);
-        return;
-      }
-      await spawnDetached();
-    }),
-    'daemon.stop': fromAction(async (options: DaemonStopOptions) => {
-      await stopDaemon(options.debug === true);
-    }),
-    'daemon.status': fromAction(async (options: DaemonStatusOptions) => {
-      await reportStatus(options.json === true, options.debug === true);
-    }),
+    'daemon.start': Object.assign(
+      fromAction((options: DaemonStartOptions) =>
+        options.foreground === true
+          ? runForeground(context, runtime, options.debug === true)
+          : spawnDetached(context, runtime),
+      ),
+      { honorsAbort: true },
+    ),
+    'daemon.stop': fromAction((options: DaemonStopOptions) =>
+      stopDaemon(context, runtime, options.debug === true),
+    ),
+    'daemon.status': fromAction((options: DaemonStatusOptions) =>
+      reportStatus(context, runtime, options.json === true, options.debug === true),
+    ),
   };
+}
+async function assemble(context: CommandContext, runtime: DaemonRuntime, logger: Logger) {
+  return runtime.build
+    ? runtime.build(logger, context.cwd)
+    : buildDaemon(logger, undefined, { cwd: context.cwd });
 }
 
 /** Runs the daemon in the foreground, blocking until SIGTERM/SIGINT. */
-async function runForeground(debug: boolean): Promise<void> {
-  const logger = makeStderrLogger(debug);
-  const built = await buildDaemon(logger);
-  if (built === null) {
-    process.stderr.write('Error: the local index is unavailable — cannot start the daemon.\n');
-    process.exit(3);
-    return;
+async function runForeground(
+  context: CommandContext,
+  runtime: DaemonRuntime,
+  debug: boolean,
+): Promise<CommandResult> {
+  const logger = makeStderrLogger(debug, context.output.stderr);
+  const built = await assemble(context, runtime, logger);
+  if (!built) {
+    context.output.stderr.write(
+      'Error: the local index is unavailable \u2014 cannot start the daemon.\n',
+    );
+    return { exitCode: 3 };
   }
-  const { daemon, close } = built;
-
-  let shuttingDown = false;
-  const shutdown = (signal: string): void => {
-    if (shuttingDown) return;
-    shuttingDown = true;
-    process.stderr.write(`\nReceived ${signal}, shutting down...\n`);
-    void daemon
-      .stop()
-      .catch(() => undefined)
-      .finally(() => {
-        close();
-        process.exit(0);
-      });
-  };
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-  process.on('SIGINT', () => shutdown('SIGINT'));
-
   try {
-    await daemon.start();
-  } catch (err) {
-    close();
-    process.stderr.write(`Error: ${err instanceof Error ? err.message : String(err)}\n`);
-    process.exit(1);
-    return;
+    try {
+      await built.daemon.start();
+    } catch (error) {
+      context.output.stderr.write(
+        `Error: ${error instanceof Error ? error.message : String(error)}\n`,
+      );
+      return { exitCode: 1 };
+    }
+    context.output.stdout.write(
+      `Scheduler daemon running (pid ${context.processes.pid}). Press Ctrl+C to stop.\n`,
+    );
+    await new Promise<void>((resolve) => {
+      if (context.signal.aborted) resolve();
+      else context.signal.addEventListener('abort', () => resolve(), { once: true });
+    });
+    const reason = typeof context.signal.reason === 'string' ? context.signal.reason : 'SIGINT';
+    context.output.stderr.write(`\nReceived ${reason}, shutting down...\n`);
+    await built.daemon
+      .stop()
+      .catch((error) =>
+        logger.warn(
+          { error: error instanceof Error ? error.message : String(error) },
+          'daemon shutdown failed',
+        ),
+      );
+    return { exitCode: 0 };
+  } finally {
+    built.close();
   }
-
-  process.stdout.write(`Scheduler daemon running (pid ${process.pid}). Press Ctrl+C to stop.\n`);
-  // Keep the process alive; the interval + signal handlers do the work.
-  await new Promise<never>(() => {
-    /* never resolves — until a signal calls process.exit */
-  });
 }
 
 /** Spawns a detached `daemon start --foreground` child, then returns. */
-async function spawnDetached(): Promise<void> {
+async function spawnDetached(
+  context: CommandContext,
+  runtime: DaemonRuntime,
+): Promise<CommandResult> {
   // Refuse to spawn a second instance if one is already running.
-  const lock = new FileDaemonLock();
+  const lock = runtime.lock ?? new FileDaemonLock();
   const info = await lock.probe();
   if (info !== null) {
-    process.stderr.write(
+    context.output.stderr.write(
       `The scheduler daemon is already running${info.pid !== null ? ` (pid ${info.pid})` : ''}.\n`,
     );
-    process.exit(1);
-    return;
+    return { exitCode: 1 as ExitCode };
   }
 
-  const child = spawn(process.execPath, [process.argv[1]!, 'daemon', 'start', '--foreground'], {
-    detached: true,
-    stdio: 'ignore',
-  });
-  child.unref();
-  process.stdout.write(`Scheduler daemon started (pid ${child.pid}).\n`);
-  process.exit(0);
+  const pid = await context.processes.spawnDaemon();
+  context.output.stdout.write(`Scheduler daemon started (pid ${pid}).\n`);
+  return { exitCode: 0 };
 }
 
 /** Signals the lock-holder PID and waits (bounded) for the lock to free. */
-async function stopDaemon(debug: boolean): Promise<void> {
-  const logger = makeStderrLogger(debug);
-  const lock = new FileDaemonLock();
+async function stopDaemon(
+  context: CommandContext,
+  runtime: DaemonRuntime,
+  debug: boolean,
+): Promise<CommandResult> {
+  const logger = makeStderrLogger(debug, context.output.stderr);
+  const lock = runtime.lock ?? new FileDaemonLock();
   const info = await lock.probe();
   if (info?.pid == null) {
-    process.stderr.write('The scheduler daemon is not running.\n');
-    process.exit(0);
-    return;
+    context.output.stderr.write('The scheduler daemon is not running.\n');
+    return { exitCode: 0 as ExitCode };
   }
 
   try {
-    process.kill(info.pid, 'SIGTERM');
+    await context.processes.signalDaemon(info);
   } catch (err) {
     logger.warn(
       { pid: info.pid, err: err instanceof Error ? err.message : String(err) },
       'failed to signal daemon',
     );
-    process.stderr.write(`Could not signal daemon pid ${info.pid} (it may have already exited).\n`);
-    process.exit(0);
-    return;
+    context.output.stderr.write(
+      `Could not signal daemon pid ${info.pid} (it may have already exited).\n`,
+    );
+    return { exitCode: 0 as ExitCode };
   }
 
   // Wait up to ~10s for the process to release the lock.
@@ -161,19 +185,25 @@ async function stopDaemon(debug: boolean): Promise<void> {
     await delay(200);
     const still = await lock.probe();
     if (still === null) {
-      process.stdout.write(`Scheduler daemon (pid ${info.pid}) stopped.\n`);
-      process.exit(0);
-      return;
+      context.output.stdout.write(`Scheduler daemon (pid ${info.pid}) stopped.\n`);
+      return { exitCode: 0 as ExitCode };
     }
   }
-  process.stderr.write(`Signaled daemon pid ${info.pid}, but it has not released the lock yet.\n`);
-  process.exit(0);
+  context.output.stderr.write(
+    `Signaled daemon pid ${info.pid}, but it has not released the lock yet.\n`,
+  );
+  return { exitCode: 0 as ExitCode };
 }
 
 /** Prints the daemon status (running?, pid, schedules, next fires). */
-async function reportStatus(json: boolean, debug: boolean): Promise<void> {
-  const logger = makeStderrLogger(debug);
-  const built = await buildDaemon(logger);
+async function reportStatus(
+  context: CommandContext,
+  runtime: DaemonRuntime,
+  json: boolean,
+  debug: boolean,
+): Promise<CommandResult> {
+  const logger = makeStderrLogger(debug, context.output.stderr);
+  const built = await assemble(context, runtime, logger);
   if (built === null) {
     const empty = {
       running: false,
@@ -183,20 +213,18 @@ async function reportStatus(json: boolean, debug: boolean): Promise<void> {
       pendingConfirmations: 0,
     };
     if (json) {
-      process.stdout.write(`${JSON.stringify(empty, null, 2)}\n`);
+      context.output.json(empty, { indent: 2 });
     } else {
-      process.stdout.write('Scheduler daemon: not running (index unavailable).\n');
+      context.output.stdout.write('Scheduler daemon: not running (index unavailable).\n');
     }
-    process.exit(0);
-    return;
+    return { exitCode: 0 as ExitCode };
   }
 
   try {
     const status = await built.daemon.status();
     if (json) {
-      process.stdout.write(`${JSON.stringify(status, null, 2)}\n`);
-      process.exit(0);
-      return;
+      context.output.json(status, { indent: 2 });
+      return { exitCode: 0 as ExitCode };
     }
     const lines: string[] = [];
     lines.push(`Scheduler daemon: ${status.running ? 'running' : 'stopped'}`);
@@ -206,8 +234,8 @@ async function reportStatus(json: boolean, debug: boolean): Promise<void> {
     for (const nf of status.nextFires) {
       lines.push(`  next fire ${nf.id}: ${nf.nextFireAt ?? '—'}`);
     }
-    process.stdout.write(lines.join('\n') + '\n');
-    process.exit(0);
+    context.output.stdout.write(lines.join('\n') + '\n');
+    return { exitCode: 0 as ExitCode };
   } finally {
     built.close();
   }

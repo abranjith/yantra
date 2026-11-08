@@ -9,9 +9,11 @@ import {
   collectContextGrants,
   defaultContextGrantAnswers,
   type ContextGrantAnswers,
-} from '../../src/commands/init-context-prompts.js';
-import type { InitWizardAnswers } from '../../src/commands/init-wizard.js';
-import { makeInitCommand } from '../../src/commands/init.js';
+} from '../../src/adapters/terminal/init-context-prompts.js';
+import type { InitWizardAnswers } from '../../src/adapters/terminal/init-wizard.js';
+import { createTerminalContext } from '../../src/adapters/terminal/terminal-adapter.js';
+import { type makeInitCommand, makeInitHandler } from '../../src/commands/init.js';
+import { executeCommand } from '../../src/execute.js';
 
 const DEFAULT_WIZARD: InitWizardAnswers = {
   provider: 'none',
@@ -80,37 +82,18 @@ describe('@no-llm collectContextGrants', () => {
 describe('@no-llm yantra init context questionnaire', () => {
   let dir: string;
   let savedEnv: Record<string, string | undefined>;
-  let exitSpy: ReturnType<typeof vi.spyOn>;
   let stdoutSpy: ReturnType<typeof vi.spyOn>;
   let stderrSpy: ReturnType<typeof vi.spyOn>;
-  let exitCodes: number[];
-
-  /**
-   * Thrown in place of a real `process.exit` so the action unwinds. init's own
-   * `catch` swallows it and exits again, so the *first* recorded code — not the
-   * escaping one — is the command's real outcome.
-   */
-  class ExitSignal extends Error {
-    public constructor(public readonly code: number) {
-      super(`exit ${code}`);
-    }
-  }
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'yantra-init-'));
     savedEnv = { YANTRA_HOME: process.env.YANTRA_HOME };
     process.env.YANTRA_HOME = dir;
-    exitCodes = [];
-    exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
-      exitCodes.push(code ?? 0);
-      throw new ExitSignal(code ?? 0);
-    }) as never);
     stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
   });
 
   afterEach(async () => {
-    exitSpy.mockRestore();
     stdoutSpy.mockRestore();
     stderrSpy.mockRestore();
     for (const [key, value] of Object.entries(savedEnv)) {
@@ -125,17 +108,23 @@ describe('@no-llm yantra init context questionnaire', () => {
     argv: readonly string[],
     deps: Parameters<typeof makeInitCommand>[0] = {},
   ): Promise<number> {
-    exitCodes = [];
-    try {
-      await makeInitCommand({
-        wizard: async () => DEFAULT_WIZARD,
-        collect: async () => defaultContextGrantAnswers(),
-        ...deps,
-      }).parseAsync([...argv], { from: 'user' });
-    } catch (error) {
-      if (!(error instanceof ExitSignal)) throw error;
-    }
-    return exitCodes[0] ?? 0;
+    const context = createTerminalContext();
+    const result = await executeCommand(
+      ['init', ...argv],
+      context,
+      {},
+      {
+        init: makeInitHandler(
+          {
+            wizard: async () => DEFAULT_WIZARD,
+            collect: async () => defaultContextGrantAnswers(),
+            ...deps,
+          },
+          context,
+        ),
+      },
+    );
+    return result.exitCode;
   }
 
   function collector(answers: ContextGrantAnswers): () => Promise<ContextGrantAnswers> {

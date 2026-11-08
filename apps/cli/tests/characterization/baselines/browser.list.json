@@ -1,0 +1,6 @@
+{
+  "stdout": "Usage: yantra browser list [options]\n\nList the browsers Yantra can use on this machine, with the current selection.\nLocal only: no network, launch, install, or update check\n\nOptions:\n  --json      emit the inventory as JSON (default: false)\n  -h, --help  display help for command\n",
+  "stderr": "",
+  "exitCode": 0,
+  "tree": {}
+}

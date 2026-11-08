@@ -16,13 +16,15 @@
  * host-environment facts, not personal data, and are deliberately not grants.
  */
 
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 import { err, ok, type Result } from '@yantra/protocol';
 import { z } from 'zod';
 
 import { configDir } from '../browser/paths.js';
+import { writeFileAtomic } from '../fs/atomic-write.js';
+import { withResourceLock, type ResourceLockOptions } from '../locks/resource-lock.js';
 
 import {
   AGENT_DURATION_HINT,
@@ -193,10 +195,29 @@ export async function saveProfile(
   const { stringify } = await import('yaml');
   const validated = profileSchema.parse(profile);
   const contents = `# yantra profile — your personal defaults (edit freely)\n${stringify(validated)}`;
-  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
-  const tmp = `${path}.tmp`;
-  await writeFile(tmp, contents, { encoding: 'utf8', mode: 0o600 });
-  await rename(tmp, path);
+  await writeFileAtomic(path, contents, { mode: 0o600 });
+}
+
+/** Invalid existing profiles are actionable failures, never silently reset. */
+export class ProfileMutationError extends Error {
+  public override readonly name = 'ProfileMutationError';
+}
+
+/** Read and update the human profile under its shared process-safe lock. */
+export async function mutateProfile(
+  mutate: (current: ProfileFile) => ProfileFile | Promise<ProfileFile>,
+  path: string = profilePath(),
+  options: ResourceLockOptions = {},
+): Promise<void> {
+  await withResourceLock(
+    { kind: 'profile' },
+    async () => {
+      const loaded = await loadProfile(path);
+      if (!loaded.isOk) throw new ProfileMutationError(loaded.error);
+      await saveProfile(await mutate(loaded.value), path);
+    },
+    { ...options, targetPath: path },
+  );
 }
 
 /**

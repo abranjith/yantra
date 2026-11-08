@@ -1,0 +1,122 @@
+{
+  "$ref": "#/definitions/CommandResultMessage",
+  "definitions": {
+    "CommandResultMessage": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "result"
+            },
+            "exit_code": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "const": 0
+                },
+                {
+                  "type": "number",
+                  "enum": [
+                    1,
+                    2,
+                    3,
+                    4,
+                    130
+                  ]
+                }
+              ]
+            },
+            "envelope": {
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/definitions/CommandResultMessage/anyOf/0/properties/envelope/anyOf/0"
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": {
+                        "$ref": "#/definitions/CommandResultMessage/anyOf/0/properties/envelope/anyOf/0"
+                      }
+                    }
+                  ],
+                  "description": "Any JSON value."
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The final terminal JSON envelope, when emitted."
+            },
+            "text": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Human output capped at 64 KiB including a truncation marker."
+            }
+          },
+          "required": [
+            "type",
+            "exit_code",
+            "envelope",
+            "text"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "error"
+            },
+            "exit_code": {
+              "$ref": "#/definitions/CommandResultMessage/anyOf/0/properties/exit_code/anyOf/1"
+            },
+            "code": {
+              "type": "string",
+              "minLength": 1
+            },
+            "message": {
+              "type": "string"
+            },
+            "remediation": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "exit_code",
+            "code",
+            "message",
+            "remediation"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "description": "The final completion of a command executed on a worker surface."
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

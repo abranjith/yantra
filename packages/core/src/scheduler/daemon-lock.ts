@@ -17,7 +17,10 @@ import { dirname, join } from 'node:path';
 
 import lockfile from 'proper-lockfile';
 
+import type { ProcessIdentity, ProcessLivenessProbe } from '../browser/installation-types.js';
 import { dataDir } from '../browser/paths.js';
+import { NodeProcessLivenessProbe } from '../browser/process-identity.js';
+import { writeFileAtomic } from '../fs/atomic-write.js';
 
 /** The daemon lock file path (proper-lockfile locks this file's directory entry). */
 export function daemonLockPath(): string {
@@ -33,6 +36,7 @@ export function daemonPidPath(): string {
 export interface DaemonLockInfo {
   /** PID of the process holding the lock, or null if unknown. */
   readonly pid: number | null;
+  readonly identity?: ProcessIdentity;
 }
 
 /**
@@ -62,10 +66,14 @@ export class DaemonLockHeldError extends Error {
 export class FileDaemonLock implements DaemonLock {
   private readonly lockTarget: string;
   private readonly pidFile: string;
+  private readonly liveness: ProcessLivenessProbe;
 
-  public constructor(opts: { lockTarget?: string; pidFile?: string } = {}) {
+  public constructor(
+    opts: { lockTarget?: string; pidFile?: string; liveness?: ProcessLivenessProbe } = {},
+  ) {
     this.lockTarget = opts.lockTarget ?? daemonLockPath();
     this.pidFile = opts.pidFile ?? daemonPidPath();
+    this.liveness = opts.liveness ?? new NodeProcessLivenessProbe();
   }
 
   public async acquire(pid: number): Promise<() => Promise<void>> {
@@ -87,13 +95,24 @@ export class FileDaemonLock implements DaemonLock {
       throw new DaemonLockHeldError(holderPid ?? pidFromError(error));
     }
 
-    await writeFile(this.pidFile, String(pid), 'utf8');
+    try {
+      await writeFileAtomic(this.pidFile, String(pid), { mode: 0o600 });
+      const identity = await this.liveness.identify(pid);
+      if (identity)
+        await writeFileAtomic(`${this.pidFile}.identity.json`, JSON.stringify(identity), {
+          mode: 0o600,
+        });
+    } catch (error) {
+      await release();
+      throw error;
+    }
 
     return async (): Promise<void> => {
       try {
         await release();
       } finally {
         await rm(this.pidFile, { force: true }).catch(() => undefined);
+        await rm(`${this.pidFile}.identity.json`, { force: true }).catch(() => undefined);
       }
     };
   }
@@ -108,7 +127,23 @@ export class FileDaemonLock implements DaemonLock {
     if (!locked) {
       return null;
     }
-    return { pid: await this.readPid() };
+    const pid = await this.readPid();
+    try {
+      const value: unknown = JSON.parse(await readFile(`${this.pidFile}.identity.json`, 'utf8'));
+      if (
+        pid !== null &&
+        value &&
+        typeof value === 'object' &&
+        'pid' in value &&
+        'startToken' in value &&
+        value.pid === pid &&
+        typeof value.startToken === 'string'
+      )
+        return { pid, identity: { pid: pid, startToken: value.startToken } };
+    } catch {
+      /* A legacy PID remains useful for display, never for signalling. */
+    }
+    return { pid };
   }
 
   private async readPid(): Promise<number | null> {

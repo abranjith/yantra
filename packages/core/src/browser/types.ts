@@ -50,6 +50,7 @@ export interface LaunchOptions {
 import type { Page as PuppeteerPage } from 'puppeteer-core';
 
 import type { InjectedScriptHost } from '../locator/types.js';
+import type { ResourceLease } from '../locks/resource-lock.js';
 
 import type { BrowserSelection } from './installation-types.js';
 
@@ -149,6 +150,8 @@ export interface ResolvedProfile {
   readonly absolutePath: string;
   readonly kind: ProfileSpec['kind'];
   readonly createdNow: boolean;
+  /** Persistent profiles hold this until their browser process has exited. */
+  readonly lease?: ResourceLease;
 }
 
 export interface WorkflowProfileEntry {

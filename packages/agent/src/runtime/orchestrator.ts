@@ -2,6 +2,9 @@ import { appendFile, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import {
+  writeExecutionReceipt,
+  receiptLockOptions,
+  type ExecutionReceiptDraft,
   AgentBrowserController,
   BlocklistImpl,
   BrowserFallbackFetcher,
@@ -307,6 +310,7 @@ export const DEFAULT_AGENT_BUDGETS: AgentBudgetConfig = {
 
 /** Public input for one run. Each call creates a new run and provider session. */
 export interface AgenticTaskRequest {
+  readonly receipt?: ExecutionReceiptDraft;
   readonly goal: string;
   /** Least-privilege command preset; defaults to the existing `do` behavior. */
   readonly profile?: CommandTaskProfile;
@@ -570,6 +574,15 @@ export async function runAgenticTask(
         }),
   });
 
+  if (request.receipt) {
+    const written = await writeExecutionReceipt(created.runDir, request.receipt);
+    await appendFile(
+      join(created.runDir, 'runtime.jsonl'),
+      `${JSON.stringify({ schema_version: 1, event: 'settings_receipt_written', path: written.path, setting_count: written.receipt.settings.length })}\n`,
+      { encoding: 'utf8', mode: 0o600 },
+    );
+  }
+
   // Deterministic pre-flight: a goal that needs the user's location, with no
   // location available, cannot be answered honestly. Refuse it here — the run
   // directory exists so the failure is auditable, but no provider session is
@@ -631,6 +644,7 @@ export async function runAgenticTask(
       rankSink: dependencies.rankSink ?? null,
       runHealth,
       browser: {
+        ...(request.receipt ? { resourceLockOptions: receiptLockOptions(request.receipt) } : {}),
         ...(dependencies.browserServices ? { services: dependencies.browserServices } : {}),
         ...(dependencies.browserSelection ? { selection: dependencies.browserSelection } : {}),
         ...(dependencies.browserInstallOfferGateway === undefined
@@ -2115,7 +2129,10 @@ function composeDefaultEnvironment(
     leaves.createBrowserProvider({
       ...(context.browser ?? {}),
       logger,
-      profileStore: new LocalProfileStore({ logger }),
+      profileStore: new LocalProfileStore({
+        logger,
+        leaseOptions: context.browser?.resourceLockOptions ?? {},
+      }),
     }),
     context.runHealth,
   );
@@ -2141,7 +2158,10 @@ function composeDefaultEnvironment(
     stepId: 'web_search',
     action: 'fetch',
   });
-  const workflowStore = new FileWorkflowStore(workflowsRoot());
+  const workflowStore = new FileWorkflowStore(workflowsRoot(), undefined, {
+    ...context.browser?.resourceLockOptions,
+    logger,
+  });
 
   return {
     browserController,
@@ -2215,7 +2235,10 @@ function composeDefaultEnvironment(
               ...(context.browser ?? {}),
               installOfferGateway: null,
               logger,
-              profileStore: new LocalProfileStore({ logger }),
+              profileStore: new LocalProfileStore({
+                logger,
+                leaseOptions: context.browser?.resourceLockOptions ?? {},
+              }),
             }),
             context.runHealth,
           );

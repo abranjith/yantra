@@ -20,6 +20,7 @@
  * each has to say which it is, because one word meaning two opposite things
  * inside one noun namespace is exactly what makes a command surface unreadable.
  */
+
 import {
   compareManagedBuild,
   createLocalBrowserRuntimeServices,
@@ -46,12 +47,14 @@ import {
   type UpdateComparison,
 } from '@yantra/core';
 import { type Command, CommanderError } from 'commander';
-import prompts from 'prompts';
 
+import { createTerminalContext } from '../adapters/terminal/terminal-adapter.js';
 import {
   resolveBrowserSelectionOverride,
   type BrowserSelectionOptions,
 } from '../browser-options.js';
+import type { CommandContext } from '../context/command-context.js';
+import { resourceOptions } from '../context/resource-options.js';
 import { createRegisteredCommand } from '../registry/build-command-tree.js';
 import { fromAction } from '../registry/handler.js';
 import { CLI_JSON_SCHEMA_VERSION } from '../render/json.js';
@@ -89,7 +92,12 @@ export interface BrowserCommandRuntime {
   /** Config writer boundary, injected so `use` tests never touch a real home. */
   readonly writeSelection?: typeof writeBrowserSelectionToConfig;
   readonly isTty?: () => boolean;
-  readonly prompt?: typeof prompts;
+  readonly prompt?: (question: {
+    type: 'confirm';
+    name: 'granted';
+    message: string;
+    initial: boolean;
+  }) => Promise<{ granted?: boolean }>;
   readonly destinationRoot?: () => string;
   readonly now?: () => Date;
   readonly stdout?: NodeJS.WritableStream;
@@ -106,14 +114,27 @@ export function makeBrowserCommand(runtime: BrowserCommandRuntime = {}): Command
 }
 
 /** Handlers for `browser`, bound by registry id; each is its former commander action, unchanged. */
-export function browserHandlers(runtime: BrowserCommandRuntime = {}) {
-  const stdout = runtime.stdout ?? process.stdout;
-  const stderr = runtime.stderr ?? process.stderr;
-  const isTty = runtime.isTty ?? (() => process.stdin.isTTY === true);
-  const prompt = runtime.prompt ?? prompts;
+export function browserHandlers(
+  runtime: BrowserCommandRuntime = {},
+  context: CommandContext = createTerminalContext({
+    ...(runtime.stdout ? { stdout: runtime.stdout } : {}),
+    ...(runtime.stderr ? { stderr: runtime.stderr } : {}),
+  }),
+) {
+  const stdout = context.output.stdout;
+  const stderr = context.output.stderr;
+  const isTty = runtime.isTty ?? (() => context.isInteractive({}));
+  const confirm = async (message: string) =>
+    runtime.prompt
+      ? (await runtime.prompt({ type: 'confirm', name: 'granted', message, initial: false }))
+          .granted === true
+      : (await context.input.confirm(message)) === true;
   const destinationRoot = runtime.destinationRoot ?? managedBrowsersRoot;
   const now = runtime.now ?? (() => new Date());
-  const writeSelection = runtime.writeSelection ?? writeBrowserSelectionToConfig;
+  const writeSelection =
+    runtime.writeSelection ??
+    ((selection) =>
+      writeBrowserSelectionToConfig(selection, undefined, resourceOptions(context, 'browser use')));
   // Composed lazily: building the command must not construct the acquisition
   // graph, and `--help` must not read the filesystem.
   let composed: BrowserRuntimeServices | undefined = runtime.services;
@@ -141,7 +162,7 @@ export function browserHandlers(runtime: BrowserCommandRuntime = {}) {
     const availability = await updateService().checkAvailability();
 
     if (options.json === true) {
-      stdout.write(`${JSON.stringify(updatePayload(true, availability, null))}\n`);
+      context.output.json(updatePayload(true, availability, null));
     } else {
       renderAvailabilityTerminal(stdout, availability);
     }
@@ -169,8 +190,8 @@ export function browserHandlers(runtime: BrowserCommandRuntime = {}) {
     if (preflight.status === 'refused') {
       const { error } = preflight;
       if (options.json === true)
-        stdout.write(
-          `${JSON.stringify(updatePayload(false, null, { status: 'failed', error, record: { status: 'absent' } }))}\n`,
+        context.output.json(
+          updatePayload(false, null, { status: 'failed', error, record: { status: 'absent' } }),
         );
       stderr.write(`${error.detail} ${error.remediation}\n`);
       throw new CommanderError(3, `yantra.browser.update.${error.code}`, error.detail);
@@ -183,14 +204,12 @@ export function browserHandlers(runtime: BrowserCommandRuntime = {}) {
     if (resolution.status === 'unavailable') {
       const { error } = resolution;
       if (options.json === true)
-        stdout.write(
-          `${JSON.stringify(
-            updatePayload(false, null, {
-              status: 'failed',
-              error,
-              record: { status: 'ready', record: installed },
-            }),
-          )}\n`,
+        context.output.json(
+          updatePayload(false, null, {
+            status: 'failed',
+            error,
+            record: { status: 'ready', record: installed },
+          }),
         );
       stderr.write(
         `${error.detail} ${error.remediation} Managed Chrome ${installed.buildId} is unaffected and still usable offline.\n`,
@@ -214,37 +233,34 @@ export function browserHandlers(runtime: BrowserCommandRuntime = {}) {
         'An interrupted transfer restarts from zero — there is no resume. External Chrome installations are untouched.\n',
     );
 
-    if (options.yes !== true && (!isTty() || options.json === true)) {
+    if (
+      options.yes !== true &&
+      (!isTty() || (context.surface === 'terminal' && options.json === true))
+    ) {
       const message = '`yantra browser update --yes` is required for JSON or non-interactive use.';
       stderr.write(`${message}\n`);
       if (options.json === true)
-        stdout.write(
-          `${JSON.stringify(
-            updatePayload(false, null, {
-              status: 'failed',
-              error: {
-                code: 'consent-required',
-                phase: 'preflight',
-                remediation: 'Pass --yes only after reviewing the replacement notice.',
-                detail: message,
-                retainedOrphan: null,
-              },
-              record: { status: 'ready', record: installed },
-            }),
-          )}\n`,
+        context.output.json(
+          updatePayload(false, null, {
+            status: 'failed',
+            error: {
+              code: 'consent-required',
+              phase: 'preflight',
+              remediation: 'Pass --yes only after reviewing the replacement notice.',
+              detail: message,
+              retainedOrphan: null,
+            },
+            record: { status: 'ready', record: installed },
+          }),
         );
       throw new CommanderError(1, 'yantra.browser.update.consent-required', message);
     }
 
     let granted = options.yes === true;
     if (!granted) {
-      const answer = (await prompt({
-        type: 'confirm',
-        name: 'granted',
-        message: `Replace managed Chrome ${installed.buildId} with ${target.buildId}?`,
-        initial: false,
-      })) as { granted?: boolean };
-      granted = answer.granted === true;
+      granted = await confirm(
+        `Replace managed Chrome ${installed.buildId} with ${target.buildId}?`,
+      );
     }
     if (!granted) {
       stderr.write('Browser replacement was declined; no installation state changed.\n');
@@ -256,6 +272,7 @@ export function browserHandlers(runtime: BrowserCommandRuntime = {}) {
     }
 
     const outcome = await service.update({
+      signal: context.signal,
       consent: {
         granted: true,
         source: options.yes === true ? 'cli-accept-flag' : 'cli-update-prompt',
@@ -273,7 +290,7 @@ export function browserHandlers(runtime: BrowserCommandRuntime = {}) {
     });
 
     if (options.json === true) {
-      stdout.write(`${JSON.stringify(updatePayload(false, null, outcome))}\n`);
+      context.output.json(updatePayload(false, null, outcome));
       if (outcome.status === 'failed')
         stderr.write(`${outcome.error.detail} ${outcome.error.remediation}\n`);
       if (outcome.status === 'cancelled')
@@ -310,15 +327,13 @@ export function browserHandlers(runtime: BrowserCommandRuntime = {}) {
     target: StableBuild,
   ): void {
     if (options.json === true) {
-      stdout.write(
-        `${JSON.stringify({
-          schemaVersion: CLI_JSON_SCHEMA_VERSION,
-          kind: 'browser_update',
-          dryRun: false,
-          destinationRoot: destinationRoot(),
-          outcome: { status, installedBuildId, available: target },
-        })}\n`,
-      );
+      context.output.json({
+        schemaVersion: CLI_JSON_SCHEMA_VERSION,
+        kind: 'browser_update',
+        dryRun: false,
+        destinationRoot: destinationRoot(),
+        outcome: { status, installedBuildId, available: target },
+      });
       return;
     }
     stdout.write(
@@ -327,15 +342,18 @@ export function browserHandlers(runtime: BrowserCommandRuntime = {}) {
         : `Managed Chrome ${installedBuildId} is newer than current Stable ${target.buildId}. Leaving it in place — Yantra never downgrades.\n`,
     );
   }
-  return {
+  const bindings = {
     'browser.install': fromAction(async (options: InstallOptions) => {
       const destination = destinationRoot();
-      if (options.yes !== true && (!isTty() || options.json === true)) {
+      if (
+        options.yes !== true &&
+        (!isTty() || (context.surface === 'terminal' && options.json === true))
+      ) {
         const message =
           '`yantra browser install --yes` is required for JSON or non-interactive use.';
         stderr.write(`${message}\n`);
         if (options.json)
-          writeInstallJson(stdout, destination, {
+          writeInstallJson(context, destination, {
             status: 'failed',
             error: {
               code: 'consent-required',
@@ -353,17 +371,18 @@ export function browserHandlers(runtime: BrowserCommandRuntime = {}) {
       );
       let granted = options.yes === true;
       if (!granted) {
-        const answer = (await prompt({
-          type: 'confirm',
-          name: 'granted',
-          message: 'Download managed Chrome?',
-          initial: false,
-        })) as { granted?: boolean };
-        granted = answer.granted === true;
+        granted =
+          context.surface === 'worker'
+            ? (
+                await context.gateways
+                  .installOffer(isTty())
+                  ?.offer({ destinationRoot: destination, approximateBytes: APPROXIMATE_BYTES })
+              )?.accepted === true
+            : await confirm('Download managed Chrome?');
       }
       if (!granted) {
         const outcome = { status: 'cancelled', at: 'preflight', retainedOrphan: null } as const;
-        if (options.json) writeInstallJson(stdout, destination, outcome);
+        if (options.json) writeInstallJson(context, destination, outcome);
         stderr.write('Browser download was declined; no installation state changed.\n');
         throw new CommanderError(
           4,
@@ -373,6 +392,7 @@ export function browserHandlers(runtime: BrowserCommandRuntime = {}) {
       }
 
       const outcome = await installService().install({
+        signal: context.signal,
         trigger: 'explicit-command',
         consent: {
           granted: true,
@@ -392,7 +412,7 @@ export function browserHandlers(runtime: BrowserCommandRuntime = {}) {
       });
 
       if (options.json) {
-        writeInstallJson(stdout, destination, outcome);
+        writeInstallJson(context, destination, outcome);
         if (outcome.status === 'failed')
           stderr.write(`${outcome.error.detail} ${outcome.error.remediation}\n`);
         if (outcome.status === 'cancelled')
@@ -414,7 +434,7 @@ export function browserHandlers(runtime: BrowserCommandRuntime = {}) {
     'browser.list': fromAction(async (options: ListOptions) => {
       const inventory = await readInventory(services());
       if (options.json === true) {
-        stdout.write(`${JSON.stringify(browserListPayload(inventory))}\n`);
+        context.output.json(browserListPayload(inventory));
         return;
       }
       renderInventoryTerminal(stdout, inventory);
@@ -479,19 +499,17 @@ export function browserHandlers(runtime: BrowserCommandRuntime = {}) {
       const nextCommand = compatibility === 'unverified' ? checkCommandFor(selection) : null;
 
       if (options.json === true) {
-        stdout.write(
-          `${JSON.stringify({
-            schemaVersion: CLI_JSON_SCHEMA_VERSION,
-            kind: 'browser_use',
-            status: 'set',
-            source: selection.source,
-            executablePath: installation?.canonicalPath ?? selection.executablePath,
-            ownership: installation?.ownership ?? null,
-            version: installation?.version ?? null,
-            compatibility,
-            nextCommand,
-          })}\n`,
-        );
+        context.output.json({
+          schemaVersion: CLI_JSON_SCHEMA_VERSION,
+          kind: 'browser_use',
+          status: 'set',
+          source: selection.source,
+          executablePath: installation?.canonicalPath ?? selection.executablePath,
+          ownership: installation?.ownership ?? null,
+          version: installation?.version ?? null,
+          compatibility,
+          nextCommand,
+        });
         return;
       }
 
@@ -530,13 +548,11 @@ export function browserHandlers(runtime: BrowserCommandRuntime = {}) {
 
       const report = buildCheckReport(installation, results);
       if (options.json === true) {
-        stdout.write(
-          `${JSON.stringify({
-            schemaVersion: CLI_JSON_SCHEMA_VERSION,
-            kind: 'browser_check',
-            ...report,
-          })}\n`,
-        );
+        context.output.json({
+          schemaVersion: CLI_JSON_SCHEMA_VERSION,
+          kind: 'browser_check',
+          ...report,
+        });
       } else {
         renderCheckTerminal(stdout, report);
       }
@@ -570,6 +586,9 @@ export function browserHandlers(runtime: BrowserCommandRuntime = {}) {
       await runReplacement(options);
     }),
   };
+  Object.defineProperty(bindings['browser.install'], 'honorsAbort', { value: true });
+  Object.defineProperty(bindings['browser.update'], 'honorsAbort', { value: true });
+  return bindings;
 }
 
 // ---------------------------------------------------------------------------
@@ -965,13 +984,16 @@ function formatBytes(bytes: number): string {
 }
 
 function writeInstallJson(
-  stream: NodeJS.WritableStream,
+  context: CommandContext,
   destinationRoot: string,
   outcome: ManagedInstallOutcome,
 ): void {
-  stream.write(
-    `${JSON.stringify({ schemaVersion: CLI_JSON_SCHEMA_VERSION, kind: 'browser_install', destinationRoot, outcome })}\n`,
-  );
+  context.output.json({
+    schemaVersion: CLI_JSON_SCHEMA_VERSION,
+    kind: 'browser_install',
+    destinationRoot,
+    outcome,
+  });
 }
 
 function renderInstallTerminal(

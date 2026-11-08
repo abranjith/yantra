@@ -1,9 +1,10 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 
 import { UsageLedger, type AgentUsageTotals, type UsageCall } from '@yantra/protocol';
 
 import type { UsageWriter } from '../executor/types.js';
+import { writeFileAtomic } from '../fs/atomic-write.js';
 
 const FLUSH_DEBOUNCE_MS = 500;
 
@@ -83,9 +84,7 @@ export class FileUsageWriter implements UsageWriter {
         : { agent: this.agentUsage }),
     });
 
-    const tmpPath = `${path}.tmp`;
-    await writeFile(tmpPath, JSON.stringify(ledger, null, 2), 'utf8');
-    await rename(tmpPath, path);
+    await writeFileAtomic(path, JSON.stringify(ledger, null, 2));
   }
 }
 

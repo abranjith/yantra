@@ -18,6 +18,8 @@ import type { Logger } from '../browser/types.js';
 import type { ConfirmationGateway } from '../executor/confirmation-gateway.js';
 import type { HistoryStore } from '../index-db/history-store.js';
 import type { LastFireStatus, Schedule } from '../index-db/schedule-store.js';
+import { ResourceBusyError } from '../locks/resource-lock.js';
+import type { ExecutionReceiptDraft } from '../receipt/execution-receipt.js';
 
 import { DaemonConfirmationGateway } from './daemon-confirmation-gateway.js';
 import type { FireResult } from './daemon.js';
@@ -35,6 +37,7 @@ export interface FireRunOutcome {
 /** A run driver — abstracts {@link RunOrchestrator.run} for testability. */
 export interface FireRunDriver {
   run(request: {
+    readonly receipt?: ExecutionReceiptDraft;
     readonly workflowName: string;
     readonly params: Readonly<Record<string, string>>;
     readonly confirmationGateway: ConfirmationGateway;
@@ -43,6 +46,7 @@ export interface FireRunDriver {
 
 /** Dependencies for {@link runScheduledFire}. */
 export interface FireRunnerDeps {
+  readonly receipt?: (schedule: Schedule) => Promise<ExecutionReceiptDraft>;
   /** Drives the actual run (wraps `RunOrchestrator.run` in production). */
   readonly driver: FireRunDriver;
   /** History index for recording the completed run (optional — best-effort). */
@@ -80,11 +84,25 @@ export async function runScheduledFire(
   let outcome: FireRunOutcome;
   try {
     outcome = await deps.driver.run({
+      ...(deps.receipt ? { receipt: await deps.receipt(schedule) } : {}),
       workflowName: schedule.workflowName,
       params: schedule.params,
       confirmationGateway: gateway,
     });
   } catch (error) {
+    if (error instanceof ResourceBusyError) {
+      deps.logger.warn(
+        {
+          scheduleId: schedule.id,
+          resource: error.resource,
+          holder_pid: error.holder?.pid ?? null,
+          reason: 'busy',
+        },
+        'Scheduled fire refused a busy resource',
+      );
+      await notify(deps, schedule, null, 'failed');
+      return { runId: null, status: 'failed', reason: 'busy' };
+    }
     deps.logger.error(
       {
         scheduleId: schedule.id,

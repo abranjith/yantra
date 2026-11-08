@@ -7,9 +7,11 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 import { CommandInvocation } from '../commands/invocation.js';
 import { CommandRegistry } from '../commands/schema.js';
 import { Brief } from '../schemas/brief.js';
+import { CommandResultMessageSchema } from '../schemas/command-result.js';
 import { ConfirmationDecision, ConfirmationRequest } from '../schemas/confirmation.js';
 import { DiscoverySession } from '../schemas/discovery.js';
 import { TaskEvent } from '../schemas/events.js';
+import { ExecutionReceiptSchema } from '../schemas/execution-receipt.js';
 import { ExtractionResultEnvelopeUnknown } from '../schemas/extraction.js';
 import { PlanSchema } from '../schemas/plan.js';
 import { LocatorChain, ValueRef } from '../schemas/refs.js';
@@ -25,6 +27,8 @@ import { WorkflowFile } from '../schemas/workflow.js';
  * Hosted URLs can be introduced later without changing the source schema definitions.
  */
 export const JSON_SCHEMA_ARTIFACTS: Record<string, { schema: z.ZodType<unknown>; name: string }> = {
+  'execution-receipt.json': { schema: ExecutionReceiptSchema, name: 'ExecutionReceipt' },
+  'command-result.json': { schema: CommandResultMessageSchema, name: 'CommandResultMessage' },
   'task-request.json': { schema: TaskRequest, name: 'TaskRequest' },
   'plan.json': { schema: PlanSchema, name: 'Plan' },
   'step.json': { schema: Step, name: 'Step' },

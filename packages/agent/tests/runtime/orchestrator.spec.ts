@@ -237,6 +237,48 @@ function evidenceEntry(url: string, title: string): EvidenceEntry {
 }
 
 describe('@no-llm runAgenticTask lifecycle', () => {
+  it('writes a safe receipt and runtime event before environment or provider setup', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'yantra-agent-receipt-'));
+    tempDirs.push(root);
+    const connector = new RecordingConnector();
+    const provider = new FakeAgentProvider({ runResult: completed });
+    const outcome = await runAgenticTask(
+      {
+        goal: 'Complete the fixture task',
+        model: { provider: 'fixture', id: 'fixture-model' },
+        auth: { mode: 'managed' },
+        connector,
+        receipt: {
+          schema_version: 1,
+          yantra_version: 'fixture',
+          invoked_by: 'worker',
+          invocation_id: 'fixture',
+          command: ['research'],
+          cwd: root,
+          settings: [{ key: 'model', value: 'fixture-model', source: { kind: 'default' } }],
+          content: [],
+          browser: null,
+        },
+      },
+      {
+        runStore: new LocalRunStore(root),
+        createEnvironment: async (context) => {
+          expect(
+            JSON.parse(await readFile(join(context.runDir, 'execution-receipt.json'), 'utf8')),
+          ).toMatchObject({ invoked_by: 'worker' });
+          return buildEnvironment(vi.fn(() => Promise.resolve()));
+        },
+        createProvider: () => provider,
+      },
+    );
+    const lines = (await readFile(join(outcome.runDir, 'runtime.jsonl'), 'utf8'))
+      .trim()
+      .split('\n');
+    const event = JSON.parse(lines[0]!) as Record<string, unknown>;
+    expect(event).toMatchObject({ event: 'settings_receipt_written', setting_count: 1 });
+    expect(Object.keys(event).sort()).toEqual(['event', 'path', 'schema_version', 'setting_count']);
+  });
+
   it('resolves image capability before constructing tools and the provider', async () => {
     const root = await mkdtemp(join(tmpdir(), 'yantra-vision-order-'));
     tempDirs.push(root);
@@ -1019,6 +1061,38 @@ describe('@no-llm runAgenticTask lifecycle', () => {
   });
 
   describe('location pre-flight gate', () => {
+    it('keeps an execution receipt when location preflight hands off before provider setup', async () => {
+      const root = await mkdtemp(join(tmpdir(), 'yantra-location-receipt-'));
+      tempDirs.push(root);
+      const createEnvironment = vi.fn(() => Promise.reject(new Error('must not open a provider')));
+      const outcome = await runAgenticTask(
+        {
+          goal: 'Find a pharmacy near me',
+          model: { provider: 'fixture', id: 'fixture' },
+          auth: { mode: 'managed' },
+          connector: new RecordingConnector(),
+          ambient: { grants: { location: false, screenshots: false }, userLocation: null },
+          receipt: {
+            schema_version: 1,
+            yantra_version: 'fixture',
+            invoked_by: 'worker',
+            invocation_id: null,
+            command: ['ask'],
+            cwd: root,
+            settings: [],
+            content: [],
+            browser: null,
+          },
+        },
+        { runStore: new LocalRunStore(root), createEnvironment },
+      );
+      expect(outcome.kind).toBe('handoff');
+      expect(createEnvironment).not.toHaveBeenCalled();
+      expect(
+        JSON.parse(await readFile(join(outcome.runDir, 'execution-receipt.json'), 'utf8')),
+      ).toMatchObject({ command: ['ask'], sequence: 0 });
+    });
+
     /** Runs a goal through the gate with a controllable ambient block. */
     async function gated(
       goal: string,
