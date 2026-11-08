@@ -41,6 +41,22 @@ export {
   type TemplatedReportValidationIssue,
 } from './schemas/report-template.js';
 export { TaskEvent, HandoffReason } from './schemas/events.js';
+export {
+  AGENT_PROGRESS_KINDS,
+  AGENT_PROGRESS_SHAPES,
+  AgentProgressEvent,
+  CONTRACT_SUMMARY_MAX,
+  LIVE_ITEM_LABEL_MAX,
+  LiveItem,
+  PROGRESS_SUMMARY_MAX,
+  agentProgressVariant,
+} from './schemas/agent-progress.js';
+export type {
+  AgentProgressEvent as AgentProgressEventType,
+  AgentProgressKind,
+  Frozen,
+  LiveItem as LiveItemType,
+} from './schemas/agent-progress.js';
 export { AgentManifestSection, AgentRunBudgets } from './schemas/agent-manifest.js';
 export type { AgentManifestSection as AgentManifestSectionType } from './schemas/agent-manifest.js';
 export { ToolAuditEntry } from './schemas/tool-audit.js';

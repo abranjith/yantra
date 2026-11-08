@@ -634,7 +634,7 @@ FEAT-072` to this spec's State Tracking. The FEAT-072 implementer then calls the
 
 - [x] TASK-001: Characterize today's live CLI output as byte-compared goldens
 - [x] TASK-002: Add `owner_lost` and `user_app` with compatibility fixtures in both directions
-- [ ] TASK-003: Promote `AgentProgressEvent` to `@yantra/protocol` and re-export it from `@yantra/agent`
+- [x] TASK-003: Promote `AgentProgressEvent` to `@yantra/protocol` and re-export it from `@yantra/agent`
 - [ ] TASK-004: Define the `RunEvent` union, the `RunEventRecord` envelope and the line parser
 - [ ] TASK-005: Implement the single-writer `RunEventLog` and reader, with tail recovery and fsync points
 - [ ] TASK-006: Implement `RunEventStream` with persist-before-publish, the pre-open buffer and degraded mode

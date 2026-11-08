@@ -236,6 +236,24 @@
       "task": "TASK-002"
     },
     {
+      "path": "packages/agent/src/runtime/connector.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/runtime/progress-ledger.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/runtime/agent-progress-protocol.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
       "path": "packages/protocol/generated/json-schema/confirmation-decision.json",
       "status": "M",
       "role": "implement",
@@ -246,6 +264,18 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/protocol/src/schemas/agent-progress.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
     },
     {
       "path": "packages/protocol/src/schemas/confirmation.ts",
@@ -266,56 +296,62 @@
       "task": "TASK-002"
     },
     {
-      "path": "packages/protocol/tests/fixtures/run-events/legacy/agent-manifests.json",
+      "path": "packages/protocol/tests/agent-progress.spec.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/legacy/agent-manifests.json",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/legacy/agent-outcomes.jsonl",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/legacy/confirmations.jsonl",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/legacy/events.jsonl",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/owner-lost.agent-outcome.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/owner-lost.manifest.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/user-app.confirmation-resolved.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/user-app.decision.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "packages/protocol/tests/schema-compat.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     }

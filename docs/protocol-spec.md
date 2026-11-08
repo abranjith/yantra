@@ -69,6 +69,16 @@ Example:
 }
 ```
 
+## AgentProgressEvent
+
+Agent progress event, discriminated by `type` (the connector shape).
+
+Example:
+
+```json
+"<value>"
+```
+
 ## AgentRunBudgets
 
 Effective budgets for one agentic run.
@@ -1752,6 +1762,32 @@ Example:
 {
   "kind": "<kind>",
   "value": "<value>"
+}
+```
+
+## LiveItem
+
+One declared requirement and how far the run has got with it.
+
+| Field | Description                                                             |
+| ----- | ----------------------------------------------------------------------- |
+| id    | Requirement id, such as `fill:email` or `artifact:screenshot:viewport`. |
+| kind  | What kind of requirement the item tracks.                               |
+| label | Short human label, at most 60 characters.                               |
+| state | pending (untouched), advancing (related work happened), or met.         |
+| done  | Units done, or null when not counted.                                   |
+| total | Units required, or null when not counted.                               |
+
+Example:
+
+```json
+{
+  "id": "<id>",
+  "kind": "<kind>",
+  "label": "<label>",
+  "state": "<state>",
+  "done": "<done>",
+  "total": "<total>"
 }
 ```
 
