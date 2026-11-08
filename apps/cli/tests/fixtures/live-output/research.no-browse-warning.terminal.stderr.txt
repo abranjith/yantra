@@ -1,0 +1,3 @@
+warning: --no-browse has no effect on deterministic research, which never opens a browsing session
+research: search-provider=auto depth=1 max-sources=24 no-llm=true detail=standard format=terminal
+goal: "ai news"

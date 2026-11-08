@@ -1,0 +1,12 @@
+
+[browser_navigate] fields: url
+Opening the page. It has	two fields.
+[browser_navigate] ok — ok (412ms)
+[browser_fill] error — error: LOCATOR_NOT_FOUND
+
+Partial: 1 of 2 requirements met; quantity: not met. Brief: <home>/runs/run-fixed/brief.html
+Screenshot: <home>/runs/run-fixed/screenshots/capture-1-abcdef012345.png
+Screenshot: <home>/runs/run-fixed/screenshots/capture-2-abcdef012345.png (part 1 of 2) (incomplete: truncated)
+Screenshot: <home>/runs/run-fixed/screenshots/capture-3-abcdef012345.png
++1 more in <home>/runs/run-fixed/screenshots
+Run: run-fixed

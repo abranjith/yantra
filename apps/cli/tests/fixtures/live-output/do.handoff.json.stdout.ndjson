@@ -1,0 +1,11 @@
+{"schemaVersion":"0.2","kind":"agent_progress","event":{"type":"contract_declared","revision":1,"summary":"fill the order form; capture a screenshot","at":"2026-06-15T00:00:00.000Z"}}
+{"schemaVersion":"0.2","kind":"agent_progress","event":{"type":"capability_gap","item":"artifact:screenshot:full_page","reason":"suppressed_by_flag","summary":"cannot deliver: full-page screenshot (screenshots are off for this run)","at":"2026-06-15T00:00:00.000Z"}}
+{"schemaVersion":"0.2","kind":"agent_progress","event":{"type":"tool_started","tool":"browser_navigate","summary":"fields: url","at":"2026-06-15T00:00:00.000Z"}}
+{"schemaVersion":"0.2","kind":"agent_progress","event":{"type":"assistant_text","text":"Opening the page. ","at":"2026-06-15T00:00:00.000Z"}}
+{"schemaVersion":"0.2","kind":"agent_progress","event":{"type":"assistant_text","text":"It has\ttwo fields.\n","at":"2026-06-15T00:00:00.000Z"}}
+{"schemaVersion":"0.2","kind":"agent_progress","event":{"type":"tool_finished","tool":"browser_navigate","summary":"ok","status":"ok","durationMs":412,"at":"2026-06-15T00:00:00.000Z"}}
+{"schemaVersion":"0.2","kind":"agent_progress","event":{"type":"tool_finished","tool":"browser_fill","summary":"error: LOCATOR_NOT_FOUND","status":"error","durationMs":null,"at":"2026-06-15T00:00:00.000Z"}}
+{"schemaVersion":"0.2","kind":"agent_progress","event":{"type":"progress","items":[{"id":"fill:email","kind":"fill","label":"email","state":"met","done":1,"total":1},{"id":"fill:quantity","kind":"fill","label":"quantity","state":"pending","done":0,"total":1}],"summary":"email filled; quantity pending","at":"2026-06-15T00:00:00.000Z"}}
+{"schemaVersion":"0.2","kind":"agent_progress","event":{"type":"recovery","rung":"steer","trigger":"stalled","move":"fill-remaining","summary":"no task progress;\u001b[2J try the next supported step","at":"2026-06-15T00:00:00.000Z"}}
+{"schemaVersion":"0.2","kind":"agent_progress","event":{"type":"contract_declared","revision":2,"summary":"fill the order form","at":"2026-06-15T00:00:00.000Z"}}
+{"schemaVersion":"0.2","kind":"agent_outcome","task_outcome":"handoff","termination_reason":"handoff","artifacts":[],"outcome":{"kind":"handoff","runId":"run-fixed","runDir":"<home>/runs/run-fixed","blocker":"The site requires sign-in.","safestNextAction":"Sign in manually, then start a fresh run.","terminationReason":"handoff"}}

@@ -1,0 +1,12 @@
+✓ Run run-fixed: fulfilled
+
+answer:
+  Delivered Monday
+
+rows:
+  [
+    {
+      "date": "07/21",
+      "event": "Delivered"
+    }
+  ]

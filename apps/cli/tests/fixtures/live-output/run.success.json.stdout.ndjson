@@ -1,0 +1,14 @@
+{
+  "kind": "success",
+  "runId": "run-fixed",
+  "outputs": {
+    "answer": "Delivered Monday",
+    "rows": [
+      {
+        "date": "07/21",
+        "event": "Delivered"
+      }
+    ]
+  },
+  "task_outcome": "fulfilled"
+}

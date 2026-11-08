@@ -1,0 +1,3 @@
+warning: model anthropic/claude-haiku-4-5 is unavailable because no credential resolved; configure provider auth or pass --auth-secret <ref>; using deterministic research
+ask: search-provider=auto limit=3 no-llm=true detail=standard format=terminal
+goal: "ai news"

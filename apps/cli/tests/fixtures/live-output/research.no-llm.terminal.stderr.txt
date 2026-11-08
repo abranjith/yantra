@@ -1,0 +1,2 @@
+research: search-provider=auto depth=2 max-sources=24 no-llm=true detail=standard format=terminal
+goal: "ai news"

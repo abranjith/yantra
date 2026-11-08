@@ -1,0 +1,1 @@
+templates require LLM mode; drop --no-llm or drop --template
