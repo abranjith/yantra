@@ -8,6 +8,66 @@
       "task": "TASK-001"
     },
     {
+      "path": "apps/cli/src/commands/ask.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/cli/src/commands/do.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/cli/src/commands/research.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/cli/src/commands/resume.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/cli/src/commands/run.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/cli/src/connector-io.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/cli/src/render/goal-echo.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/cli/src/render/run-event-json.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/cli/src/render/run-event-terminal.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/cli/src/run-event-output.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
       "path": "apps/cli/tests/fixtures/live-output/ask.model-unavailable.terminal.stderr.txt",
       "status": "A",
       "role": "implement",
@@ -230,6 +290,18 @@
       "task": "TASK-001"
     },
     {
+      "path": "apps/cli/tests/render/run-event-projections.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/cli/tests/run-event-output.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
       "path": "docs/protocol-spec.md",
       "status": "M",
       "role": "implement",
@@ -321,7 +393,7 @@
     },
     {
       "path": "packages/core/src/run-events/recording-confirmation-gateway.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
@@ -381,7 +453,7 @@
     },
     {
       "path": "packages/core/tests/run-events/recording-confirmation-gateway.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },

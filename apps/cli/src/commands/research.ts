@@ -40,6 +40,8 @@ import {
   type SearchProviderName,
   type SynthesisLength,
   ResourceBusyError,
+  RunEventLogError,
+  type RunEventStream,
   UserInputMarkerError,
 } from '@yantra/core';
 import {
@@ -71,7 +73,7 @@ import { recordTaskHistory } from '../history.js';
 import { resolveAmbientContext, type ResolvedAmbientContext } from '../preferences.js';
 import { attachRegistered } from '../registry/build-command-tree.js';
 import { handler, type Handler, type HandlerArgs } from '../registry/handler.js';
-import { renderGoalEcho } from '../render/goal-echo.js';
+import { goalEchoEvent } from '../render/goal-echo.js';
 import { JSONRenderer } from '../render/json.js';
 import { TerminalRenderer } from '../render/terminal.js';
 import type { BriefDetailLevel, BriefOutputFormat, ConnectorRenderOpts } from '../render/types.js';
@@ -80,6 +82,12 @@ import {
   type NoBrowseOption,
   type ResearchBrowseResolution,
 } from '../research-browse.js';
+import {
+  createLiveRunEvents,
+  exitCodeOfThrown,
+  finishRunEvents,
+  warningEvent,
+} from '../run-event-output.js';
 import { createBestEffortRankSignalSink, runAgenticTaskWithRankSink } from '../runtime.js';
 import { TEMPLATE_LLM_GUARD, resolveTemplateRef } from '../template-ref.js';
 
@@ -157,170 +165,200 @@ export function makeResearchHandler(
       const browserSelection = resolveBrowserSelectionOverride(options);
       const effective = await resolvedRuntime.resolveDefaults();
       context.settings.usePreferences(effective);
-      const agent = await resolvedRuntime.resolveAgent(
-        'research',
-        options,
-        context.settings.env(),
-        effective,
-      );
-      if (agent.mode === 'no-llm' && agent.reason === 'unavailable') {
-        context.output.stderr.write(
-          `warning: model ${agent.model.provider}/${agent.model.id} is unavailable because no credential resolved; ` +
-            'configure provider auth or pass --auth-secret <ref>; using deterministic research\n',
-        );
-      }
-      const invocation = buildInvocation(topicArg, options, agent.mode === 'no-llm');
       const format = resolveFormat(options);
       const detail = (options.detail ?? 'standard') as BriefDetailLevel;
-      if (options.template !== undefined && invocation.options.noLlm) {
-        context.output.stderr.write(`${TEMPLATE_LLM_GUARD}\n`);
-        throw new CommanderError(1, 'yantra.template.llm-required', TEMPLATE_LLM_GUARD);
-      }
-      const template =
-        options.template === undefined
-          ? undefined
-          : await resolvedRuntime.resolveTemplate(options.template).catch((error: unknown) => {
-              context.output.stderr.write(
-                `${error instanceof Error ? error.message : String(error)}\n`,
-              );
-              throw error;
-            });
-      if (
-        template !== undefined &&
-        (command.getOptionValueSource('detail') === 'cli' ||
-          command.getOptionValueSource('length') === 'cli')
-      ) {
-        context.output.stderr.write(
-          'warning: --detail and --length do not affect template-defined report structure\n',
-        );
-      }
-      const browse = resolveResearchBrowse(options, effective);
-      // A scripted `--no-browse` must keep working when credentials go
-      // missing, so the deterministic path warns and continues.
-      if (agent.mode === 'no-llm' && options.browse === false) {
-        context.output.stderr.write(
-          'warning: --no-browse has no effect on deterministic research, which never opens a browsing session\n',
-        );
-      }
-
-      const configuredBrowser =
-        browserSelection === undefined
-          ? await new ConfigBrowserSelectionReader().read()
-          : undefined;
-      const selection = browserSelection ??
-        configuredBrowser ?? { source: 'auto' as const, executablePath: null };
-      const templatePath =
-        template?.path ??
-        (template?.name ? new FileTemplateStore(templatesRoot()).pathFor(template.name) : null);
-      const content = templatePath ? [await contentIdentity('template', templatePath)] : [];
-      const effectiveSettings: Readonly<Record<string, unknown>> = {
-        depth: invocation.options.budget.maxHops,
-        maxSources: invocation.options.budget.maxSources,
-        llm: !invocation.options.noLlm,
-        format,
-        detail,
-        length: invocation.options.length,
-        searchProvider: invocation.searchProvider,
-        perQueryLimit: invocation.options.perQueryLimit,
-        fetchTimeout: invocation.options.perFetchTimeoutMs,
-        pipelineTimeout: invocation.options.budget.maxWallClockMs,
-        maxLlmCalls: invocation.options.budget.maxLlmCalls,
-      };
-      for (const [key, value] of Object.entries(effectiveSettings))
-        await context.settings.effective(key, value);
-      context.settings.record(
-        'browse',
-        browse.enabled,
-        browse.source === 'preference'
-          ? { kind: 'preference', key: 'agent.research_browse' }
-          : { kind: browse.source },
-      );
-      if (options.json) context.settings.record('format', format, { kind: 'flag' });
-      if (agent.mode === 'llm') {
-        await context.settings.effective('provider', agent.model.provider);
-        await context.settings.effective('model', agent.model.id);
-        await context.settings.effective('thinking', agent.model.thinking ?? null);
-      }
-      const browserSource = browserSelection
-        ? { kind: 'flag' as const }
-        : configuredBrowser
-          ? { kind: 'config' as const, key: 'browser.source' }
-          : { kind: 'default' as const };
-      context.settings.record('browser', selection.source, browserSource);
-      context.settings.record('browserPath', selection.executablePath, browserSource);
-      const receipt = await context.settings.draftReceipt(['research'], {
-        content,
-        browser: {
-          selection,
-          source: browserSelection
-            ? { kind: 'flag' }
-            : configuredBrowser
-              ? { kind: 'config', key: 'browser.source' }
-              : { kind: 'default' },
-        },
-      });
-
-      // Resolved before the try so a bad --provider/--model is a validation
-      // failure (exit 1) rather than being reclassified as an execution failure
-      // by the catch below. Skipped entirely in deterministic mode, which never
-      // constructs a provider session.
-      context.output.stderr.write(
-        `research: search-provider=${invocation.searchProvider ?? 'auto'} ` +
-          `depth=${invocation.options.budget.maxHops} max-sources=${invocation.options.budget.maxSources} ` +
-          `no-llm=${invocation.options.noLlm} detail=${detail} format=${format}` +
-          (agent.mode === 'no-llm'
-            ? ''
-            : ` model=${agent.model.provider}/${agent.model.id} browse=${browse.enabled ? 'on' : 'off'}`) +
-          '\n',
-      );
-      // The goal exactly as received, so a shell-rewritten argument is visible.
-      context.output.stderr.write(renderGoalEcho(topicArg));
-
+      // FEAT-063: the run's event stream, created before the run exists so the
+      // goal echo and advisories print first. Every live line goes through it.
+      const runEvents = createLiveRunEvents(agentRenderOpts(context, format, detail, options));
       try {
-        // Deterministic selection is resolved before any agent/provider setup.
-        if (agent.mode === 'llm') {
-          honorsAbort = true;
-          await runAgenticResearch(
-            topicArg,
-            invocation,
-            format,
-            detail,
-            options,
-            resolvedRuntime,
-            context,
-            template,
-            agent,
-            resolveAmbientContext(effective),
-            browserSelection,
-            browse,
-            receipt,
-          );
-          return;
-        }
-        const loop = await resolvedRuntime.createLoop(invocation, {
-          resourceLockOptions: resourceOptions(context, 'research'),
-          installOfferGateway: context.gateways.installOffer(
-            context.isInteractive({ json: format === 'json' }),
-          ),
-          ...(browserSelection === undefined ? {} : { selection: browserSelection }),
-        });
-        const result: ResearchRunResult = await loop.run({ ...invocation.options, receipt });
-
-        renderBrief(context, result, { format, detail, options });
-
-        if (options.open === true && result.artifacts !== null) {
-          context.openExternal(result.artifacts.htmlPath);
-        }
+        await researchWithRunEvents();
       } catch (error) {
-        if (error instanceof ResourceBusyError) throw error;
-        const message = error instanceof Error ? error.message : String(error);
-        if (error instanceof UserInputMarkerError) {
-          context.output.stderr.write(`research validation failed: ${message}\n`);
-          throw new CommanderError(1, 'yantra.research.invalid-user-input-marker', message);
+        finishRunEvents(runEvents, exitCodeOfThrown(error));
+        throw error;
+      }
+      finishRunEvents(runEvents, 0);
+
+      async function researchWithRunEvents(): Promise<void> {
+        const agent = await resolvedRuntime.resolveAgent(
+          'research',
+          options,
+          context.settings.env(),
+          effective,
+        );
+        if (agent.mode === 'no-llm' && agent.reason === 'unavailable') {
+          runEvents.emit(
+            warningEvent(
+              'command',
+              `model ${agent.model.provider}/${agent.model.id} is unavailable because no credential resolved; ` +
+                'configure provider auth or pass --auth-secret <ref>; using deterministic research',
+            ),
+          );
         }
-        context.output.stderr.write(`research failed: ${message}\n`);
-        if (error instanceof CommanderError) throw error;
-        throw new CommanderError(2, 'yantra.research.failed', message);
+        const invocation = buildInvocation(topicArg, options, agent.mode === 'no-llm');
+        if (options.template !== undefined && invocation.options.noLlm) {
+          context.output.stderr.write(`${TEMPLATE_LLM_GUARD}\n`);
+          throw new CommanderError(1, 'yantra.template.llm-required', TEMPLATE_LLM_GUARD);
+        }
+        const template =
+          options.template === undefined
+            ? undefined
+            : await resolvedRuntime.resolveTemplate(options.template).catch((error: unknown) => {
+                context.output.stderr.write(
+                  `${error instanceof Error ? error.message : String(error)}\n`,
+                );
+                throw error;
+              });
+        if (
+          template !== undefined &&
+          (command.getOptionValueSource('detail') === 'cli' ||
+            command.getOptionValueSource('length') === 'cli')
+        ) {
+          runEvents.emit(
+            warningEvent(
+              'command',
+              '--detail and --length do not affect template-defined report structure',
+            ),
+          );
+        }
+        const browse = resolveResearchBrowse(options, effective);
+        // A scripted `--no-browse` must keep working when credentials go
+        // missing, so the deterministic path warns and continues.
+        if (agent.mode === 'no-llm' && options.browse === false) {
+          runEvents.emit(
+            warningEvent(
+              'command',
+              '--no-browse has no effect on deterministic research, which never opens a browsing session',
+            ),
+          );
+        }
+
+        const configuredBrowser =
+          browserSelection === undefined
+            ? await new ConfigBrowserSelectionReader().read()
+            : undefined;
+        const selection = browserSelection ??
+          configuredBrowser ?? { source: 'auto' as const, executablePath: null };
+        const templatePath =
+          template?.path ??
+          (template?.name ? new FileTemplateStore(templatesRoot()).pathFor(template.name) : null);
+        const content = templatePath ? [await contentIdentity('template', templatePath)] : [];
+        const effectiveSettings: Readonly<Record<string, unknown>> = {
+          depth: invocation.options.budget.maxHops,
+          maxSources: invocation.options.budget.maxSources,
+          llm: !invocation.options.noLlm,
+          format,
+          detail,
+          length: invocation.options.length,
+          searchProvider: invocation.searchProvider,
+          perQueryLimit: invocation.options.perQueryLimit,
+          fetchTimeout: invocation.options.perFetchTimeoutMs,
+          pipelineTimeout: invocation.options.budget.maxWallClockMs,
+          maxLlmCalls: invocation.options.budget.maxLlmCalls,
+        };
+        for (const [key, value] of Object.entries(effectiveSettings))
+          await context.settings.effective(key, value);
+        context.settings.record(
+          'browse',
+          browse.enabled,
+          browse.source === 'preference'
+            ? { kind: 'preference', key: 'agent.research_browse' }
+            : { kind: browse.source },
+        );
+        if (options.json) context.settings.record('format', format, { kind: 'flag' });
+        if (agent.mode === 'llm') {
+          await context.settings.effective('provider', agent.model.provider);
+          await context.settings.effective('model', agent.model.id);
+          await context.settings.effective('thinking', agent.model.thinking ?? null);
+        }
+        const browserSource = browserSelection
+          ? { kind: 'flag' as const }
+          : configuredBrowser
+            ? { kind: 'config' as const, key: 'browser.source' }
+            : { kind: 'default' as const };
+        context.settings.record('browser', selection.source, browserSource);
+        context.settings.record('browserPath', selection.executablePath, browserSource);
+        const receipt = await context.settings.draftReceipt(['research'], {
+          content,
+          browser: {
+            selection,
+            source: browserSelection
+              ? { kind: 'flag' }
+              : configuredBrowser
+                ? { kind: 'config', key: 'browser.source' }
+                : { kind: 'default' },
+          },
+        });
+
+        // Resolved before the try so a bad --provider/--model is a validation
+        // failure (exit 1) rather than being reclassified as an execution failure
+        // by the catch below. Skipped entirely in deterministic mode, which never
+        // constructs a provider session.
+        context.output.stderr.write(
+          `research: search-provider=${invocation.searchProvider ?? 'auto'} ` +
+            `depth=${invocation.options.budget.maxHops} max-sources=${invocation.options.budget.maxSources} ` +
+            `no-llm=${invocation.options.noLlm} detail=${detail} format=${format}` +
+            (agent.mode === 'no-llm'
+              ? ''
+              : ` model=${agent.model.provider}/${agent.model.id} browse=${browse.enabled ? 'on' : 'off'}`) +
+            '\n',
+        );
+        // The goal exactly as received, so a shell-rewritten argument is visible.
+        runEvents.emit(goalEchoEvent(topicArg));
+
+        try {
+          // Deterministic selection is resolved before any agent/provider setup.
+          if (agent.mode === 'llm') {
+            honorsAbort = true;
+            await runAgenticResearch(
+              topicArg,
+              invocation,
+              format,
+              detail,
+              options,
+              resolvedRuntime,
+              context,
+              template,
+              agent,
+              resolveAmbientContext(effective),
+              browserSelection,
+              browse,
+              receipt,
+              runEvents,
+            );
+            return;
+          }
+          const loop = await resolvedRuntime.createLoop(invocation, {
+            resourceLockOptions: resourceOptions(context, 'research'),
+            installOfferGateway: context.gateways.installOffer(
+              context.isInteractive({ json: format === 'json' }),
+            ),
+            ...(browserSelection === undefined ? {} : { selection: browserSelection }),
+          });
+          const result: ResearchRunResult = await loop.run({
+            ...invocation.options,
+            receipt,
+            runEvents,
+          });
+
+          renderBrief(context, result, { format, detail, options });
+
+          if (options.open === true && result.artifacts !== null) {
+            context.openExternal(result.artifacts.htmlPath);
+          }
+        } catch (error) {
+          if (error instanceof ResourceBusyError) throw error;
+          const message = error instanceof Error ? error.message : String(error);
+          if (error instanceof UserInputMarkerError) {
+            context.output.stderr.write(`research validation failed: ${message}\n`);
+            throw new CommanderError(1, 'yantra.research.invalid-user-input-marker', message);
+          }
+          context.output.stderr.write(`research failed: ${message}\n`);
+          if (error instanceof CommanderError) throw error;
+          // An unopenable run-event log is an environment failure (exit 3).
+          if (error instanceof RunEventLogError)
+            throw new CommanderError(3, 'yantra.research.run-events-unavailable', message);
+          throw new CommanderError(2, 'yantra.research.failed', message);
+        }
       }
     },
   );
@@ -461,6 +499,26 @@ function runtimeWithDefaults(
   };
 }
 
+/** Render options of the research run's live output and its agentic connector. */
+function agentRenderOpts(
+  context: CommandContext,
+  format: BriefOutputFormat,
+  detail: BriefDetailLevel,
+  options: ResearchCommandOptions,
+): ConnectorRenderOpts {
+  return {
+    json: format === 'json',
+    debug: false,
+    noColor: resolveNoColor(options, context),
+    stream: context.output.stdout,
+    errStream: context.output.stderr,
+    briefDetail: detail,
+    briefFormat: format,
+    suppressOpenHint: options.open === true,
+    ...(context.output.columns === null ? {} : { width: context.output.columns }),
+  };
+}
+
 async function runAgenticResearch(
   topic: string,
   invocation: ResearchInvocation,
@@ -475,24 +533,16 @@ async function runAgenticResearch(
   browserSelection: BrowserSelection | undefined,
   browse: ResearchBrowseResolution,
   receipt: ExecutionReceiptDraft,
+  runEvents: RunEventStream,
 ): Promise<void> {
-  const renderOpts: ConnectorRenderOpts = {
-    json: format === 'json',
-    debug: false,
-    noColor: resolveNoColor(options, context),
-    stream: context.output.stdout,
-    errStream: context.output.stderr,
-    briefDetail: detail,
-    briefFormat: format,
-    suppressOpenHint: options.open === true,
-    ...(context.output.columns === null ? {} : { width: context.output.columns }),
-  };
+  const renderOpts = agentRenderOpts(context, format, detail, options);
   const connector = context.connector(
     format === 'json' ? new JSONRenderer() : new TerminalRenderer(),
     {
       renderOpts,
       interactive: context.isInteractive({ json: format === 'json' }),
       suppressPublishedOutcome: true,
+      runEvents,
     },
   );
   const profile = resolveCommandTaskProfile('research', { browse: browse.enabled });

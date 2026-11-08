@@ -252,6 +252,20 @@ The live **events** listed above are the ones rendered from the union.
 > the bridge and carries the "non-interactive `do` records raised → resolved `timed_out`/`timeout`"
 > test in `run-events-emission.spec.ts`.
 
+> **DEVIATION** (TASK-010, `--json` projection): the spec's JSON renderer prints only agent kinds.
+> Today a `--json` run also writes two human lines to **stderr**: the goal echo and the command's
+> own `warning:` advisories (the TASK-001 goldens pin both). The JSON projection keeps printing
+> `goal_echo` and `run_warning` with `source: 'command'` to stderr; an agent advisory stays
+> suppressed, as before. stdout carries only `agent_progress` lines, unchanged.
+>
+> **Note** (TASK-010, wiring after FEAT-072): a connector subscribes its renderer only to a stream it
+> creates itself. `ask`, `research`, `run` and `resume` create the stream at command start
+> (`createLiveRunEvents`), so it renders their goal echo and advisories, and hand it to any later
+> connector through `CliAgentConnectorOptions.runEvents`; nothing renders twice. When the run throws,
+> the command records the outcome with the exit code it returns (`finishRunEvents`). An unopenable
+> log exits 3. The `ask:`/`research:` settings header stays a direct write: it is configuration,
+> not a run event, and the receipt records it.
+
 ## 3. Files
 
 **Protocol (`packages/protocol`)**
@@ -682,7 +696,7 @@ FEAT-072` to this spec's State Tracking. The FEAT-072 implementer then calls the
 - [x] TASK-007: Deterministic replay (`run`, `resume`, daemon fires) writes `run-events.jsonl`
 - [x] TASK-008: Deterministic `ask`/`research` emit phase events, budget snapshots, artifacts and the outcome
 - [x] TASK-009: Record every consent wait as `intervention_raised` / `intervention_resolved`
-- [ ] TASK-010: CLI renderers consume the union; `ask`/`research`/`run`/`resume` route their live output through the stream
+- [x] TASK-010: CLI renderers consume the union; `ask`/`research`/`run`/`resume` route their live output through the stream
 - [ ] TASK-011: Agentic runs (`do`, agentic `ask`/`research`) write their progress through the stream
 - [ ] TASK-012: `receipt_written` emission
 - [ ] TASK-013: Acceptance suite: counterparts, gap-free `seq`, canary, old fixtures; Audit Trail listing

@@ -32,6 +32,7 @@ import { resolve } from 'node:path';
 import { PiAgentProvider } from '@yantra/agent';
 import {
   ResourceBusyError,
+  RunEventLogError,
   BrowserInstallOfferDeclinedError,
   BrowserManagedInstallError,
   type EffectivePreferences,
@@ -63,6 +64,12 @@ import { createRegisteredCommand } from '../registry/build-command-tree.js';
 import { handler, type Handler, type HandlerArgs } from '../registry/handler.js';
 import { TerminalRenderer } from '../render/terminal.js';
 import type { ConnectorRenderOpts } from '../render/types.js';
+import {
+  createLiveRunEvents,
+  finishRunEvents,
+  liveRenderOpts,
+  warningEvent,
+} from '../run-event-output.js';
 import { buildOrchestratorRuntime, makeStderrLogger } from '../runtime.js';
 import { createSynthesisLlm } from '../synthesis-llm.js';
 
@@ -168,10 +175,16 @@ export async function runHandler(
     return { exitCode: 1 as ExitCode };
   }
   const { selection } = wiring;
+  // FEAT-063: the run's event stream, created before the run exists so its
+  // advisories print first; the orchestrator opens it with the run directory.
+  const runEvents = createLiveRunEvents(liveRenderOpts(context, options.json === true));
   if (wiring.reason === 'unavailable' && wiring.unavailableModel !== undefined) {
-    context.output.stderr.write(
-      `warning: model ${wiring.unavailableModel.provider}/${wiring.unavailableModel.id} is unavailable because no credential resolved; ` +
-        'configure provider auth or pass --auth-secret <ref>; using deterministic replay synthesis\n',
+    runEvents.emit(
+      warningEvent(
+        'command',
+        `model ${wiring.unavailableModel.provider}/${wiring.unavailableModel.id} is unavailable because no credential resolved; ` +
+          'configure provider auth or pass --auth-secret <ref>; using deterministic replay synthesis',
+      ),
     );
   }
 
@@ -239,7 +252,7 @@ export async function runHandler(
         options.paramsFile === undefined ? undefined : resolve(context.cwd, options.paramsFile),
       ),
     });
-    const outcome = await orchestrator.run({ ...request, receipt });
+    const outcome = await orchestrator.run({ ...request, receipt, runEvents });
 
     // Record the completed run into the history index (best-effort — the
     // index is an optional cache and must never fail a run).
@@ -279,16 +292,24 @@ export async function runHandler(
       context.openExternal(briefArtifacts.htmlPath);
 
     closeRuntime();
-    return { exitCode: exitCodeFor(outcome) as ExitCode };
+    const exitCode = exitCodeFor(outcome) as ExitCode;
+    finishRunEvents(runEvents, exitCode);
+    return { exitCode };
   } catch (err) {
     closeRuntime();
-    if (err instanceof ResourceBusyError) throw err;
+    if (err instanceof ResourceBusyError) {
+      finishRunEvents(runEvents, 3);
+      throw err;
+    }
     const message = err instanceof Error ? err.message : String(err);
     context.output.stderr.write(`Error: ${message}\n`);
     if (options.debug === true && err instanceof Error && err.stack !== undefined) {
       context.output.stderr.write(`${err.stack}\n`);
     }
-    return { exitCode: 1 as ExitCode };
+    // An unopenable run-event log is an environment failure (exit 3).
+    const exitCode = (err instanceof RunEventLogError ? 3 : 1) as ExitCode;
+    finishRunEvents(runEvents, exitCode);
+    return { exitCode };
   }
 }
 

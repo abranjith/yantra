@@ -40,7 +40,9 @@ import {
   type SearchProviderName,
   type SynthesisLength,
   ResourceBusyError,
+  RunEventLogError,
   UserInputMarkerError,
+  type RunEventStream,
 } from '@yantra/core';
 import {
   COMMAND_REGISTRY,
@@ -72,10 +74,16 @@ import { recordTaskHistory } from '../history.js';
 import { resolveAmbientContext, type ResolvedAmbientContext } from '../preferences.js';
 import { attachRegistered } from '../registry/build-command-tree.js';
 import { handler, type Handler, type HandlerArgs } from '../registry/handler.js';
-import { renderGoalEcho } from '../render/goal-echo.js';
+import { goalEchoEvent } from '../render/goal-echo.js';
 import { JSONRenderer } from '../render/json.js';
 import { TerminalRenderer } from '../render/terminal.js';
 import type { BriefDetailLevel, BriefOutputFormat, ConnectorRenderOpts } from '../render/types.js';
+import {
+  createLiveRunEvents,
+  exitCodeOfThrown,
+  finishRunEvents,
+  warningEvent,
+} from '../run-event-output.js';
 import { createBestEffortRankSignalSink, runAgenticTaskWithRankSink } from '../runtime.js';
 import { TEMPLATE_LLM_GUARD, resolveTemplateRef } from '../template-ref.js';
 
@@ -151,129 +159,152 @@ export function makeAskHandler(
       const effective = await resolvedRuntime.resolveDefaults();
       context.settings.usePreferences(effective);
       const resolved = resolveAskDefaults(options, effective);
-      const agent = await resolvedRuntime.resolveAgent(
-        'ask',
-        options,
-        context.settings.env(),
-        effective,
-      );
-      honorsAbort = agent.mode === 'llm';
-      if (agent.mode === 'no-llm' && agent.reason === 'unavailable') {
-        context.output.stderr.write(
-          `warning: model ${agent.model.provider}/${agent.model.id} is unavailable because no credential resolved; ` +
-            'configure provider auth or pass --auth-secret <ref>; using deterministic research\n',
-        );
-      }
-      const baseQuery = buildAskQuery(queryArg, options, resolved, agent.mode === 'no-llm');
-      // Build the privacy-gated personalization context (LLM path only). The
-      // builder takes preferences only — raw history has no path in.
-      const personalization = baseQuery.noLlm ? null : personalizationFrom(effective);
-      const query: AskQuery = personalization ? { ...baseQuery, personalization } : baseQuery;
       const format = resolveFormat(options);
       const detail = resolved.detail;
-      if (options.template !== undefined && query.noLlm) {
-        context.output.stderr.write(`${TEMPLATE_LLM_GUARD}\n`);
-        throw new CommanderError(1, 'yantra.template.llm-required', TEMPLATE_LLM_GUARD);
-      }
-      const template =
-        options.template === undefined
-          ? undefined
-          : await resolvedRuntime.resolveTemplate(options.template).catch((error: unknown) => {
-              context.output.stderr.write(
-                `${error instanceof Error ? error.message : String(error)}\n`,
-              );
-              throw error;
-            });
-      if (
-        template !== undefined &&
-        (command.getOptionValueSource('detail') === 'cli' ||
-          command.getOptionValueSource('length') === 'cli')
-      ) {
-        context.output.stderr.write(
-          'warning: --detail and --length do not affect template-defined report structure\n',
-        );
-      }
-
-      const receipt = await draftRunReceipt(context, ['ask'], {
-        agent,
-        ...(template === undefined ? {} : { template }),
-        ...(browserSelection === undefined ? {} : { browser: browserSelection }),
-        settings: {
-          llm: !query.noLlm,
-          detail,
-          length: query.length,
-          format,
-          limit: query.limit,
-          searchProvider: query.searchProvider,
-          fetchTimeout: query.perFetchTimeoutMs,
-          pipelineTimeout: query.pipelineBudgetMs,
-        },
-      });
-      // Resolved before the try so a bad --provider/--model is a validation
-      // failure (exit 1) rather than being reclassified as an execution failure
-      // by the catch below. Skipped entirely in deterministic mode, which never
-      // constructs a provider session.
-      context.output.stderr.write(
-        `ask: search-provider=${query.searchProvider ?? 'auto'} limit=${query.limit} ` +
-          `no-llm=${query.noLlm} detail=${detail} format=${format}` +
-          (agent.mode === 'no-llm' ? '' : ` model=${agent.model.provider}/${agent.model.id}`) +
-          '\n',
-      );
-      // The goal exactly as received, so a shell-rewritten argument is visible.
-      context.output.stderr.write(renderGoalEcho(queryArg));
-
+      // FEAT-063: the run's event stream, created before the run exists so the
+      // goal echo and advisories print first. Every live line goes through it.
+      const runEvents = createLiveRunEvents(agentRenderOpts(context, format, detail, options));
       try {
-        // Selection happens before the agent runtime/provider is constructed.
-        // The deterministic pipeline below is deliberately untouched.
-        if (agent.mode === 'llm') {
-          await runAgenticAsk(
-            queryArg,
-            query,
-            format,
-            detail,
-            options,
-            resolvedRuntime,
-            context,
-            template,
-            agent,
-            resolveAmbientContext(effective),
-            browserSelection,
-            receipt,
-          );
-          return;
-        }
-        const pipeline = await resolvedRuntime.createPipeline(query, {
-          resourceLockOptions: resourceOptions(context, 'ask'),
-          installOfferGateway: context.gateways.installOffer(
-            context.isInteractive({ json: format === 'json' }),
-          ),
-          ...(browserSelection === undefined ? {} : { selection: browserSelection }),
-        });
-        const result: AskRunResult = await pipeline.run({ ...query, receipt });
-
-        renderBrief(context, result, { format, detail, options });
-
-        // Record the completed task into the history index (best-effort — a
-        // missing/failed index never fails the ask). Reads the manifest the
-        // pipeline just wrote under runs/<run_id>/.
-        const runId = result.brief.metadata.run_id;
-        if (typeof runId === 'string' && runId.length > 0) {
-          await resolvedRuntime.recordHistory(runId);
-        }
-
-        if (options.open === true && result.artifacts !== null) {
-          context.openExternal(result.artifacts.htmlPath);
-        }
+        await askWithRunEvents();
       } catch (error) {
-        if (error instanceof ResourceBusyError) throw error;
-        const message = error instanceof Error ? error.message : String(error);
-        if (error instanceof UserInputMarkerError) {
-          context.output.stderr.write(`ask validation failed: ${message}\n`);
-          throw new CommanderError(1, 'yantra.ask.invalid-user-input-marker', message);
+        finishRunEvents(runEvents, exitCodeOfThrown(error));
+        throw error;
+      }
+      finishRunEvents(runEvents, 0);
+
+      async function askWithRunEvents(): Promise<void> {
+        const agent = await resolvedRuntime.resolveAgent(
+          'ask',
+          options,
+          context.settings.env(),
+          effective,
+        );
+        honorsAbort = agent.mode === 'llm';
+        if (agent.mode === 'no-llm' && agent.reason === 'unavailable') {
+          runEvents.emit(
+            warningEvent(
+              'command',
+              `model ${agent.model.provider}/${agent.model.id} is unavailable because no credential resolved; ` +
+                'configure provider auth or pass --auth-secret <ref>; using deterministic research',
+            ),
+          );
         }
-        context.output.stderr.write(`ask failed: ${message}\n`);
-        if (error instanceof CommanderError) throw error;
-        throw new CommanderError(2, 'yantra.ask.failed', message);
+        const baseQuery = buildAskQuery(queryArg, options, resolved, agent.mode === 'no-llm');
+        // Build the privacy-gated personalization context (LLM path only). The
+        // builder takes preferences only — raw history has no path in.
+        const personalization = baseQuery.noLlm ? null : personalizationFrom(effective);
+        const query: AskQuery = personalization ? { ...baseQuery, personalization } : baseQuery;
+        if (options.template !== undefined && query.noLlm) {
+          context.output.stderr.write(`${TEMPLATE_LLM_GUARD}\n`);
+          throw new CommanderError(1, 'yantra.template.llm-required', TEMPLATE_LLM_GUARD);
+        }
+        const template =
+          options.template === undefined
+            ? undefined
+            : await resolvedRuntime.resolveTemplate(options.template).catch((error: unknown) => {
+                context.output.stderr.write(
+                  `${error instanceof Error ? error.message : String(error)}\n`,
+                );
+                throw error;
+              });
+        if (
+          template !== undefined &&
+          (command.getOptionValueSource('detail') === 'cli' ||
+            command.getOptionValueSource('length') === 'cli')
+        ) {
+          runEvents.emit(
+            warningEvent(
+              'command',
+              '--detail and --length do not affect template-defined report structure',
+            ),
+          );
+        }
+
+        const receipt = await draftRunReceipt(context, ['ask'], {
+          agent,
+          ...(template === undefined ? {} : { template }),
+          ...(browserSelection === undefined ? {} : { browser: browserSelection }),
+          settings: {
+            llm: !query.noLlm,
+            detail,
+            length: query.length,
+            format,
+            limit: query.limit,
+            searchProvider: query.searchProvider,
+            fetchTimeout: query.perFetchTimeoutMs,
+            pipelineTimeout: query.pipelineBudgetMs,
+          },
+        });
+        // Resolved before the try so a bad --provider/--model is a validation
+        // failure (exit 1) rather than being reclassified as an execution failure
+        // by the catch below. Skipped entirely in deterministic mode, which never
+        // constructs a provider session.
+        context.output.stderr.write(
+          `ask: search-provider=${query.searchProvider ?? 'auto'} limit=${query.limit} ` +
+            `no-llm=${query.noLlm} detail=${detail} format=${format}` +
+            (agent.mode === 'no-llm' ? '' : ` model=${agent.model.provider}/${agent.model.id}`) +
+            '\n',
+        );
+        // The goal exactly as received, so a shell-rewritten argument is visible.
+        runEvents.emit(goalEchoEvent(queryArg));
+
+        try {
+          // Selection happens before the agent runtime/provider is constructed.
+          // The deterministic pipeline below is deliberately untouched.
+          if (agent.mode === 'llm') {
+            await runAgenticAsk(
+              queryArg,
+              query,
+              format,
+              detail,
+              options,
+              resolvedRuntime,
+              context,
+              template,
+              agent,
+              resolveAmbientContext(effective),
+              browserSelection,
+              receipt,
+              runEvents,
+            );
+            return;
+          }
+          const pipeline = await resolvedRuntime.createPipeline(query, {
+            resourceLockOptions: resourceOptions(context, 'ask'),
+            installOfferGateway: context.gateways.installOffer(
+              context.isInteractive({ json: format === 'json' }),
+            ),
+            ...(browserSelection === undefined ? {} : { selection: browserSelection }),
+          });
+          const result: AskRunResult = await pipeline.run({ ...query, receipt, runEvents });
+
+          renderBrief(context, result, { format, detail, options });
+
+          // Record the completed task into the history index (best-effort — a
+          // missing/failed index never fails the ask). Reads the manifest the
+          // pipeline just wrote under runs/<run_id>/.
+          const runId = result.brief.metadata.run_id;
+          if (typeof runId === 'string' && runId.length > 0) {
+            await resolvedRuntime.recordHistory(runId);
+          }
+
+          if (options.open === true && result.artifacts !== null) {
+            context.openExternal(result.artifacts.htmlPath);
+          }
+        } catch (error) {
+          if (error instanceof ResourceBusyError) throw error;
+          const message = error instanceof Error ? error.message : String(error);
+          if (error instanceof UserInputMarkerError) {
+            context.output.stderr.write(`ask validation failed: ${message}\n`);
+            throw new CommanderError(1, 'yantra.ask.invalid-user-input-marker', message);
+          }
+          context.output.stderr.write(`ask failed: ${message}\n`);
+          if (error instanceof CommanderError) throw error;
+          // An unopenable run-event log is an environment failure (exit 3).
+          if (error instanceof RunEventLogError)
+            throw new CommanderError(3, 'yantra.ask.run-events-unavailable', message);
+          throw new CommanderError(2, 'yantra.ask.failed', message);
+        }
       }
     },
   );
@@ -449,6 +480,7 @@ async function runAgenticAsk(
   ambient: ResolvedAmbientContext,
   browserSelection: BrowserSelection | undefined,
   receipt: ExecutionReceiptDraft,
+  runEvents: RunEventStream,
 ): Promise<void> {
   const renderOpts = agentRenderOpts(context, format, detail, options);
   const connector = context.connector(
@@ -457,6 +489,7 @@ async function runAgenticAsk(
       renderOpts,
       interactive: context.isInteractive({ json: format === 'json' }),
       suppressPublishedOutcome: true,
+      runEvents,
     },
   );
   const profile = resolveCommandTaskProfile('ask');

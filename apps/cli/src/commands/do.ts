@@ -36,7 +36,7 @@ import { recordTaskHistory } from '../history.js';
 import { resolveAmbientContext } from '../preferences.js';
 import { attachRegistered } from '../registry/build-command-tree.js';
 import { handler, type Handler, type HandlerArgs } from '../registry/handler.js';
-import { renderGoalEcho } from '../render/goal-echo.js';
+import { goalEchoEvent } from '../render/goal-echo.js';
 import { JSONRenderer } from '../render/json.js';
 import { TerminalRenderer } from '../render/terminal.js';
 import type { ConnectorRenderOpts } from '../render/types.js';
@@ -143,9 +143,6 @@ async function executeDo(
           );
           throw error;
         });
-  // The goal exactly as received, before the agent starts, so a shell-rewritten
-  // argument is visible. Same spelling as `ask` and `research`.
-  context.output.stderr.write(renderGoalEcho(goal));
   const json = options.json === true;
   const renderOpts: ConnectorRenderOpts = {
     json,
@@ -160,6 +157,10 @@ async function executeDo(
     interactive: context.isInteractive({ json }),
     suppressPublishedOutcome: template !== undefined,
   });
+  // The goal exactly as received, before the agent starts, so a shell-rewritten
+  // argument is visible. Same spelling as `ask` and `research`; it goes through
+  // the run's event stream (FEAT-063), whose renderer prints it on stderr.
+  connector.runEvents.emit(goalEchoEvent(goal));
 
   const allowedHosts = normalizeHosts(options.allowHost ?? []);
   const receipt = await draftRunReceipt(context, ['do'], {

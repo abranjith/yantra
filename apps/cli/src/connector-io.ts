@@ -5,7 +5,9 @@
  * Responsibilities (the only three the interface owns):
  *
  *   1. Build a `TaskRequest` from the connector's native input shape.
- *   2. Subscribe to the `TaskEvent` stream for the lifetime of one task.
+ *   2. Subscribe to the run's `RunEvent` stream for the lifetime of one task
+ *      (FEAT-063: one union for lifecycle, agent progress, consent waits,
+ *      budgets, artifacts and the outcome).
  *   3. Render the final outcome and signal completion.
  *
  * Designed *now* so the Phase 2 split is a mechanical "add another
@@ -33,8 +35,14 @@ import {
   type AgentTaskConnector,
   type AgenticTaskOutcome,
 } from '@yantra/agent';
-import type { Brief, ConfirmationRequest, TaskEvent, TemplatedReport } from '@yantra/protocol';
-import { SCHEMA_VERSION } from '@yantra/protocol';
+import { RunEventStream } from '@yantra/core';
+import type {
+  Brief,
+  ConfirmationRequest,
+  RunEventDelivery,
+  TemplatedReport,
+} from '@yantra/protocol';
+import { SCHEMA_VERSION, toRunEvent } from '@yantra/protocol';
 
 import type { GlobalFlags } from './global-flags.js';
 import { stripControlCharacters } from './render/goal-echo.js';
@@ -48,6 +56,7 @@ import type {
   OutputRenderer,
   ShowItem,
 } from './render/types.js';
+import { subscribeRunEventRenderer, warningEvent } from './run-event-output.js';
 
 export type ConnectorId = 'cli' | 'whatsapp' | 'email' | 'web';
 
@@ -76,11 +85,16 @@ export type ConnectorResult =
 export interface ConnectorIO extends AgentTaskConnector {
   readonly id: ConnectorId;
 
+  /** The run's event stream; the command emits its own live lines through it. */
+  readonly runEvents: RunEventStream;
+
   /**
-   * Subscribes a handler to the task event stream for the lifetime of one
-   * task. The returned disposer is idempotent — calling it twice is safe.
+   * Subscribes a handler to the run's event stream for the lifetime of one
+   * task. The handler sees committed events only (each already appended to
+   * `run-events.jsonl`, with its `seq`). The returned disposer is idempotent —
+   * calling it twice is safe.
    */
-  onEvent(handler: (event: TaskEvent) => void): () => void;
+  onEvent(handler: (delivery: RunEventDelivery) => void): () => void;
 
   /**
    * Renders the final outcome to the connector surface. For CLI this writes
@@ -101,43 +115,38 @@ export interface CliAgentConnectorOptions {
   /** Command will render the published Brief itself using its selected format. */
   readonly suppressPublishedOutcome?: boolean;
   readonly output?: { json(value: unknown): void; jsonLine(value: unknown): void };
-}
-
-/**
- * Trivial in-process event bus the CLI uses when there isn't a wider one
- * available (e.g. for the audit/doctor commands which produce no
- * `TaskEvent`s). Phase 2 swaps in the FEAT-005 EventBus.
- */
-class NoopEventStream {
-  private readonly handlers = new Set<(event: TaskEvent) => void>();
-
-  subscribe(handler: (event: TaskEvent) => void): () => void {
-    this.handlers.add(handler);
-    let disposed = false;
-    return (): void => {
-      if (disposed) return;
-      disposed = true;
-      this.handlers.delete(handler);
-    };
-  }
+  /**
+   * The run's event stream, when the command created it first (to print its
+   * goal echo and warnings before the run exists). Its renderer is already
+   * subscribed, so the connector subscribes none of its own.
+   */
+  readonly runEvents?: RunEventStream;
 }
 
 export class CommandConnectorIO implements ConnectorIO {
   readonly id: ConnectorId = 'cli';
-  private readonly events = new NoopEventStream();
+  /** The run's event stream: the command's own, or one this connector created and renders. */
+  public readonly runEvents: RunEventStream;
 
   public constructor(
     private readonly renderer: OutputRenderer,
     private readonly agentOptions?: CliAgentConnectorOptions,
-  ) {}
+  ) {
+    this.runEvents = agentOptions?.runEvents ?? new RunEventStream();
+    // The connector's renderer is a projection of the union. A stream handed
+    // in already has its renderer; one created here gets it now.
+    if (agentOptions !== undefined && agentOptions.runEvents === undefined) {
+      subscribeRunEventRenderer(this.runEvents, agentOptions.renderOpts, agentOptions.output);
+    }
+  }
 
   /** True only for an explicitly interactive, non-JSON TTY command. */
   public get interactive(): boolean {
     return this.agentOptions?.interactive === true;
   }
 
-  onEvent(handler: (event: TaskEvent) => void): () => void {
-    return this.events.subscribe(handler);
+  onEvent(handler: (delivery: RunEventDelivery) => void): () => void {
+    return this.runEvents.subscribe(handler);
   }
 
   renderResult(result: ConnectorResult, opts: ConnectorRenderOpts): void {
@@ -169,54 +178,19 @@ export class CommandConnectorIO implements ConnectorIO {
     }
   }
 
-  /** Render one bounded agent progress item; raw tool inputs/outputs are absent by type. */
+  /**
+   * Emit one bounded agent progress item into the run's stream; the
+   * subscribed renderer prints it. Raw tool inputs/outputs are absent by type.
+   */
   public emitAgentEvent(event: AgentProgressEvent): void {
-    const opts = this.requireAgentOptions();
-    if (opts.json) {
-      const value = { schemaVersion: SCHEMA_VERSION, kind: 'agent_progress', event };
-      if (this.agentOptions?.output) this.agentOptions.output.jsonLine(value);
-      else opts.stream.write(`${JSON.stringify(value)}\n`);
-      return;
-    }
-    switch (event.type) {
-      case 'assistant_text':
-        opts.stream.write(event.text);
-        return;
-      case 'tool_started':
-        opts.stream.write(`\n[${event.tool}] ${event.summary}\n`);
-        return;
-      case 'tool_finished':
-        opts.stream.write(
-          `[${event.tool}] ${event.status} — ${event.summary}` +
-            `${event.durationMs === null ? '' : ` (${event.durationMs}ms)`}\n`,
-        );
-        return;
-      case 'contract_declared':
-        // What the run understood, beside the goal echo on stderr, so a
-        // misreading is visible in the first seconds. Control characters are
-        // stripped again here: the terminal is the last boundary.
-        opts.errStream.write(
-          `${event.revision === 1 ? 'understood' : 'understood (revised)'}: ` +
-            `${stripControlCharacters(event.summary)}\n`,
-        );
-        return;
-      case 'progress':
-      case 'recovery':
-        opts.errStream.write(`${event.type}: ${stripControlCharacters(event.summary)}\n`);
-        return;
-      case 'capability_gap':
-        // FEAT-058: a declared item the run cannot deliver, disclosed right
-        // after the echo above, in ASCII punctuation; the run keeps going.
-        opts.errStream.write(`${stripControlCharacters(event.summary)}\n`);
-        return;
-    }
+    this.requireAgentOptions();
+    this.runEvents.emit(toRunEvent(event));
   }
 
-  /** Render a safe advisory on stderr, suppressing it for machine-readable output. */
+  /** Emit a safe advisory; the terminal prints it on stderr and `--json` suppresses it. */
   public emitAgentWarning(warning: string): void {
-    const opts = this.requireAgentOptions();
-    if (opts.json) return;
-    opts.errStream.write(`warning: ${warning}\n`);
+    this.requireAgentOptions();
+    this.runEvents.emit(warningEvent('agent', warning));
   }
 
   /** Present a fail-closed terminal confirmation prompt. */
