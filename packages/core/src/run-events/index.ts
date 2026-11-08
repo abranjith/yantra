@@ -22,3 +22,12 @@ export {
   type RunEventSubscribeOptions,
 } from './stream.js';
 export { MirroringEventBus, openTaskEventBus } from './mirroring-event-bus.js';
+export {
+  abandonOwnedStream,
+  emitArtifactSaved,
+  exitCodeForThrown,
+  runOutcomeEvent,
+  runRelativePath,
+  type ArtifactKind,
+  type RunOutcomeFacts,
+} from './run-facts.js';

@@ -223,6 +223,20 @@ The live **events** listed above are the ones rendered from the union.
 > `execution-receipt.json` would make a resume's receipt event unrepresentable, so `path` accepts
 > `^execution-receipt(\.resume-[1-9]\d*)?\.json$`.
 
+> **DEVIATION** (TASK-007, where the stream is passed): the stream is per run, while one
+> `RunOrchestrator` can drive many runs (the daemon, nested `workflow_run`). It is therefore passed
+> per call (`RunRequest.runEvents`, `resume(runId, {runEvents})`) rather than in
+> `RunOrchestratorOptions`. Omitted, the orchestrator constructs, opens and closes its own.
+> **Ownership rule:** the orchestrator records `run_outcome` for every outcome it returns. When the
+> run throws, it records a `failed` outcome (exit 3 for a busy resource, else 2) only on a stream it
+> owns; a caller-supplied stream is left open so the caller records the outcome with the exit code
+> it actually returns.
+>
+> **DEVIATION** (TASK-007, resume): `resume` continues in the original run directory, whose log
+> already ends with the first execution's `run_outcome`. "Exactly one `run_outcome`" is enforced per
+> execution segment: a `task_resumed` begins a new segment in the same log (seq continues), which
+> ends in its own `run_outcome`.
+
 ## 3. Files
 
 **Protocol (`packages/protocol`)**
@@ -650,7 +664,7 @@ FEAT-072` to this spec's State Tracking. The FEAT-072 implementer then calls the
 - [x] TASK-004: Define the `RunEvent` union, the `RunEventRecord` envelope and the line parser
 - [x] TASK-005: Implement the single-writer `RunEventLog` and reader, with tail recovery and fsync points
 - [x] TASK-006: Implement `RunEventStream` with persist-before-publish, the pre-open buffer and degraded mode
-- [ ] TASK-007: Deterministic replay (`run`, `resume`, daemon fires) writes `run-events.jsonl`
+- [x] TASK-007: Deterministic replay (`run`, `resume`, daemon fires) writes `run-events.jsonl`
 - [ ] TASK-008: Deterministic `ask`/`research` emit phase events, budget snapshots, artifacts and the outcome
 - [ ] TASK-009: Record every consent wait as `intervention_raised` / `intervention_resolved`
 - [ ] TASK-010: CLI renderers consume the union; `ask`/`research`/`run`/`resume` route their live output through the stream

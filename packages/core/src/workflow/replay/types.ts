@@ -19,6 +19,7 @@ import type { ProfileSpec } from '../../browser/types.js';
 import type { Checkpoint } from '../../executor/types.js';
 import type { EngineLocatorChain } from '../../locator/types.js';
 import type { ExecutionReceiptDraft } from '../../receipt/execution-receipt.js';
+import type { RunEventStream } from '../../run-events/stream.js';
 
 export type { FailureClass, TaskOutcome, TerminationReason };
 
@@ -48,6 +49,15 @@ export interface RunBudgets {
 /** Top-level request constructed by the CLI from argv. */
 export interface RunRequest {
   readonly receipt?: ExecutionReceiptDraft;
+  /**
+   * The run's event stream (FEAT-063), created by the caller so its own
+   * renderer can subscribe before the run exists. Omitted, the orchestrator
+   * constructs, opens and closes its own (daemon fires, nested runs, tests).
+   * A caller-supplied stream is closed by the orchestrator only after the
+   * run's outcome is recorded; when the run throws, the caller records the
+   * outcome with the exit code it returns, then closes it.
+   */
+  readonly runEvents?: RunEventStream;
   readonly workflowName: string;
   /** Resolved (coerced) param values. */
   readonly params: Readonly<Record<string, unknown>>;

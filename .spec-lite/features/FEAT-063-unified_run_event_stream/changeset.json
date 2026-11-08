@@ -254,6 +254,12 @@
       "task": "TASK-003"
     },
     {
+      "path": "packages/core/src/executor/execution-context.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
       "path": "packages/core/src/index.ts",
       "status": "M",
       "role": "implement",
@@ -273,7 +279,7 @@
     },
     {
       "path": "packages/core/src/run-events/mirroring-event-bus.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
@@ -284,10 +290,28 @@
       "task": "TASK-005"
     },
     {
-      "path": "packages/core/src/run-events/stream.ts",
+      "path": "packages/core/src/run-events/run-facts.ts",
       "status": "U",
       "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/core/src/run-events/stream.ts",
+      "status": "A",
+      "role": "implement",
       "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/src/workflow/replay/run-orchestrator.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/core/src/workflow/replay/types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "packages/core/tests/run-events/log.spec.ts",
@@ -302,8 +326,14 @@
       "task": "TASK-005"
     },
     {
-      "path": "packages/core/tests/run-events/stream.spec.ts",
+      "path": "packages/core/tests/run-events/run-facts.spec.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/core/tests/run-events/stream.spec.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
@@ -312,6 +342,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/tests/workflow/replay/run-events.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "packages/protocol/generated/json-schema/agent-progress-event.json",

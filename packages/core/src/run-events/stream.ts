@@ -89,6 +89,7 @@ export class RunEventStream {
   private readonly invalidLogged = new Set<string>();
   private logger: Logger;
   private openedRunId: string | null = null;
+  private outcomeSeen = false;
 
   public constructor(options: { readonly logger?: Logger } = {}) {
     this.logger = options.logger ?? noopLogger;
@@ -107,6 +108,14 @@ export class RunEventStream {
   /** True after {@link close}. */
   public get closed(): boolean {
     return this.state === 'closed';
+  }
+
+  /**
+   * True once a `run_outcome` was emitted in this process (whether or not it
+   * was committed); a `task_resumed` starts a new execution and clears it.
+   */
+  public get outcomeRecorded(): boolean {
+    return this.outcomeSeen;
   }
 
   /** The run this stream was opened for, or null before open. */
@@ -161,6 +170,7 @@ export class RunEventStream {
    *   `run_outcome`, which is a producer bug, never a disk fault.
    */
   public emit(event: RunEventType): void {
+    if (this.state !== 'closed') this.noteSegment(event);
     switch (this.state) {
       case 'pre_open':
         if (this.buffer.length >= PRE_OPEN_BUFFER_LIMIT) {
@@ -238,6 +248,11 @@ export class RunEventStream {
         'run_events_close_failed',
       );
     }
+  }
+
+  private noteSegment(event: RunEventType): void {
+    if (event.kind === 'run_outcome') this.outcomeSeen = true;
+    else if (event.kind === 'task_resumed') this.outcomeSeen = false;
   }
 
   /** Appends one event; returns its seq, or null when it was not committed. */

@@ -18,7 +18,9 @@
  *   unsynced append, and on `close()`.
  * - **Line cap.** A line over {@link MAX_RUN_EVENT_LINE_BYTES} is replaced by an
  *   `event_omitted` marker.
- * - **One outcome.** A second `run_outcome` is refused.
+ * - **One outcome.** A second `run_outcome` is refused. A `task_resumed`
+ *   (a resume continuing this run directory) begins a new execution segment,
+ *   which records its own outcome.
  */
 
 import { closeSync, fdatasyncSync, mkdirSync, openSync, truncateSync, writeSync } from 'node:fs';
@@ -192,6 +194,9 @@ export class RunEventLog {
     writeFully(this.fd, line);
     this.nextSeq = seq + 1;
     if (event.kind === 'run_outcome') this.outcomeWritten = true;
+    // A resume continues the same run directory and log: it starts a new
+    // execution segment, which ends in its own run_outcome.
+    else if (event.kind === 'task_resumed') this.outcomeWritten = false;
     this.unsynced += 1;
     if (FORCE_SYNC.has(event.kind) || this.unsynced >= RUN_EVENTS_SYNC_EVERY) this.syncNow();
     else this.armTimer();
