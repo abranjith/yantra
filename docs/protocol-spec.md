@@ -2287,6 +2287,38 @@ Example:
 "button"
 ```
 
+## RunEvent
+
+One run event, discriminated by `kind`.
+
+Example:
+
+```json
+"<value>"
+```
+
+## RunEventRecord
+
+One sequence-numbered run event, as written to run-events.jsonl.
+
+| Field          | Description                                                            |
+| -------------- | ---------------------------------------------------------------------- |
+| schema_version | Envelope version; a reader rejects an unknown major.                   |
+| seq            | Gap-free, strictly increasing sequence number, assigned by the writer. |
+| run_id         | The owning run.                                                        |
+| event          | One run event, discriminated by `kind`.                                |
+
+Example:
+
+```json
+{
+  "schema_version": "<schema_version>",
+  "seq": "<seq>",
+  "run_id": "<run_id>",
+  "event": "<event>"
+}
+```
+
 ## RunHealth
 
 An agentic run's own health summary (run-health.json): searches, fetches, source failures, browser launches, budgets, tool failures, and runtime notices. Counts and closed codes only.
@@ -2323,6 +2355,16 @@ Example:
   "extraction": "<extraction>",
   "capture": "<capture>"
 }
+```
+
+## RunRelativePath
+
+Run-relative POSIX path of a file inside the run directory.
+
+Example:
+
+```json
+"<value>"
 ```
 
 ## ScalarValue

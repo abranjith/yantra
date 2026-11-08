@@ -1,0 +1,12 @@
+{
+  "schema_version": "1",
+  "seq": 4,
+  "run_id": "20261101T120000Z-do-a1b2c3d4",
+  "event": {
+    "kind": "capability_gap",
+    "item": "artifact:screenshot:full_page",
+    "reason": "suppressed_by_flag",
+    "summary": "Cannot deliver: a full-page screenshot.",
+    "at": "2026-11-01T12:00:00.000Z"
+  }
+}

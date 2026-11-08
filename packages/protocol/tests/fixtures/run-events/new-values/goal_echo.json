@@ -1,0 +1,12 @@
+{
+  "schema_version": "1",
+  "seq": 14,
+  "run_id": "20261101T120000Z-do-a1b2c3d4",
+  "event": {
+    "kind": "goal_echo",
+    "display": "goal: \"buy 2 widgets\"",
+    "received_chars": 13,
+    "truncated": false,
+    "at": "2026-11-01T12:00:00.000Z"
+  }
+}

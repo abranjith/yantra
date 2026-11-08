@@ -1,0 +1,23 @@
+{
+  "schema_version": "1",
+  "seq": 3,
+  "run_id": "20261101T120000Z-do-a1b2c3d4",
+  "event": {
+    "kind": "budget_snapshot",
+    "dimensions": [
+      {
+        "name": "elapsed",
+        "used": 1200,
+        "limit": 600000,
+        "unit": "ms"
+      },
+      {
+        "name": "tool_calls",
+        "used": 3,
+        "limit": null,
+        "unit": "count"
+      }
+    ],
+    "at": "2026-11-01T12:00:00.000Z"
+  }
+}

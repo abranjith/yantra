@@ -1,0 +1,13 @@
+{
+  "schema_version": "1",
+  "seq": 25,
+  "run_id": "20261101T120000Z-do-a1b2c3d4",
+  "event": {
+    "task_id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+    "at": "2026-10-01T12:00:00.000Z",
+    "kind": "scope_violation",
+    "scope": "read-only-data",
+    "attempted_verb": "click",
+    "step_id": "s4"
+  }
+}

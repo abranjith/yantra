@@ -249,9 +249,15 @@
     },
     {
       "path": "packages/agent/tests/runtime/agent-progress-protocol.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/protocol/generated/json-schema/agent-progress-event.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
     },
     {
       "path": "packages/protocol/generated/json-schema/confirmation-decision.json",
@@ -260,10 +266,28 @@
       "task": "TASK-002"
     },
     {
+      "path": "packages/protocol/generated/json-schema/run-event-record.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/generated/json-schema/run-event.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "packages/protocol/generated/json-schema/task-event.json",
       "status": "M",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/src/emit/json-schema.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
     },
     {
       "path": "packages/protocol/src/index.ts",
@@ -273,7 +297,7 @@
     },
     {
       "path": "packages/protocol/src/schemas/agent-progress.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -290,6 +314,12 @@
       "task": "TASK-002"
     },
     {
+      "path": "packages/protocol/src/schemas/run-event.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "packages/protocol/src/schemas/task-outcome.ts",
       "status": "M",
       "role": "implement",
@@ -297,7 +327,7 @@
     },
     {
       "path": "packages/protocol/tests/agent-progress.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -326,6 +356,114 @@
       "task": "TASK-002"
     },
     {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/artifact_saved.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/assistant_text.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/budget_snapshot.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/capability_gap.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/checkpoint_saved.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/chrome_drift_warning.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/confirmation_requested.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/confirmation_resolved.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/contract_declared.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/discovery_cycle_completed.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/discovery_session_completed.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/event_omitted.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/extract_completed.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/goal_echo.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/human_handoff_requested.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/intervention_raised.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/intervention_resolved.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/llm_step_skipped.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/owner-lost.agent-outcome.json",
       "status": "A",
       "role": "implement",
@@ -338,6 +476,132 @@
       "task": "TASK-002"
     },
     {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/progress.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/receipt_written.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/recovery.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/research_hop_completed.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/run_outcome.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/run_warning.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/scope_violation.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/search_completed.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/source_fetched.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/step_completed.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/step_retry.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/step_started.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/synthesis_completed.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/synthesize_started.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/task_completed.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/task_failed.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/task_queued.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/task_resumed.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/task_started.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/tool_finished.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/tool_started.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "packages/protocol/tests/fixtures/run-events/new-values/user-app.confirmation-resolved.json",
       "status": "A",
       "role": "implement",
@@ -348,6 +612,24 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/new-values/validation_failed.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-events/newer-writer.unknown-kind.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/run-event.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
     },
     {
       "path": "packages/protocol/tests/schema-compat.spec.ts",

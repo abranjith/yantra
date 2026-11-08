@@ -211,6 +211,18 @@ The live **events** listed above are the ones rendered from the union.
 > No socket, host or committed subscriber can exist before the log opens, so the D11/D17 replay
 > guarantees are unaffected. Awaiting confirmation.
 
+> **DEVIATION** (TASK-004, `goal_echo.display` bound): the spec bounds `display` at 260
+> characters, but today's echo can legitimately be longer: up to 200 goal characters, each of
+> which may print as two (`\"`, `\\`, or a surrogate pair), inside the `goal: "…"` frame, plus the
+> `(N characters received)` suffix. A 260 cap would reject real echoes or force a new truncation,
+> which would break the byte-identical goldens. The bound is `GOAL_ECHO_DISPLAY_MAX = 512`, which
+> covers the worst case; the test pins it.
+>
+> **DEVIATION** (TASK-004, `receipt_written.path`): FEAT-072 writes a resumed run's receipt as
+> `execution-receipt.resume-<n>.json` next to the first `execution-receipt.json`. The literal
+> `execution-receipt.json` would make a resume's receipt event unrepresentable, so `path` accepts
+> `^execution-receipt(\.resume-[1-9]\d*)?\.json$`.
+
 ## 3. Files
 
 **Protocol (`packages/protocol`)**
@@ -635,7 +647,7 @@ FEAT-072` to this spec's State Tracking. The FEAT-072 implementer then calls the
 - [x] TASK-001: Characterize today's live CLI output as byte-compared goldens
 - [x] TASK-002: Add `owner_lost` and `user_app` with compatibility fixtures in both directions
 - [x] TASK-003: Promote `AgentProgressEvent` to `@yantra/protocol` and re-export it from `@yantra/agent`
-- [ ] TASK-004: Define the `RunEvent` union, the `RunEventRecord` envelope and the line parser
+- [x] TASK-004: Define the `RunEvent` union, the `RunEventRecord` envelope and the line parser
 - [ ] TASK-005: Implement the single-writer `RunEventLog` and reader, with tail recovery and fsync points
 - [ ] TASK-006: Implement `RunEventStream` with persist-before-publish, the pre-open buffer and degraded mode
 - [ ] TASK-007: Deterministic replay (`run`, `resume`, daemon fires) writes `run-events.jsonl`
