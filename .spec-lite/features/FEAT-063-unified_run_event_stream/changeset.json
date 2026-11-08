@@ -51,19 +51,19 @@
     },
     {
       "path": "apps/cli/src/render/run-event-json.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
     {
       "path": "apps/cli/src/render/run-event-terminal.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
     {
       "path": "apps/cli/src/run-event-output.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
@@ -291,13 +291,13 @@
     },
     {
       "path": "apps/cli/tests/render/run-event-projections.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
     {
       "path": "apps/cli/tests/run-event-output.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
@@ -314,6 +314,12 @@
       "task": "TASK-003"
     },
     {
+      "path": "packages/agent/src/runtime/orchestrator.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
       "path": "packages/agent/src/runtime/progress-ledger.ts",
       "status": "M",
       "role": "implement",
@@ -324,6 +330,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/runtime/run-events-emission.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-011"
     },
     {
       "path": "packages/core/src/executor/execution-context.ts",
@@ -414,6 +426,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-007"
+    },
+    {
+      "path": "packages/core/src/workflow/replay/run-store.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-011"
     },
     {
       "path": "packages/core/src/workflow/replay/types.ts",

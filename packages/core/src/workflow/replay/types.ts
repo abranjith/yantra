@@ -246,7 +246,9 @@ export type AgentStartupFailureCode =
   | 'AGENT_AUTH_UNAVAILABLE'
   | 'AGENT_PROVIDER_UNAVAILABLE'
   | 'AGENT_SESSION_START_FAILED'
-  | 'AGENT_ABORTED';
+  | 'AGENT_ABORTED'
+  /** The run's `run-events.jsonl` could not be opened (FEAT-063). */
+  | 'AGENT_RUN_EVENTS_UNAVAILABLE';
 
 /** Typed and sanitized startup failure stored in `manifest.json`. */
 export interface AgentStartupFailure {
@@ -270,7 +272,11 @@ export interface AgentRunRequest {
 /** Run-store operations used by agentic commands before and during startup. */
 export interface AgentRunStore {
   createAgentRun(request: AgentRunRequest): Promise<{ runId: string; runDir: string }>;
-  finalizeStartupFailure(runId: string, error: AgentStartupFailure): Promise<void>;
+  finalizeStartupFailure(
+    runId: string,
+    error: AgentStartupFailure,
+    runEvents?: RunEventStream,
+  ): Promise<void>;
 }
 
 /** Serialized to outputs.json. */

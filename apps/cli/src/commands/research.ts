@@ -560,6 +560,7 @@ async function runAgenticResearch(
       ambient,
       screenshotsSuppressed: options.screenshots === false,
       connector,
+      runEvents,
     },
     {
       cwd: context.cwd,

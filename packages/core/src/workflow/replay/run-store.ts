@@ -12,7 +12,8 @@ import type { FailureClass, TaskOutcome, TerminationReason } from '@yantra/proto
 
 import { MarkdownReportBuilder } from '../../audit/report-builder.js';
 import { runsRoot } from '../../browser/paths.js';
-import { JsonlEventBus } from '../../executor/event-bus.js';
+import { openTaskEventBus } from '../../run-events/mirroring-event-bus.js';
+import type { RunEventStream } from '../../run-events/stream.js';
 
 import { RunDirMissingError } from './errors.js';
 import { writeManifest, readManifest } from './manifest-writer.js';
@@ -114,9 +115,15 @@ export class LocalRunStore implements RunStore, AgentRunStore {
    *
    * @param runId Existing run created by {@link createAgentRun}.
    * @param error Typed, sanitized provider startup failure.
+   * @param runEvents The run's open event stream, if any: `task_failed` is
+   *   mirrored into it (the caller records the outcome).
    * @returns Nothing after manifest, event, report, and lock state are durable.
    */
-  public async finalizeStartupFailure(runId: string, error: AgentStartupFailure): Promise<void> {
+  public async finalizeStartupFailure(
+    runId: string,
+    error: AgentStartupFailure,
+    runEvents?: RunEventStream,
+  ): Promise<void> {
     const runDir = join(this.root, runId);
     let manifest: RunManifest;
     try {
@@ -136,7 +143,7 @@ export class LocalRunStore implements RunStore, AgentRunStore {
     };
     await writeManifest(runDir, updated);
 
-    const events = new JsonlEventBus(join(runDir, 'events.jsonl'));
+    const events = openTaskEventBus(runDir, runEvents?.opened === true ? runEvents : null);
     events.publish({
       task_id: manifest.taskId,
       at: endedAt,

@@ -697,7 +697,7 @@ FEAT-072` to this spec's State Tracking. The FEAT-072 implementer then calls the
 - [x] TASK-008: Deterministic `ask`/`research` emit phase events, budget snapshots, artifacts and the outcome
 - [x] TASK-009: Record every consent wait as `intervention_raised` / `intervention_resolved`
 - [x] TASK-010: CLI renderers consume the union; `ask`/`research`/`run`/`resume` route their live output through the stream
-- [ ] TASK-011: Agentic runs (`do`, agentic `ask`/`research`) write their progress through the stream
+- [x] TASK-011: Agentic runs (`do`, agentic `ask`/`research`) write their progress through the stream
 - [ ] TASK-012: `receipt_written` emission
 - [ ] TASK-013: Acceptance suite: counterparts, gap-free `seq`, canary, old fixtures; Audit Trail listing
 

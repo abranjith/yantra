@@ -508,6 +508,7 @@ async function runAgenticAsk(
       ambient,
       screenshotsSuppressed: options.screenshots === false,
       connector,
+      runEvents,
     },
     {
       cwd: context.cwd,
