@@ -44,6 +44,7 @@ import {
   writeExecutionReceipt,
   type ExecutionReceiptDraft,
 } from '../../receipt/execution-receipt.js';
+import { recordReceiptWritten } from '../../run-events/receipt-written.js';
 import {
   abandonOwnedStream,
   emitArtifactSaved,
@@ -215,8 +216,8 @@ export class RunOrchestrator {
     // subscribed by its renderer; otherwise this run owns one.
     const ownsRunEvents = request.runEvents === undefined;
     const runEvents = request.runEvents ?? new RunEventStream({ logger });
-    if (request.receipt)
-      await writeExecutionReceipt(runDir, {
+    if (request.receipt) {
+      const written = await writeExecutionReceipt(runDir, {
         ...request.receipt,
         settings: [
           ...request.receipt.settings.filter(
@@ -236,6 +237,9 @@ export class RunOrchestrator {
           },
         ],
       });
+      // Committed as an early line once the log opens.
+      await recordReceiptWritten(runEvents, written.path);
+    }
 
     const taskId = plan.task_id;
     const startedAt = clock.now().toISOString();
@@ -492,7 +496,10 @@ export class RunOrchestrator {
     const ownsRunEvents = options.runEvents === undefined;
     const runEvents = options.runEvents ?? new RunEventStream({ logger: this.opts.logger });
 
-    if (options.receipt) await writeExecutionReceipt(runDir, options.receipt, { resume: true });
+    if (options.receipt) {
+      const written = await writeExecutionReceipt(runDir, options.receipt, { resume: true });
+      await recordReceiptWritten(runEvents, written.path);
+    }
 
     // Update status to running
     manifest.status = 'running';

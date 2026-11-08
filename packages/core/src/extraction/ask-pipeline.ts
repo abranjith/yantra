@@ -17,6 +17,7 @@ import type { RankSignalSink } from '../ranking/types.js';
 import { writeExecutionReceipt } from '../receipt/execution-receipt.js';
 import { openTaskEventBus } from '../run-events/mirroring-event-bus.js';
 import { asToken, boundedQuery, sourceFetchedEvent } from '../run-events/phase-fields.js';
+import { recordReceiptWritten } from '../run-events/receipt-written.js';
 import { abandonOwnedStream, emitArtifactSaved, runOutcomeEvent } from '../run-events/run-facts.js';
 import { RunEventStream } from '../run-events/stream.js';
 import type { Synthesizer } from '../synthesis/types.js';
@@ -141,6 +142,7 @@ export class AskPipeline {
     try {
       if (query.receipt) {
         const written = await writeExecutionReceipt(runDir, query.receipt);
+        await recordReceiptWritten(runEvents, written.path);
         this.logger.info(
           {
             event: 'settings_receipt_written',

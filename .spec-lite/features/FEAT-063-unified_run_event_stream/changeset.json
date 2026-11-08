@@ -333,7 +333,7 @@
     },
     {
       "path": "packages/agent/tests/runtime/run-events-emission.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
@@ -404,6 +404,12 @@
       "task": "TASK-005"
     },
     {
+      "path": "packages/core/src/run-events/receipt-written.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
       "path": "packages/core/src/run-events/recording-confirmation-gateway.ts",
       "status": "A",
       "role": "implement",
@@ -468,6 +474,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/tests/run-events/receipt-written.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
     },
     {
       "path": "packages/core/tests/run-events/recording-confirmation-gateway.spec.ts",

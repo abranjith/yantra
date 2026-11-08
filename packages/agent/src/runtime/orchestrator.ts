@@ -17,6 +17,7 @@ import {
   HybridContentFetcher,
   RecordingConfirmationGateway,
   RunEventStream,
+  recordReceiptWritten,
   capText,
   emitArtifactSaved,
   openTaskEventBus,
@@ -624,6 +625,7 @@ export async function runAgenticTask(
 
   if (request.receipt) {
     const written = await writeExecutionReceipt(created.runDir, request.receipt);
+    await recordReceiptWritten(runEvents, written.path);
     await appendFile(
       join(created.runDir, 'runtime.jsonl'),
       `${JSON.stringify({ schema_version: 1, event: 'settings_receipt_written', path: written.path, setting_count: written.receipt.settings.length })}\n`,

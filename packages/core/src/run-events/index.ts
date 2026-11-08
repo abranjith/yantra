@@ -41,6 +41,7 @@ export {
   sourceFetchedEvent,
   type BudgetSnapshotDimension,
 } from './phase-fields.js';
+export { emitReceiptWritten, recordReceiptWritten } from './receipt-written.js';
 export {
   RecordingConfirmationGateway,
   requestDeadline,

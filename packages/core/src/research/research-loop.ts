@@ -57,6 +57,7 @@ import {
   budgetDimensions,
   sourceFetchedEvent,
 } from '../run-events/phase-fields.js';
+import { recordReceiptWritten } from '../run-events/receipt-written.js';
 import { abandonOwnedStream, emitArtifactSaved, runOutcomeEvent } from '../run-events/run-facts.js';
 import { RunEventStream } from '../run-events/stream.js';
 import { DeterministicSynthesizer } from '../synthesis/deterministic.js';
@@ -208,6 +209,7 @@ export class ResearchLoop {
     try {
       if (options.receipt) {
         const written = await writeExecutionReceipt(runDir, options.receipt);
+        await recordReceiptWritten(runEvents, written.path);
         this.deps.logger.info(
           {
             event: 'settings_receipt_written',
