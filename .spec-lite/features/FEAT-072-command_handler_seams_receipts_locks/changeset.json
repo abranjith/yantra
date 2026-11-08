@@ -1810,6 +1810,7 @@
   ],
   "excluded": [
     ".spec-lite/feature-summary.md",
+    ".spec-lite/features/FEAT-064-run_ownership_channel_reconciliation/spec.md",
     ".spec-lite/features/FEAT-072-command_handler_seams_receipts_locks/changeset.json",
     ".spec-lite/features/FEAT-072-command_handler_seams_receipts_locks/spec.md",
     ".spec-lite/plan_ui.md"
