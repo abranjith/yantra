@@ -46,7 +46,9 @@ Each saved file uses a unique sibling staging file (`<file>.<pid>.<random>.tmp`)
 
 The core recording store also serializes writes for each recording. Appending an action reloads the latest partial draft from disk while holding the lock, then adds the action and writes it atomically. Separate store instances can append without losing each other's actions. This does not add a public recorder command.
 
-File writers wait for a held lock for about five seconds before core raises a typed `ResourceBusyError`, with holder information when available and advice to retry when it finishes. CLI handling depends on the command; workflow promotion remains best-effort as described above. `schedule` holds a shared schedule-registry lock through workflow validation and registration, and `unschedule` uses that same lock for removal. Those two commands report exhausted lock contention as `busy` with exit `3`; see [Scheduling and the Local Daemon](scheduling.md).
+File writers wait for a held lock for about five seconds before core raises a typed `ResourceBusyError`, with holder information when available and advice to retry when it finishes. Direct locked writers in the terminal and worker use the same command boundary, which maps this error to exit `3`. With `--json`, the `busy` envelope includes `schemaVersion`, the registry command ID as `kind`, `status: "busy"`, `resource`, and nullable `holder`. Holder metadata contains a PID, command label, start timestamp, and execution surface; command labels contain the command path, never raw arguments or credentials. Workers return the envelope through their structured result sink. Workflow promotion remains best-effort as described above.
+
+`schedule` holds a shared schedule-registry lock through workflow validation and registration, and `unschedule` uses that same lock for removal. Both use this shared contention mapping; see [Scheduling and the Local Daemon](scheduling.md).
 
 ### Deterministic execution
 
@@ -181,7 +183,7 @@ Repeat `--params key=value` for several values. A parameter file must be a YAML 
 
 `--json` prints the raw run outcome, including outputs and Brief document data when available, plus `task_outcome`. Without it, the first line names the run and its outcome word, such as `✓ Run <run-id>: fulfilled`; a successful ordinary run then prints declared outputs and truncates very long terminal values with a pointer to `outputs.json`. A workflow with a `synthesis:` block renders the Brief instead.
 
-Terminal and worker invocations use the same `run` and `resume` handlers, with output, prompts, settings, and working directory supplied by their adapter. The command options and exit codes are shared, including exit `130` for a user abort.
+Terminal and worker invocations use the same `run` and `resume` handlers, with output, prompts, settings, and working directory supplied by their adapter. Command options and exit codes match for supported outcomes. Terminal Ctrl+C preserves the conventional exit `130`; replay does not yet honor `context.signal`, so worker cancellation reports `cancel_unsupported` and leaves replay running.
 
 Replay uses the same outcome words as the agentic commands: a successful replay is `fulfilled`, a human handoff such as a confirmation that could not be granted is `handoff`, a user abort is `aborted`, and a workflow failure, scope violation, or ethics refusal is `failed`. Each word has one exit code across every command, read from the protocol's shared outcome table: a replay user abort exits `130`, as `do`, `ask`, and `research` do, and a handoff exits `4` (see [Exit behavior](#exit-behavior)). A replay's `manifest.json` does not record the word, so `yantra list runs` shows none beside a replay's status.
 

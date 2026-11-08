@@ -167,14 +167,6 @@ export const DRSHYA_STYLE_SELECTORS = [
   },
 ];
 
-/** Shrink-only migration list, introduced 2026-11-03; removed at TASK-015. */
-export const HANDLER_PURITY_MIGRATION_ALLOWLIST = [
-  'apps/cli/src/global-flags.ts',
-  'apps/cli/src/open-artifact.ts',
-  'apps/cli/src/render/brief-terminal.ts',
-  'apps/cli/src/render/types.ts',
-  'apps/cli/src/synthesis-llm.ts',
-];
 export const HANDLER_PURITY_SELECTORS = [
   {
     selector:
@@ -439,11 +431,15 @@ export default tseslint.config(
 
   {
     files: ['apps/cli/src/**/*.ts'],
-    ignores: [
-      'apps/cli/src/adapters/terminal/**/*.ts',
-      'apps/cli/src/bin.ts',
-      ...HANDLER_PURITY_MIGRATION_ALLOWLIST,
-    ],
+    ignores: ['apps/cli/src/adapters/terminal/**/*.ts', 'apps/cli/src/bin.ts'],
+    rules: {
+      'no-restricted-syntax': ['error', ...SITE_SPECIFIC_SELECTORS, ...HANDLER_PURITY_SELECTORS],
+    },
+  },
+
+  // This negative fixture deliberately exercises the same rules as a handler.
+  {
+    files: ['apps/cli/src/adapters/terminal/_lint-fixtures/impure-handler.ts'],
     rules: {
       'no-restricted-syntax': ['error', ...SITE_SPECIFIC_SELECTORS, ...HANDLER_PURITY_SELECTORS],
     },

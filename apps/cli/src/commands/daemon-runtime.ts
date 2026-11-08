@@ -12,6 +12,7 @@ import { resolve } from 'node:path';
 
 import {
   ConfigBrowserSelectionReader,
+  receiptLockOptions,
   type ExecutionReceiptDraft,
   type FireRunDriver,
   FileDaemonLock,
@@ -113,7 +114,10 @@ function makeOrchestratorDriver(logger: Logger): FireRunDriver {
       const runtime = await buildOrchestratorRuntime({
         logger,
         // Unattended fires can report install guidance but never authorize a download.
-        browser: { installOfferGateway: null },
+        browser: {
+          installOfferGateway: null,
+          resourceLockOptions: { ...receiptLockOptions(request.receipt), logger },
+        },
         confirmationGateway: request.confirmationGateway,
         // Hard zero-LLM: a scheduled fire is unattended, so it never opens a
         // provider session regardless of how the workflow or environment is
@@ -156,20 +160,23 @@ function makeResumeDriver(
 } {
   return {
     async resume(runId): Promise<{ status: LastFireStatus; runId: string }> {
+      const { manifest } = await loadResumePoint(new LocalRunStore(), runId);
+      const receipt = await daemonReceipt(manifest.workflowName, manifest.params, cwd);
       // Replay the human's prior `yantra confirm` grant so the executor's
       // re-request on resume is satisfied exactly once (never auto-created).
       const runtime = await buildOrchestratorRuntime({
         logger,
         // A resumed scheduled run remains unattended and cannot prompt for acquisition.
-        browser: { installOfferGateway: null },
+        browser: {
+          installOfferGateway: null,
+          resourceLockOptions: { ...receiptLockOptions(receipt), logger },
+        },
         confirmationGateway: new PreGrantedConfirmationGateway({ logger }),
         // Hard zero-LLM, as on the fire path: resuming a parked scheduled run is
         // still an unattended surface.
         synthesis: { llm: null, noLlm: true },
       });
       try {
-        const { manifest } = await loadResumePoint(new LocalRunStore(), runId);
-        const receipt = await daemonReceipt(manifest.workflowName, manifest.params, cwd);
         const outcome = await runtime.orchestrator.resume(runId, { receipt });
         return { runId: outcome.runId, status: mapResumeStatus(outcome, exitCodeFor(outcome)) };
       } finally {

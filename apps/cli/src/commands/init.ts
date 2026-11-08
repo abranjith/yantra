@@ -37,7 +37,7 @@ export function makeInitHandler(
     };
     const result = await runInit(
       {
-        ...options,
+        ...(options.provider === undefined ? {} : { provider: options.provider }),
         reset: options.reset === true,
         yes: options.yes === true,
         interactive:

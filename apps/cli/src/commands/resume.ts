@@ -37,6 +37,7 @@ import {
 import type { CommandContext, CommandResult, ExitCode } from '../context/command-context.js';
 import { replayContent } from '../context/replay-content.js';
 import type { ReplayRuntimeDependencies } from '../context/replay-runtime.js';
+import { resourceOptions } from '../context/resource-options.js';
 import { draftRunReceipt } from '../context/run-receipt.js';
 import { createRegisteredCommand } from '../registry/build-command-tree.js';
 import { handler, type Handler, type HandlerArgs } from '../registry/handler.js';
@@ -120,6 +121,7 @@ export async function resumeHandler(
       logger,
       confirmationGateway: context.gateways.confirmation(interactive),
       browser: {
+        resourceLockOptions: resourceOptions(context, 'resume'),
         installOfferGateway: context.gateways.installOffer(interactive),
         ...(browserSelection === undefined ? {} : { selection: browserSelection }),
       },

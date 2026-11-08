@@ -1,3 +1,4 @@
+/** @option-observation-only Records effective settings; it does not apply command options. */
 import type { ActiveReportTemplate } from '@yantra/agent';
 import {
   ConfigBrowserSelectionReader,
@@ -41,6 +42,7 @@ export async function draftRunReceipt(
       maxDuration: agent.budgets.wallClockMs,
       maxTokens: agent.budgets.maxProviderTokens,
       toolTimeout: agent.budgets.perToolTimeoutMs,
+      turnTimeout: agent.budgets.turnTimeoutMs,
       toolRetries: agent.budgets.toolRetries,
       confirmTimeout: agent.budgets.confirmationWaitMs,
     };

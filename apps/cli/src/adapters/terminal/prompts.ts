@@ -5,7 +5,18 @@ import prompts from 'prompts';
 
 import type { InputCollector } from '../../context/command-context.js';
 
-export function terminalInputs(interactive: boolean): InputCollector {
+export interface TerminalInputDependencies {
+  readonly stdin?: NodeJS.ReadableStream;
+  readonly env?: Readonly<NodeJS.ProcessEnv>;
+  readonly spawn?: typeof spawn;
+}
+export function terminalInputs(
+  interactive: boolean,
+  deps: TerminalInputDependencies = {},
+): InputCollector {
+  const stdin = deps.stdin ?? process.stdin;
+  const env = deps.env ?? process.env;
+  const launch = deps.spawn ?? spawn;
   async function ask(
     type: 'select' | 'text' | 'confirm' | 'password',
     message: string,
@@ -40,20 +51,26 @@ export function terminalInputs(interactive: boolean): InputCollector {
       return typeof v === 'boolean' ? v : null;
     },
     stdin: async () => {
+      stdin.setEncoding('utf8');
       let value = '';
-      for await (const chunk of process.stdin) value += String(chunk);
+      for await (const chunk of stdin) value += String(chunk);
       return value;
     },
     editor: async (path, options) => {
+      const configuredEditor = env.EDITOR?.trim();
       const editor =
-        process.env.EDITOR ??
-        (process.platform === 'win32'
-          ? 'notepad.exe'
-          : process.platform === 'darwin'
-            ? 'open'
-            : 'xdg-open');
+        configuredEditor !== undefined && configuredEditor !== ''
+          ? configuredEditor
+          : process.platform === 'win32'
+            ? 'notepad.exe'
+            : process.platform === 'darwin'
+              ? 'open'
+              : 'xdg-open';
       return new Promise<boolean>((resolve, reject) => {
-        const child = spawn(editor, [path], { stdio: 'inherit', shell: false });
+        const child = launch(editor, [path], {
+          stdio: 'inherit',
+          shell: Boolean(configuredEditor),
+        });
         child.once('error', reject);
         if (options?.wait === false)
           child.once('spawn', () => {

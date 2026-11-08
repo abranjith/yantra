@@ -66,6 +66,7 @@ import {
 } from '../browser-options.js';
 import { agentFailureLine } from '../connector-io.js';
 import type { CommandContext } from '../context/command-context.js';
+import { resourceOptions } from '../context/resource-options.js';
 import { draftRunReceipt } from '../context/run-receipt.js';
 import { recordTaskHistory } from '../history.js';
 import { resolveAmbientContext, type ResolvedAmbientContext } from '../preferences.js';
@@ -242,6 +243,7 @@ export function makeAskHandler(
           return;
         }
         const pipeline = await resolvedRuntime.createPipeline(query, {
+          resourceLockOptions: resourceOptions(context, 'ask'),
           installOfferGateway: context.gateways.installOffer(
             context.isInteractive({ json: format === 'json' }),
           ),
@@ -346,7 +348,10 @@ export async function createDefaultAskPipeline(
 ): Promise<AskPipeline> {
   const logger = noopLogger;
 
-  const profileStore = new LocalProfileStore({ logger });
+  const profileStore = new LocalProfileStore({
+    logger,
+    leaseOptions: browser.resourceLockOptions ?? {},
+  });
   // The same seam every other launch-capable path uses; building it starts no
   // browser, so the lazy fetch fallback stays lazy.
   const browserProvider = createSelectedBrowserProvider({ ...browser, profileStore, logger });

@@ -184,7 +184,7 @@ describe('@no-llm agentic adapter parity', () => {
       expect(results[1]).toEqual(results[0]);
     },
   );
-  it.each(['do', 'ask'] as const)(
+  it.each(['do', 'ask', 'research'] as const)(
     'worker cancel and terminal SIGINT both abort %s with 130',
     async (command) => {
       const codes: number[] = [];
@@ -208,7 +208,11 @@ describe('@no-llm agentic adapter parity', () => {
           return outcome;
         };
         const options: CliRunOptions = {
-          [command === 'do' ? 'doRuntime' : 'askRuntime']: {
+          [command === 'do'
+            ? 'doRuntime'
+            : command === 'research'
+              ? 'researchRuntime'
+              : 'askRuntime']: {
             runTask,
             resolveDefaults: () => Promise.resolve(new Map()),
             resolveAgent: (name, opts, env, prefs) =>

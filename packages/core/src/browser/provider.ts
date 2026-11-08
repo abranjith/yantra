@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 import { basename } from 'node:path';
 
+import type { ResourceLockOptions } from '../locks/resource-lock.js';
+
 import { identifyExecutable, toChromeInstall } from './browser-resolver.js';
 import { detectChrome } from './chrome-discovery.js';
 import {
@@ -403,6 +405,7 @@ export class LocalBrowserProvider implements BrowserProvider {
  * rather than by each factory remembering to agree.
  */
 export interface BrowserRuntimeOptions {
+  readonly resourceLockOptions?: ResourceLockOptions;
   /** Shared services. Defaults to the local read-only composition. */
   readonly services?: BrowserRuntimeServices;
   /** Per-invocation choice. Ephemeral — never written to config. */
@@ -422,7 +425,9 @@ export interface BrowserRuntimeOptions {
  */
 export function createSelectedBrowserProvider(opts: BrowserRuntimeOptions = {}): BrowserProvider {
   const logger = opts.logger ?? noopLogger;
-  const profileStore = opts.profileStore ?? new LocalProfileStore({ logger });
+  const profileStore =
+    opts.profileStore ??
+    new LocalProfileStore({ logger, leaseOptions: opts.resourceLockOptions ?? {} });
   return new LocalBrowserProvider({
     profileStore,
     logger,

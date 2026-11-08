@@ -6,7 +6,7 @@
  * index against an isolated `YANTRA_HOME` so the user's real `~/.yantra/` is
  * never touched.
  *
- * Bypasses `process.exit` the same way `cli-commands.spec.ts` does.
+ * Captures the terminal adapter result and streams, as cli-commands.spec.ts does.
  */
 
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -66,10 +66,11 @@ async function invoke(argv: readonly string[]): Promise<InvocationResult> {
   };
 
   try {
-    await run(argv).catch((err: unknown) => {
+    const result = await run(argv).catch((err: unknown) => {
       if (err instanceof Error && err.message === '__cli_exit__') return;
       throw err;
     });
+    if (!exited && typeof result === 'number') exitCode = result;
   } finally {
     process.stdout.write = originalOut;
     process.stderr.write = originalErr;

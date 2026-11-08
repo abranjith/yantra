@@ -56,6 +56,7 @@ import {
 import type { CommandContext, CommandResult, ExitCode } from '../context/command-context.js';
 import { replayContent } from '../context/replay-content.js';
 import type { ReplayRuntimeDependencies } from '../context/replay-runtime.js';
+import { resourceOptions } from '../context/resource-options.js';
 import { draftRunReceipt } from '../context/run-receipt.js';
 import { recordTaskHistory } from '../history.js';
 import { createRegisteredCommand } from '../registry/build-command-tree.js';
@@ -183,6 +184,7 @@ export async function runHandler(
       logger,
       confirmationGateway: context.gateways.confirmation(interactive),
       browser: {
+        resourceLockOptions: resourceOptions(context, 'run'),
         installOfferGateway: context.gateways.installOffer(interactive),
         ...(browserSelection === undefined ? {} : { selection: browserSelection }),
       },

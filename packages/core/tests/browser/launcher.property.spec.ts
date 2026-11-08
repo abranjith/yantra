@@ -1,10 +1,19 @@
+import type * as NodeCrypto from 'node:crypto';
+import type * as NodeFs from 'node:fs/promises';
+
 import * as fc from 'fast-check';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as Paths from '../../src/browser/paths.js';
 import { LocalProfileStore } from '../../src/browser/profile-store.js';
 import type { Logger } from '../../src/browser/types.js';
 
-vi.mock('node:fs/promises', () => ({
+vi.mock('node:fs/promises', async (importOriginal) => ({
+  ...(await importOriginal<typeof NodeFs>()),
+  realpath: vi.fn(async (path) => String(path)),
+  open: vi.fn(async () => ({ writeFile: vi.fn(), chmod: vi.fn(), sync: vi.fn(), close: vi.fn() })),
+  rename: vi.fn(),
+  readFile: vi.fn().mockRejectedValue(new Error('ENOENT')),
   access: vi.fn(),
   chmod: vi.fn(),
   mkdir: vi.fn(),
@@ -16,10 +25,12 @@ vi.mock('node:os', () => ({
   homedir: vi.fn(() => '/home/testuser'),
   tmpdir: vi.fn(() => '/tmp'),
 }));
-vi.mock('node:crypto', () => ({
+vi.mock('node:crypto', async (importOriginal) => ({
+  ...(await importOriginal<typeof NodeCrypto>()),
   randomUUID: vi.fn(() => `uuid-${Math.random().toString(36).slice(2)}`),
 }));
-vi.mock('../../src/browser/paths.js', () => ({
+vi.mock('../../src/browser/paths.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof Paths>()),
   dataDir: vi.fn(() => '/home/testuser/.local/share/yantra'),
   ephemeralRoot: vi.fn(() => '/tmp'),
 }));
@@ -110,10 +121,15 @@ describe('@no-llm launcher property tests', () => {
             vi.mocked(await import('node:fs/promises').then((m) => m.access)).mockRejectedValueOnce(
               new Error('ENOENT'),
             );
-            const store = new LocalProfileStore({ logger: silentLogger });
+            const release = vi.fn(async () => undefined);
+            const lock = vi.fn(async () => release);
+            const store = new LocalProfileStore({ logger: silentLogger, leaseOptions: { lock } });
             const result = await store.resolve({ kind: 'workflow', workflowName });
             expect(result.kind).toBe('workflow');
             expect(result.absolutePath).toContain(workflowName);
+            expect(lock).toHaveBeenCalledTimes(1);
+            await result.lease?.release();
+            expect(release).toHaveBeenCalledTimes(1);
           },
         ),
         { numRuns: 50 },

@@ -64,7 +64,7 @@ const DEFAULT_WIDTH = 80;
  * @returns The rendered block, ready to write to stdout (no trailing newline).
  *
  * @example
- * process.stdout.write(`${renderBriefTerminal(brief, { detail: 'full' })}\n`);
+ * output.write(`${renderBriefTerminal(brief, { detail: 'full' })}\n`);
  */
 export function renderBriefTerminal(brief: Brief, options: BriefTerminalOptions = {}): string {
   const detail = options.detail ?? 'standard';

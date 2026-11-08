@@ -60,7 +60,8 @@ spelled:
   the managed root boundary in either direction — is refused as a selection error rather than
   followed.
 - A path that resolves outside the managed root is an ordinary external browser, read and launched
-  but never written to or deleted.
+  without Yantra writing to or deleting its executable. Profile state is separate from executable
+  ownership, as described below.
 
 ### Has no minimum Chrome version
 
@@ -188,6 +189,20 @@ launch is still counted in the run's `browser.launches`.
 The deterministic `ask --no-llm` and `research --no-llm` pipelines do not use the pool. They keep one
 headless browser launch per scraped results page or fallback render, closed when that page's work
 ends, and now honor the same timeout and cancellation.
+
+### Protects persistent profiles from concurrent use
+
+A workflow's persistent profile and a caller-supplied explicit profile directory each admit one
+Yantra browser session at a time. The lease uses the directory's canonical path, so symlink or
+junction aliases cannot acquire it twice. A second session is refused immediately; CLI commands
+report `busy` with exit code `3` and holder information when available. Ephemeral profiles are
+unique per session and do not contend for this lease.
+
+This protection applies with either a managed or external browser executable. The browser may
+write cookies, storage, and other browser state into the selected persistent profile, and Yantra
+preserves that directory after the session. The lease is released after browser exit or startup
+rollback; shutdown that cannot establish exit retains the lease. For workflow profile selection,
+see [Persistent browser profiles](saved-workflows.md#persistent-browser-profiles).
 
 ### Leaves nothing behind
 
@@ -352,8 +367,10 @@ The persisted selection this feature's resolver reads lives in the `browser` blo
 and is written only by `yantra browser use` or the ordinary configuration key surface; see
 [Browser Selection and Diagnostics](browser-selection-and-diagnostics.md). No new permission,
 credential, or authentication path is involved. Browser selection is not consent to use your personal
-browsing data: the existing refusal of real Chrome profile roots is unchanged, and external browsers
-and their profiles are read and launched but never modified.
+browsing data: the existing refusal of real Chrome profile roots is unchanged. Yantra reads and
+launches external browser executables without writing to or deleting them. An allowed workflow or
+explicit profile is writable browser state, protected by its own exclusive lease; using it does
+not make the external browser executable Yantra-managed.
 
 Resolution, the compatibility check, the evidence cache, session and recorder startup, `doctor`, and
 `config data-dir` never resolve a Stable build, download anything, or check for updates.

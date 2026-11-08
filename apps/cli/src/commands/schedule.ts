@@ -26,6 +26,7 @@ import { type Command } from 'commander';
 
 import { createTerminalContext } from '../adapters/terminal/terminal-adapter.js';
 import type { CommandContext, CommandResult, ExitCode } from '../context/command-context.js';
+import { resourceOptions } from '../context/resource-options.js';
 import { createRegisteredCommand } from '../registry/build-command-tree.js';
 import { fromAction } from '../registry/handler.js';
 import type { HandlerArgs } from '../registry/handler.js';
@@ -126,6 +127,7 @@ export function scheduleHandlers(context: CommandContext = createTerminalContext
             handle.close();
           }
         },
+        { ...resourceOptions(context, 'schedule'), logger },
       ).catch((error: unknown) => {
         throw error;
       });
@@ -239,11 +241,12 @@ export function unscheduleHandlers(context: CommandContext = createTerminalConte
       }
 
       try {
-        const removed = await withScheduleRegistryLock(() => handle.store.remove(id)).catch(
-          (error: unknown) => {
-            throw error;
-          },
-        );
+        const removed = await withScheduleRegistryLock(() => handle.store.remove(id), {
+          ...resourceOptions(context, 'unschedule'),
+          logger,
+        }).catch((error: unknown) => {
+          throw error;
+        });
         if (!removed.isOk) {
           context.output.stderr.write(`Error: ${removed.error.message}\n`);
           return { exitCode: 2 as ExitCode };

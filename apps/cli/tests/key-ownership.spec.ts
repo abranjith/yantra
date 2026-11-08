@@ -27,18 +27,13 @@ describe('@no-llm key ownership', () => {
         stderr.push(String(chunk));
         return true;
       }) as never);
-      // `prefs` reports the redirect and exits; intercepting the exit is what
-      // proves it never reached the preference store.
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
-        throw new Error(`exit:${String(code)}`);
-      }) as never);
+      // The typed validation failure must happen before opening the preference store.
 
       try {
         await expect(
           makePrefsCommand().parseAsync(['set', key, 'managed'], { from: 'user' }),
-        ).rejects.toThrow('exit:1');
+        ).rejects.toMatchObject({ exitCode: 1 });
       } finally {
-        exitSpy.mockRestore();
         errSpy.mockRestore();
       }
 

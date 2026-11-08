@@ -5,7 +5,7 @@ import type { WorkflowFile } from '@yantra/protocol';
 import type { Result } from '@yantra/protocol';
 
 import { writeFileAtomic } from '../fs/atomic-write.js';
-import { withResourceLock } from '../locks/resource-lock.js';
+import { withResourceLock, type ResourceLockOptions } from '../locks/resource-lock.js';
 
 import { projectCatalogEntry, type WorkflowCatalogEntry } from './catalog.js';
 import type { LintReport } from './lint/index.js';
@@ -38,6 +38,7 @@ export class FileWorkflowStore implements WorkflowStore {
   constructor(
     private readonly workflowsDir: string,
     private readonly sidecarThreshold = 50,
+    private readonly lockOptions: ResourceLockOptions = {},
   ) {}
 
   private filePath(name: string): string {
@@ -82,7 +83,7 @@ export class FileWorkflowStore implements WorkflowStore {
           throw new WorkflowStoreError('save', name, e);
         }
       },
-      { targetPath: this.filePath(name) },
+      { ...this.lockOptions, targetPath: this.filePath(name) },
     );
   }
 
@@ -170,7 +171,7 @@ export class FileWorkflowStore implements WorkflowStore {
           throw new WorkflowStoreError('delete', name, e);
         }
       },
-      { targetPath: this.filePath(name) },
+      { ...this.lockOptions, targetPath: this.filePath(name) },
     );
   }
 

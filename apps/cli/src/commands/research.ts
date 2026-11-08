@@ -66,6 +66,7 @@ import {
 } from '../browser-options.js';
 import { agentFailureLine } from '../connector-io.js';
 import type { CommandContext } from '../context/command-context.js';
+import { resourceOptions } from '../context/resource-options.js';
 import { recordTaskHistory } from '../history.js';
 import { resolveAmbientContext, type ResolvedAmbientContext } from '../preferences.js';
 import { attachRegistered } from '../registry/build-command-tree.js';
@@ -144,7 +145,8 @@ export function makeResearchHandler(
   context: CommandContext = createTerminalContext(runtime),
 ): Handler {
   const resolvedRuntime = runtimeWithDefaults(context, runtime);
-  return handler(
+  let honorsAbort = false;
+  const binding = handler(
     async (args: HandlerArgs, options: ResearchCommandOptions, command: Command): Promise<void> => {
       const [topicArg] = args as readonly [string];
       const registryEntry = COMMAND_REGISTRY.commands.find((entry) => entry.id === 'research');
@@ -277,6 +279,7 @@ export function makeResearchHandler(
       try {
         // Deterministic selection is resolved before any agent/provider setup.
         if (agent.mode === 'llm') {
+          honorsAbort = true;
           await runAgenticResearch(
             topicArg,
             invocation,
@@ -295,6 +298,7 @@ export function makeResearchHandler(
           return;
         }
         const loop = await resolvedRuntime.createLoop(invocation, {
+          resourceLockOptions: resourceOptions(context, 'research'),
           installOfferGateway: context.gateways.installOffer(
             context.isInteractive({ json: format === 'json' }),
           ),
@@ -320,6 +324,8 @@ export function makeResearchHandler(
       }
     },
   );
+  Object.defineProperty(binding, 'honorsAbort', { get: () => honorsAbort });
+  return binding;
 }
 
 /** Renders the Brief through the unified connector dispatch (same as `ask`). */
@@ -368,7 +374,10 @@ export async function createDefaultResearchLoop(
 ): Promise<ResearchLoop> {
   const logger = noopLogger;
 
-  const profileStore = new LocalProfileStore({ logger });
+  const profileStore = new LocalProfileStore({
+    logger,
+    leaseOptions: browser.resourceLockOptions ?? {},
+  });
   const browserProvider = createSelectedBrowserProvider({ ...browser, profileStore, logger });
   // One browser launch per SERP scrape or fetch fallback, as before FEAT-050:
   // the deterministic loop keeps its own wiring and gains only the honest

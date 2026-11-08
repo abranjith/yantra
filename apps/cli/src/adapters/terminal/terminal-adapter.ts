@@ -2,16 +2,19 @@ import { fileURLToPath } from 'node:url';
 
 import { NodeDaemonProcessControl } from '@yantra/core';
 import { InteractiveConfirmationGateway, InteractiveInstallOfferGateway } from '@yantra/core';
+import { parseInvocation } from '@yantra/protocol';
 
 import type { CommandContext } from '../../context/command-context.js';
 import { SettingsResolver } from '../../context/settings-resolver.js';
 import { executeCommand } from '../../execute.js';
-import { openArtifact } from '../../open-artifact.js';
 import type { CliRunOptions } from '../../program.js';
+import type { HandlerTable } from '../../registry/build-command-tree.js';
+import { buildHandlers } from '../../registry/handlers.js';
 import { JSONRenderer } from '../../render/json.js';
 import { makeStderrLogger } from '../../runtime.js';
 
 import { CLIConnectorIO } from './connector.js';
+import { openArtifact } from './open-artifact.js';
 import { terminalInputs, terminalInitCollector } from './prompts.js';
 
 /** Optional terminal capabilities also let tests supply hermetic streams and input. */
@@ -58,7 +61,7 @@ export function createTerminalContext(options: TerminalOptions = {}): CommandCon
     },
     settings,
     logger: makeStderrLogger(false, stderr),
-    input: terminalInputs(tty),
+    input: terminalInputs(tty, { env: options.env ?? process.env }),
     isInteractive: ({ json }) => tty && !json,
     connector: (renderer, opts) =>
       new CLIConnectorIO(
@@ -99,24 +102,41 @@ export async function runTerminal(
                 ? options.doctorRuntime
                 : undefined;
   const controller = new AbortController();
-  const interrupt = () => controller.abort('SIGINT');
-  const terminate = () => controller.abort('SIGTERM');
+  const context = createTerminalContext({
+    ...legacy,
+    ...terminal,
+    signal: terminal.signal ?? controller.signal,
+  });
+  const handlers: HandlerTable = buildHandlers(options, context);
+  const parsed = parseInvocation([...argv], { cwd: context.cwd });
+  const binding = parsed.isOk ? handlers[parsed.value.entry.id] : undefined;
+  const dispose = wireTerminalSignals(
+    controller,
+    () => typeof binding === 'function' && binding.honorsAbort === true,
+  );
+  try {
+    return (await executeCommand(argv, context, options, handlers)).exitCode;
+  } finally {
+    dispose();
+  }
+}
+
+/** Unsupported handlers retain the terminal's conventional signal exit. */
+export function wireTerminalSignals(
+  controller: AbortController,
+  honorsAbort: () => boolean,
+  exit: (code: number) => void = (code) => process.exit(code),
+): () => void {
+  const signal = (name: 'SIGINT' | 'SIGTERM') => {
+    if (honorsAbort()) controller.abort(name);
+    else exit(name === 'SIGINT' ? 130 : 143);
+  };
+  const interrupt = () => signal('SIGINT'),
+    terminate = () => signal('SIGTERM');
   process.once('SIGINT', interrupt);
   process.once('SIGTERM', terminate);
-  try {
-    return (
-      await executeCommand(
-        argv,
-        createTerminalContext({
-          ...legacy,
-          ...terminal,
-          signal: terminal.signal ?? controller.signal,
-        }),
-        options,
-      )
-    ).exitCode;
-  } finally {
+  return () => {
     process.off('SIGINT', interrupt);
     process.off('SIGTERM', terminate);
-  }
+  };
 }

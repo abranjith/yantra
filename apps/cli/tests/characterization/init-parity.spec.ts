@@ -87,9 +87,10 @@ describe('@no-llm initialization adapter parity', () => {
         }
         expect(code).toBe(0);
         const tree = await snapshotTree(home);
+        let backupIndex = 0;
         const stable = Object.fromEntries(
           Object.entries(tree).map(([key, value]) => [
-            key.replace(/\.bak\.\d+/u, '.bak.<time>'),
+            key.replace(/\.bak\.\d+/u, () => `.bak.${backupIndex++}`),
             value,
           ]),
         );

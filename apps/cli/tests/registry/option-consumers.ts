@@ -15,6 +15,7 @@ import ts from 'typescript';
 
 /** What one module (or a union of modules) observably does with options. */
 export interface ModuleFacts {
+  readonly observationOnly: boolean;
   /** Attributes read as `options.x`, `opts.x`, `options['x']` or destructured `{ x }`. */
   readonly optionReads: ReadonlySet<string>;
   /** Every property name read anywhere (`a.x`, `a?.x`), assignment targets excluded. */
@@ -71,16 +72,22 @@ export function factsOf(sourceText: string, fileName = 'module.ts'): ModuleFacts
     ts.forEachChild(node, visit);
   };
   visit(source);
-  return { optionReads, propertyReads, calls, imports };
+  const observationOnly = (ts.getLeadingCommentRanges(sourceText, 0) ?? []).some((range) =>
+    sourceText.slice(range.pos, range.end).includes('@option-observation-only'),
+  );
+  return { observationOnly, optionReads, propertyReads, calls, imports };
 }
 
 /** Unions several modules' facts. */
 export function mergeFacts(all: readonly ModuleFacts[]): ModuleFacts {
+  // Observing settings in an audit receipt cannot make a dormant control executable.
+  const execution = all.filter((facts) => !facts.observationOnly);
   return {
-    optionReads: new Set(all.flatMap((facts) => [...facts.optionReads])),
-    propertyReads: new Set(all.flatMap((facts) => [...facts.propertyReads])),
-    calls: new Set(all.flatMap((facts) => [...facts.calls])),
-    imports: all.flatMap((facts) => facts.imports),
+    observationOnly: execution.length === 0,
+    optionReads: new Set(execution.flatMap((facts) => [...facts.optionReads])),
+    propertyReads: new Set(execution.flatMap((facts) => [...facts.propertyReads])),
+    calls: new Set(execution.flatMap((facts) => [...facts.calls])),
+    imports: execution.flatMap((facts) => facts.imports),
   };
 }
 

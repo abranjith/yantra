@@ -3,6 +3,7 @@ import { join } from 'node:path';
 
 import {
   writeExecutionReceipt,
+  receiptLockOptions,
   type ExecutionReceiptDraft,
   AgentBrowserController,
   BlocklistImpl,
@@ -643,6 +644,7 @@ export async function runAgenticTask(
       rankSink: dependencies.rankSink ?? null,
       runHealth,
       browser: {
+        ...(request.receipt ? { resourceLockOptions: receiptLockOptions(request.receipt) } : {}),
         ...(dependencies.browserServices ? { services: dependencies.browserServices } : {}),
         ...(dependencies.browserSelection ? { selection: dependencies.browserSelection } : {}),
         ...(dependencies.browserInstallOfferGateway === undefined
@@ -2127,7 +2129,10 @@ function composeDefaultEnvironment(
     leaves.createBrowserProvider({
       ...(context.browser ?? {}),
       logger,
-      profileStore: new LocalProfileStore({ logger }),
+      profileStore: new LocalProfileStore({
+        logger,
+        leaseOptions: context.browser?.resourceLockOptions ?? {},
+      }),
     }),
     context.runHealth,
   );
@@ -2153,7 +2158,10 @@ function composeDefaultEnvironment(
     stepId: 'web_search',
     action: 'fetch',
   });
-  const workflowStore = new FileWorkflowStore(workflowsRoot());
+  const workflowStore = new FileWorkflowStore(workflowsRoot(), undefined, {
+    ...context.browser?.resourceLockOptions,
+    logger,
+  });
 
   return {
     browserController,
@@ -2227,7 +2235,10 @@ function composeDefaultEnvironment(
               ...(context.browser ?? {}),
               installOfferGateway: null,
               logger,
-              profileStore: new LocalProfileStore({ logger }),
+              profileStore: new LocalProfileStore({
+                logger,
+                leaseOptions: context.browser?.resourceLockOptions ?? {},
+              }),
             }),
             context.runHealth,
           );

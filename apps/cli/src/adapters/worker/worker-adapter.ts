@@ -202,7 +202,7 @@ export async function runWorkerInvocation(
       options,
       handlers,
     );
-    if (result.failure && envelope === null)
+    if (result.failure && envelope === null && bytes === 0)
       return finish({
         type: 'error',
         exit_code: result.exitCode === 0 ? 2 : result.exitCode,

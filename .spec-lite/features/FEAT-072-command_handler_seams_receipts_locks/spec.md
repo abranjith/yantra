@@ -890,7 +890,7 @@ tests/setup` passes; `init.ts`, `init-wizard.ts` and `init-context-prompts.ts` a
 
 ### TASK-015: Empty the purity allowlist and run the full parity sweep
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - Remove `HANDLER_PURITY_MIGRATION_ALLOWLIST` (now empty) from `eslint.config.js`.
   - Make the remaining helpers clean: `commands/audit-builder.ts`, `auto-detect.ts`,
     `schedule-registration.ts`, `render/types.ts` (default streams move to the adapter),
@@ -898,11 +898,15 @@ tests/setup` passes; `init.ts`, `init-wizard.ts` and `init-context-prompts.ts` a
   - Add a test asserting the parity table covers every registry command path (registry enumeration,
     not a hand list), with `exemption` and `in-process-secure` paths asserted as worker-refused
     instead.
-- [ ] **Unit Tests**:
+    > Verification note: the existing profile-permission test now supplies the OS-lock boundary
+    > and a partial filesystem mock for lease publication. Its `0700` assertion is retained,
+    > with explicit lease-acquisition and release assertions.
+
+- [x] **Unit Tests**:
   - `handler-purity.spec.ts`: no allowlist exists, and `rg "process\.(exit|stdin|stdout|stderr)|isTTY|new CLIConnectorIO" apps/cli/src`
     matches only under `adapters/terminal/` and `bin.ts`.
   - Full `adapter-parity.spec.ts` and `terminal-baseline.spec.ts` pass.
-- [ ] **Documentation Update**: Invoke **Document** update mode for `docs/architecture.md` (final state
+- [x] **Documentation Update**: Invoke **Document** update mode for `docs/architecture.md` (final state
       of the seams; the exemption list).
 - **Verify**:
   - `npx turbo run lint typecheck` passes.
@@ -910,6 +914,15 @@ tests/setup` passes; `init.ts`, `init-wizard.ts` and `init-context-prompts.ts` a
   - The `e2e` suite passes after `turbo run build`, including `format.spec.ts` (the repo-wide lint
     gate).
 - **Depends on**: TASK-006 to TASK-014.
+
+> Final verification (2026-11-08): build, lint, and type checks passed across all seven
+> workspaces. The full Windows suite was exercised with models disabled, including all 114
+> terminal baselines and 590 task-fidelity checks. The initial full run reported one PowerShell
+> shell-copy failure after a roughly 5.7-hour interruption; the remaining copied commands had
+> not run. The affected case passed on retry, then the complete shell suite passed (9 passed,
+> 1 documented platform exemption). Other end-to-end checks passed, including repository-wide
+> lint. Scenario deadlines and assertions were retained. Live models and macOS/Linux were not
+> exercised in this session.
 
 ## 6. Cross-Cutting Concerns
 
@@ -972,6 +985,6 @@ tests/setup` passes; `init.ts`, `init-wizard.ts` and `init-context-prompts.ts` a
 - [x] TASK-012: Migrate the read-class commands
 - [x] TASK-013: Migrate the mutate-class commands
 - [x] TASK-014: The `init` application service with a pluggable answer collector
-- [ ] TASK-015: Empty the purity allowlist and run the full parity sweep
+- [x] TASK-015: Empty the purity allowlist and run the full parity sweep
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

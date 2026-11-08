@@ -209,13 +209,20 @@ export async function buildOrchestratorRuntime(
     enforceRobotsTxt: ethicsConfig.robotsEnabled,
   });
 
-  const profileStore = new LocalProfileStore({ logger });
+  const profileStore = new LocalProfileStore({
+    logger,
+    leaseOptions: opts.browser?.resourceLockOptions ?? {},
+  });
   const browserProvider = createSelectedBrowserProvider({
     ...(opts.browser ?? {}),
     profileStore,
     logger,
   });
-  const workflowStore = new FileWorkflowStore(workflowsRoot());
+  const workflowStore = new FileWorkflowStore(
+    workflowsRoot(),
+    undefined,
+    opts.browser?.resourceLockOptions,
+  );
   const runStore = new LocalRunStore();
   const sanitizer = new DefaultSanitizer();
 

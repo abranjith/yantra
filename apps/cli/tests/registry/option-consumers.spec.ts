@@ -149,6 +149,14 @@ describe('@no-llm option consumer analysis', () => {
     expect(isConsumed(budget, facts)).toBe(true);
   });
 
+  it('does not turn an audit-only budget observation into execution support', () => {
+    const facts = mergeFacts([
+      factsOf(`const agent=resolveAgentInvocation('run',options,env);run({budgets:{}});`),
+      factsOf('/** @option-observation-only */ function receipt(agent){ return agent.budgets; }'),
+    ]);
+    expect(isConsumed(budget, facts)).toBe(false);
+  });
+
   it('merges a module with its direct imports', () => {
     const merged = mergeFacts([factsOf('import "./a.js";'), factsOf('options.json;')]);
     expect(isConsumed(json, merged)).toBe(true);
