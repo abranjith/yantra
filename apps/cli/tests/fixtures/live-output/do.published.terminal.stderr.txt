@@ -1,0 +1,7 @@
+goal: "buy \"2\" widgets for under $40"
+warning: a credential-shaped value in the goal was replaced with [secret-1]
+understood: fill the order form; capture a screenshot
+cannot deliver: full-page screenshot (screenshots are off for this run)
+progress: email filled; quantity pending
+recovery: no task progress; [2J try the next supported step
+understood (revised): fill the order form

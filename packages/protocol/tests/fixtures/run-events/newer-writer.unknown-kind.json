@@ -1,0 +1,10 @@
+{
+  "schema_version": "1",
+  "seq": 7,
+  "run_id": "20261101T120000Z-do-a1b2c3d4",
+  "event": {
+    "kind": "attendance_changed",
+    "attended": 2,
+    "at": "2026-11-01T12:00:00.000Z"
+  }
+}

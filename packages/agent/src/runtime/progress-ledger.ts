@@ -1,5 +1,10 @@
 import { canonicalUrl, type FillCensus } from '@yantra/core';
-import { artifactRequirementId, type RunHealth, type TaskContractBody } from '@yantra/protocol';
+import {
+  artifactRequirementId,
+  type LiveItem,
+  type RunHealth,
+  type TaskContractBody,
+} from '@yantra/protocol';
 
 import type { ActionLedger, ActionLedgerEntry } from './action-ledger.js';
 import type { NowMs } from './budget.js';
@@ -20,14 +25,8 @@ export type ProgressSignal =
   | 'action_verified'
   | 'artifact_saved'
   | 'item_advanced';
-export interface LiveItem {
-  readonly id: string;
-  readonly kind: 'fill' | 'artifact' | 'effects' | 'deliverable';
-  readonly label: string;
-  readonly state: 'pending' | 'advancing' | 'met';
-  readonly done: number | null;
-  readonly total: number | null;
-}
+/** One requirement's live state; the shape is protocol data (FEAT-063). */
+export type { LiveItem };
 export interface ProgressSources {
   documentCount(): number;
   page(): { readonly epoch: number | null; readonly url: string } | null;

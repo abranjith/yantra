@@ -1,0 +1,2 @@
+ask: search-provider=auto limit=3 no-llm=true detail=standard format=terminal
+goal: "ai news"

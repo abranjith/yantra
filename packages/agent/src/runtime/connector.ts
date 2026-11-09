@@ -1,62 +1,14 @@
-import type { DeliverableReason } from './capture-capability.js';
+import type { AgentProgressEvent } from '@yantra/protocol';
+
 import type { ConfirmationConnector } from './confirmation-bridge.js';
 import type { AgenticTaskOutcome } from './outcome.js';
-import type { LiveItem } from './progress-ledger.js';
 
-/** Bounded, render-safe progress sent from the provider seam to a connector. */
-export type AgentProgressEvent =
-  | {
-      readonly type: 'recovery';
-      readonly rung: 'steer' | 'freeze' | 'stop';
-      readonly trigger: 'stalled' | 'turn-timeout';
-      readonly move: 'fill-remaining' | 'list-fields' | 'capture' | 'publish' | null;
-      readonly summary: string;
-      readonly at: string;
-    }
-  | {
-      readonly type: 'progress';
-      readonly items: readonly LiveItem[];
-      readonly summary: string;
-      readonly at: string;
-    }
-  | { readonly type: 'assistant_text'; readonly text: string; readonly at: string }
-  | {
-      readonly type: 'tool_started';
-      readonly tool: string;
-      readonly summary: string;
-      readonly at: string;
-    }
-  | {
-      readonly type: 'tool_finished';
-      readonly tool: string;
-      readonly summary: string;
-      readonly status: 'ok' | 'error' | 'denied' | 'aborted';
-      readonly durationMs: number | null;
-      readonly at: string;
-    }
-  | {
-      /**
-       * A `task_contract` declaration succeeded (FEAT-052). `summary` is the
-       * one-line echo of the normalized, sanitized contract.
-       */
-      readonly type: 'contract_declared';
-      readonly revision: number;
-      readonly summary: string;
-      readonly at: string;
-    }
-  | {
-      /**
-       * A declared item this run cannot deliver (FEAT-058), disclosed once,
-       * right after the declaration that introduced it. `summary` is the
-       * one-line, ASCII-only disclosure; the run continues with the rest.
-       */
-      readonly type: 'capability_gap';
-      /** The requirement id, such as `artifact:screenshot:viewport`. */
-      readonly item: string;
-      readonly reason: DeliverableReason;
-      readonly summary: string;
-      readonly at: string;
-    };
+/**
+ * Bounded, render-safe progress sent from the provider seam to a connector.
+ * Defined once in `@yantra/protocol` (FEAT-063), where it also builds the
+ * matching `RunEvent` variants; re-exported here for existing connectors.
+ */
+export type { AgentProgressEvent };
 
 /** IO surface consumed by the agentic runtime (CLI today, other connectors later). */
 export interface AgentTaskConnector extends ConfirmationConnector {

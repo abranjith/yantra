@@ -18,6 +18,7 @@ import {
   JsonValue,
   TASK_OUTCOME_TABLE,
   type Brief,
+  type FailureClass,
   type Plan,
   type SecretRef,
   type SecurityScope,
@@ -43,6 +44,13 @@ import {
   writeExecutionReceipt,
   type ExecutionReceiptDraft,
 } from '../../receipt/execution-receipt.js';
+import { recordReceiptWritten } from '../../run-events/receipt-written.js';
+import {
+  abandonOwnedStream,
+  emitArtifactSaved,
+  runOutcomeEvent,
+} from '../../run-events/run-facts.js';
+import { RunEventStream } from '../../run-events/stream.js';
 import type { KeychainProvider } from '../../secrets/keychain.js';
 import { DefaultOpaqueRefResolver } from '../../secrets/resolver.js';
 import type { WorkflowStore } from '../store.types.js';
@@ -148,6 +156,7 @@ export function taskOutcomeForReplay(outcome: OrchestratorRunOutcome): TaskOutco
 // ---------------------------------------------------------------------------
 
 const REPORT_FILE = 'report.md';
+const OUTPUTS_FILE = 'outputs.json';
 const REPORT_JSON_FILE = 'report.json';
 
 export class RunOrchestrator {
@@ -195,8 +204,7 @@ export class RunOrchestrator {
 
     // 3. Translate workflow → plan
     const translated = translate(workflow, params);
-    const { plan, locatorTable, profileSpec, outputBindings, declaredSecretKeys, synthesisSpec } =
-      translated;
+    const { plan, profileSpec, outputBindings, declaredSecretKeys } = translated;
 
     // 4. Preflight checks
     await preflightSecrets(declaredSecretKeys, this.opts.keychain);
@@ -204,8 +212,12 @@ export class RunOrchestrator {
 
     // 5. Create run directory
     const { runId, runDir } = await this.opts.runStore.createRun(request);
-    if (request.receipt)
-      await writeExecutionReceipt(runDir, {
+    // FEAT-063: the run's event stream. A caller-supplied stream is already
+    // subscribed by its renderer; otherwise this run owns one.
+    const ownsRunEvents = request.runEvents === undefined;
+    const runEvents = request.runEvents ?? new RunEventStream({ logger });
+    if (request.receipt) {
+      const written = await writeExecutionReceipt(runDir, {
         ...request.receipt,
         settings: [
           ...request.receipt.settings.filter(
@@ -225,6 +237,9 @@ export class RunOrchestrator {
           },
         ],
       });
+      // Committed as an early line once the log opens.
+      await recordReceiptWritten(runEvents, written.path);
+    }
 
     const taskId = plan.task_id;
     const startedAt = clock.now().toISOString();
@@ -248,6 +263,47 @@ export class RunOrchestrator {
     };
     await writeManifest(runDir, manifest);
 
+    // 6b. Open the run's event log (FEAT-063). Anything emitted so far is
+    // committed as its first lines.
+    await this.openRunEvents(runEvents, runId, runDir, manifest);
+    try {
+      return await this.runAfterOpen({
+        request,
+        workflow,
+        params,
+        translated,
+        manifest,
+        runId,
+        runDir,
+        taskId,
+        startedAt,
+        runEvents,
+      });
+    } catch (error) {
+      abandonOwnedStream(runEvents, ownsRunEvents, runId, error);
+      throw error;
+    }
+  }
+
+  /** Steps 7 onward of {@link run}, once the run's event log is open. */
+  private async runAfterOpen(input: {
+    readonly request: RunRequest;
+    readonly workflow: Parameters<typeof translate>[0];
+    readonly params: Awaited<ReturnType<typeof resolveParams>>;
+    readonly translated: TranslatedWorkflow;
+    readonly manifest: RunManifest;
+    readonly runId: string;
+    readonly runDir: string;
+    readonly taskId: string;
+    readonly startedAt: string;
+    readonly runEvents: RunEventStream;
+  }): Promise<OrchestratorRunOutcome> {
+    const clock = this.opts.clock ?? { now: () => new Date() };
+    const logger = this.opts.logger;
+    const { workflow, params, translated, manifest, runId, runDir, taskId, startedAt, runEvents } =
+      input;
+    const { plan, locatorTable, profileSpec, outputBindings, synthesisSpec } = translated;
+
     // 7. Write plan.json
     await writeFile(join(runDir, 'plan.json'), JSON.stringify(plan, null, 2), {
       encoding: 'utf8',
@@ -262,7 +318,7 @@ export class RunOrchestrator {
       })
       .catch(async (error: unknown) => {
         if (error instanceof ResourceBusyError)
-          await this.recordStartupRefusal(runId, runDir, manifest, error);
+          await this.recordStartupRefusal(runId, runDir, manifest, error, runEvents);
         throw error;
       });
 
@@ -322,6 +378,7 @@ export class RunOrchestrator {
         },
         confirmationGateway: this.opts.confirmationGateway ?? null,
         logger,
+        runEvents,
       });
 
       // 13. Execute
@@ -343,6 +400,7 @@ export class RunOrchestrator {
         createdAt: endedAt,
         outputs: redacted,
       });
+      emitArtifactSaved(runEvents, runDir, join(runDir, OUTPUTS_FILE), 'output');
 
       // 15. Map executor outcome → orchestrator outcome + update manifest
       const baseOutcome = this.mapExecutorOutcome(executorOutcome, runId, evaluated.persisted);
@@ -365,6 +423,14 @@ export class RunOrchestrator {
         baseOutcome.kind === 'success' && brief.artifacts !== null
           ? { ...baseOutcome, brief: brief.artifacts }
           : baseOutcome;
+      if (brief.artifacts !== null) {
+        for (const path of [
+          brief.artifacts.jsonPath,
+          brief.artifacts.mdPath,
+          brief.artifacts.htmlPath,
+        ])
+          emitArtifactSaved(runEvents, runDir, path, 'brief');
+      }
 
       manifest.status = outcome.kind === 'success' ? 'completed' : 'failed';
       manifest.endedAt = endedAt;
@@ -394,7 +460,11 @@ export class RunOrchestrator {
         encoding: 'utf8',
         mode: 0o600,
       });
+      emitArtifactSaved(runEvents, runDir, join(runDir, REPORT_FILE), 'report');
+      emitArtifactSaved(runEvents, runDir, join(runDir, REPORT_JSON_FILE), 'report');
 
+      // The run's last event; the stream closes once the manifest is final.
+      this.recordOutcome(runEvents, outcome, clock.now().toISOString());
       return outcome;
     } finally {
       await this.opts.runStore.releaseLock(runId);
@@ -414,19 +484,45 @@ export class RunOrchestrator {
    */
   public async resume(
     runId: string,
-    options: { readonly receipt?: ExecutionReceiptDraft } = {},
+    options: {
+      readonly receipt?: ExecutionReceiptDraft;
+      /** As {@link RunRequest.runEvents}: caller-owned when given. */
+      readonly runEvents?: RunEventStream;
+    } = {},
   ): Promise<OrchestratorRunOutcome> {
-    const logger = this.opts.logger;
-
     // Load resume point (validates resumability)
     const point = await loadResumePoint(this.opts.runStore, runId);
-    const { plan, nextStepIndex, lastCheckpoint, manifest, runDir } = point;
+    const { manifest, runDir } = point;
+    const ownsRunEvents = options.runEvents === undefined;
+    const runEvents = options.runEvents ?? new RunEventStream({ logger: this.opts.logger });
 
-    if (options.receipt) await writeExecutionReceipt(runDir, options.receipt, { resume: true });
+    if (options.receipt) {
+      const written = await writeExecutionReceipt(runDir, options.receipt, { resume: true });
+      await recordReceiptWritten(runEvents, written.path);
+    }
 
     // Update status to running
     manifest.status = 'running';
     await writeManifest(runDir, manifest);
+
+    // A resume continues the run's own log: seq picks up after the original
+    // execution, and `task_resumed` opens the new segment.
+    await this.openRunEvents(runEvents, runId, runDir, manifest);
+    try {
+      return await this.resumeAfterOpen(runId, point, runEvents);
+    } catch (error) {
+      abandonOwnedStream(runEvents, ownsRunEvents, runId, error);
+      throw error;
+    }
+  }
+
+  private async resumeAfterOpen(
+    runId: string,
+    point: Awaited<ReturnType<typeof loadResumePoint>>,
+    runEvents: RunEventStream,
+  ): Promise<OrchestratorRunOutcome> {
+    const logger = this.opts.logger;
+    const { plan, nextStepIndex, lastCheckpoint, manifest, runDir } = point;
 
     const browser = await this.opts.browserProvider
       .launch({
@@ -438,7 +534,7 @@ export class RunOrchestrator {
       })
       .catch(async (error: unknown) => {
         if (error instanceof ResourceBusyError)
-          await this.recordStartupRefusal(runId, runDir, manifest, error);
+          await this.recordStartupRefusal(runId, runDir, manifest, error, runEvents);
         throw error;
       });
 
@@ -472,6 +568,7 @@ export class RunOrchestrator {
         ethics: this.opts.ethicsGate,
         confirmationGateway: this.opts.confirmationGateway ?? null,
         logger,
+        runEvents,
       });
 
       // Emit task_resumed event
@@ -513,6 +610,7 @@ export class RunOrchestrator {
         createdAt: endedAt,
         outputs: redacted,
       });
+      emitArtifactSaved(runEvents, runDir, join(runDir, OUTPUTS_FILE), 'output');
 
       const outcome = this.mapExecutorOutcome(executorOutcome, runId, evaluated.persisted);
 
@@ -524,6 +622,7 @@ export class RunOrchestrator {
       }
       await writeManifest(runDir, manifest);
 
+      this.recordOutcome(runEvents, outcome, new Date().toISOString());
       return outcome;
     } finally {
       await this.opts.runStore.releaseLock(runId);
@@ -533,6 +632,50 @@ export class RunOrchestrator {
 
   // -------------------------------------------------------------------------
   // Private helpers
+
+  /**
+   * Opens the run's event log. A log that cannot be opened is an environment
+   * failure before the run proceeds: it is recorded through the startup
+   * failure path (failed manifest, report, `task_failed`) and rethrown.
+   */
+  private async openRunEvents(
+    runEvents: RunEventStream,
+    runId: string,
+    runDir: string,
+    manifest: RunManifest,
+  ): Promise<void> {
+    try {
+      runEvents.open({ runDir, runId, logger: this.opts.logger });
+    } catch (error) {
+      await this.recordStartupFailure(runId, runDir, manifest, {
+        message: error instanceof Error ? error.message : String(error),
+        auditEntries: [],
+        runEvents: null,
+      });
+      throw error;
+    }
+  }
+
+  /** Records the run's one `run_outcome` (its last event) and closes the stream. */
+  private recordOutcome(
+    runEvents: RunEventStream,
+    outcome: OrchestratorRunOutcome,
+    at: string,
+  ): void {
+    const taskOutcome = taskOutcomeForReplay(outcome);
+    runEvents.emit(
+      runOutcomeEvent({
+        runId: outcome.runId,
+        taskOutcome,
+        terminationReason: null,
+        stopDetail: null,
+        exitCode: TASK_OUTCOME_TABLE[taskOutcome].exitCode,
+        failureClass: replayFailureClass(outcome),
+        at,
+      }),
+    );
+    runEvents.close();
+  }
   // -------------------------------------------------------------------------
 
   /**
@@ -590,6 +733,25 @@ export class RunOrchestrator {
     runDir: string,
     manifest: RunManifest,
     error: ResourceBusyError,
+    runEvents: RunEventStream,
+  ): Promise<void> {
+    await this.recordStartupFailure(runId, runDir, manifest, {
+      message: `${error.message} ${error.remediation}`,
+      auditEntries: [{ kind: 'resource_busy', resource: error.resource, holder: error.holder }],
+      runEvents,
+    });
+  }
+
+  /** Finalizes a run that failed before its first step as an auditable failure. */
+  private async recordStartupFailure(
+    runId: string,
+    runDir: string,
+    manifest: RunManifest,
+    failure: {
+      readonly message: string;
+      readonly auditEntries: RunReport['auditEntries'];
+      readonly runEvents: RunEventStream | null;
+    },
   ): Promise<void> {
     const endedAt = (this.opts.clock?.now() ?? new Date()).toISOString();
     manifest.status = 'failed';
@@ -606,9 +768,9 @@ export class RunOrchestrator {
       failure: {
         failureClass: 'unexpected',
         stepId: 'startup',
-        message: `${error.message} ${error.remediation}`,
+        message: failure.message,
       },
-      auditEntries: [{ kind: 'resource_busy', resource: error.resource, holder: error.holder }],
+      auditEntries: failure.auditEntries,
     };
     try {
       await writeManifest(runDir, manifest);
@@ -618,11 +780,19 @@ export class RunOrchestrator {
         join(runDir, REPORT_JSON_FILE),
         JSON.stringify(this.renderer.renderJson(report), null, 2),
       );
-      await appendFile(
-        join(runDir, 'events.jsonl'),
-        `${JSON.stringify({ kind: 'task_failed', task_id: manifest.taskId, at: endedAt, failure_class: 'unexpected', task_outcome: 'failed', report_path: reportPath })}\n`,
-        { encoding: 'utf8', mode: 0o600 },
-      );
+      const taskFailed = {
+        kind: 'task_failed',
+        task_id: manifest.taskId,
+        at: endedAt,
+        failure_class: 'unexpected',
+        task_outcome: 'failed',
+        report_path: reportPath,
+      } as const;
+      await appendFile(join(runDir, 'events.jsonl'), `${JSON.stringify(taskFailed)}\n`, {
+        encoding: 'utf8',
+        mode: 0o600,
+      });
+      failure.runEvents?.emit(taskFailed);
     } finally {
       await this.opts.runStore.releaseLock(runId);
     }
@@ -652,6 +822,27 @@ export class RunOrchestrator {
           },
         };
     }
+  }
+}
+
+/** The failure class a replay outcome records on its `run_outcome`. */
+function replayFailureClass(outcome: OrchestratorRunOutcome): FailureClass | null {
+  switch (outcome.kind) {
+    case 'success':
+      return null;
+    case 'failure':
+      return outcome.failureClass;
+    case 'aborted':
+      switch (outcome.reason) {
+        case 'user-handoff':
+          return null;
+        case 'user-abort':
+          return 'user_aborted';
+        case 'scope-violation':
+          return 'scope_violation';
+        case 'ethics-refused':
+          return 'ethics_refused';
+      }
   }
 }
 

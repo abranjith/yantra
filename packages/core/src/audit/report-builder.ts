@@ -12,6 +12,7 @@ import {
 } from '@yantra/protocol';
 
 import { normalizeAttemptArtifact } from '../interaction/escalation.js';
+import { RUN_EVENTS_FILENAME } from '../run-events/log.js';
 
 import type { AgentJsonlEntry, SecretsJsonlEntry } from './log-writer.js';
 export interface FailureContext {
@@ -58,6 +59,8 @@ export class MarkdownReportBuilder implements ReportBuilder {
           // derives run status from it: it is operator diagnostics, and a
           // report that read it would make an optional artifact load-bearing.
           hasRuntimeLog: await fileExists(join(runDir, 'runtime.jsonl')),
+          // FEAT-063: listed by presence only, never parsed, like runtime.jsonl.
+          hasRunEvents: await fileExists(join(runDir, RUN_EVENTS_FILENAME)),
           runHealth: await readRunHealth(join(runDir, 'run-health.json')),
           contract: await readTaskContract(join(runDir, 'contract.json')),
           ...(failure ? { failure } : {}),
@@ -70,6 +73,7 @@ export class MarkdownReportBuilder implements ReportBuilder {
           secretEntries,
           usage,
           outcome,
+          hasRunEvents: await fileExists(join(runDir, RUN_EVENTS_FILENAME)),
           ...(failure ? { failure } : {}),
         });
 
@@ -120,6 +124,8 @@ function renderAgenticReport(input: {
   readonly outcome: 'completed' | 'failed';
   /** Whether `runtime.jsonl` exists in the run directory. Presence, not content. */
   readonly hasRuntimeLog: boolean;
+  /** Whether `run-events.jsonl` exists (FEAT-063). Presence, not content. */
+  readonly hasRunEvents: boolean;
   /** `run-health.json`, when the run wrote one (absent on older runs). */
   readonly runHealth: RunHealthRead;
   /** `contract.json`, when the run declared a task contract (FEAT-052). */
@@ -231,6 +237,7 @@ function renderAgenticReport(input: {
   // preflight handoff) legitimately has none, and every report written before
   // this artifact existed stays exactly as valid as it was.
   if (input.hasRuntimeLog) lines.push('- runtime.jsonl');
+  if (input.hasRunEvents) lines.push(`- ${RUN_EVENTS_FILENAME}`);
   if (input.runHealth.kind !== 'absent') lines.push('- run-health.json');
   if (input.contract.kind !== 'absent') lines.push('- contract.json');
   const sessionFile = stringOr(agent.session_file, '');
@@ -450,6 +457,8 @@ function renderReport(input: {
   readonly secretEntries: SecretsJsonlEntry[];
   readonly usage: UsageLedger | null;
   readonly outcome: 'completed' | 'failed';
+  /** Whether `run-events.jsonl` exists (FEAT-063). Presence, not content. */
+  readonly hasRunEvents: boolean;
   readonly failure?: FailureContext;
 }): string {
   const lines: string[] = [];
@@ -539,6 +548,7 @@ function renderReport(input: {
   lines.push('- agent.jsonl');
   lines.push('- secrets.jsonl');
   lines.push('- events.jsonl');
+  if (input.hasRunEvents) lines.push(`- ${RUN_EVENTS_FILENAME}`);
 
   return lines.join('\n');
 }

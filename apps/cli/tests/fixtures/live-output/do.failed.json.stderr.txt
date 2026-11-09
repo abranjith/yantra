@@ -1,0 +1,1 @@
+goal: "buy \"2\" widgets for under $40"

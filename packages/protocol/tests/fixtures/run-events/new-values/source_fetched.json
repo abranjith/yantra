@@ -1,0 +1,15 @@
+{
+  "schema_version": "1",
+  "seq": 27,
+  "run_id": "20261101T120000Z-do-a1b2c3d4",
+  "event": {
+    "kind": "source_fetched",
+    "hop_index": null,
+    "source_index": 1,
+    "url": "https://example.com/one",
+    "status": "ok",
+    "failure_class": null,
+    "duration_ms": 20,
+    "at": "2026-11-01T12:00:00.000Z"
+  }
+}

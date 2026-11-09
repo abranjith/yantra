@@ -11,6 +11,7 @@
  */
 
 import { redactRunInput, UserInputMarkerError } from '@yantra/core';
+import type { RunEventOf } from '@yantra/protocol';
 
 /** The echo shows at most this many characters of the goal. */
 export const GOAL_ECHO_MAX_CHARS = 200;
@@ -30,7 +31,9 @@ export function stripControlCharacters(text: string): string {
 }
 
 /**
- * Render the goal-echo line.
+ * The goal-echo event (FEAT-063): the echo line without its newline, plus how
+ * much goal was received and whether the line shows only its start. The run's
+ * renderers print `display`; the run-event log records the event.
  *
  * 1. Credential-shaped and marked values print as their placeholders
  *    (`redactRunInput`), exactly as the run itself will see them.
@@ -44,26 +47,49 @@ export function stripControlCharacters(text: string): string {
  * because an unclosed marker may hold a secret.
  *
  * @param goal The goal argument as received.
- * @returns One line, newline-terminated: `goal: "<text>"`.
+ * @param at Emission timestamp; defaults to now.
  */
-export function renderGoalEcho(goal: string): string {
+export function goalEchoEvent(
+  goal: string,
+  at: string = new Date().toISOString(),
+): RunEventOf<'goal_echo'> {
+  const receivedChars = [...goal].length;
   let redacted: string;
   try {
     redacted = redactRunInput({ goal }).goal;
   } catch (error) {
     if (error instanceof UserInputMarkerError) {
-      return 'goal: [not shown: the goal has a malformed @{...} marker]\n';
+      return {
+        kind: 'goal_echo',
+        display: 'goal: [not shown: the goal has a malformed @{...} marker]',
+        received_chars: receivedChars,
+        truncated: false,
+        at,
+      };
     }
     throw error;
   }
   const cleaned = stripControlCharacters(redacted);
   const chars = [...cleaned];
-  const bounded =
-    chars.length <= GOAL_ECHO_MAX_CHARS
-      ? cleaned
-      : `${chars.slice(0, GOAL_ECHO_MAX_CHARS).join('')}…`;
+  const truncated = chars.length > GOAL_ECHO_MAX_CHARS;
+  const bounded = truncated ? `${chars.slice(0, GOAL_ECHO_MAX_CHARS).join('')}…` : cleaned;
   const escaped = bounded.replace(/\\/gu, '\\\\').replace(/"/gu, '\\"');
-  const suffix =
-    chars.length <= GOAL_ECHO_MAX_CHARS ? '' : ` (${[...goal].length} characters received)`;
-  return `goal: "${escaped}"${suffix}\n`;
+  const suffix = truncated ? ` (${receivedChars} characters received)` : '';
+  return {
+    kind: 'goal_echo',
+    display: `goal: "${escaped}"${suffix}`,
+    received_chars: receivedChars,
+    truncated,
+    at,
+  };
+}
+
+/**
+ * Render the goal-echo line: {@link goalEchoEvent}'s `display` plus a newline.
+ *
+ * @param goal The goal argument as received.
+ * @returns One line, newline-terminated: `goal: "<text>"`.
+ */
+export function renderGoalEcho(goal: string): string {
+  return `${goalEchoEvent(goal).display}\n`;
 }

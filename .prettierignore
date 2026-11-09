@@ -31,6 +31,10 @@ e2e/task-fidelity/.out/
 # at fixed widths, parse-error stderr, and `--version`.
 apps/cli/tests/fixtures/cli-surface/
 
+# Live-output goldens (FEAT-063) are byte-compared terminal and `--json` run
+# output; refresh them only through YANTRA_UPDATE_LIVE_GOLDENS=1.
+apps/cli/tests/fixtures/live-output/
+
 # Task-fidelity goldens are byte-for-byte renderer/extractor output, and
 # baselines stay byte-identical to the `baseline.json` their eval run wrote.
 e2e/task-fidelity/golden/

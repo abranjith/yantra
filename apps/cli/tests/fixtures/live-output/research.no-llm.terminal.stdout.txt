@@ -1,0 +1,25 @@
+Ai news
+ AI news roundup: chipmakers unveiled faster processors built for AI model      
+ training. [3] In AI news, a startup raised forty-five million dollars to       
+ expand its coding assistant. [1][2][3] AI news this week centered on a major   
+ research lab that released a new language model. [1]                           
+
+Key Findings
+• In AI news, a startup raised forty-five million dollars to expand its coding assistant. [1][2][3]
+• The team reported the AI system improved reasoning accuracy by twelve percent. [1][2][3]
+• AI news this week centered on a major research lab that released a new language model. [1]
+• AI news roundup: chipmakers unveiled faster processors built for AI model training. [3]
+• One vendor listed its flagship AI accelerator at 328 dollars. [3]
+• The company said its AI model automates enterprise workflows. [2]
+
+Notices
+⚠ example.com: robots - robots.txt disallows
+⚠ synthesis: only 6 relevant findings met the evidence bar for a long brief (up to 10 requested)
+
+Sources
+[1] Article one — example.com
+[2] Article two — example.com
+[3] Article three — example.com
+
+Saved: <home>/runs/<run-id>/brief.md · <home>/runs/<run-id>/brief.html
+Open: yantra open <run-id>

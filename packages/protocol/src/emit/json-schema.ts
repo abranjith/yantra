@@ -6,6 +6,7 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 
 import { CommandInvocation } from '../commands/invocation.js';
 import { CommandRegistry } from '../commands/schema.js';
+import { AgentProgressEvent } from '../schemas/agent-progress.js';
 import { Brief } from '../schemas/brief.js';
 import { CommandResultMessageSchema } from '../schemas/command-result.js';
 import { ConfirmationDecision, ConfirmationRequest } from '../schemas/confirmation.js';
@@ -15,6 +16,7 @@ import { ExecutionReceiptSchema } from '../schemas/execution-receipt.js';
 import { ExtractionResultEnvelopeUnknown } from '../schemas/extraction.js';
 import { PlanSchema } from '../schemas/plan.js';
 import { LocatorChain, ValueRef } from '../schemas/refs.js';
+import { RunEvent, RunEventRecord } from '../schemas/run-event.js';
 import { RunHealth } from '../schemas/run-health.js';
 import { Step } from '../schemas/steps.js';
 import { TaskContractRecord } from '../schemas/task-contract.js';
@@ -33,6 +35,9 @@ export const JSON_SCHEMA_ARTIFACTS: Record<string, { schema: z.ZodType<unknown>;
   'plan.json': { schema: PlanSchema, name: 'Plan' },
   'step.json': { schema: Step, name: 'Step' },
   'task-event.json': { schema: TaskEvent, name: 'TaskEvent' },
+  'run-event.json': { schema: RunEvent, name: 'RunEvent' },
+  'run-event-record.json': { schema: RunEventRecord, name: 'RunEventRecord' },
+  'agent-progress-event.json': { schema: AgentProgressEvent, name: 'AgentProgressEvent' },
   'value-ref.json': { schema: ValueRef, name: 'ValueRef' },
   'locator-chain.json': { schema: LocatorChain, name: 'LocatorChain' },
   'workflow.json': { schema: WorkflowFile, name: 'WorkflowFile' },

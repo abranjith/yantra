@@ -20,6 +20,7 @@ import type { Brief } from '@yantra/protocol';
 
 import type { BriefArtifactPaths } from '../brief/write-artifacts.js';
 import type { ExecutionReceiptDraft } from '../receipt/execution-receipt.js';
+import type { RunEventStream } from '../run-events/stream.js';
 import type { SynthesisLength, SynthesisScope } from '../synthesis/types.js';
 
 /**
@@ -99,6 +100,13 @@ export type TerminationReason = 'coverage_met' | 'max_hops' | 'no_novel_queries'
 /** Options controlling one research run. */
 export interface ResearchOptions {
   readonly receipt?: ExecutionReceiptDraft;
+  /**
+   * The run's event stream (FEAT-063), created by the caller so its renderer
+   * can subscribe first. Omitted, the run constructs, opens and closes its own.
+   * When the run throws, a caller-supplied stream is left open for the caller
+   * to record the outcome with the exit code it returns.
+   */
+  readonly runEvents?: RunEventStream;
   /** The research topic (raw user input). */
   readonly topic: string;
   /** Budget caps for this run. */

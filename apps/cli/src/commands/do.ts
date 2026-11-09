@@ -17,7 +17,7 @@ import {
   type AgenticTaskOutcome,
   type PromotionResult,
 } from '@yantra/agent';
-import { UserInputMarkerError, type EffectivePreferences } from '@yantra/core';
+import { RunEventLogError, UserInputMarkerError, type EffectivePreferences } from '@yantra/core';
 import { COMMAND_REGISTRY, validateTemplatedReport } from '@yantra/protocol';
 import { CommanderError, type Command } from 'commander';
 
@@ -36,10 +36,11 @@ import { recordTaskHistory } from '../history.js';
 import { resolveAmbientContext } from '../preferences.js';
 import { attachRegistered } from '../registry/build-command-tree.js';
 import { handler, type Handler, type HandlerArgs } from '../registry/handler.js';
-import { renderGoalEcho } from '../render/goal-echo.js';
+import { goalEchoEvent } from '../render/goal-echo.js';
 import { JSONRenderer } from '../render/json.js';
 import { TerminalRenderer } from '../render/terminal.js';
 import type { ConnectorRenderOpts } from '../render/types.js';
+import { exitCodeOfThrown, finishRunEvents } from '../run-event-output.js';
 import { runAgenticTaskWithRankSink } from '../runtime.js';
 import { TEMPLATE_LLM_GUARD, resolveTemplateRef } from '../template-ref.js';
 
@@ -143,9 +144,6 @@ async function executeDo(
           );
           throw error;
         });
-  // The goal exactly as received, before the agent starts, so a shell-rewritten
-  // argument is visible. Same spelling as `ask` and `research`.
-  context.output.stderr.write(renderGoalEcho(goal));
   const json = options.json === true;
   const renderOpts: ConnectorRenderOpts = {
     json,
@@ -160,6 +158,10 @@ async function executeDo(
     interactive: context.isInteractive({ json }),
     suppressPublishedOutcome: template !== undefined,
   });
+  // The goal exactly as received, before the agent starts, so a shell-rewritten
+  // argument is visible. Same spelling as `ask` and `research`; it goes through
+  // the run's event stream (FEAT-063), whose renderer prints it on stderr.
+  connector.runEvents.emit(goalEchoEvent(goal));
 
   const allowedHosts = normalizeHosts(options.allowHost ?? []);
   const receipt = await draftRunReceipt(context, ['do'], {
@@ -197,6 +199,8 @@ async function executeDo(
         ...(saveAs && saveAs.length > 0 ? { saveAs } : {}),
         ...(template === undefined ? {} : { template }),
         connector,
+        // FEAT-063: progress reaches the terminal through the run's stream.
+        runEvents: connector.runEvents,
         signal: context.signal,
       },
       {
@@ -241,11 +245,20 @@ async function executeDo(
       const word = taskOutcomeOf(outcome);
       throw new CommanderError(exitCode, `yantra.do.${word}`, word);
     }
+    finishRunEvents(connector.runEvents, exitCode);
   } catch (error) {
     if (error instanceof UserInputMarkerError) {
       context.output.stderr.write(`${error.message}\n`);
+      finishRunEvents(connector.runEvents, 1);
       throw new CommanderError(1, 'yantra.do.invalid-user-input-marker', error.message);
     }
+    if (error instanceof RunEventLogError) {
+      // An unopenable run-event log is an environment failure (exit 3).
+      context.output.stderr.write(`${error.message}\n`);
+      finishRunEvents(connector.runEvents, 3);
+      throw new CommanderError(3, 'yantra.do.run-events-unavailable', error.message);
+    }
+    finishRunEvents(connector.runEvents, exitCodeOfThrown(error));
     throw error;
   }
 }

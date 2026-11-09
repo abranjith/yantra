@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { appendFile, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -14,8 +15,16 @@ import {
   EthicsGateImpl,
   HttpFetcher,
   HybridContentFetcher,
-  JsonlEventBus,
+  RecordingConfirmationGateway,
+  RunEventStream,
+  recordReceiptWritten,
+  capText,
+  emitArtifactSaved,
+  openTaskEventBus,
+  runOutcomeEvent,
+  stripControl,
   createSelectedBrowserProvider,
+  type EventBus,
   type BrowserProvider,
   type BrowserRuntimeOptions,
   type BrowserRuntimeServices,
@@ -64,8 +73,11 @@ import {
   type RunStatus,
 } from '@yantra/core/workflow/replay';
 import {
+  RUN_WARNING_TEXT_MAX,
   RunHealth,
   artifactRequirementId,
+  toAgentProgressEvent,
+  toRunEvent,
   generateUlid,
   validateBrief,
   validateTemplatedReport,
@@ -75,6 +87,9 @@ import {
   type TaskOutcome,
   type TemplateManifest,
   type TerminationReason,
+  type AgentProgressEvent,
+  type RunEventDelivery,
+  type RunEventOf,
 } from '@yantra/protocol';
 
 import { modelSupportsImageInput } from '../adapters/pi/environment.js';
@@ -110,7 +125,13 @@ import {
   sanitizePublishContent,
   withArtifacts,
 } from './brief-composer.js';
-import { BudgetTracker, DEFAULT_BUDGET_LIMITS, type BudgetLimits, type NowMs } from './budget.js';
+import {
+  BudgetTracker,
+  DEFAULT_BUDGET_LIMITS,
+  type BudgetLimits,
+  type BudgetSnapshot,
+  type NowMs,
+} from './budget.js';
 import { artifactRefsOfSet, type CaptureArtifactSet } from './capture-artifacts.js';
 import { resolveCaptureCapability } from './capture-capability.js';
 import { ConfirmationBridge } from './confirmation-bridge.js';
@@ -129,6 +150,7 @@ import { renderAgentMessage } from './messages.js';
 import type { ToolStatus } from './middleware.js';
 import {
   TASK_OUTCOME_TABLE,
+  exitCodeForAgenticOutcome,
   failureClassFor,
   outcomeFirstLine,
   taskOutcomeOf,
@@ -350,6 +372,14 @@ export interface AgenticTaskRequest {
   readonly saveAs?: string;
   /** User interrupt/caller cancellation. */
   readonly signal?: AbortSignal;
+  /**
+   * The run's event stream (FEAT-063). A CLI command creates it first, with
+   * its renderer subscribed, and passes it here; progress then reaches the
+   * terminal through the stream alone. Omitted, the run creates its own and
+   * relays agent progress and warnings to `connector`, so any connector keeps
+   * receiving exactly what it always did.
+   */
+  readonly runEvents?: RunEventStream;
 }
 
 /** Resolved template content and non-secret reference provenance for one run. */
@@ -551,9 +581,16 @@ export async function runAgenticTask(
     goal: request.goal,
     ...(request.profileContext === undefined ? {} : { profileContext: request.profileContext }),
   });
-  for (const warning of redacted.warnings) request.connector.emitAgentWarning?.(warning);
   const userInput = redacted.vault;
   const now = dependencies.now ?? (() => new Date());
+  const ownsRunEvents = request.runEvents === undefined;
+  const runEvents = request.runEvents ?? new RunEventStream();
+  if (ownsRunEvents) {
+    runEvents.subscribe(connectorRelay(request.connector), { includeUncommitted: true });
+  }
+  // Warnings raised before the run exists are emitted pre-open: the renderer
+  // shows them now, and the log commits them as its first lines.
+  for (const warning of redacted.warnings) runEvents.emit(agentWarningEvent(warning, now()));
   const runStore = dependencies.runStore ?? new LocalRunStore();
   const sanitizer = dependencies.sanitizer ?? new DefaultSanitizer();
   const profile = request.profile ?? COMMAND_TASK_PROFILES.do;
@@ -574,8 +611,21 @@ export async function runAgenticTask(
         }),
   });
 
+  try {
+    runEvents.open({ runDir: created.runDir, runId: created.runId });
+  } catch (error) {
+    // An unopenable run-event log is an environment failure before the run
+    // proceeds: finalized like any startup failure, then rethrown typed.
+    await runStore.finalizeStartupFailure(created.runId, {
+      code: 'AGENT_RUN_EVENTS_UNAVAILABLE',
+      message: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
+
   if (request.receipt) {
     const written = await writeExecutionReceipt(created.runDir, request.receipt);
+    await recordReceiptWritten(runEvents, written.path);
     await appendFile(
       join(created.runDir, 'runtime.jsonl'),
       `${JSON.stringify({ schema_version: 1, event: 'settings_receipt_written', path: written.path, setting_count: written.receipt.settings.length })}\n`,
@@ -597,7 +647,7 @@ export async function runAgenticTask(
       ...locationHandoff,
       terminationReason: 'handoff',
     };
-    const gateEvents = new JsonlEventBus(join(created.runDir, 'events.jsonl'));
+    const gateEvents = openTaskEventBus(created.runDir, runEvents);
     gateEvents.publish({ task_id: taskId, at: now().toISOString(), kind: 'task_started' });
     await finalizeRun({
       outcome,
@@ -606,6 +656,7 @@ export async function runAgenticTask(
       runStore,
       reportBuilder: dependencies.reportBuilder ?? new MarkdownReportBuilder(),
       now,
+      runEvents,
     });
     request.connector.renderAgentOutcome(outcome);
     return outcome;
@@ -615,7 +666,7 @@ export async function runAgenticTask(
   let session: AgentSession | undefined;
   let recorder: RunRecorder | undefined;
   let unsubscribe: (() => void) | undefined;
-  let events: JsonlEventBus | undefined;
+  let events: EventBus | undefined;
   let latestRunResult: AgentRunResult | undefined;
   let executionState: ExecutionState | undefined;
   let startupFinalized = false;
@@ -663,6 +714,25 @@ export async function runAgenticTask(
       remainingWallClockMs: () => runBudget.remainingWallClockMs(),
       store: createConfirmationStore(created.runDir),
       nowIso: () => now().toISOString(),
+    });
+    // FEAT-063: every consent wait is recorded as intervention_raised /
+    // intervention_resolved. The deadline is the bridge's effective wait: the
+    // shorter of its timeout and the wall clock left (the D5 ceiling arrives
+    // with FEAT-068).
+    const recordedConfirmations = new RecordingConfirmationGateway(confirmationBridge, runEvents, {
+      now: () => now().toISOString(),
+      deadlineFor: (confirmation) =>
+        new Date(
+          now().getTime() +
+            Math.max(
+              0,
+              Math.min(
+                budgetsConfig.confirmationWaitMs,
+                confirmation.timeout_ms ?? budgetsConfig.confirmationWaitMs,
+                runBudget.remainingWallClockMs(),
+              ),
+            ),
+        ).toISOString(),
     });
     // The ingress vault owns the redacted placeholders for this entire run;
     // tool middleware resolves them only at the execution boundary.
@@ -755,7 +825,7 @@ export async function runAgenticTask(
         urlProvenance,
         runHealth,
         documents,
-        confirmation: { gateway: confirmationBridge, store: null },
+        confirmation: { gateway: recordedConfirmations, store: null },
         actionPhase,
         evidence,
         evidencePhase: new EvidencePhase(),
@@ -838,7 +908,7 @@ export async function runAgenticTask(
       budgets: manifestBudgets(budgetsConfig),
       capture,
     });
-    events = new JsonlEventBus(join(created.runDir, 'events.jsonl'));
+    events = openTaskEventBus(created.runDir, runEvents);
     events.publish({ task_id: taskId, at: now().toISOString(), kind: 'task_started' });
 
     const state = createExecutionState({
@@ -852,6 +922,8 @@ export async function runAgenticTask(
       runDir: created.runDir,
       contract,
       services,
+      runEvents,
+      nowMs: () => now().getTime(),
       registeredTools: buildYantraWrappedTools(services, profile),
       capabilities:
         services.contractCapabilities ?? deliverableContractCapabilities(capture.deliverable),
@@ -889,11 +961,12 @@ export async function runAgenticTask(
   } catch (error) {
     if (session === undefined) {
       const startup = toStartupError(error);
-      await runStore.finalizeStartupFailure(created.runId, startup.toAgentError());
+      await runStore.finalizeStartupFailure(created.runId, startup.toAgentError(), runEvents);
       startupFinalized = true;
       // This branch skips the teardown block below, so it owns the close.
       await environment?.closeRuntimeLog?.().catch(() => undefined);
       terminal = failed(created.runId, created.runDir, startup.toAgentError(), 'provider_failed');
+      recordRunEnd(runEvents, terminal, now);
     } else {
       terminal = failed(
         created.runId,
@@ -980,6 +1053,9 @@ export async function runAgenticTask(
         },
         'provider_failed',
       );
+      if (budgetTracker !== undefined) {
+        runEvents.emit(budgetSnapshotEvent(budgetTracker.snapshot(), budgetsConfig, now()));
+      }
       await finalizeRun({
         outcome: terminal,
         taskId,
@@ -987,6 +1063,7 @@ export async function runAgenticTask(
         runStore,
         reportBuilder: dependencies.reportBuilder ?? new MarkdownReportBuilder(),
         now,
+        runEvents,
       });
     }
   }
@@ -1039,8 +1116,25 @@ function createExecutionState(input: {
     readonly parameters?: unknown;
   }[];
   readonly capabilities: ContractCapabilityResolver;
+  /** The run's event stream; progress goes here, and the connector's renderer reads it. */
+  readonly runEvents: RunEventStream;
+  /** Clock for the budget-snapshot throttle. */
+  readonly nowMs: () => number;
 }): ExecutionState {
   const starts = new Map<string, number>();
+  const emitProgress = (event: AgentProgressEvent): void => {
+    input.runEvents.emit(toRunEvent(event));
+  };
+  // At most one budget snapshot per second during tool activity.
+  let lastBudgetSnapshotMs = Number.NEGATIVE_INFINITY;
+  const maybeBudgetSnapshot = (at: string): void => {
+    const nowMs = input.nowMs();
+    if (nowMs - lastBudgetSnapshotMs < BUDGET_SNAPSHOT_INTERVAL_MS) return;
+    lastBudgetSnapshotMs = nowMs;
+    input.runEvents.emit(
+      budgetSnapshotEvent(input.budgetTracker.snapshot(), input.budgets, new Date(at)),
+    );
+  };
   let echoedRevisions = 0;
   // Declared items already disclosed as undeliverable (FEAT-058): a later
   // revision repeating the item does not repeat the disclosure.
@@ -1196,7 +1290,7 @@ function createExecutionState(input: {
       },
       'recovery rung',
     );
-    input.connector.emitAgentEvent({
+    emitProgress({
       type: 'recovery',
       rung: rung.id,
       trigger: trigger.kind,
@@ -1272,7 +1366,7 @@ function createExecutionState(input: {
         return;
       case 'assistant_text':
         lastResponseText += event.text;
-        input.connector.emitAgentEvent(event);
+        emitProgress(event);
         if (/\b(captcha|bot[- ]wall|mfa)\b/i.test(event.text)) {
           handoff ??= {
             blocker: 'The site requires human verification or authentication.',
@@ -1282,7 +1376,7 @@ function createExecutionState(input: {
         return;
       case 'tool_started':
         starts.set(event.callId, Date.parse(event.at));
-        input.connector.emitAgentEvent({
+        emitProgress({
           type: 'tool_started',
           tool: event.tool,
           summary: summarizeInput(event.input),
@@ -1293,7 +1387,7 @@ function createExecutionState(input: {
         const metadata = toolMetadata(event.output, event.isError);
         const started = starts.get(event.callId);
         starts.delete(event.callId);
-        input.connector.emitAgentEvent({
+        emitProgress({
           type: 'tool_finished',
           tool: event.tool,
           summary: metadata.summary,
@@ -1301,6 +1395,7 @@ function createExecutionState(input: {
           durationMs: duration(started, event.at),
           at: event.at,
         });
+        maybeBudgetSnapshot(event.at);
         if (event.tool === 'result_publish' && metadata.status === 'ok') published = true;
         if (event.tool === 'task_contract' && metadata.status === 'ok') {
           // Parallel declarations can finish before either event arrives, so
@@ -1309,7 +1404,7 @@ function createExecutionState(input: {
             echoedRevisions += 1;
             const body = input.contract.revisionAt(echoedRevisions);
             if (body === null) break;
-            input.connector.emitAgentEvent({
+            emitProgress({
               type: 'contract_declared',
               revision: echoedRevisions,
               summary: renderContractEcho(
@@ -1327,7 +1422,7 @@ function createExecutionState(input: {
             const reason = input.capabilities.captureGap(artifact.scope);
             if (reason === null) continue;
             disclosedGaps.add(item);
-            input.connector.emitAgentEvent({
+            emitProgress({
               type: 'capability_gap',
               item,
               reason,
@@ -1367,7 +1462,7 @@ function createExecutionState(input: {
             );
           if (checkpoint.changedItems.length > 0) {
             const items = input.services.progress.liveItems();
-            input.connector.emitAgentEvent({
+            emitProgress({
               type: 'progress',
               items,
               summary: renderProgressLine(items),
@@ -1739,10 +1834,11 @@ async function readPublishedBrief(
 async function finalizeRun(input: {
   readonly outcome: AgenticTaskOutcome;
   readonly taskId: string;
-  readonly events: JsonlEventBus | undefined;
+  readonly events: EventBus | undefined;
   readonly runStore: AgenticRunStore;
   readonly reportBuilder: ReportBuilder;
   readonly now: () => Date;
+  readonly runEvents: RunEventStream;
 }): Promise<void> {
   const endedAt = input.now().toISOString();
   const taskOutcome = taskOutcomeOf(input.outcome);
@@ -1780,7 +1876,122 @@ async function finalizeRun(input: {
     mapping.manifestStatus === 'completed' ? 'completed' : 'failed',
     reportFailure(input.outcome, failureClass),
   );
+  // The outcome is committed (and the log closed) before the lock is
+  // released and before the connector renders the final line.
+  recordRunEnd(input.runEvents, input.outcome, input.now);
   await input.runStore.releaseLock(input.outcome.runId);
+}
+
+/** Budget snapshots during tool activity are at most this frequent. */
+const BUDGET_SNAPSHOT_INTERVAL_MS = 1_000;
+
+/**
+ * Relays the run's agent progress and agent warnings to a connector, for a
+ * stream the run owns (no CLI renderer subscribed): the connector receives
+ * exactly the callbacks it always did, in order.
+ */
+function connectorRelay(connector: AgentTaskConnector): (delivery: RunEventDelivery) => void {
+  return (delivery) => {
+    const event = delivery.event;
+    const progress = toAgentProgressEvent(event);
+    if (progress !== null) connector.emitAgentEvent(progress);
+    else if (event.kind === 'run_warning' && event.source === 'agent') {
+      connector.emitAgentWarning?.(event.text);
+    }
+  };
+}
+
+/** An agent advisory as a `run_warning`: control-free and bounded. */
+function agentWarningEvent(text: string, at: Date): RunEventOf<'run_warning'> {
+  return {
+    kind: 'run_warning',
+    source: 'agent',
+    text: capText(stripControl(text), RUN_WARNING_TEXT_MAX),
+    at: at.toISOString(),
+  };
+}
+
+/** The agent budget as `budget_snapshot` dimensions. */
+function budgetSnapshotEvent(
+  snapshot: BudgetSnapshot,
+  limits: AgentBudgetConfig,
+  at: Date,
+): RunEventOf<'budget_snapshot'> {
+  return {
+    kind: 'budget_snapshot',
+    dimensions: [
+      { name: 'elapsed', used: snapshot.elapsedMs, limit: limits.wallClockMs, unit: 'ms' },
+      { name: 'tool_calls', used: snapshot.totalCalls, limit: null, unit: 'count' },
+      {
+        name: 'bytes',
+        used: snapshot.cumulativeBytes,
+        limit: limits.maxBytesPerRun,
+        unit: 'bytes',
+      },
+      {
+        name: 'navigations',
+        used: snapshot.navigations,
+        limit: limits.maxNavigations,
+        unit: 'count',
+      },
+      { name: 'hosts', used: snapshot.hosts, limit: limits.maxHosts, unit: 'count' },
+      {
+        name: 'deliverable_captures',
+        used: snapshot.deliverableCaptureCount,
+        limit: limits.maxDeliverableCaptures,
+        unit: 'count',
+      },
+    ],
+    at: at.toISOString(),
+  };
+}
+
+/**
+ * Records how the run ended — its saved files, then its one `run_outcome` —
+ * and closes the stream. The outcome's exit code is the one the CLI returns
+ * for it.
+ */
+function recordRunEnd(
+  runEvents: RunEventStream,
+  outcome: AgenticTaskOutcome,
+  now: () => Date,
+): void {
+  const at = now().toISOString();
+  if (outcome.kind === 'published') {
+    const kind = outcome.brief.kind === 'templated_report' ? 'templated_report' : 'brief';
+    for (const path of [
+      outcome.brief.jsonPath,
+      outcome.brief.markdownPath,
+      outcome.brief.htmlPath,
+    ]) {
+      emitArtifactSaved(runEvents, outcome.runDir, path, kind, at);
+    }
+    for (const set of outcome.captureSets) {
+      for (const part of set.parts) {
+        emitArtifactSaved(
+          runEvents,
+          outcome.runDir,
+          join(outcome.runDir, ...part.path.split('/')),
+          'screenshot',
+          at,
+        );
+      }
+    }
+  }
+  const salvaged = join(outcome.runDir, 'result.md');
+  if (existsSync(salvaged)) emitArtifactSaved(runEvents, outcome.runDir, salvaged, 'result', at);
+  runEvents.emit(
+    runOutcomeEvent({
+      runId: outcome.runId,
+      taskOutcome: taskOutcomeOf(outcome),
+      terminationReason: outcome.terminationReason,
+      stopDetail: null,
+      exitCode: exitCodeForAgenticOutcome(outcome),
+      failureClass: failureClassFor(outcome) ?? null,
+      at,
+    }),
+  );
+  runEvents.close();
 }
 
 /** The report's failure block, or undefined for a fulfilled run. */

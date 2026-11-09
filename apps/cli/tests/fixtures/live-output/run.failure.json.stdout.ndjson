@@ -1,0 +1,11 @@
+{
+  "kind": "failure",
+  "runId": "run-fixed",
+  "failureClass": "locator_not_found",
+  "failureDetail": {
+    "failureClass": "locator_not_found",
+    "stepId": "",
+    "message": "Run failed with class: locator_not_found"
+  },
+  "task_outcome": "failed"
+}

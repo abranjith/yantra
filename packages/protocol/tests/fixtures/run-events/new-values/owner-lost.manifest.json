@@ -1,0 +1,17 @@
+{
+  "runId": "20261101T120000Z-do-0000ffff",
+  "taskId": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "workflowName": "do",
+  "workflowVersion": null,
+  "params": {},
+  "startedAt": "2026-10-01T12:00:00.000Z",
+  "endedAt": "2026-10-01T12:05:00.000Z",
+  "status": "failed",
+  "durationMs": 300000,
+  "profileKind": "ephemeral",
+  "cookieProfilePath": null,
+  "outputBindingNames": [],
+  "runKind": "agentic",
+  "taskOutcome": "failed",
+  "terminationReason": "owner_lost"
+}

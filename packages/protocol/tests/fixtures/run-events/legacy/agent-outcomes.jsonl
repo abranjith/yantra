@@ -1,0 +1,11 @@
+{"schemaVersion":"0.2","kind":"agent_outcome","task_outcome":"fulfilled","termination_reason":"model_finished","artifacts":[]}
+{"schemaVersion":"0.2","kind":"agent_outcome","task_outcome":"partial","termination_reason":"wall-clock-soft","artifacts":[]}
+{"schemaVersion":"0.2","kind":"agent_outcome","task_outcome":"failed","termination_reason":"wall-clock-hard","artifacts":[]}
+{"schemaVersion":"0.2","kind":"agent_outcome","task_outcome":"failed","termination_reason":"provider-tokens","artifacts":[]}
+{"schemaVersion":"0.2","kind":"agent_outcome","task_outcome":"partial","termination_reason":"tool-budget","artifacts":[]}
+{"schemaVersion":"0.2","kind":"agent_outcome","task_outcome":"failed","termination_reason":"repeated-tool-failure","artifacts":[]}
+{"schemaVersion":"0.2","kind":"agent_outcome","task_outcome":"handoff","termination_reason":"handoff","artifacts":[]}
+{"schemaVersion":"0.2","kind":"agent_outcome","task_outcome":"aborted","termination_reason":"user_abort","artifacts":[]}
+{"schemaVersion":"0.2","kind":"agent_outcome","task_outcome":"failed","termination_reason":"provider_failed","artifacts":[]}
+{"schemaVersion":"0.2","kind":"agent_outcome","task_outcome":"failed","termination_reason":"stalled","artifacts":[]}
+{"schemaVersion":"0.2","kind":"agent_outcome","task_outcome":"failed","termination_reason":"turn-timeout","artifacts":[]}

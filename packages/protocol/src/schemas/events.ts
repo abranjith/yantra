@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { ConfirmationRequest } from './confirmation.js';
+import { ConfirmationDecidedBy, ConfirmationRequest } from './confirmation.js';
 import { DiscoveryCycle, DiscoveryOutcome } from './discovery.js';
 import { FailureClass, SecurityScope, STEP_VERBS } from './security.js';
 import { TaskOutcome } from './task-outcome.js';
@@ -183,9 +183,9 @@ export const TaskEvent = z
         .describe('A confirmation request was resolved by a human decision (FEAT-019).'),
       confirmation_id: z.string().min(1).describe('ULID of the resolved request.'),
       decision: z.enum(['granted', 'denied', 'timed_out']).describe('Outcome of the confirmation.'),
-      decided_by: z
-        .enum(['user_interactive', 'user_cli_confirm', 'timeout'])
-        .describe('Who or what resolved the confirmation — never agent.'),
+      decided_by: ConfirmationDecidedBy.describe(
+        'Who or what resolved the confirmation — never agent.',
+      ),
     }),
     z.object({
       ...TaskEventBase,

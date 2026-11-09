@@ -13,6 +13,8 @@
 import { PiAgentProvider } from '@yantra/agent';
 import {
   ResourceBusyError,
+  RunEventLogError,
+  type RunEventStream,
   BrowserInstallOfferDeclinedError,
   BrowserManagedInstallError,
   type EffectivePreferences,
@@ -41,6 +43,7 @@ import { resourceOptions } from '../context/resource-options.js';
 import { draftRunReceipt } from '../context/run-receipt.js';
 import { createRegisteredCommand } from '../registry/build-command-tree.js';
 import { handler, type Handler, type HandlerArgs } from '../registry/handler.js';
+import { createLiveRunEvents, finishRunEvents, liveRenderOpts } from '../run-event-output.js';
 import {
   buildOrchestratorRuntime,
   makeStderrLogger,
@@ -83,6 +86,7 @@ export async function resumeHandler(
   const logger = makeStderrLogger(options.debug === true, context.output.stderr);
   logger.info({ runId }, 'yantra resume: starting');
   let closeRuntime = (): void => undefined;
+  let runEvents: RunEventStream | null = null;
 
   // Resolved before any run state is touched: a conflicting `--browser`
   // pair is a validation failure, not a resume that half-started.
@@ -153,7 +157,9 @@ export async function resumeHandler(
       ...(browserSelection === undefined ? {} : { browser: browserSelection }),
       content: await replayContent(point.manifest.workflowName),
     });
-    const outcome = await orchestrator.resume(runId, { receipt });
+    // FEAT-063: the resumed run continues its own run-events.jsonl.
+    runEvents = createLiveRunEvents(liveRenderOpts(context, options.json === true));
+    const outcome = await orchestrator.resume(runId, { receipt, runEvents });
     if (options.open === true && outcome.kind === 'success' && outcome.brief) {
       context.openExternal(outcome.brief.htmlPath);
     }
@@ -166,22 +172,29 @@ export async function resumeHandler(
     }
 
     closeRuntime();
-    return { exitCode: exitCodeFor(outcome) as ExitCode };
+    const exitCode = exitCodeFor(outcome) as ExitCode;
+    finishRunEvents(runEvents, exitCode);
+    return { exitCode };
   } catch (err) {
     closeRuntime();
-    if (err instanceof ResourceBusyError) throw err;
+    if (err instanceof ResourceBusyError) {
+      if (runEvents) finishRunEvents(runEvents, 3);
+      throw err;
+    }
     const message = err instanceof Error ? err.message : String(err);
     context.output.stderr.write(`Error: ${message}\n`);
     if (options.debug === true && err instanceof Error && err.stack !== undefined) {
       context.output.stderr.write(`${err.stack}\n`);
     }
-    return {
-      exitCode: (err instanceof BrowserInstallOfferDeclinedError
+    const exitCode = (
+      err instanceof BrowserInstallOfferDeclinedError
         ? 4
-        : err instanceof BrowserManagedInstallError
+        : err instanceof BrowserManagedInstallError || err instanceof RunEventLogError
           ? 3
-          : 1) as ExitCode,
-    };
+          : 1
+    ) as ExitCode;
+    if (runEvents) finishRunEvents(runEvents, exitCode);
+    return { exitCode };
   }
 }
 

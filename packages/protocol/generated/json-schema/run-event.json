@@ -1,0 +1,4139 @@
+{
+  "$ref": "#/definitions/RunEvent",
+  "definitions": {
+    "RunEvent": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Owning task id."
+            },
+            "at": {
+              "type": "string",
+              "format": "date-time",
+              "description": "ISO-8601 UTC timestamp."
+            },
+            "kind": {
+              "type": "string",
+              "const": "task_queued",
+              "description": "Task was queued."
+            }
+          },
+          "required": [
+            "task_id",
+            "at",
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/task_id"
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/at"
+            },
+            "kind": {
+              "type": "string",
+              "const": "task_started",
+              "description": "Task execution started."
+            }
+          },
+          "required": [
+            "task_id",
+            "at",
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/task_id"
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/at"
+            },
+            "kind": {
+              "type": "string",
+              "const": "step_started",
+              "description": "A step execution started."
+            },
+            "step_id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Step id."
+            },
+            "step_type": {
+              "type": "string",
+              "enum": [
+                "navigate",
+                "click",
+                "fill",
+                "fill_element",
+                "extract",
+                "wait_for",
+                "assert",
+                "branch",
+                "loop",
+                "call_workflow",
+                "llm_summarize"
+              ],
+              "description": "Step type."
+            }
+          },
+          "required": [
+            "task_id",
+            "at",
+            "kind",
+            "step_id",
+            "step_type"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/task_id"
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/at"
+            },
+            "kind": {
+              "type": "string",
+              "const": "step_retry",
+              "description": "A step execution retried."
+            },
+            "step_id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Step id."
+            },
+            "attempt": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "description": "Retry attempt count."
+            },
+            "reason": {
+              "type": "string",
+              "enum": [
+                "locator_not_found",
+                "navigation_timeout",
+                "rate_limited",
+                "captcha_detected",
+                "mfa_required",
+                "network_error",
+                "scope_violation",
+                "validation_error",
+                "ethics_refused",
+                "budget_exhausted",
+                "user_aborted",
+                "unexpected",
+                "resume_drift",
+                "locator_miss_in_unrecorded_frame",
+                "requirements_unmet"
+              ],
+              "description": "Retry reason class."
+            }
+          },
+          "required": [
+            "task_id",
+            "at",
+            "kind",
+            "step_id",
+            "attempt",
+            "reason"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/task_id"
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/at"
+            },
+            "kind": {
+              "type": "string",
+              "const": "step_completed",
+              "description": "A step execution completed."
+            },
+            "step_id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Step id."
+            },
+            "capture_keys": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Capture keys produced by the step."
+            }
+          },
+          "required": [
+            "task_id",
+            "at",
+            "kind",
+            "step_id",
+            "capture_keys"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/task_id"
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/at"
+            },
+            "kind": {
+              "type": "string",
+              "const": "llm_step_skipped",
+              "description": "An llm_summarize step passed its input through unchanged because no model was configured."
+            },
+            "step_id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Step id that was passed through."
+            },
+            "output_as": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Capture key the raw input was bound to."
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Why the model path was unavailable."
+            }
+          },
+          "required": [
+            "task_id",
+            "at",
+            "kind",
+            "step_id",
+            "output_as",
+            "reason"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/task_id"
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/at"
+            },
+            "kind": {
+              "type": "string",
+              "const": "checkpoint_saved",
+              "description": "Checkpoint persisted after a step."
+            },
+            "after_step_id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Last successful step id."
+            }
+          },
+          "required": [
+            "task_id",
+            "at",
+            "kind",
+            "after_step_id"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/task_id"
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/at"
+            },
+            "kind": {
+              "type": "string",
+              "const": "human_handoff_requested",
+              "description": "Run paused for human handoff."
+            },
+            "step_id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Step requiring handoff."
+            },
+            "reason": {
+              "type": "string",
+              "enum": [
+                "captcha",
+                "mfa",
+                "unexpected_state",
+                "other"
+              ],
+              "description": "Reason handoff is required."
+            }
+          },
+          "required": [
+            "task_id",
+            "at",
+            "kind",
+            "step_id",
+            "reason"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/task_id"
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/at"
+            },
+            "kind": {
+              "type": "string",
+              "const": "task_completed",
+              "description": "Task execution completed successfully."
+            },
+            "outputs_keys": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Output keys generated by the task."
+            }
+          },
+          "required": [
+            "task_id",
+            "at",
+            "kind",
+            "outputs_keys"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/task_id"
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/at"
+            },
+            "kind": {
+              "type": "string",
+              "const": "task_failed",
+              "description": "Task execution failed."
+            },
+            "failure_class": {
+              "type": "string",
+              "enum": [
+                "locator_not_found",
+                "navigation_timeout",
+                "rate_limited",
+                "captcha_detected",
+                "mfa_required",
+                "network_error",
+                "scope_violation",
+                "validation_error",
+                "ethics_refused",
+                "budget_exhausted",
+                "user_aborted",
+                "unexpected",
+                "resume_drift",
+                "locator_miss_in_unrecorded_frame",
+                "requirements_unmet"
+              ],
+              "description": "Failure class."
+            },
+            "report_path": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Path to generated report artifact."
+            },
+            "task_outcome": {
+              "type": "string",
+              "enum": [
+                "fulfilled",
+                "partial",
+                "handoff",
+                "failed",
+                "aborted"
+              ],
+              "description": "The task outcome (partial, handoff, failed, aborted); absent on older events."
+            }
+          },
+          "required": [
+            "task_id",
+            "at",
+            "kind",
+            "failure_class",
+            "report_path"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/task_id"
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/at"
+            },
+            "kind": {
+              "type": "string",
+              "const": "validation_failed",
+              "description": "Plan or workflow validation failed."
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "description": "JSON pointer path for failure."
+            },
+            "message": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Validation failure message."
+            }
+          },
+          "required": [
+            "task_id",
+            "at",
+            "kind",
+            "path",
+            "message"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/task_id"
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/at"
+            },
+            "kind": {
+              "type": "string",
+              "const": "scope_violation",
+              "description": "Scope policy violation detected."
+            },
+            "scope": {
+              "type": "string",
+              "enum": [
+                "public",
+                "read-only-data",
+                "authenticated"
+              ],
+              "description": "Effective scope at violation time."
+            },
+            "attempted_verb": {
+              "type": "string",
+              "enum": [
+                "navigate",
+                "click",
+                "fill",
+                "fill_element",
+                "extract",
+                "wait_for",
+                "assert",
+                "branch",
+                "loop",
+                "call_workflow",
+                "llm_summarize"
+              ],
+              "description": "Attempted step type."
+            },
+            "step_id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Step id causing violation."
+            }
+          },
+          "required": [
+            "task_id",
+            "at",
+            "kind",
+            "scope",
+            "attempted_verb",
+            "step_id"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/task_id"
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/at"
+            },
+            "kind": {
+              "type": "string",
+              "const": "task_resumed",
+              "description": "A previously paused or failed run was resumed."
+            },
+            "original_run_id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The run id of the original run being resumed."
+            },
+            "resume_step_id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Step id from which execution resumes."
+            }
+          },
+          "required": [
+            "task_id",
+            "at",
+            "kind",
+            "original_run_id",
+            "resume_step_id"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/task_id"
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/at"
+            },
+            "kind": {
+              "type": "string",
+              "const": "chrome_drift_warning",
+              "description": "Chrome major version differs from recording."
+            },
+            "recorded_chrome_major": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "description": "Chrome major at recording time."
+            },
+            "current_chrome_major": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "description": "Chrome major at run time."
+            },
+            "drift": {
+              "type": "integer",
+              "description": "Absolute difference in major versions."
+            }
+          },
+          "required": [
+            "task_id",
+            "at",
+            "kind",
+            "recorded_chrome_major",
+            "current_chrome_major",
+            "drift"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/task_id"
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/at"
+            },
+            "kind": {
+              "type": "string",
+              "const": "synthesis_completed",
+              "description": "The synthesize stage produced a Brief (FEAT-014)."
+            },
+            "strategy": {
+              "type": "string",
+              "enum": [
+                "deterministic",
+                "llm"
+              ],
+              "description": "Synthesis strategy that produced the Brief."
+            },
+            "sources_in": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of extracted sources fed into synthesis."
+            },
+            "sources_used": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of deduplicated numbered sources in the Brief."
+            },
+            "coverage": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Fraction of sources represented in the Brief (0-1), or null."
+            },
+            "citation_verdict": {
+              "type": "object",
+              "properties": {
+                "claims_checked": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Claims inspected."
+                },
+                "flagged": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Claims flagged as unanchored."
+                },
+                "stripped": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Claims stripped as unanchored."
+                }
+              },
+              "required": [
+                "claims_checked",
+                "flagged",
+                "stripped"
+              ],
+              "additionalProperties": false,
+              "description": "Citation-faithfulness verdict from the validator."
+            }
+          },
+          "required": [
+            "task_id",
+            "at",
+            "kind",
+            "strategy",
+            "sources_in",
+            "sources_used",
+            "coverage",
+            "citation_verdict"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/task_id"
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/at"
+            },
+            "kind": {
+              "type": "string",
+              "const": "research_hop_completed",
+              "description": "One deep-research hop finished (FEAT-017)."
+            },
+            "hop_index": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "description": "1-based hop index."
+            },
+            "queries": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Queries issued this hop."
+            },
+            "docs_fetched": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Documents successfully fetched+extracted this hop."
+            },
+            "docs_kept": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Documents kept after dedup/diversification this hop."
+            },
+            "coverage": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Coverage score after this hop (0-1)."
+            },
+            "coverage_delta": {
+              "type": "number",
+              "description": "Change in coverage vs the previous hop (may be negative)."
+            }
+          },
+          "required": [
+            "task_id",
+            "at",
+            "kind",
+            "hop_index",
+            "queries",
+            "docs_fetched",
+            "docs_kept",
+            "coverage",
+            "coverage_delta"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/task_id"
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/at"
+            },
+            "kind": {
+              "type": "string",
+              "const": "confirmation_requested",
+              "description": "Executor paused for human consent before a flagged step (FEAT-019)."
+            },
+            "request": {
+              "type": "object",
+              "properties": {
+                "confirmation_id": {
+                  "type": "string",
+                  "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
+                  "description": "Globally unique ULID for this confirmation request."
+                },
+                "run_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Owning run id."
+                },
+                "step_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Step id that triggered the request."
+                },
+                "action_kind": {
+                  "type": "string",
+                  "enum": [
+                    "click",
+                    "fill",
+                    "navigate"
+                  ],
+                  "description": "The mutating verb that will execute on grant."
+                },
+                "host": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Resolved target host for the action (e.g. \"bank.example.com\")."
+                },
+                "description": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Human-readable summary of what will happen — from step name or annotation."
+                },
+                "expected_cost": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "amount": {
+                          "type": "number",
+                          "description": "Numeric cost amount."
+                        },
+                        "currency": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "ISO 4217 currency code or descriptive label (e.g. \"USD\", \"credits\")."
+                        }
+                      },
+                      "required": [
+                        "amount",
+                        "currency"
+                      ],
+                      "additionalProperties": false,
+                      "description": "Best-effort cost estimate for the action being confirmed."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Best-effort cost estimate, or null if unknown."
+                },
+                "consequence": {
+                  "type": "string",
+                  "enum": [
+                    "reversible",
+                    "hard_to_reverse",
+                    "irreversible",
+                    "unknown"
+                  ],
+                  "description": "Reversibility classification.",
+                  "default": "unknown"
+                },
+                "requested_at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "ISO-8601 UTC timestamp when the request was created."
+                },
+                "timeout_ms": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "exclusiveMinimum": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Timeout in milliseconds, or null to wait indefinitely (interactive mode)."
+                }
+              },
+              "required": [
+                "confirmation_id",
+                "run_id",
+                "step_id",
+                "action_kind",
+                "host",
+                "description",
+                "expected_cost",
+                "requested_at",
+                "timeout_ms"
+              ],
+              "additionalProperties": false,
+              "description": "The structured confirmation request."
+            }
+          },
+          "required": [
+            "task_id",
+            "at",
+            "kind",
+            "request"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/task_id"
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/at"
+            },
+            "kind": {
+              "type": "string",
+              "const": "confirmation_resolved",
+              "description": "A confirmation request was resolved by a human decision (FEAT-019)."
+            },
+            "confirmation_id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "ULID of the resolved request."
+            },
+            "decision": {
+              "type": "string",
+              "enum": [
+                "granted",
+                "denied",
+                "timed_out"
+              ],
+              "description": "Outcome of the confirmation."
+            },
+            "decided_by": {
+              "type": "string",
+              "enum": [
+                "user_interactive",
+                "user_cli_confirm",
+                "timeout",
+                "user_app"
+              ],
+              "description": "Who or what resolved the confirmation — never agent."
+            }
+          },
+          "required": [
+            "task_id",
+            "at",
+            "kind",
+            "confirmation_id",
+            "decision",
+            "decided_by"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/task_id"
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/at"
+            },
+            "kind": {
+              "type": "string",
+              "const": "discovery_cycle_completed",
+              "description": "One discovery propose→act→observe cycle finished (FEAT-020)."
+            },
+            "cycle": {
+              "type": "object",
+              "properties": {
+                "index": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "0-based cycle index."
+                },
+                "proposal": {
+                  "type": "object",
+                  "properties": {
+                    "rationale": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 1000,
+                      "description": "Model's stated reasoning for this cycle — audited, never executed."
+                    },
+                    "steps": {
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^s[0-9]+$",
+                                "description": "Step identifier, unique within the plan."
+                              },
+                              "scope": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "public",
+                                      "read-only-data",
+                                      "authenticated"
+                                    ],
+                                    "description": "Step-level security scope."
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "Step scope; null inherits the plan default."
+                              },
+                              "requires_confirmation": {
+                                "type": "boolean",
+                                "default": false,
+                                "description": "If true, the executor pauses for human consent before executing this step. Only legal on click, fill, fill_element, and navigate steps."
+                              },
+                              "confirmation_description": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "default": null,
+                                "description": "Human-readable override for the consent card. Falls back to step name when null."
+                              },
+                              "expected_cost": {
+                                "anyOf": [
+                                  {
+                                    "$ref": "#/definitions/RunEvent/anyOf/16/properties/request/properties/expected_cost/anyOf/0"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "Best-effort cost estimate shown on the consent card, or null if unknown.",
+                                "default": null
+                              },
+                              "consequence": {
+                                "anyOf": [
+                                  {
+                                    "$ref": "#/definitions/RunEvent/anyOf/16/properties/request/properties/consequence"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "Reversibility hint for the action, or null to default to \"unknown\".",
+                                "default": null
+                              },
+                              "type": {
+                                "type": "string",
+                                "const": "navigate",
+                                "description": "Navigate step discriminator."
+                              },
+                              "url": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "literal",
+                                        "description": "Discriminator for literal values."
+                                      },
+                                      "value": {
+                                        "type": [
+                                          "string",
+                                          "number",
+                                          "boolean",
+                                          "null"
+                                        ],
+                                        "description": "Literal scalar value embedded in the plan."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "value"
+                                    ],
+                                    "additionalProperties": false,
+                                    "description": "Literal scalar value."
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "param",
+                                        "description": "Discriminator for runtime param references."
+                                      },
+                                      "key": {
+                                        "type": "string",
+                                        "pattern": "^[a-z][a-z0-9_]*$",
+                                        "description": "Declared workflow/task param key."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "key"
+                                    ],
+                                    "additionalProperties": false,
+                                    "description": "Reference to runtime input provided by the user."
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "secret",
+                                        "description": "Discriminator for secret references."
+                                      },
+                                      "key": {
+                                        "type": "string",
+                                        "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$",
+                                        "description": "Secret key in namespace.name format."
+                                      },
+                                      "hosts": {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 253
+                                        },
+                                        "minItems": 1,
+                                        "maxItems": 32,
+                                        "description": "Trusted website hosts allowed to receive this secret. Required for browser fills."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "key"
+                                    ],
+                                    "additionalProperties": false,
+                                    "description": "Reference to a credential stored outside the plan payload."
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "capture",
+                                        "description": "Discriminator for capture references."
+                                      },
+                                      "step_id": {
+                                        "type": "string",
+                                        "pattern": "^s[0-9]+$",
+                                        "description": "Extract step id that produced the capture."
+                                      },
+                                      "field": {
+                                        "type": [
+                                          "string",
+                                          "null"
+                                        ],
+                                        "description": "Optional extracted field key. Null means the whole capture payload."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "step_id",
+                                      "field"
+                                    ],
+                                    "additionalProperties": false,
+                                    "description": "Reference to values captured by a previous extract step."
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "template",
+                                        "description": "Discriminator for template-backed values."
+                                      },
+                                      "template": {
+                                        "type": "string",
+                                        "description": "Template string with {{placeholder}} markers."
+                                      },
+                                      "bindings": {
+                                        "type": "object",
+                                        "additionalProperties": {
+                                          "anyOf": [
+                                            {
+                                              "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/0"
+                                            },
+                                            {
+                                              "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/1"
+                                            },
+                                            {
+                                              "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/2"
+                                            },
+                                            {
+                                              "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/3"
+                                            },
+                                            {
+                                              "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/4"
+                                            }
+                                          ],
+                                          "description": "Any value reference that can flow through a plan or workflow."
+                                        },
+                                        "description": "Typed mapping from placeholder names to value references."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "template",
+                                      "bindings"
+                                    ],
+                                    "additionalProperties": false,
+                                    "description": "Templated value with explicit typed bindings."
+                                  }
+                                ],
+                                "description": "Target URL as a value reference."
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "scope",
+                              "type",
+                              "url"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Navigate browser to a URL."
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/id"
+                              },
+                              "scope": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/scope"
+                              },
+                              "requires_confirmation": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/requires_confirmation"
+                              },
+                              "confirmation_description": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/confirmation_description"
+                              },
+                              "expected_cost": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/expected_cost"
+                              },
+                              "consequence": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/consequence"
+                              },
+                              "type": {
+                                "type": "string",
+                                "const": "click",
+                                "description": "Click step discriminator."
+                              },
+                              "locator": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "recorded",
+                                        "description": "Recorded locator candidate index reference."
+                                      },
+                                      "step_index": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "description": "Recorded step index."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "step_index"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "workflow",
+                                        "description": "Named workflow locator chain reference."
+                                      },
+                                      "name": {
+                                        "type": "string",
+                                        "pattern": "^[A-Za-z][A-Za-z0-9 _-]{0,63}$",
+                                        "description": "Human-readable workflow locator key."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "name"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "intent",
+                                        "description": "Semantic intent locator that engine resolves."
+                                      },
+                                      "role": {
+                                        "type": "string",
+                                        "enum": [
+                                          "button",
+                                          "link",
+                                          "textbox",
+                                          "searchbox",
+                                          "table",
+                                          "heading",
+                                          "region",
+                                          "dialog",
+                                          "listitem",
+                                          "cell",
+                                          "checkbox",
+                                          "radio",
+                                          "combobox",
+                                          "listbox",
+                                          "slider",
+                                          "spinbutton",
+                                          "option",
+                                          "tab",
+                                          "tabpanel",
+                                          "menuitem",
+                                          "row",
+                                          "grid"
+                                        ],
+                                        "description": "Target ARIA role."
+                                      },
+                                      "name_match": {
+                                        "anyOf": [
+                                          {
+                                            "anyOf": [
+                                              {
+                                                "type": "object",
+                                                "properties": {
+                                                  "kind": {
+                                                    "type": "string",
+                                                    "const": "exact",
+                                                    "description": "Exact match strategy."
+                                                  },
+                                                  "value": {
+                                                    "type": "string",
+                                                    "description": "Exact accessible name value."
+                                                  }
+                                                },
+                                                "required": [
+                                                  "kind",
+                                                  "value"
+                                                ],
+                                                "additionalProperties": false
+                                              },
+                                              {
+                                                "type": "object",
+                                                "properties": {
+                                                  "kind": {
+                                                    "type": "string",
+                                                    "const": "regex",
+                                                    "description": "Regex match strategy."
+                                                  },
+                                                  "pattern": {
+                                                    "type": "string",
+                                                    "description": "Regex pattern to compile."
+                                                  },
+                                                  "flags": {
+                                                    "type": "string",
+                                                    "description": "Regex flags such as i or im."
+                                                  }
+                                                },
+                                                "required": [
+                                                  "kind",
+                                                  "pattern",
+                                                  "flags"
+                                                ],
+                                                "additionalProperties": false
+                                              }
+                                            ],
+                                            "description": "Accessible-name matcher for intent locators."
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ],
+                                        "description": "Optional accessible-name matcher."
+                                      },
+                                      "near": {
+                                        "anyOf": [
+                                          {
+                                            "anyOf": [
+                                              {
+                                                "type": "object",
+                                                "properties": {
+                                                  "kind": {
+                                                    "type": "string",
+                                                    "const": "recorded",
+                                                    "description": "Recorded locator candidate index reference."
+                                                  },
+                                                  "step_index": {
+                                                    "type": "integer",
+                                                    "minimum": 0,
+                                                    "description": "Recorded step index."
+                                                  }
+                                                },
+                                                "required": [
+                                                  "kind",
+                                                  "step_index"
+                                                ],
+                                                "additionalProperties": false
+                                              },
+                                              {
+                                                "type": "object",
+                                                "properties": {
+                                                  "kind": {
+                                                    "type": "string",
+                                                    "const": "workflow",
+                                                    "description": "Named workflow locator chain reference."
+                                                  },
+                                                  "name": {
+                                                    "type": "string",
+                                                    "pattern": "^[A-Za-z][A-Za-z0-9 _-]{0,63}$",
+                                                    "description": "Human-readable workflow locator key."
+                                                  }
+                                                },
+                                                "required": [
+                                                  "kind",
+                                                  "name"
+                                                ],
+                                                "additionalProperties": false
+                                              },
+                                              {
+                                                "type": "object",
+                                                "properties": {
+                                                  "kind": {
+                                                    "type": "string",
+                                                    "const": "intent",
+                                                    "description": "Semantic intent locator that engine resolves."
+                                                  },
+                                                  "role": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                      "button",
+                                                      "link",
+                                                      "textbox",
+                                                      "searchbox",
+                                                      "table",
+                                                      "heading",
+                                                      "region",
+                                                      "dialog",
+                                                      "listitem",
+                                                      "cell",
+                                                      "checkbox",
+                                                      "radio",
+                                                      "combobox",
+                                                      "listbox",
+                                                      "slider",
+                                                      "spinbutton",
+                                                      "option",
+                                                      "tab",
+                                                      "tabpanel",
+                                                      "menuitem",
+                                                      "row",
+                                                      "grid"
+                                                    ],
+                                                    "description": "Target ARIA role."
+                                                  },
+                                                  "name_match": {
+                                                    "anyOf": [
+                                                      {
+                                                        "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/name_match/anyOf/0"
+                                                      },
+                                                      {
+                                                        "type": "null"
+                                                      }
+                                                    ],
+                                                    "description": "Optional accessible-name matcher."
+                                                  },
+                                                  "near": {
+                                                    "anyOf": [
+                                                      {
+                                                        "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/near/anyOf/0"
+                                                      },
+                                                      {
+                                                        "type": "null"
+                                                      }
+                                                    ],
+                                                    "description": "Optional relative anchor."
+                                                  }
+                                                },
+                                                "required": [
+                                                  "kind",
+                                                  "role",
+                                                  "name_match",
+                                                  "near"
+                                                ],
+                                                "additionalProperties": false
+                                              }
+                                            ],
+                                            "description": "Locator resolution strategy chain."
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ],
+                                        "description": "Optional relative anchor."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "role",
+                                      "name_match",
+                                      "near"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                ],
+                                "description": "Locator chain for click target."
+                              },
+                              "modifiers": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "alt": {
+                                        "type": "boolean",
+                                        "default": false,
+                                        "description": "Alt modifier key."
+                                      },
+                                      "shift": {
+                                        "type": "boolean",
+                                        "default": false,
+                                        "description": "Shift modifier key."
+                                      },
+                                      "ctrl": {
+                                        "type": "boolean",
+                                        "default": false,
+                                        "description": "Control modifier key."
+                                      },
+                                      "meta": {
+                                        "type": "boolean",
+                                        "default": false,
+                                        "description": "Meta modifier key."
+                                      }
+                                    },
+                                    "additionalProperties": false,
+                                    "description": "Optional keyboard modifiers for click steps."
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "Optional click modifier keys."
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "scope",
+                              "type",
+                              "locator",
+                              "modifiers"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Click on a resolved locator target."
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/id"
+                              },
+                              "scope": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/scope"
+                              },
+                              "requires_confirmation": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/requires_confirmation"
+                              },
+                              "confirmation_description": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/confirmation_description"
+                              },
+                              "expected_cost": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/expected_cost"
+                              },
+                              "consequence": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/consequence"
+                              },
+                              "type": {
+                                "type": "string",
+                                "const": "fill",
+                                "description": "Fill step discriminator."
+                              },
+                              "locator": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "recorded",
+                                        "description": "Recorded locator candidate index reference."
+                                      },
+                                      "step_index": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "description": "Recorded step index."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "step_index"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "workflow",
+                                        "description": "Named workflow locator chain reference."
+                                      },
+                                      "name": {
+                                        "type": "string",
+                                        "pattern": "^[A-Za-z][A-Za-z0-9 _-]{0,63}$",
+                                        "description": "Human-readable workflow locator key."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "name"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "intent",
+                                        "description": "Semantic intent locator that engine resolves."
+                                      },
+                                      "role": {
+                                        "type": "string",
+                                        "enum": [
+                                          "button",
+                                          "link",
+                                          "textbox",
+                                          "searchbox",
+                                          "table",
+                                          "heading",
+                                          "region",
+                                          "dialog",
+                                          "listitem",
+                                          "cell",
+                                          "checkbox",
+                                          "radio",
+                                          "combobox",
+                                          "listbox",
+                                          "slider",
+                                          "spinbutton",
+                                          "option",
+                                          "tab",
+                                          "tabpanel",
+                                          "menuitem",
+                                          "row",
+                                          "grid"
+                                        ],
+                                        "description": "Target ARIA role."
+                                      },
+                                      "name_match": {
+                                        "anyOf": [
+                                          {
+                                            "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/name_match/anyOf/0"
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ],
+                                        "description": "Optional accessible-name matcher."
+                                      },
+                                      "near": {
+                                        "anyOf": [
+                                          {
+                                            "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/near/anyOf/0"
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ],
+                                        "description": "Optional relative anchor."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "role",
+                                      "name_match",
+                                      "near"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                ],
+                                "description": "Locator chain for fill target."
+                              },
+                              "value": {
+                                "anyOf": [
+                                  {
+                                    "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/0"
+                                  },
+                                  {
+                                    "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/1"
+                                  },
+                                  {
+                                    "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/2"
+                                  },
+                                  {
+                                    "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/3"
+                                  },
+                                  {
+                                    "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/4"
+                                  }
+                                ],
+                                "description": "Value inserted into the target input."
+                              },
+                              "submit": {
+                                "type": "boolean",
+                                "default": false,
+                                "description": "Whether to submit after filling."
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "scope",
+                              "type",
+                              "locator",
+                              "value"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Fill an input-like field."
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/id"
+                              },
+                              "scope": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/scope"
+                              },
+                              "requires_confirmation": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/requires_confirmation"
+                              },
+                              "confirmation_description": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/confirmation_description"
+                              },
+                              "expected_cost": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/expected_cost"
+                              },
+                              "consequence": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/consequence"
+                              },
+                              "type": {
+                                "type": "string",
+                                "const": "fill_element",
+                                "description": "Semantic fill-element step discriminator."
+                              },
+                              "field_name": {
+                                "type": "string",
+                                "minLength": 1,
+                                "description": "Accessible field name used for fresh resolution."
+                              },
+                              "field_label_origin": {
+                                "type": "string",
+                                "enum": [
+                                  "explicit",
+                                  "structural",
+                                  "placeholder",
+                                  "title"
+                                ],
+                                "description": "How field_name was derived when it is not the control's accessible name. Absent means accessible name."
+                              },
+                              "locator": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "recorded",
+                                        "description": "Recorded locator candidate index reference."
+                                      },
+                                      "step_index": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "description": "Recorded step index."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "step_index"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "workflow",
+                                        "description": "Named workflow locator chain reference."
+                                      },
+                                      "name": {
+                                        "type": "string",
+                                        "pattern": "^[A-Za-z][A-Za-z0-9 _-]{0,63}$",
+                                        "description": "Human-readable workflow locator key."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "name"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "intent",
+                                        "description": "Semantic intent locator that engine resolves."
+                                      },
+                                      "role": {
+                                        "type": "string",
+                                        "enum": [
+                                          "button",
+                                          "link",
+                                          "textbox",
+                                          "searchbox",
+                                          "table",
+                                          "heading",
+                                          "region",
+                                          "dialog",
+                                          "listitem",
+                                          "cell",
+                                          "checkbox",
+                                          "radio",
+                                          "combobox",
+                                          "listbox",
+                                          "slider",
+                                          "spinbutton",
+                                          "option",
+                                          "tab",
+                                          "tabpanel",
+                                          "menuitem",
+                                          "row",
+                                          "grid"
+                                        ],
+                                        "description": "Target ARIA role."
+                                      },
+                                      "name_match": {
+                                        "anyOf": [
+                                          {
+                                            "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/name_match/anyOf/0"
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ],
+                                        "description": "Optional accessible-name matcher."
+                                      },
+                                      "near": {
+                                        "anyOf": [
+                                          {
+                                            "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/near/anyOf/0"
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ],
+                                        "description": "Optional relative anchor."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "role",
+                                      "name_match",
+                                      "near"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                ],
+                                "description": "Fallback locator chain for the target field."
+                              },
+                              "value": {
+                                "anyOf": [
+                                  {
+                                    "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/0"
+                                  },
+                                  {
+                                    "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/1"
+                                  },
+                                  {
+                                    "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/2"
+                                  },
+                                  {
+                                    "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/3"
+                                  },
+                                  {
+                                    "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/4"
+                                  }
+                                ],
+                                "description": "Semantic value committed through the unified fill engine."
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "scope",
+                              "type",
+                              "field_name",
+                              "locator",
+                              "value"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Resolve and semantically fill one browser field."
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/id"
+                              },
+                              "scope": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/scope"
+                              },
+                              "requires_confirmation": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/requires_confirmation"
+                              },
+                              "type": {
+                                "type": "string",
+                                "const": "extract",
+                                "description": "Extract step discriminator."
+                              },
+                              "locator": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "recorded",
+                                        "description": "Recorded locator candidate index reference."
+                                      },
+                                      "step_index": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "description": "Recorded step index."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "step_index"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "workflow",
+                                        "description": "Named workflow locator chain reference."
+                                      },
+                                      "name": {
+                                        "type": "string",
+                                        "pattern": "^[A-Za-z][A-Za-z0-9 _-]{0,63}$",
+                                        "description": "Human-readable workflow locator key."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "name"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "intent",
+                                        "description": "Semantic intent locator that engine resolves."
+                                      },
+                                      "role": {
+                                        "type": "string",
+                                        "enum": [
+                                          "button",
+                                          "link",
+                                          "textbox",
+                                          "searchbox",
+                                          "table",
+                                          "heading",
+                                          "region",
+                                          "dialog",
+                                          "listitem",
+                                          "cell",
+                                          "checkbox",
+                                          "radio",
+                                          "combobox",
+                                          "listbox",
+                                          "slider",
+                                          "spinbutton",
+                                          "option",
+                                          "tab",
+                                          "tabpanel",
+                                          "menuitem",
+                                          "row",
+                                          "grid"
+                                        ],
+                                        "description": "Target ARIA role."
+                                      },
+                                      "name_match": {
+                                        "anyOf": [
+                                          {
+                                            "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/name_match/anyOf/0"
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ],
+                                        "description": "Optional accessible-name matcher."
+                                      },
+                                      "near": {
+                                        "anyOf": [
+                                          {
+                                            "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/near/anyOf/0"
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ],
+                                        "description": "Optional relative anchor."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "role",
+                                      "name_match",
+                                      "near"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                ],
+                                "description": "Locator chain for extraction target."
+                              },
+                              "extraction_schema": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "const": "primitive",
+                                        "description": "Primitive extraction schema node."
+                                      },
+                                      "kind": {
+                                        "type": "string",
+                                        "enum": [
+                                          "string",
+                                          "number",
+                                          "boolean",
+                                          "date",
+                                          "money",
+                                          "readable"
+                                        ],
+                                        "description": "Primitive value kind."
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "kind"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "const": "array",
+                                        "description": "Array extraction schema node."
+                                      },
+                                      "items": {
+                                        "anyOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "type": "string",
+                                                "const": "primitive",
+                                                "description": "Primitive extraction schema node."
+                                              },
+                                              "kind": {
+                                                "type": "string",
+                                                "enum": [
+                                                  "string",
+                                                  "number",
+                                                  "boolean",
+                                                  "date",
+                                                  "money",
+                                                  "readable"
+                                                ],
+                                                "description": "Primitive value kind."
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "kind"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "type": "string",
+                                                "const": "array",
+                                                "description": "Array extraction schema node."
+                                              },
+                                              "items": {
+                                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/4/properties/extraction_schema/anyOf/1/properties/items",
+                                                "description": "Item schema for extracted arrays."
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "items"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "type": "string",
+                                                "const": "object",
+                                                "description": "Object extraction schema node."
+                                              },
+                                              "fields": {
+                                                "type": "object",
+                                                "additionalProperties": {
+                                                  "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/4/properties/extraction_schema/anyOf/1/properties/items"
+                                                },
+                                                "description": "Field mapping for extracted object rows."
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "fields"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        ],
+                                        "description": "Item schema for extracted arrays."
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "items"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "const": "object",
+                                        "description": "Object extraction schema node."
+                                      },
+                                      "fields": {
+                                        "type": "object",
+                                        "additionalProperties": {
+                                          "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/4/properties/extraction_schema/anyOf/1/properties/items"
+                                        },
+                                        "description": "Field mapping for extracted object rows."
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "fields"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                ],
+                                "description": "Expected extracted data shape."
+                              },
+                              "capture_as": {
+                                "type": "string",
+                                "pattern": "^[a-z][a-z0-9_]*$",
+                                "description": "Capture alias for downstream references."
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "scope",
+                              "type",
+                              "locator",
+                              "extraction_schema",
+                              "capture_as"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Extract data from the page using a declared schema."
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/id"
+                              },
+                              "scope": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/scope"
+                              },
+                              "requires_confirmation": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/requires_confirmation"
+                              },
+                              "type": {
+                                "type": "string",
+                                "const": "wait_for",
+                                "description": "Wait-for step discriminator."
+                              },
+                              "locator": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "recorded",
+                                        "description": "Recorded locator candidate index reference."
+                                      },
+                                      "step_index": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "description": "Recorded step index."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "step_index"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "workflow",
+                                        "description": "Named workflow locator chain reference."
+                                      },
+                                      "name": {
+                                        "type": "string",
+                                        "pattern": "^[A-Za-z][A-Za-z0-9 _-]{0,63}$",
+                                        "description": "Human-readable workflow locator key."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "name"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "intent",
+                                        "description": "Semantic intent locator that engine resolves."
+                                      },
+                                      "role": {
+                                        "type": "string",
+                                        "enum": [
+                                          "button",
+                                          "link",
+                                          "textbox",
+                                          "searchbox",
+                                          "table",
+                                          "heading",
+                                          "region",
+                                          "dialog",
+                                          "listitem",
+                                          "cell",
+                                          "checkbox",
+                                          "radio",
+                                          "combobox",
+                                          "listbox",
+                                          "slider",
+                                          "spinbutton",
+                                          "option",
+                                          "tab",
+                                          "tabpanel",
+                                          "menuitem",
+                                          "row",
+                                          "grid"
+                                        ],
+                                        "description": "Target ARIA role."
+                                      },
+                                      "name_match": {
+                                        "anyOf": [
+                                          {
+                                            "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/name_match/anyOf/0"
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ],
+                                        "description": "Optional accessible-name matcher."
+                                      },
+                                      "near": {
+                                        "anyOf": [
+                                          {
+                                            "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/near/anyOf/0"
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ],
+                                        "description": "Optional relative anchor."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "role",
+                                      "name_match",
+                                      "near"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                ],
+                                "description": "Locator chain for awaited target."
+                              },
+                              "state": {
+                                "type": "string",
+                                "enum": [
+                                  "visible",
+                                  "hidden",
+                                  "attached",
+                                  "detached"
+                                ],
+                                "description": "Target state to wait for."
+                              },
+                              "timeout_ms": {
+                                "anyOf": [
+                                  {
+                                    "type": "integer",
+                                    "exclusiveMinimum": 0
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "Optional timeout override."
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "scope",
+                              "type",
+                              "locator",
+                              "state",
+                              "timeout_ms"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Wait for target element state transitions."
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/id"
+                              },
+                              "scope": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/scope"
+                              },
+                              "requires_confirmation": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/requires_confirmation"
+                              },
+                              "type": {
+                                "type": "string",
+                                "const": "assert",
+                                "description": "Assert step discriminator."
+                              },
+                              "locator": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "recorded",
+                                        "description": "Recorded locator candidate index reference."
+                                      },
+                                      "step_index": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "description": "Recorded step index."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "step_index"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "workflow",
+                                        "description": "Named workflow locator chain reference."
+                                      },
+                                      "name": {
+                                        "type": "string",
+                                        "pattern": "^[A-Za-z][A-Za-z0-9 _-]{0,63}$",
+                                        "description": "Human-readable workflow locator key."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "name"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "intent",
+                                        "description": "Semantic intent locator that engine resolves."
+                                      },
+                                      "role": {
+                                        "type": "string",
+                                        "enum": [
+                                          "button",
+                                          "link",
+                                          "textbox",
+                                          "searchbox",
+                                          "table",
+                                          "heading",
+                                          "region",
+                                          "dialog",
+                                          "listitem",
+                                          "cell",
+                                          "checkbox",
+                                          "radio",
+                                          "combobox",
+                                          "listbox",
+                                          "slider",
+                                          "spinbutton",
+                                          "option",
+                                          "tab",
+                                          "tabpanel",
+                                          "menuitem",
+                                          "row",
+                                          "grid"
+                                        ],
+                                        "description": "Target ARIA role."
+                                      },
+                                      "name_match": {
+                                        "anyOf": [
+                                          {
+                                            "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/name_match/anyOf/0"
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ],
+                                        "description": "Optional accessible-name matcher."
+                                      },
+                                      "near": {
+                                        "anyOf": [
+                                          {
+                                            "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/1/properties/locator/anyOf/2/properties/near/anyOf/0"
+                                          },
+                                          {
+                                            "type": "null"
+                                          }
+                                        ],
+                                        "description": "Optional relative anchor."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "role",
+                                      "name_match",
+                                      "near"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                ],
+                                "description": "Locator chain for assertion target."
+                              },
+                              "condition": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "visible",
+                                        "description": "Assert that target is visible."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "hidden",
+                                        "description": "Assert that target is hidden."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "text_matches",
+                                        "description": "Assert text by regex pattern."
+                                      },
+                                      "pattern": {
+                                        "type": "string",
+                                        "description": "Regular expression source."
+                                      },
+                                      "flags": {
+                                        "type": "string",
+                                        "default": "",
+                                        "description": "Regex flags."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "pattern"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "count_equals",
+                                        "description": "Assert list count equals expected value."
+                                      },
+                                      "count": {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "description": "Expected count."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "count"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                ],
+                                "description": "Assertion condition payload."
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "scope",
+                              "type",
+                              "locator",
+                              "condition"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Assert state against the current page."
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/id"
+                              },
+                              "scope": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/scope"
+                              },
+                              "requires_confirmation": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/requires_confirmation"
+                              },
+                              "type": {
+                                "type": "string",
+                                "const": "branch",
+                                "description": "Branch step discriminator."
+                              },
+                              "condition": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "always",
+                                        "description": "Always branch to then_step_id."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "kind": {
+                                        "type": "string",
+                                        "const": "capture_exists",
+                                        "description": "Branch if capture reference resolves."
+                                      },
+                                      "capture": {
+                                        "type": "object",
+                                        "properties": {
+                                          "kind": {
+                                            "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/3/properties/kind"
+                                          },
+                                          "step_id": {
+                                            "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/3/properties/step_id"
+                                          },
+                                          "field": {
+                                            "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/3/properties/field"
+                                          }
+                                        },
+                                        "required": [
+                                          "kind",
+                                          "step_id",
+                                          "field"
+                                        ],
+                                        "additionalProperties": false,
+                                        "description": "Capture checked for branch decision."
+                                      }
+                                    },
+                                    "required": [
+                                      "kind",
+                                      "capture"
+                                    ],
+                                    "additionalProperties": false
+                                  }
+                                ],
+                                "description": "Branch condition payload."
+                              },
+                              "then_step_id": {
+                                "type": "string",
+                                "pattern": "^s[0-9]+$",
+                                "description": "Step id for true branch."
+                              },
+                              "else_step_id": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^s[0-9]+$"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "Optional step id for false branch."
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "scope",
+                              "type",
+                              "condition",
+                              "then_step_id",
+                              "else_step_id"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Explicit branch to another step id."
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/id"
+                              },
+                              "scope": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/scope"
+                              },
+                              "requires_confirmation": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/requires_confirmation"
+                              },
+                              "type": {
+                                "type": "string",
+                                "const": "loop",
+                                "description": "Loop step discriminator."
+                              },
+                              "over": {
+                                "anyOf": [
+                                  {
+                                    "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/3"
+                                  },
+                                  {
+                                    "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/1"
+                                  }
+                                ],
+                                "description": "Collection reference iterated by loop."
+                              },
+                              "as": {
+                                "type": "string",
+                                "pattern": "^[a-z][a-z0-9_]*$",
+                                "description": "Loop variable alias."
+                              },
+                              "body_step_ids": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "pattern": "^s[0-9]+$"
+                                },
+                                "minItems": 1,
+                                "description": "Step ids that form the loop body."
+                              },
+                              "max_iterations": {
+                                "type": "integer",
+                                "exclusiveMinimum": 0,
+                                "description": "Hard cap for loop iterations at runtime."
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "scope",
+                              "type",
+                              "over",
+                              "as",
+                              "body_step_ids",
+                              "max_iterations"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Iterate over collection values."
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/id"
+                              },
+                              "scope": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/scope"
+                              },
+                              "requires_confirmation": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/requires_confirmation"
+                              },
+                              "type": {
+                                "type": "string",
+                                "const": "call_workflow",
+                                "description": "Call-workflow step discriminator."
+                              },
+                              "workflow_name": {
+                                "type": "string",
+                                "minLength": 1,
+                                "description": "Name of workflow to invoke."
+                              },
+                              "params": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/4/properties/bindings/additionalProperties"
+                                },
+                                "default": {},
+                                "description": "Param values passed to called workflow."
+                              },
+                              "capture_as": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^[a-z][a-z0-9_]*$"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "Optional capture alias for workflow output."
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "scope",
+                              "type",
+                              "workflow_name",
+                              "capture_as"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Invoke another workflow from the current plan."
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/id"
+                              },
+                              "scope": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/scope"
+                              },
+                              "requires_confirmation": {
+                                "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/requires_confirmation"
+                              },
+                              "type": {
+                                "type": "string",
+                                "const": "llm_summarize",
+                                "description": "LLM summarize step discriminator."
+                              },
+                              "input": {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/3/properties/kind"
+                                  },
+                                  "step_id": {
+                                    "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/3/properties/step_id"
+                                  },
+                                  "field": {
+                                    "$ref": "#/definitions/RunEvent/anyOf/18/properties/cycle/properties/proposal/properties/steps/items/anyOf/0/properties/url/anyOf/3/properties/field"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "step_id",
+                                  "field"
+                                ],
+                                "additionalProperties": false,
+                                "description": "Capture reference fed to summarization."
+                              },
+                              "prompt": {
+                                "type": "string",
+                                "minLength": 1,
+                                "description": "Summarization instruction prompt."
+                              },
+                              "output_as": {
+                                "type": "string",
+                                "pattern": "^[a-z][a-z0-9_]*$",
+                                "description": "Capture alias for summarization output."
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "scope",
+                              "type",
+                              "input",
+                              "prompt",
+                              "output_as"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Summarize extracted captures with an LLM."
+                          }
+                        ],
+                        "description": "Single executable unit in a validated plan."
+                      },
+                      "minItems": 1,
+                      "maxItems": 3,
+                      "description": "1–3 standard protocol steps to execute this cycle."
+                    },
+                    "done": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "goal_met": {
+                              "type": "boolean",
+                              "description": "Whether the agent believes the goal has been achieved."
+                            },
+                            "summary_md": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4000,
+                              "description": "Markdown summary of what was found or accomplished."
+                            },
+                            "citations_hint": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "format": "uri"
+                              },
+                              "maxItems": 20,
+                              "description": "URLs of pages actually visited that support the summary claims."
+                            }
+                          },
+                          "required": [
+                            "goal_met",
+                            "summary_md",
+                            "citations_hint"
+                          ],
+                          "additionalProperties": false,
+                          "description": "Terminal claim — triggers Brief assembly when goal_met is true."
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Terminal claim, or null if the goal is not yet met."
+                    }
+                  },
+                  "required": [
+                    "rationale",
+                    "steps",
+                    "done"
+                  ],
+                  "additionalProperties": false,
+                  "description": "The (possibly normalized) proposal for this cycle."
+                },
+                "validation": {
+                  "type": "object",
+                  "properties": {
+                    "verdict": {
+                      "type": "string",
+                      "enum": [
+                        "accepted",
+                        "rejected"
+                      ],
+                      "description": "Whether the proposal passed validation."
+                    },
+                    "reasons": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Rejection reasons (empty when accepted)."
+                    }
+                  },
+                  "required": [
+                    "verdict",
+                    "reasons"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Validation verdict for the proposal."
+                },
+                "observation": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "url": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "Current page URL after cycle execution."
+                        },
+                        "title": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 300
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Page title or null if unavailable."
+                        },
+                        "page_digest": {
+                          "type": "string",
+                          "maxLength": 8000,
+                          "description": "Sanitized + truncated extract of readable page content."
+                        },
+                        "interactables": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "role": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 50,
+                                "description": "ARIA role or semantic kind (e.g. \"button\", \"link\", \"textbox\")."
+                              },
+                              "name": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "maxLength": 200
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "Accessible name or label, truncated to 200 chars. Null if unnamed."
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "button",
+                                  "link",
+                                  "input",
+                                  "select"
+                                ],
+                                "description": "Coarse interaction kind for the model to reason about."
+                              },
+                              "disabled": {
+                                "type": "boolean",
+                                "description": "Whether the element is disabled or aria-disabled."
+                              }
+                            },
+                            "required": [
+                              "role",
+                              "name",
+                              "kind",
+                              "disabled"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Sanitized descriptor of one interactable element on the page."
+                          },
+                          "maxItems": 30,
+                          "description": "Visible, enabled interactable elements (cap 30, ranked by prominence)."
+                        },
+                        "step_outcome": {
+                          "type": "string",
+                          "enum": [
+                            "completed",
+                            "failed",
+                            "ethics_refused",
+                            "confirmation_denied"
+                          ],
+                          "description": "Typed outcome of the cycle execution."
+                        },
+                        "outcome_reason": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 500
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Human-readable reason for the outcome (e.g. ethics rule, error message). Null on clean completion."
+                        }
+                      },
+                      "required": [
+                        "url",
+                        "title",
+                        "page_digest",
+                        "interactables",
+                        "step_outcome",
+                        "outcome_reason"
+                      ],
+                      "additionalProperties": false,
+                      "description": "Post-sanitizer observation of the current page state, sent to the model."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Post-cycle observation, or null if the cycle was rejected without execution."
+                },
+                "budget_after": {
+                  "type": "object",
+                  "properties": {
+                    "steps_used": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Steps consumed so far."
+                    },
+                    "llm_calls_used": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "LLM calls consumed so far."
+                    },
+                    "wall_clock_ms": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Wall clock elapsed in ms."
+                    },
+                    "cost_usd": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Cost consumed in USD."
+                    }
+                  },
+                  "required": [
+                    "steps_used",
+                    "llm_calls_used",
+                    "wall_clock_ms",
+                    "cost_usd"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Budget snapshot after this cycle."
+                }
+              },
+              "required": [
+                "index",
+                "proposal",
+                "validation",
+                "observation",
+                "budget_after"
+              ],
+              "additionalProperties": false,
+              "description": "The completed cycle record."
+            }
+          },
+          "required": [
+            "task_id",
+            "at",
+            "kind",
+            "cycle"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "task_id": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/task_id"
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/0/properties/at"
+            },
+            "kind": {
+              "type": "string",
+              "const": "discovery_session_completed",
+              "description": "A discovery session reached a terminal outcome (FEAT-020)."
+            },
+            "outcome": {
+              "type": "string",
+              "enum": [
+                "goal_met",
+                "goal_unreachable",
+                "budget_exhausted",
+                "user_declined",
+                "handoff",
+                "aborted"
+              ],
+              "description": "Terminal outcome of the session."
+            },
+            "cycles": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Total cycles executed."
+            },
+            "promoted_workflow": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Workflow name if promoted via --save-as, or null."
+            }
+          },
+          "required": [
+            "task_id",
+            "at",
+            "kind",
+            "outcome",
+            "cycles",
+            "promoted_workflow"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "recovery",
+              "description": "The stall/turn-limit recovery ladder fired a rung."
+            },
+            "rung": {
+              "type": "string",
+              "enum": [
+                "steer",
+                "freeze",
+                "stop"
+              ],
+              "description": "The recovery rung that fired."
+            },
+            "trigger": {
+              "type": "string",
+              "enum": [
+                "stalled",
+                "turn-timeout"
+              ],
+              "description": "What triggered recovery: no progress, or a turn over its thinking limit."
+            },
+            "move": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "fill-remaining",
+                    "list-fields",
+                    "capture",
+                    "publish"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The next supported move the run was steered to, or null on stop."
+            },
+            "summary": {
+              "type": "string",
+              "description": "One-line, render-safe description of the recovery step."
+            },
+            "at": {
+              "type": "string",
+              "format": "date-time",
+              "description": "ISO-8601 UTC timestamp of emission."
+            }
+          },
+          "required": [
+            "kind",
+            "rung",
+            "trigger",
+            "move",
+            "summary",
+            "at"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "progress",
+              "description": "Declared requirements advanced."
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Requirement id, such as `fill:email` or `artifact:screenshot:viewport`."
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "fill",
+                      "artifact",
+                      "effects",
+                      "deliverable"
+                    ],
+                    "description": "What kind of requirement the item tracks."
+                  },
+                  "label": {
+                    "type": "string",
+                    "maxLength": 60,
+                    "description": "Short human label, at most 60 characters."
+                  },
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "pending",
+                      "advancing",
+                      "met"
+                    ],
+                    "description": "pending (untouched), advancing (related work happened), or met."
+                  },
+                  "done": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Units done, or null when not counted."
+                  },
+                  "total": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Units required, or null when not counted."
+                  }
+                },
+                "required": [
+                  "id",
+                  "kind",
+                  "label",
+                  "state",
+                  "done",
+                  "total"
+                ],
+                "additionalProperties": false,
+                "description": "One declared requirement and how far the run has got with it."
+              },
+              "description": "Every declared requirement and its live state."
+            },
+            "summary": {
+              "type": "string",
+              "maxLength": 160,
+              "description": "One-line progress summary, at most 160 characters."
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/20/properties/at"
+            }
+          },
+          "required": [
+            "kind",
+            "items",
+            "summary",
+            "at"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "assistant_text",
+              "description": "The model streamed reply text."
+            },
+            "text": {
+              "type": "string",
+              "description": "A sanitized chunk of the model’s streamed reply."
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/20/properties/at"
+            }
+          },
+          "required": [
+            "kind",
+            "text",
+            "at"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "tool_started",
+              "description": "A tool call started."
+            },
+            "tool": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Tool name."
+            },
+            "summary": {
+              "type": "string",
+              "description": "Bounded input summary (field names only, never values)."
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/20/properties/at"
+            }
+          },
+          "required": [
+            "kind",
+            "tool",
+            "summary",
+            "at"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "tool_finished",
+              "description": "A tool call finished."
+            },
+            "tool": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Tool name."
+            },
+            "summary": {
+              "type": "string",
+              "description": "Bounded result summary: status and error code only."
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "ok",
+                "error",
+                "denied",
+                "aborted"
+              ],
+              "description": "How the call ended."
+            },
+            "durationMs": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Call duration in milliseconds, or null when the start was not observed."
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/20/properties/at"
+            }
+          },
+          "required": [
+            "kind",
+            "tool",
+            "summary",
+            "status",
+            "durationMs",
+            "at"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "contract_declared",
+              "description": "A task contract revision was declared and echoed."
+            },
+            "revision": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "description": "1-based contract revision."
+            },
+            "summary": {
+              "type": "string",
+              "maxLength": 400,
+              "description": "One-line echo of the normalized, sanitized contract."
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/20/properties/at"
+            }
+          },
+          "required": [
+            "kind",
+            "revision",
+            "summary",
+            "at"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "capability_gap",
+              "description": "A declared item cannot be delivered by this run."
+            },
+            "item": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The requirement id, such as `artifact:screenshot:viewport`."
+            },
+            "reason": {
+              "type": "string",
+              "enum": [
+                "suppressed_by_flag",
+                "no_browser",
+                "no_interaction_tools"
+              ],
+              "description": "Why the item cannot be delivered."
+            },
+            "summary": {
+              "type": "string",
+              "description": "One-line, ASCII-only disclosure; the run continues."
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/20/properties/at"
+            }
+          },
+          "required": [
+            "kind",
+            "item",
+            "reason",
+            "summary",
+            "at"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "goal_echo",
+              "description": "The goal exactly as the run received it (redacted)."
+            },
+            "display": {
+              "type": "string",
+              "maxLength": 512,
+              "description": "The echo line without its newline, e.g. `goal: \"…\"` or `goal: [not shown: …]`; already redacted and control-stripped."
+            },
+            "received_chars": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Characters of goal received."
+            },
+            "truncated": {
+              "type": "boolean",
+              "description": "Whether the display shows only the start of the goal."
+            },
+            "at": {
+              "type": "string",
+              "format": "date-time",
+              "description": "ISO-8601 UTC timestamp of emission."
+            }
+          },
+          "required": [
+            "kind",
+            "display",
+            "received_chars",
+            "truncated",
+            "at"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "run_warning",
+              "description": "A `warning: …` advisory the run printed."
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "command",
+                "agent"
+              ],
+              "description": "command: the CLI command raised it; agent: the agent runtime raised it."
+            },
+            "text": {
+              "type": "string",
+              "maxLength": 1000,
+              "description": "Advisory text without the `warning: ` prefix."
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/27/properties/at"
+            }
+          },
+          "required": [
+            "kind",
+            "source",
+            "text",
+            "at"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "receipt_written",
+              "description": "The execution receipt was written (FEAT-072)."
+            },
+            "path": {
+              "type": "string",
+              "pattern": "^execution-receipt(?:\\.resume-[1-9]\\d*)?\\.json$",
+              "description": "Run-relative receipt file: `execution-receipt.json`, or `execution-receipt.resume-<n>.json` for the n-th resume."
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$",
+              "description": "Lowercase hex SHA-256 of the receipt file bytes."
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/27/properties/at"
+            }
+          },
+          "required": [
+            "kind",
+            "path",
+            "sha256",
+            "at"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "budget_snapshot",
+              "description": "What the run has spent against its budgets."
+            },
+            "dimensions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Budget dimension, such as `elapsed`, `tool_calls` or `hops`."
+                  },
+                  "used": {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "Amount spent so far."
+                  },
+                  "limit": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "The limit, or null if unbounded."
+                  },
+                  "unit": {
+                    "type": "string",
+                    "enum": [
+                      "ms",
+                      "count",
+                      "bytes",
+                      "pixels"
+                    ],
+                    "description": "Unit of `used` and `limit`."
+                  }
+                },
+                "required": [
+                  "name",
+                  "used",
+                  "limit",
+                  "unit"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 16,
+              "description": "Budget dimensions, at most 16."
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/27/properties/at"
+            }
+          },
+          "required": [
+            "kind",
+            "dimensions",
+            "at"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "artifact_saved",
+              "description": "The run saved a file into its run directory."
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300,
+              "description": "Run-relative POSIX path of a file inside the run directory."
+            },
+            "artifact_kind": {
+              "type": "string",
+              "enum": [
+                "brief",
+                "report",
+                "templated_report",
+                "screenshot",
+                "output",
+                "result",
+                "other"
+              ],
+              "description": "What the file is."
+            },
+            "media_type": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "description": "IANA media type of the file."
+            },
+            "bytes": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "File size, or null if unknown."
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/27/properties/at"
+            }
+          },
+          "required": [
+            "kind",
+            "path",
+            "artifact_kind",
+            "media_type",
+            "bytes",
+            "at"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "intervention_raised",
+              "description": "The run is waiting for a person (a consent wait today)."
+            },
+            "intervention_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "description": "The intervention id; for a confirmation, its `confirmation_id`."
+            },
+            "intervention_kind": {
+              "type": "string",
+              "enum": [
+                "confirmation"
+              ],
+              "description": "What the person is asked for; FEAT-068 extends this additively."
+            },
+            "request": {
+              "type": "object",
+              "properties": {
+                "confirmation_id": {
+                  "$ref": "#/definitions/RunEvent/anyOf/16/properties/request/properties/confirmation_id"
+                },
+                "run_id": {
+                  "$ref": "#/definitions/RunEvent/anyOf/16/properties/request/properties/run_id"
+                },
+                "step_id": {
+                  "$ref": "#/definitions/RunEvent/anyOf/16/properties/request/properties/step_id"
+                },
+                "action_kind": {
+                  "$ref": "#/definitions/RunEvent/anyOf/16/properties/request/properties/action_kind"
+                },
+                "host": {
+                  "$ref": "#/definitions/RunEvent/anyOf/16/properties/request/properties/host"
+                },
+                "description": {
+                  "$ref": "#/definitions/RunEvent/anyOf/16/properties/request/properties/description"
+                },
+                "expected_cost": {
+                  "$ref": "#/definitions/RunEvent/anyOf/16/properties/request/properties/expected_cost"
+                },
+                "consequence": {
+                  "$ref": "#/definitions/RunEvent/anyOf/16/properties/request/properties/consequence"
+                },
+                "requested_at": {
+                  "$ref": "#/definitions/RunEvent/anyOf/16/properties/request/properties/requested_at"
+                },
+                "timeout_ms": {
+                  "$ref": "#/definitions/RunEvent/anyOf/16/properties/request/properties/timeout_ms"
+                }
+              },
+              "required": [
+                "confirmation_id",
+                "run_id",
+                "step_id",
+                "action_kind",
+                "host",
+                "description",
+                "expected_cost",
+                "requested_at",
+                "timeout_ms"
+              ],
+              "additionalProperties": false,
+              "description": "The sanitized confirmation request."
+            },
+            "deadline_at": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Absolute instant the wait ends, or null when it waits indefinitely."
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/27/properties/at"
+            }
+          },
+          "required": [
+            "kind",
+            "intervention_id",
+            "intervention_kind",
+            "request",
+            "deadline_at",
+            "at"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "intervention_resolved",
+              "description": "A person (or the timeout) ended the wait."
+            },
+            "intervention_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "description": "The intervention that was resolved."
+            },
+            "decision": {
+              "type": "string",
+              "enum": [
+                "granted",
+                "denied",
+                "timed_out"
+              ],
+              "description": "How the wait ended."
+            },
+            "decided_by": {
+              "type": "string",
+              "enum": [
+                "user_interactive",
+                "user_cli_confirm",
+                "timeout",
+                "user_app"
+              ],
+              "description": "Who or what resolved it — never agent."
+            },
+            "decided_at": {
+              "type": "string",
+              "format": "date-time",
+              "description": "ISO-8601 UTC timestamp of the decision."
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/27/properties/at"
+            }
+          },
+          "required": [
+            "kind",
+            "intervention_id",
+            "decision",
+            "decided_by",
+            "decided_at",
+            "at"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "run_outcome",
+              "description": "How the run ended: exactly one, the last event."
+            },
+            "run_id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The run that ended."
+            },
+            "task_outcome": {
+              "type": "string",
+              "enum": [
+                "fulfilled",
+                "partial",
+                "handoff",
+                "failed",
+                "aborted"
+              ],
+              "description": "Whether the task was done."
+            },
+            "termination_reason": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "model_finished",
+                    "wall-clock-soft",
+                    "wall-clock-hard",
+                    "provider-tokens",
+                    "tool-budget",
+                    "repeated-tool-failure",
+                    "handoff",
+                    "user_abort",
+                    "provider_failed",
+                    "stalled",
+                    "turn-timeout",
+                    "owner_lost"
+                  ],
+                  "description": "Why the run stopped: stalled (no progress after recovery), turn-timeout (thinking limit), the model finished, a budget or the repeated-failure breaker ended it, a handoff was raised, the user aborted, or the provider failed. wall-clock-soft means the model finished after the exploration wind-down began. owner_lost means the process that owned the run died before writing a terminal result, and a reconciler recorded the end (FEAT-064). Added in FEAT-063: readable by new executables only."
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Why an agentic run stopped, or null for a deterministic run."
+            },
+            "stop_detail": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{0,63}$",
+                  "description": "Command-specific stop detail, such as research `max_hops`."
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Command-specific stop detail, such as research `max_hops`, or null."
+            },
+            "exit_code": {
+              "type": "integer",
+              "description": "The process exit code the run reports."
+            },
+            "failure_class": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "locator_not_found",
+                    "navigation_timeout",
+                    "rate_limited",
+                    "captcha_detected",
+                    "mfa_required",
+                    "network_error",
+                    "scope_violation",
+                    "validation_error",
+                    "ethics_refused",
+                    "budget_exhausted",
+                    "user_aborted",
+                    "unexpected",
+                    "resume_drift",
+                    "locator_miss_in_unrecorded_frame",
+                    "requirements_unmet"
+                  ],
+                  "description": "Failure category emitted in task_failed and retry events."
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Failure category, or null on success."
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/27/properties/at"
+            }
+          },
+          "required": [
+            "kind",
+            "run_id",
+            "task_outcome",
+            "termination_reason",
+            "stop_detail",
+            "exit_code",
+            "failure_class",
+            "at"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "search_completed",
+              "description": "A deterministic search returned."
+            },
+            "hop_index": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "1-based research hop, or null for `ask` (a single pass)."
+            },
+            "provider": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,47}$",
+              "description": "Search provider name."
+            },
+            "query": {
+              "type": "string",
+              "maxLength": 200,
+              "description": "The query, redacted and control-stripped, at most 200."
+            },
+            "result_count": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Results returned."
+            },
+            "cached": {
+              "type": "boolean",
+              "description": "Whether the answer came from the day cache."
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/27/properties/at"
+            }
+          },
+          "required": [
+            "kind",
+            "hop_index",
+            "provider",
+            "query",
+            "result_count",
+            "cached",
+            "at"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "source_fetched",
+              "description": "One deterministic source fetch finished."
+            },
+            "hop_index": {
+              "$ref": "#/definitions/RunEvent/anyOf/35/properties/hop_index"
+            },
+            "source_index": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "description": "1-based source position in its pass."
+            },
+            "url": {
+              "type": "string",
+              "maxLength": 300,
+              "description": "Origin plus path only: no userinfo, query or fragment; a credential-shaped path is `<origin>/[redacted]`."
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "ok",
+                "failed",
+                "blocked",
+                "skipped"
+              ],
+              "description": "ok, failed (fetch or extract), blocked (ethics/challenge), or skipped (budget/policy)."
+            },
+            "failure_class": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                  "description": "Failure stage or class."
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Failure stage or class, or null on success."
+            },
+            "duration_ms": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Fetch time, or null."
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/27/properties/at"
+            }
+          },
+          "required": [
+            "kind",
+            "hop_index",
+            "source_index",
+            "url",
+            "status",
+            "failure_class",
+            "duration_ms",
+            "at"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "extract_completed",
+              "description": "Extraction for a pass finished."
+            },
+            "hop_index": {
+              "$ref": "#/definitions/RunEvent/anyOf/35/properties/hop_index"
+            },
+            "extracted": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Sources extracted."
+            },
+            "failed": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Sources that failed."
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/27/properties/at"
+            }
+          },
+          "required": [
+            "kind",
+            "hop_index",
+            "extracted",
+            "failed",
+            "at"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "synthesize_started",
+              "description": "Synthesis began; `synthesis_completed` reports the end."
+            },
+            "strategy": {
+              "type": "string",
+              "enum": [
+                "deterministic",
+                "llm"
+              ],
+              "description": "Synthesis strategy."
+            },
+            "sources_in": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Sources fed into synthesis."
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/27/properties/at"
+            }
+          },
+          "required": [
+            "kind",
+            "strategy",
+            "sources_in",
+            "at"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "event_omitted",
+              "description": "An event too large for one line was replaced by this marker."
+            },
+            "original_kind": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "description": "The kind of the omitted event."
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Serialized size of the omitted line."
+            },
+            "at": {
+              "$ref": "#/definitions/RunEvent/anyOf/27/properties/at"
+            }
+          },
+          "required": [
+            "kind",
+            "original_kind",
+            "bytes",
+            "at"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "description": "One run event, discriminated by `kind`."
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

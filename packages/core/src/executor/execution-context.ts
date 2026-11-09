@@ -5,12 +5,14 @@ import type { Plan } from '@yantra/protocol';
 
 import { PageSettler } from '../browser/page-settle.js';
 import type { BrowserSession, Logger, Page } from '../browser/types.js';
+import { openTaskEventBus } from '../run-events/mirroring-event-bus.js';
+import { RecordingConfirmationGateway } from '../run-events/recording-confirmation-gateway.js';
+import type { RunEventStream } from '../run-events/stream.js';
 
 import { InMemoryCaptureStore } from './capture-store.js';
 import { FilesystemCheckpointStore } from './checkpoint-store.js';
 import { createConfirmationStore } from './confirmation-gateway.js';
 import type { ConfirmationGateway } from './confirmation-gateway.js';
-import { JsonlEventBus } from './event-bus.js';
 import { ReplayEvidenceLedger } from './evidence-ledger.js';
 import { RetryBudgetImpl } from './retry-budget.js';
 import { buildScopeChain } from './scope-enforcer.js';
@@ -53,6 +55,11 @@ export interface ExecutionContextOptions {
    * ledger; pass `null` for a context that must not collect evidence.
    */
   readonly evidence?: ReplayEvidenceLedger | null;
+  /**
+   * The run's event stream (FEAT-063). When given, every `TaskEvent` the run
+   * publishes is mirrored into `run-events.jsonl`; `events.jsonl` is unchanged.
+   */
+  readonly runEvents?: RunEventStream | null;
 }
 
 /**
@@ -80,7 +87,7 @@ export function createExecutionContext(opts: ExecutionContextOptions): Execution
 
   const captures: CaptureStore = new InMemoryCaptureStore();
   const scopeChain = buildScopeChain(opts.plan);
-  const events: EventBus = new JsonlEventBus(join(opts.runDir, 'events.jsonl'));
+  const events: EventBus = openTaskEventBus(opts.runDir, opts.runEvents);
   const checkpoints: CheckpointStore = new FilesystemCheckpointStore(
     join(opts.runDir, 'checkpoints'),
   );
@@ -112,7 +119,12 @@ export function createExecutionContext(opts: ExecutionContextOptions): Execution
     logger: opts.logger,
     clock,
     runDir: opts.runDir,
-    confirmationGateway: opts.confirmationGateway ?? null,
+    // FEAT-063: every consent wait (interactive or a daemon park) is recorded
+    // as intervention_raised / intervention_resolved in run-events.jsonl.
+    confirmationGateway:
+      opts.confirmationGateway && opts.runEvents
+        ? new RecordingConfirmationGateway(opts.confirmationGateway, opts.runEvents)
+        : (opts.confirmationGateway ?? null),
     confirmationStore: createConfirmationStore(opts.runDir),
     evidence: opts.evidence === undefined ? new ReplayEvidenceLedger() : opts.evidence,
   };

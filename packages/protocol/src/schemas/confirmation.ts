@@ -92,8 +92,10 @@ export type ConfirmationRequest = z.infer<typeof ConfirmationRequest>;
  * records which surface granted it.
  */
 export const ConfirmationDecidedBy = z
-  .enum(['user_interactive', 'user_cli_confirm', 'timeout'])
-  .describe('Who or what resolved the confirmation — no agent variant exists.');
+  .enum(['user_interactive', 'user_cli_confirm', 'timeout', 'user_app'])
+  .describe(
+    'Who or what resolved the confirmation — no agent variant exists. user_interactive: a person at the terminal prompt; user_cli_confirm: a person running `yantra confirm`; timeout: the bounded wait expired; user_app: a person answered in the Yantra app (FEAT-068; added in FEAT-063, readable by new executables only).',
+  );
 
 export type ConfirmationDecidedBy = z.infer<typeof ConfirmationDecidedBy>;
 

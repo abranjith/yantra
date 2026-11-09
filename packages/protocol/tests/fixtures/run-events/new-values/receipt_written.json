@@ -1,0 +1,11 @@
+{
+  "schema_version": "1",
+  "seq": 20,
+  "run_id": "20261101T120000Z-do-a1b2c3d4",
+  "event": {
+    "kind": "receipt_written",
+    "path": "execution-receipt.json",
+    "sha256": "abababababababababababababababababababababababababababababababab",
+    "at": "2026-11-01T12:00:00.000Z"
+  }
+}

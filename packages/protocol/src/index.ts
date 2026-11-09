@@ -41,6 +41,51 @@ export {
   type TemplatedReportValidationIssue,
 } from './schemas/report-template.js';
 export { TaskEvent, HandoffReason } from './schemas/events.js';
+export {
+  AGENT_PROGRESS_KINDS,
+  AGENT_PROGRESS_SHAPES,
+  AgentProgressEvent,
+  CONTRACT_SUMMARY_MAX,
+  LIVE_ITEM_LABEL_MAX,
+  LiveItem,
+  PROGRESS_SUMMARY_MAX,
+  agentProgressVariant,
+} from './schemas/agent-progress.js';
+export {
+  ARTIFACT_PATH_MAX,
+  BUDGET_DIMENSIONS_MAX,
+  GOAL_ECHO_DISPLAY_MAX,
+  INTERVENTION_EVENT_KINDS,
+  MAX_RUN_EVENT_LINE_BYTES,
+  PHASE_QUERY_MAX,
+  PHASE_URL_MAX,
+  RUN_EVENTS_SCHEMA_VERSION,
+  RUN_EVENT_KINDS,
+  RUN_WARNING_TEXT_MAX,
+  RunEvent,
+  RunEventRecord,
+  RunRelativePath,
+  TERMINAL_EVENT_KINDS,
+  isAgentProgressRunEvent,
+  isRunEventKind,
+  parseRunEventLine,
+  toAgentProgressEvent,
+  toRunEvent,
+} from './schemas/run-event.js';
+export type {
+  RunEvent as RunEventType,
+  RunEventDelivery,
+  RunEventKind,
+  RunEventOf,
+  RunEventReadItem,
+  RunEventRecord as RunEventRecordType,
+} from './schemas/run-event.js';
+export type {
+  AgentProgressEvent as AgentProgressEventType,
+  AgentProgressKind,
+  Frozen,
+  LiveItem as LiveItemType,
+} from './schemas/agent-progress.js';
 export { AgentManifestSection, AgentRunBudgets } from './schemas/agent-manifest.js';
 export type { AgentManifestSection as AgentManifestSectionType } from './schemas/agent-manifest.js';
 export { ToolAuditEntry } from './schemas/tool-audit.js';

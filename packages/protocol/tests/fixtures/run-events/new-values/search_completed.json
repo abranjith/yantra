@@ -1,0 +1,14 @@
+{
+  "schema_version": "1",
+  "seq": 26,
+  "run_id": "20261101T120000Z-do-a1b2c3d4",
+  "event": {
+    "kind": "search_completed",
+    "hop_index": 1,
+    "provider": "duckduckgo",
+    "query": "ai news",
+    "result_count": 5,
+    "cached": false,
+    "at": "2026-11-01T12:00:00.000Z"
+  }
+}

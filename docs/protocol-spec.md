@@ -69,6 +69,16 @@ Example:
 }
 ```
 
+## AgentProgressEvent
+
+Agent progress event, discriminated by `type` (the connector shape).
+
+Example:
+
+```json
+"<value>"
+```
+
 ## AgentRunBudgets
 
 Effective budgets for one agentic run.
@@ -841,7 +851,7 @@ Example:
 
 ## ConfirmationDecidedBy
 
-Who or what resolved the confirmation — no agent variant exists.
+Who or what resolved the confirmation — no agent variant exists. user_interactive: a person at the terminal prompt; user_cli_confirm: a person running `yantra confirm`; timeout: the bounded wait expired; user_app: a person answered in the Yantra app (FEAT-068; added in FEAT-063, readable by new executables only).
 
 Example:
 
@@ -1755,6 +1765,32 @@ Example:
 }
 ```
 
+## LiveItem
+
+One declared requirement and how far the run has got with it.
+
+| Field | Description                                                             |
+| ----- | ----------------------------------------------------------------------- |
+| id    | Requirement id, such as `fill:email` or `artifact:screenshot:viewport`. |
+| kind  | What kind of requirement the item tracks.                               |
+| label | Short human label, at most 60 characters.                               |
+| state | pending (untouched), advancing (related work happened), or met.         |
+| done  | Units done, or null when not counted.                                   |
+| total | Units required, or null when not counted.                               |
+
+Example:
+
+```json
+{
+  "id": "<id>",
+  "kind": "<kind>",
+  "label": "<label>",
+  "state": "<state>",
+  "done": "<done>",
+  "total": "<total>"
+}
+```
+
 ## LocatorCandidate
 
 Candidate locator entry in workflow \_locators block.
@@ -2251,6 +2287,38 @@ Example:
 "button"
 ```
 
+## RunEvent
+
+One run event, discriminated by `kind`.
+
+Example:
+
+```json
+"<value>"
+```
+
+## RunEventRecord
+
+One sequence-numbered run event, as written to run-events.jsonl.
+
+| Field          | Description                                                            |
+| -------------- | ---------------------------------------------------------------------- |
+| schema_version | Envelope version; a reader rejects an unknown major.                   |
+| seq            | Gap-free, strictly increasing sequence number, assigned by the writer. |
+| run_id         | The owning run.                                                        |
+| event          | One run event, discriminated by `kind`.                                |
+
+Example:
+
+```json
+{
+  "schema_version": "<schema_version>",
+  "seq": "<seq>",
+  "run_id": "<run_id>",
+  "event": "<event>"
+}
+```
+
 ## RunHealth
 
 An agentic run's own health summary (run-health.json): searches, fetches, source failures, browser launches, budgets, tool failures, and runtime notices. Counts and closed codes only.
@@ -2287,6 +2355,16 @@ Example:
   "extraction": "<extraction>",
   "capture": "<capture>"
 }
+```
+
+## RunRelativePath
+
+Run-relative POSIX path of a file inside the run directory.
+
+Example:
+
+```json
+"<value>"
 ```
 
 ## ScalarValue
@@ -2673,7 +2751,7 @@ Example:
 
 ## TerminationReason
 
-Why the run stopped: stalled (no progress after recovery), turn-timeout (thinking limit), the model finished, a budget or the repeated-failure breaker ended it, a handoff was raised, the user aborted, or the provider failed. wall-clock-soft means the model finished after the exploration wind-down began.
+Why the run stopped: stalled (no progress after recovery), turn-timeout (thinking limit), the model finished, a budget or the repeated-failure breaker ended it, a handoff was raised, the user aborted, or the provider failed. wall-clock-soft means the model finished after the exploration wind-down began. owner_lost means the process that owned the run died before writing a terminal result, and a reconciler recorded the end (FEAT-064). Added in FEAT-063: readable by new executables only.
 
 Example:
 
