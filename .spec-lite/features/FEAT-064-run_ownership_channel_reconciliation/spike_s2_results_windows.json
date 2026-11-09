@@ -1,0 +1,582 @@
+{
+  "environment": {
+    "platform": "win32",
+    "arch": "x64",
+    "release": "10.0.26300",
+    "node": "v24.15.0",
+    "ci": false,
+    "runnerOs": null,
+    "tmpdir": "C:\\Users\\abran\\AppData\\Local\\Temp",
+    "startedAt": "2026-11-09T13:58:21.845Z"
+  },
+  "note": "Full local run plus the append-only sidecar rows from a scenario-6 rerun (2026-11-09T19:13:56.549Z).",
+  "results": [
+    {
+      "scenario": "1a",
+      "name": "worker survives the parent exiting normally",
+      "expected": true,
+      "actual": true,
+      "pass": true,
+      "details": {
+        "pids": {
+          "launcherPid": 28004,
+          "workerPid": 21876,
+          "via": "direct"
+        },
+        "inheritedEnv": true
+      }
+    },
+    {
+      "scenario": "1b",
+      "name": "worker survives a hard kill of the parent (taskkill /F)",
+      "expected": true,
+      "actual": true,
+      "pass": true,
+      "details": {
+        "launcherDead": true,
+        "pids": {
+          "launcherPid": 26420,
+          "workerPid": 20176,
+          "via": "direct"
+        }
+      }
+    },
+    {
+      "scenario": "1c",
+      "name": "worker survives closing the launching console window",
+      "expected": true,
+      "actual": true,
+      "pass": null,
+      "details": {
+        "method": "WM_CLOSE to 1 window(s) of 1 console host(s); then console host killed",
+        "launcherDiedWithConsole": false
+      }
+    },
+    {
+      "scenario": "1d",
+      "name": "tree kill of a live parent (taskkill /T /F), spawn direct",
+      "expected": null,
+      "actual": "killed",
+      "pass": null,
+      "details": {
+        "workerAliveAfter1s": false
+      }
+    },
+    {
+      "scenario": "1d",
+      "name": "tree kill of a live parent (taskkill /T /F), spawn trampoline",
+      "expected": "survives",
+      "actual": "survives",
+      "pass": true,
+      "details": {
+        "workerAliveAfter1s": true
+      }
+    },
+    {
+      "scenario": "1e",
+      "name": "environment: is this harness inside a Job object?",
+      "expected": null,
+      "actual": {
+        "inJob": true,
+        "limitFlags": 15360
+      },
+      "pass": null,
+      "details": {
+        "killOnClose": true,
+        "breakawayOk": true,
+        "silentBreakawayOk": true
+      }
+    },
+    {
+      "scenario": "1e",
+      "name": "worker inside a job: KILL_ON_JOB_CLOSE, direct spawn",
+      "expected": null,
+      "actual": "killed",
+      "pass": null,
+      "details": {
+        "harness": "job:ok",
+        "worker": null
+      }
+    },
+    {
+      "scenario": "1e",
+      "name": "worker inside a job: KILL_ON_JOB_CLOSE + BREAKAWAY_OK, direct spawn",
+      "expected": null,
+      "actual": "killed",
+      "pass": null,
+      "details": {
+        "harness": "job:ok",
+        "worker": null
+      }
+    },
+    {
+      "scenario": "1e",
+      "name": "worker inside a job: KILL_ON_JOB_CLOSE + SILENT_BREAKAWAY_OK, direct spawn",
+      "expected": "survives",
+      "actual": "survives",
+      "pass": true,
+      "details": {
+        "harness": "job:ok",
+        "worker": {
+          "pid": 29460,
+          "importMs": 1419,
+          "identityMs": 613,
+          "claimMs": 2035,
+          "socketKind": "pipe",
+          "inheritedEnv": true
+        }
+      }
+    },
+    {
+      "scenario": "1e",
+      "name": "worker inside a job: KILL_ON_JOB_CLOSE, WMI Win32_Process.Create spawn",
+      "expected": null,
+      "actual": "survives",
+      "pass": null,
+      "details": {
+        "harness": "job:ok",
+        "worker": {
+          "pid": 24928,
+          "importMs": 1540,
+          "identityMs": 636,
+          "claimMs": 2179,
+          "socketKind": "pipe",
+          "inheritedEnv": false
+        }
+      }
+    },
+    {
+      "scenario": "2b",
+      "name": "random named pipe listens and accepts",
+      "expected": true,
+      "actual": true,
+      "pass": true,
+      "details": {
+        "address": "\\\\.\\pipe\\yantra-<32 hex>",
+        "listenMs": 3,
+        "connectMs": 6
+      }
+    },
+    {
+      "scenario": "2b",
+      "name": "a second listener on the same pipe name is refused",
+      "expected": false,
+      "actual": false,
+      "pass": true,
+      "details": {
+        "code": "EADDRINUSE"
+      }
+    },
+    {
+      "scenario": "2c",
+      "name": "unauthenticated client gets 0 bytes: no hello within the deadline",
+      "expected": "0 bytes, closed",
+      "actual": "0 bytes, closed",
+      "pass": true,
+      "details": {
+        "closeMs": 507
+      }
+    },
+    {
+      "scenario": "2c",
+      "name": "unauthenticated client gets 0 bytes: wrong token (same length)",
+      "expected": "0 bytes, closed",
+      "actual": "0 bytes, closed",
+      "pass": true,
+      "details": {
+        "closeMs": 37
+      }
+    },
+    {
+      "scenario": "2c",
+      "name": "unauthenticated client gets 0 bytes: token of a different length",
+      "expected": "0 bytes, closed",
+      "actual": "0 bytes, closed",
+      "pass": true,
+      "details": {
+        "closeMs": 27
+      }
+    },
+    {
+      "scenario": "2c",
+      "name": "unauthenticated client gets 0 bytes: non-hello first frame",
+      "expected": "0 bytes, closed",
+      "actual": "0 bytes, closed",
+      "pass": true,
+      "details": {
+        "closeMs": 35
+      }
+    },
+    {
+      "scenario": "2c",
+      "name": "unauthenticated client gets 0 bytes: 17 KiB first frame header",
+      "expected": "0 bytes, closed",
+      "actual": "0 bytes, closed",
+      "pass": true,
+      "details": {
+        "closeMs": 34
+      }
+    },
+    {
+      "scenario": "2c",
+      "name": "unauthenticated client gets 0 bytes: garbage type byte",
+      "expected": "0 bytes, closed",
+      "actual": "0 bytes, closed",
+      "pass": true,
+      "details": {
+        "closeMs": 39
+      }
+    },
+    {
+      "scenario": "2d",
+      "name": "hello delivered one byte at a time is decoded",
+      "expected": true,
+      "actual": true,
+      "pass": true,
+      "details": {}
+    },
+    {
+      "scenario": "2d",
+      "name": "three coalesced frames each answered (20 events, 2 pongs)",
+      "expected": "20/2",
+      "actual": "20/2",
+      "pass": true,
+      "details": {}
+    },
+    {
+      "scenario": "2d",
+      "name": "unknown message type gets error{unsupported} and the connection survives",
+      "expected": "unsupported/open",
+      "actual": "unsupported/open",
+      "pass": true,
+      "details": {}
+    },
+    {
+      "scenario": "2c",
+      "name": "server rejection counters",
+      "expected": null,
+      "actual": {
+        "hello_deadline": 1,
+        "bad_token": 2,
+        "non_hello_first": 1,
+        "fatal_hello": 2
+      },
+      "pass": null,
+      "details": {}
+    },
+    {
+      "scenario": "3",
+      "name": "reattached host replays from from_seq while the worker keeps emitting: no gap, no duplicate",
+      "expected": true,
+      "actual": true,
+      "pass": true,
+      "details": {
+        "host1Received": 162,
+        "host2From": 163,
+        "fileSeqAtReattach": 263,
+        "replayedWhileEmitting": 101,
+        "host2Received": 441,
+        "host2Exit": 0,
+        "missing": [],
+        "fileEvents": 603,
+        "lastEvent": "run_outcome",
+        "host2Anomalies": {
+          "duplicates": 0,
+          "gaps": 0
+        },
+        "reattachFirstEventMs": 14,
+        "workerPid": 24140
+      }
+    },
+    {
+      "scenario": "3",
+      "name": "lease removed only after the terminal event (completion evidence first)",
+      "expected": true,
+      "actual": true,
+      "pass": true,
+      "details": {}
+    },
+    {
+      "scenario": "4",
+      "name": "answer after reconnect is accepted; repeat on the same connection is already_decided",
+      "expected": "accepted,already_decided",
+      "actual": "accepted,already_decided",
+      "pass": true,
+      "details": {}
+    },
+    {
+      "scenario": "4",
+      "name": "a different client answering later gets already_decided",
+      "expected": "already_decided",
+      "actual": "already_decided",
+      "pass": true,
+      "details": {}
+    },
+    {
+      "scenario": "4",
+      "name": "exactly one decision persisted",
+      "expected": 1,
+      "actual": 1,
+      "pass": true,
+      "details": {}
+    },
+    {
+      "scenario": "3",
+      "name": "owner exits without draining its sockets: does the live client get the terminal event?",
+      "expected": null,
+      "actual": "lost (present only in run-events.jsonl)",
+      "pass": null,
+      "details": {
+        "host2Exit": 6,
+        "missing": ["603:run_outcome"]
+      }
+    },
+    {
+      "scenario": "5",
+      "name": "Chrome after the owning worker dies: taskkill /F (no /T)",
+      "expected": null,
+      "actual": "gone",
+      "pass": null,
+      "details": {
+        "selfExitMs": 255,
+        "chromeProcessesBefore": 7,
+        "chromeLaunchMs": 1083,
+        "recordedToken": "win32:134387064796495880"
+      }
+    },
+    {
+      "scenario": "5",
+      "name": "reaper leaves no process of that Chrome profile (hard)",
+      "expected": 0,
+      "actual": 0,
+      "pass": true,
+      "details": {
+        "verdicts": [
+          {
+            "pid": 29548,
+            "verdict": "dead"
+          }
+        ],
+        "terminateCalls": 0
+      }
+    },
+    {
+      "scenario": "5",
+      "name": "Chrome after the owning worker dies: taskkill /T /F",
+      "expected": "gone",
+      "actual": "gone",
+      "pass": true,
+      "details": {
+        "selfExitMs": 190,
+        "chromeProcessesBefore": 7,
+        "chromeLaunchMs": 920,
+        "recordedToken": "win32:134387064879478470"
+      }
+    },
+    {
+      "scenario": "5",
+      "name": "reaper leaves no process of that Chrome profile (tree)",
+      "expected": 0,
+      "actual": 0,
+      "pass": true,
+      "details": {
+        "verdicts": [
+          {
+            "pid": 16136,
+            "verdict": "dead"
+          }
+        ],
+        "terminateCalls": 0
+      }
+    },
+    {
+      "scenario": "5",
+      "name": "reaper terminates a live owned Chrome and confirms its exit by identity",
+      "expected": "1 terminate, 0 left",
+      "actual": "1 terminate, 0 left",
+      "pass": true,
+      "details": {
+        "verdicts": [
+          {
+            "pid": 25636,
+            "verdict": "alive"
+          }
+        ],
+        "chromeProcessesBefore": 7
+      }
+    },
+    {
+      "scenario": "5",
+      "name": "forged entry never signalled: reused PID (wrong start token)",
+      "expected": "not signalled, process alive",
+      "actual": "not signalled, process alive",
+      "pass": true,
+      "details": {
+        "verdicts": [
+          {
+            "pid": 15080,
+            "verdict": "dead"
+          }
+        ],
+        "keptEntries": 0
+      }
+    },
+    {
+      "scenario": "5",
+      "name": "forged entry never signalled: unknown start token",
+      "expected": "not signalled, process alive",
+      "actual": "not signalled, process alive",
+      "pass": true,
+      "details": {
+        "verdicts": [
+          {
+            "pid": 15080,
+            "verdict": "unknown"
+          }
+        ],
+        "keptEntries": 1
+      }
+    },
+    {
+      "scenario": "6",
+      "name": "identifyProcess latency (ms)",
+      "expected": null,
+      "actual": {
+        "p50": 572,
+        "p95": 598,
+        "max": 598
+      },
+      "pass": null,
+      "details": {
+        "sequential": [598, 572, 556, 592, 572, 572, 582, 572, 558, 561],
+        "parallel8WallMs": 879
+      }
+    },
+    {
+      "scenario": "6",
+      "name": "worker startup: import @yantra/core, first currentProcessIdentity(), lease claimed (ms)",
+      "expected": null,
+      "actual": {
+        "importP50": 1419,
+        "identityP50": 612,
+        "identityMax": 854,
+        "claimP50": 2035
+      },
+      "pass": null,
+      "details": {
+        "samples": 12
+      }
+    },
+    {
+      "scenario": "6",
+      "name": "temp-then-rename vs a polling Node reader: no failed update after bounded retry",
+      "expected": 0,
+      "actual": 1,
+      "pass": false,
+      "details": {
+        "label": "Node reader polling readFileSync",
+        "iterations": 300,
+        "failures": 1,
+        "retried": 191,
+        "codes": {
+          "EPERM": 337,
+          "final:EPERM": 1
+        },
+        "reader": ""
+      }
+    },
+    {
+      "scenario": "6",
+      "name": "temp-then-rename vs a Node reader holding the file open",
+      "expected": 0,
+      "actual": 300,
+      "pass": false,
+      "details": {
+        "label": "Node reader holding an fd open",
+        "iterations": 300,
+        "failures": 300,
+        "retried": 0,
+        "codes": {
+          "EPERM": 2700,
+          "final:EPERM": 300
+        },
+        "reader": ""
+      }
+    },
+    {
+      "scenario": "6",
+      "name": "temp-then-rename while a .NET reader holds the lease with FileShare.Read",
+      "expected": null,
+      "actual": "20/20 updates failed after bounded retry",
+      "pass": null,
+      "details": {
+        "codes": {
+          "EPERM": 180,
+          "final:EPERM": 20
+        }
+      }
+    },
+    {
+      "scenario": "6",
+      "name": "temp-then-rename while a .NET reader holds the lease with FileShare.ReadWrite, Delete",
+      "expected": null,
+      "actual": "20/20 updates failed after bounded retry",
+      "pass": null,
+      "details": {
+        "codes": {
+          "EPERM": 180,
+          "final:EPERM": 20
+        }
+      }
+    },
+    {
+      "scenario": "6",
+      "name": "link()-based exclusive claim: exactly one winner in each of 10 rounds of 8 racers",
+      "expected": "1,1,1,1,1,1,1,1,1,1",
+      "actual": "1,1,1,1,1,1,1,1,1,1",
+      "pass": true,
+      "details": {}
+    },
+    {
+      "scenario": "6",
+      "name": "hard links supported in the data directory filesystem",
+      "expected": null,
+      "actual": true,
+      "pass": null,
+      "details": {
+        "dir": "C:\\Users\\abran\\AppData\\Local\\Temp\\yantra-s2-lhhg3m\\contention"
+      }
+    },
+    {
+      "scenario": "6",
+      "name": "reader polling during 50 claims never sees a partial lease",
+      "expected": 0,
+      "actual": 0,
+      "pass": true,
+      "details": {
+        "ok": 13661,
+        "partial": 0
+      }
+    },
+    {
+      "scenario": "6",
+      "name": "append-only sidecar while a Node reader holds it open: failed appends",
+      "expected": 0,
+      "actual": 0,
+      "pass": true,
+      "details": {
+        "codes": {}
+      }
+    },
+    {
+      "scenario": "6",
+      "name": "append-only sidecar while a .NET reader holds it with FileShare.ReadWrite: failed appends",
+      "expected": 0,
+      "actual": 0,
+      "pass": true,
+      "details": {
+        "codes": {}
+      }
+    }
+  ]
+}

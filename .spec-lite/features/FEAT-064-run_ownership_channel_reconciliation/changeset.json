@@ -1,0 +1,93 @@
+{
+  "vcs": "git",
+  "files": [
+    {
+      "path": ".github/workflows/spike-s2.yml",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/spikes/s2-worker-recovery/actors/host.mjs",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/spikes/s2-worker-recovery/actors/job.ps1",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/spikes/s2-worker-recovery/actors/launcher.mjs",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/spikes/s2-worker-recovery/actors/sleeper.mjs",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/spikes/s2-worker-recovery/actors/worker.mjs",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/spikes/s2-worker-recovery/lib/channel.mjs",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/spikes/s2-worker-recovery/lib/frame.mjs",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/spikes/s2-worker-recovery/lib/util.mjs",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/spikes/s2-worker-recovery/README.md",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/spikes/s2-worker-recovery/run-spike.mjs",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "eslint.config.js",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    }
+  ],
+  "excluded": [
+    ".spec-lite/features/FEAT-064-run_ownership_channel_reconciliation/changeset.json",
+    ".spec-lite/features/FEAT-064-run_ownership_channel_reconciliation/spec.md",
+    ".spec-lite/features/FEAT-064-run_ownership_channel_reconciliation/spike_s2_report.md",
+    ".spec-lite/features/FEAT-064-run_ownership_channel_reconciliation/spike_s2_results_windows.json",
+    ".spec-lite/features/FEAT-066-run_results_audit/spec.md",
+    ".spec-lite/plan_ui.md"
+  ],
+  "baseline": {
+    "sha": "2f55a680e268dca2a641598a94acb11210f5f3d9",
+    "capturedAt": "2026-11-09T05:13:26.896Z",
+    "dirtyAtBaseline": [],
+    "dirtyBlobHashes": {},
+    "workflow": "ft/feat-064-run-ownership-channel-reconciliation@2f55a680e268dca2a641598a94acb11210f5f3d9"
+  },
+  "featureId": "FEAT-064"
+}

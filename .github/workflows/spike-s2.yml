@@ -1,0 +1,60 @@
+# TEMPORARY — FEAT-064 TASK-001 spike S2 (detached worker and recovery on three OSes).
+# Removed by FEAT-064 TASK-014. Runs on pushes to the feature branch because GitHub only
+# dispatches workflows whose default-branch copy declares `workflow_dispatch`.
+name: spike-s2
+
+on:
+  push:
+    branches: [ft/feat-064-run-ownership-channel-reconciliation]
+    paths:
+      - 'e2e/spikes/s2-worker-recovery/**'
+      - '.github/workflows/spike-s2.yml'
+  workflow_dispatch:
+
+jobs:
+  spike-s2:
+    name: spike-s2 / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build core
+        run: pnpm exec turbo run build --filter=@yantra/core
+
+      - name: Provision fixed Chrome for Testing
+        working-directory: packages/core
+        run: pnpm exec tsx tests/helpers/provision-test-browser.ts
+
+      - name: Run spike S2
+        shell: bash
+        run: >-
+          node e2e/spikes/s2-worker-recovery/run-spike.mjs
+          --out "spike-s2-${{ runner.os }}.json"
+          --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload spike results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spike-s2-${{ runner.os }}
+          path: spike-s2-${{ runner.os }}.json
+          if-no-files-found: warn
