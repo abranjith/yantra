@@ -321,7 +321,7 @@
     },
     {
       "path": "e2e/run-events.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-013"
     },
