@@ -699,6 +699,6 @@ FEAT-072` to this spec's State Tracking. The FEAT-072 implementer then calls the
 - [x] TASK-010: CLI renderers consume the union; `ask`/`research`/`run`/`resume` route their live output through the stream
 - [x] TASK-011: Agentic runs (`do`, agentic `ask`/`research`) write their progress through the stream
 - [x] TASK-012: `receipt_written` emission
-- [ ] TASK-013: Acceptance suite: counterparts, gap-free `seq`, canary, old fixtures; Audit Trail listing
+- [x] TASK-013: Acceptance suite: counterparts, gap-free `seq`, canary, old fixtures; Audit Trail listing
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

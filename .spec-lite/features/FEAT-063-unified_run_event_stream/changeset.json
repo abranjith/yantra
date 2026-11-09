@@ -302,10 +302,28 @@
       "task": "TASK-010"
     },
     {
+      "path": "docs/architecture.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "docs/features/diagnostics-and-audit.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
       "path": "docs/protocol-spec.md",
       "status": "M",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "e2e/run-events.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-013"
     },
     {
       "path": "packages/agent/src/runtime/connector.ts",
@@ -336,6 +354,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-011"
+    },
+    {
+      "path": "packages/core/src/audit/report-builder.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-013"
     },
     {
       "path": "packages/core/src/executor/execution-context.ts",
@@ -405,7 +429,7 @@
     },
     {
       "path": "packages/core/src/run-events/receipt-written.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
@@ -446,6 +470,12 @@
       "task": "TASK-007"
     },
     {
+      "path": "packages/core/tests/audit/report-builder.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
       "path": "packages/core/tests/extraction/ask-run-events.spec.ts",
       "status": "A",
       "role": "implement",
@@ -477,7 +507,7 @@
     },
     {
       "path": "packages/core/tests/run-events/receipt-written.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
@@ -897,6 +927,7 @@
     }
   ],
   "excluded": [
+    ".spec-lite/feature-summary.md",
     ".spec-lite/features/FEAT-063-unified_run_event_stream/changeset.json",
     ".spec-lite/features/FEAT-063-unified_run_event_stream/spec.md",
     ".spec-lite/plan_ui.md"

@@ -177,6 +177,27 @@ the command at a line break. PowerShell's own resolution of `yantra` picks the `
 which carries everything, and because the formatter wraps quoted PowerShell values in literal
 double quotes, `& | < > ^` and a lone `%` survive the `.cmd` route too.
 
+The run-event contract (FEAT-063) is `RunEvent` in `src/schemas/run-event.ts`: one union,
+discriminated by `kind`, of every `TaskEvent`, the seven agent progress variants, and the run-level
+facts `goal_echo`, `run_warning` (with `source` `command` or `agent`), `receipt_written`,
+`budget_snapshot`, `artifact_saved`, `intervention_raised`/`intervention_resolved`, `run_outcome`,
+the deterministic phases `search_completed`, `source_fetched`, `extract_completed` and
+`synthesize_started`, and `event_omitted`. `RUN_EVENT_KINDS` lists the kinds in union order. The
+agent progress shapes live in `src/schemas/agent-progress.ts` and are defined once: they build both
+the connector-facing `AgentProgressEvent` (discriminated by `type`, which `@yantra/agent` now
+re-exports from protocol) and the matching `RunEvent` variants. `toRunEvent` and
+`toAgentProgressEvent` rename only `type` and `kind` and keep every other key in order, including
+the camelCase `durationMs`, so `--json` bytes survive the round trip. Each line of
+`run-events.jsonl` is a `RunEventRecord` envelope: `schema_version: "1"`, a writer-assigned `seq`,
+`run_id`, and the event. Text fields are bounded and control-free, `goal_echo.display` is capped
+at `GOAL_ECHO_DISPLAY_MAX` (512, enough for today's longest echo), and a line is capped at
+`MAX_RUN_EVENT_LINE_BYTES` (262,144). `INTERVENTION_EVENT_KINDS` and `TERMINAL_EVENT_KINDS` name
+the kinds that force a sync. `parseRunEventLine` classifies one line as an `event`, an
+`unknown_kind` (a well-formed envelope from a newer writer, never an error), or `invalid`.
+`RunEventDelivery` (`seq`, `committed`, `event`) is the in-process value a subscriber receives and
+is never persisted. The same feature adds `owner_lost` to `TerminationReason` and `user_app` to
+`ConfirmationDecidedBy` for FEAT-064 and FEAT-068.
+
 ### `packages/core`
 
 `@yantra/core` contains provider-independent domain and infrastructure services:
@@ -195,6 +216,7 @@ double quotes, `& | < > ^` and a lone `%` survive the `.cmd` route too.
 - ethics, robots, rate limiting, sanitization, user-input masking, secret resolution, and security
   scope enforcement;
 - filesystem stores for workflows, run artifacts, profiles, report templates, and ask cache;
+- the run-event stream and its single-writer `run-events.jsonl` log (`src/run-events/`);
 - the local SQLite index for history, preferences, persistent rate limits, schedules, and domain
   ranks; and
 - the local scheduler daemon, notification adapters, audit writers, and diagnostics.
@@ -1324,6 +1346,125 @@ reader. `processSource` (`packages/core/src/extraction/source-processor.ts`) tak
 the readable text, and the analysis rides on `ProcessedSource.page`. Only `web_search` passes it;
 without it, `processSource` stays article-only.
 
+#### Run-event stream and log
+
+Every run — `ask`, `research`, `do`, `run`, `resume`, a daemon fire, or a nested workflow — writes
+one ordered, gap-free record of what happened while it ran, `<runDir>/run-events.jsonl`.
+`packages/core/src/run-events/` holds the whole mechanism. Producers emit `RunEvent`s into a
+per-run `RunEventStream`. The stream appends each event through the run's single
+`RunEventLog` and only then delivers it to subscribers.
+
+```mermaid
+flowchart LR
+  subgraph Producers
+    Cmd[CLI command<br/>goal_echo, command run_warning]
+    Bus[MirroringEventBus<br/>executor, replay, ask and research TaskEvents]
+    Phases[AskPipeline and ResearchLoop<br/>phase events, budget_snapshot]
+    Agent[Agent orchestrator<br/>progress, agent run_warning, budget_snapshot]
+    Consent[RecordingConfirmationGateway<br/>intervention_raised and resolved]
+    Receipt[recordReceiptWritten<br/>receipt_written]
+    Facts[Run-fact builders<br/>artifact_saved, run_outcome]
+  end
+  Bus --> EventsFile[events.jsonl, unchanged]
+  Cmd --> Stream[RunEventStream]
+  Bus -->|mirrorOf| Stream
+  Phases --> Stream
+  Agent --> Stream
+  Consent --> Stream
+  Receipt --> Stream
+  Facts --> Stream
+  Stream -->|pre-open buffer, up to 64| Buffer[Buffered events]
+  Buffer -->|committed first on open| Log[RunEventLog<br/>single writer]
+  Stream -->|once open: append, then deliver| Log
+  Log --> File[run-events.jsonl]
+  Stream -->|committed deliveries with seq| Committed[Committed subscribers<br/>onEvent, tests, future app relays]
+  Stream -->|every delivery, including pre-open and degraded| Owner[includeUncommitted subscriber<br/>the owning process's one renderer]
+```
+
+**One writer, one sequence.** `RunEventLog` (`log.ts`) is the only code that writes the file. It
+opens the file for append with mode `0o600`, assigns `seq` itself (strictly increasing by one from
+the last valid line), validates each event against the protocol `RunEvent` schema and writes the
+parsed value, so unknown keys never reach disk. `append` is synchronous (`fs.writeSync` until the
+whole line is written), so every existing producer keeps a synchronous `emit`. On open,
+`scanRunEventsTail` (`reader.ts`) reads backwards from the end of the file to find the last valid
+record. A trailing partial line is truncated, and `seq` continues after the last valid record. A
+line over `MAX_RUN_EVENT_LINE_BYTES` is replaced by an `event_omitted` marker that keeps the
+original kind and size. `fdatasync` runs immediately after an intervention or terminal kind, after
+`RUN_EVENTS_SYNC_EVERY` (50) unsynced appends, `RUN_EVENTS_SYNC_INTERVAL_MS` (1 s) after the first
+unsynced append on an unref'd timer, and on `close()`. A failed interval sync is logged once as
+`run_events_sync_failed`, because the bytes were already written. Ownership is by construction:
+only the process that created the run directory opens the log. FEAT-064's lease is still a marked
+stub. Readers never trust the tail: `readRunEvents` streams a file line by line from an optional
+`fromSeq` and never yields an unterminated last line.
+
+**Persist before publish, with one pre-open exception.** Once the stream is open, an event is
+appended before any subscriber sees it, and a committed subscriber (the default) receives only
+appended events, each with its `seq`. A subscriber that passes `includeUncommitted: true` also
+receives events emitted before the log exists. Only the owning process's own terminal or JSON
+renderer subscribes this way. Commands emit the goal echo and pre-run warnings before the run
+directory exists, and validation can still end the command with no run at all. Those events are
+delivered at once with `seq: null`, held in a buffer of at most `PRE_OPEN_BUFFER_LIMIT` (64; the
+oldest are dropped and the overflow is logged on open), and committed as the log's first lines on
+`open()` with their original `at`. They are not delivered to the renderer a second time. No
+committed subscriber can exist before the log opens, so a committed reader always sees a gap-free
+sequence.
+
+**Degraded mode and isolation.** If an append throws (for example `ENOSPC` or `EACCES`), the
+stream logs one `run_events_degraded` error carrying only the error code, closes the log, and
+stops delivering to committed subscribers. It keeps serving `includeUncommitted` subscribers with
+`seq: null`, so the terminal behaves exactly as before and a disk fault never aborts the run. An
+event that fails schema validation is dropped and logged once per kind (`run_events_invalid`)
+without degrading the log, and a listener that throws is logged once and isolated from the run
+and from every other listener. Emits after `close()` are dropped and logged once per kind.
+`RUN_OUTCOME_DUPLICATE` is the one error `emit` rethrows, because a second outcome is a producer
+bug, not a disk fault.
+
+**Producers.** Each producer reaches the stream through one shared seam:
+
+- `openTaskEventBus(runDir, stream)` (`mirroring-event-bus.ts`) replaces every direct `events.jsonl`
+  bus. Its `MirroringEventBus` publishes each `TaskEvent` to `events.jsonl` exactly as before and
+  mirrors it into the stream. `mirrorOf` changes one field: `research_hop_completed.queries`, which
+  `events.jsonl` has always stored raw, passes through `boundedQuery`, the same run-input
+  redaction the phase events use. Closing the bus closes `events.jsonl` only, because the outcome
+  still follows.
+- `AskPipeline` and `ResearchLoop` emit `search_completed`, `source_fetched`, `extract_completed`
+  and `synthesize_started` through the builders in `phase-fields.ts`. Queries are redacted and
+  bounded, URLs keep only origin and path, and control characters are stripped. `ResearchLoop`
+  also emits a `budget_snapshot` after each hop.
+- `RecordingConfirmationGateway` (`recording-confirmation-gateway.ts`) wraps any confirmation
+  requester. It emits `intervention_raised` (with the sanitized request and its absolute
+  `deadline_at`, or null) before the wait and `intervention_resolved` after a decision. A parked
+  daemon request stays raised, and a gateway that throws records nothing further. The executor
+  wraps its gateway in `createExecutionContext` when the run has a stream, and the agent wraps its
+  confirmation bridge.
+- `recordReceiptWritten` (`receipt-written.ts`) hashes the receipt file that
+  `writeExecutionReceipt` just published and emits `receipt_written` with the SHA-256 of its exact
+  bytes. The path is `execution-receipt.json`, or `execution-receipt.resume-<n>.json` for a resume.
+- `emitArtifactSaved` and `runOutcomeEvent` (`run-facts.ts`) build `artifact_saved` (run-relative
+  path only, media type by extension, size from disk or null) and the run's `run_outcome`.
+
+**Stream ownership and the outcome rule.** A stream is per run, while one `RunOrchestrator` can
+drive many runs (the daemon, nested `workflow_run`). The stream is therefore passed per call, as
+`RunRequest.runEvents`, `resume(runId, { runEvents })`, `AskQuery.runEvents`,
+`ResearchOptions.runEvents` or `AgenticTaskRequest.runEvents`, never as a constructor option.
+Without one, the run constructs, opens and closes its own, which is how daemon fires and nested
+workflows write their logs. Whoever owns the stream records exactly one `run_outcome` per
+execution, as its last event. The run records it for every outcome it returns, with the exit code
+that outcome maps to. When the run throws, `abandonOwnedStream` records a `failed` outcome (exit 3
+for `ResourceBusyError`, otherwise 2) only on a stream the run owns. A caller-supplied stream is
+left open, so the caller records the outcome with the exit code it actually returns. A log that
+cannot be opened is an environment failure before the run proceeds. Replay and the deterministic
+pipelines record the run as failed (manifest and report), the agent finalizes it as
+`AGENT_RUN_EVENTS_UNAVAILABLE`, and each rethrows the typed `RunEventLogError`.
+`resume` reopens the original run's log, which already ends with the first execution's
+`run_outcome`. The `task_resumed` event starts a new execution segment in the same file, with
+`seq` continuing, and that segment ends in its own `run_outcome`. Both the log and the stream's
+`outcomeRecorded` flag reset on `task_resumed`.
+
+`MarkdownReportBuilder` lists `run-events.jsonl` under the Audit Trail of both its agentic and its
+non-agentic report when the file exists. It checks presence only and never parses the file, so older
+run directories render unchanged.
+
 ### `packages/agent`
 
 `@yantra/agent` owns live model-driven execution. `runAgenticTask()` creates the auditable run,
@@ -1407,6 +1548,24 @@ whether the artifact exists; and the run lock is released last, after the report
 environment that fails partway through construction closes the destination it already opened
 before rethrowing, and the early startup-failure branch, which skips the teardown block entirely,
 closes it itself and writes no run-health summary, so no terminal path leaks a handle.
+
+Agent progress reaches the user only through the run's `RunEventStream` (see "Run-event stream
+and log"). `runAgenticTask()` takes the stream from `AgenticTaskRequest.runEvents`, where the CLI
+command's renderer is already subscribed. When the request has none, the run creates its own and
+subscribes `connectorRelay`, which hands agent progress and `source: 'agent'` warnings back to the
+request's connector, so a connector receives the same callbacks it always did. Redaction warnings
+are emitted before the run directory exists, so they are pre-open events. The stream opens right
+after `createAgentRun`, before the receipt is written. The run's task-event buses are
+`openTaskEventBus` mirrors, and the confirmation bridge is wrapped in
+`RecordingConfirmationGateway`, so a non-interactive `do` records `intervention_raised` followed
+by `intervention_resolved` with `timed_out`. Every `AgentProgressEvent` is emitted through
+`toRunEvent`. Tool activity also emits a `budget_snapshot` of the agent budget at most once per
+second (`BUDGET_SNAPSHOT_INTERVAL_MS`), and the run emits a final one before it finalizes. The run
+converts its own failures into a terminal outcome, so it always records its end itself:
+`recordRunEnd` emits `artifact_saved` for the published Brief or templated-report files, each
+deliverable screenshot and a salvaged `result.md`, then the one `run_outcome`, with the exit code
+`exitCodeForAgenticOutcome` gives, and closes the stream. On the normal path this happens after
+`report.md` is built.
 
 Typed browser startup failures survive the tool boundary. A browser starts lazily, on the first
 tool call that needs a page, so every "no usable browser" condition surfaces inside a tool rather
@@ -2597,6 +2756,37 @@ Deterministic Brief JSON and other structured results use `output.json`.
 prompt uses stdin and the configured diagnostic stream. This keeps the terminal confirmation
 mechanism at the adapter boundary.
 
+Live run output is a projection of the run-event union (FEAT-063). `renderRunEventTerminal`
+(`src/render/run-event-terminal.ts`) and `renderRunEventJson` (`src/render/run-event-json.ts`) each
+switch over every `RunEvent` kind and end in `assertNever`, so a new kind fails to compile until
+it is mapped. The terminal projection prints the goal echo, `warning:` lines, assistant text, the
+`[tool]` lines, `understood:`, `progress:`, `recovery:` and capability-gap lines with the exact
+bytes the CLI printed before the union existed. Every other kind is recorded and prints nothing:
+the consent card is still the gateway's own prompt, and the outcome and result lines are still
+printed by the command. The JSON projection writes the agent progress kinds to stdout as the
+unchanged `agent_progress` NDJSON lines. The goal echo and a command's own (`source: 'command'`)
+warnings still go to stderr, as they always did under `--json`, and agent advisories stay
+suppressed.
+
+Exactly one renderer is subscribed per stream, so nothing prints twice. `src/run-event-output.ts`
+owns that wiring. `subscribeRunEventRenderer` subscribes the selected projection with
+`includeUncommitted: true`, and `createLiveRunEvents` returns a new stream with it already
+subscribed. `ask`, `research`, `run` and `resume` create their stream at command start, so the goal
+echo and advisories (`warningEvent`) render before any run directory exists. They then hand it to
+the pipeline, orchestrator or agent run, and to any connector through
+`CliAgentConnectorOptions.runEvents`. `CommandConnectorIO` subscribes a renderer only to a stream
+it creates itself: `do` lets its connector create one and emits its goal echo through
+`connector.runEvents`. `emitAgentEvent` and `emitAgentWarning` now emit into the stream rather than
+writing, and `ConnectorIO.onEvent` subscribes a committed handler that receives
+`RunEventDelivery` values. Every command ends with `finishRunEvents(stream, exitCode)`. When the
+run threw after its log opened, the stream has no outcome yet, so this records a `run_outcome`
+with the exit code the command actually returns (`exitCodeOfThrown`: a `CommanderError` or
+`CommandFailure` keeps its own code, `ResourceBusyError` or `RunEventLogError` gives 3, anything
+else 2) and then closes the stream. A stream that never opened is closed without writing. An
+unopenable run-event log is therefore an exit-3 environment failure. The `ask:`/`research:`
+settings header stays a direct write: it is configuration, not a run event, and the receipt
+records it.
+
 `runWorkerInvocation` in `src/adapters/worker/worker-adapter.ts`
 validates the requested path and argv through `parseInvocation`, then calls the same
 `executeCommand` and generated tree as the terminal. The worker context takes its working
@@ -2663,7 +2853,10 @@ Task commands (`ask`, `research`, `do`), workflow replay (`run`), scheduled fire
 writes it before location pre-flight and provider startup; deterministic pipelines and replay write
 it before their execution work. Resume and daemon pickup of a granted parked run publish a separate
 `execution-receipt.resume-<k>.json`, preserving the start receipt. Core's receipt argument remains
-optional for direct callers and older run readers.
+optional for direct callers and older run readers. After every receipt write (`ask`, `research`,
+`run`, `resume` and agentic runs), `recordReceiptWritten` emits a `receipt_written` run event
+carrying the receipt's file name and the SHA-256 of its exact bytes. A receipt written before the
+run-event log opens is committed as one of the log's first lines.
 
 The versioned protocol record holds effective non-secret settings with provenance, the command and
 invocation surface/ID, explicit working directory, Yantra version, initial browser selection, and
@@ -2739,6 +2932,16 @@ local operations and refusals without network, model, or Chrome work. Expected r
 Adapter-parity suites compare human and JSON output, exit codes, receipts, and normalized durable
 artifacts across terminal and worker contexts for agentic tasks, replay, scheduling, reads, mutations,
 and initialization. Secure and exempt commands are tested through their refusal contracts.
+
+`apps/cli/tests/live-output-golden.spec.ts` pins every byte a run prints while it runs. It was
+captured before the renderers moved onto the run-event union and still passes unchanged after the
+move. Each scenario runs the real handler through `executeCommand` over a terminal context in a
+sandboxed `YANTRA_HOME`. `ask` and `research` drive the real deterministic pipeline over stub
+stages with a fixed clock, `do` drives the connector the way the agent orchestrator does, and `run`
+and `resume` use a stub orchestrator. Goldens in `tests/fixtures/live-output/` hold each scenario's
+stdout (`.txt`, or `.ndjson` under `--json`) and stderr, compared byte for byte. A stream with no
+file must stay empty. `YANTRA_UPDATE_LIVE_GOLDENS=1` recaptures them, and `.prettierignore`
+excludes the directory.
 
 ### `packages/ui` (Drshya)
 
@@ -3407,6 +3610,53 @@ The scheduler is a lightweight local process. It polls SQLite schedules, skips m
 overlapping fires, and calls the same orchestrator used by interactive `run`. Its confirmation
 gateway can only park and notify; it never grants a protected action automatically.
 
+### Run-event recording
+
+Every run kind follows the same order. A CLI command creates the stream and subscribes its one
+renderer, the run opens it once its run directory exists, and the stream's owner records the
+outcome and closes it. A daemon fire or nested workflow passes no stream, so the orchestrator owns
+one with no renderer. A command that fails validation before any run exists closes a stream that
+never opened, and no file is written.
+
+```mermaid
+sequenceDiagram
+  participant Cmd as CLI command
+  participant R as Renderer (includeUncommitted)
+  participant S as RunEventStream
+  participant Run as Pipeline, orchestrator, or agent run
+  participant L as RunEventLog
+  participant F as run-events.jsonl
+
+  Cmd->>S: createLiveRunEvents subscribes the renderer
+  Cmd->>S: emit goal_echo and command run_warning
+  S-->>R: deliver at once (seq null) and buffer
+  Cmd->>Run: request with runEvents
+  Run->>Run: create run directory
+  Run->>S: open(runDir, runId)
+  S->>L: open, scan tail, truncate a partial last line
+  S->>L: append buffered events first, original at
+  L->>F: lines from the next seq
+  loop while the run executes
+    Run->>S: emit receipt, TaskEvent mirror, phase, progress, budget, intervention, or artifact
+    S->>L: append (sync at intervention, terminal, 50 events, or 1 s)
+    L->>F: one line
+    S-->>R: deliver with seq, after the append
+  end
+  alt the run returns an outcome
+    Run->>S: emit run_outcome with that outcome's exit code
+    Run->>S: close
+  else the run throws on a caller-supplied stream
+    Run-->>Cmd: rethrow, stream left open
+    Cmd->>S: finishRunEvents emits run_outcome with the command's exit code
+    Cmd->>S: close
+  end
+  Note over S,F: Append failure: one run_events_degraded error, log closed,<br/>renderer keeps receiving with seq null
+```
+
+`resume` uses the same sequence on the original run directory. `RunEventLog.open` recovers the tail
+and continues `seq`. The orchestrator emits `task_resumed`, which starts a new execution segment in
+the same file, and that segment ends in its own `run_outcome`.
+
 ## Data Model
 
 Yantra has no remote database and no single relational domain model. Durable state is split by
@@ -3475,6 +3725,20 @@ profile path, full executable path, launch arguments, environment values, creden
 message or stack, whole error objects, raw helper stderr, or raw managed-install detail. Run
 directories written without it stay valid and no protocol schema changes, so the artifact and its
 report entry are purely additive.
+
+The run-event log adds one run artifact and no table. Each run directory has zero or one
+`run-events.jsonl`, written only by the run's single writer, holding `RunEventRecord` lines
+ordered by a gap-free `seq`. Its `TaskEvent` lines are the same objects as the matching
+`events.jsonl` lines, except that `research_hop_completed.queries` is redacted.
+`events.jsonl` itself is unchanged. Joins are by value, not by foreign key.
+`intervention_raised.intervention_id` is the confirmation's `confirmation_id`, the same id
+`confirmations.jsonl` records, and `intervention_resolved` names the same id.
+`artifact_saved.path` resolves inside the run directory, and `receipt_written.path` names the
+start or resume receipt. Each execution segment holds exactly one `run_outcome`, and a
+`task_resumed` line begins the next segment. The log never holds secret values, resolved
+placeholder values, raw page text, a URL with query or userinfo, environment values, tokens, or
+frames. Run directories written before the log, and logs from a newer writer, still read: a
+missing file yields nothing, and an unknown kind is reported as `unknown_kind`.
 
 Run health adds one optional run artifact and no table. `RunHealthLedger` is in-memory, one per
 agentic run; its durable form is `<runDir>/run-health.json`, a `RunHealth` document at
@@ -3608,19 +3872,19 @@ flowchart TD
   Deterministic --> RunDir
 ```
 
-| Store                          | Verified contents and role                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Home `~/.yantra/`              | Fixed installation root (or `YANTRA_HOME`): strict `config.yaml`, human-editable `profile.yaml`, user `blocklist.yaml`, and sanitizer host overrides. Configuration holds references, never resolved secret values.                                                                                                                                                                                                                                                                                                                                                  |
-| Data `workflows/`              | Canonical saved workflow YAML plus optional locator sidecars; preserved as user-owned input.                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| Data `templates/`              | Saved Markdown report templates.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| Data `runs/<run-id>/`          | Canonical observability record: manifest, events, audit/report files, outputs, checkpoints, private `screenshots/*.png`, fetched sources, Brief/document artifacts, traces, and agent session metadata as applicable, plus the agentic operator log `runtime.jsonl` and the counts-only `run-health.json` where they exist. `tool-calls.jsonl` references screenshots by metadata only and is sanitized leaf by leaf, so every record re-parses; the raw provider session can contain image data; neither `runtime.jsonl` nor `run-health.json` is ever model input. |
-| Data `index.db`                | SQLite schema version 4: `history` (with the nullable `task_outcome` column), `preferences`, `rate_limits`, `schedules`, `domain_ranks`, and `meta`. History rows reference run IDs logically and can be rebuilt from run directories; the schema declares no foreign keys between these tables.                                                                                                                                                                                                                                                                     |
-| Data `pi/`                     | Pi session staging, the default pinned auth store, and deterministic `models.json` derived from `config.yaml`. The explicit `agent.pi_auth_path` opt-in changes auth only; no ambient Pi settings, skills, prompts, or model file are loaded.                                                                                                                                                                                                                                                                                                                        |
-| Data `browsers/`               | Managed browser tree: `ready.json` (the one selectable installation), `operation.json` (an exclusive owner/path claim, never a phase log), `coordination/` (mutex and shared use reservations), and one upstream cache in each `installation-<id>` child. Only the child the pointer names is selectable; every other child is an orphan collected by explicit install/update.                                                                                                                                                                                       |
-| Cache `ask/`                   | TTL- and size-bounded deterministic Brief cache keyed by normalized query, search provider, and UTC day.                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| Cache `browser-compatibility/` | One JSON evidence document per executable identity and probe profile, keyed by canonical path, version, stat fingerprint, host, driver version, probe revision, and capability-table hash. Regenerable by a local probe; only successful results are evidence.                                                                                                                                                                                                                                                                                                       |
-| Browser profiles               | Ephemeral profiles in the OS temporary directory by default; workflow-scoped persistent profiles under the data directory when explicitly selected. Compatibility probes use their own ephemeral profile, removed on success and failure alike.                                                                                                                                                                                                                                                                                                                      |
-| OS keychain                    | Search/model credentials and workflow secret values. Artifacts persist opaque references and audit metadata, not resolved values.                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Store                          | Verified contents and role                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Home `~/.yantra/`              | Fixed installation root (or `YANTRA_HOME`): strict `config.yaml`, human-editable `profile.yaml`, user `blocklist.yaml`, and sanitizer host overrides. Configuration holds references, never resolved secret values.                                                                                                                                                                                                                                                                                                                                                                                      |
+| Data `workflows/`              | Canonical saved workflow YAML plus optional locator sidecars; preserved as user-owned input.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Data `templates/`              | Saved Markdown report templates.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Data `runs/<run-id>/`          | Canonical observability record: manifest, events, the ordered `run-events.jsonl` log, audit/report files, outputs, checkpoints, private `screenshots/*.png`, fetched sources, Brief/document artifacts, traces, and agent session metadata as applicable, plus the agentic operator log `runtime.jsonl` and the counts-only `run-health.json` where they exist. `tool-calls.jsonl` references screenshots by metadata only and is sanitized leaf by leaf, so every record re-parses; the raw provider session can contain image data; neither `runtime.jsonl` nor `run-health.json` is ever model input. |
+| Data `index.db`                | SQLite schema version 4: `history` (with the nullable `task_outcome` column), `preferences`, `rate_limits`, `schedules`, `domain_ranks`, and `meta`. History rows reference run IDs logically and can be rebuilt from run directories; the schema declares no foreign keys between these tables.                                                                                                                                                                                                                                                                                                         |
+| Data `pi/`                     | Pi session staging, the default pinned auth store, and deterministic `models.json` derived from `config.yaml`. The explicit `agent.pi_auth_path` opt-in changes auth only; no ambient Pi settings, skills, prompts, or model file are loaded.                                                                                                                                                                                                                                                                                                                                                            |
+| Data `browsers/`               | Managed browser tree: `ready.json` (the one selectable installation), `operation.json` (an exclusive owner/path claim, never a phase log), `coordination/` (mutex and shared use reservations), and one upstream cache in each `installation-<id>` child. Only the child the pointer names is selectable; every other child is an orphan collected by explicit install/update.                                                                                                                                                                                                                           |
+| Cache `ask/`                   | TTL- and size-bounded deterministic Brief cache keyed by normalized query, search provider, and UTC day.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| Cache `browser-compatibility/` | One JSON evidence document per executable identity and probe profile, keyed by canonical path, version, stat fingerprint, host, driver version, probe revision, and capability-table hash. Regenerable by a local probe; only successful results are evidence.                                                                                                                                                                                                                                                                                                                                           |
+| Browser profiles               | Ephemeral profiles in the OS temporary directory by default; workflow-scoped persistent profiles under the data directory when explicitly selected. Compatibility probes use their own ephemeral profile, removed on success and failure alike.                                                                                                                                                                                                                                                                                                                                                          |
+| OS keychain                    | Search/model credentials and workflow secret values. Artifacts persist opaque references and audit metadata, not resolved values.                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 The default data and cache roots are `<home>/data` and `<home>/cache`. `YANTRA_DATA_DIR` and
 `YANTRA_CACHE_DIR` take precedence over `config.yaml`'s respective absolute path, and all three
@@ -3976,6 +4240,26 @@ update` is the only surface that contacts a version server, and only when a huma
   rule. The cost is one read-only element evaluation before every click, taken whatever the
   contract says, because a click that submits or navigates leaves nothing to read afterwards and
   the ledger's submit signal needs it. Under `forbidden` the policy hook takes a second one.
+- **One run-event record, persisted before it is published.** Lifecycle events, agent progress,
+  consent waits, budgets, artifacts and the outcome were split across `events.jsonl`, terminal-only
+  lines and nothing at all. They now share one protocol union and one sequence-numbered file, so
+  the app and any later connector can read one contract instead of scraping terminal text. A
+  single synchronous writer keeps `emit` synchronous for every existing producer and makes `seq`
+  gap-free. A committed reader therefore never sees an event the file lacks. The cost is a write
+  per event and an `fdatasync` at each intervention and terminal event. The one exception is
+  deliberate: the owning process's own renderer sees pre-open events at once, because waiting for
+  the run directory would delay or lose the goal echo and change byte-pinned output. A disk fault
+  degrades the log rather than failing the user's run, which trades a complete record for a run
+  that always finishes.
+- **The CLI renderers are projections of the union.** Each kind is mapped explicitly in an
+  exhaustive switch, so terminal and `--json` output stay byte-identical (pinned by the live-output
+  goldens), and a new kind cannot ship without deciding how it renders. Exactly one renderer is
+  subscribed per stream, so no line prints twice.
+- **Whoever owns the stream records the outcome.** A run records `run_outcome` for every outcome
+  it returns. A caller that handed in a stream records the outcome itself when the run throws, with
+  the exit code it actually returns, so the logged exit code always matches the process exit code.
+  A resume continues the same file, and `task_resumed` begins a new segment, so "exactly one
+  outcome" holds per execution rather than per file.
 - **Fail-closed unattended automation.** Scheduled execution reuses the interactive workflow
   engine but swaps in a park-and-notify confirmation gateway, so the daemon cannot self-authorize
   protected side effects. It also carries no browser-install offer gateway; JSON, non-TTY, daemon,

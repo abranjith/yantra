@@ -1,4 +1,4 @@
-import { copyFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -284,6 +284,68 @@ describe('@no-llm report builder — agentic runs', () => {
     expect(markdown).toContain('- runtime.jsonl');
 
     await rm(runDir, { recursive: true, force: true });
+  });
+
+  describe('run-events.jsonl (FEAT-063)', () => {
+    it('lists run-events.jsonl in an agentic report when the file exists', async () => {
+      const runDir = await mkdtemp(join(tmpdir(), 'yantra-report-run-events-'));
+      await writeAgenticRun(runDir, []);
+      await writeFile(join(runDir, 'run-events.jsonl'), '', 'utf8');
+
+      const markdown = await new MarkdownReportBuilder().build(runDir, 'completed');
+
+      expect(markdown.split('## Audit Trail')[1]).toContain('- run-events.jsonl');
+      await rm(runDir, { recursive: true, force: true });
+    });
+
+    it('lists it in a legacy-shaped report too, and omits it when absent', async () => {
+      const withLog = await mkdtemp(join(tmpdir(), 'yantra-report-run-events-legacy-'));
+      const without = await mkdtemp(join(tmpdir(), 'yantra-report-run-events-legacy-none-'));
+      for (const dir of [withLog, without]) {
+        for (const file of ['manifest.json', 'events.jsonl', 'agent.jsonl', 'secrets.jsonl'])
+          await copyFile(join(fixtureRoot, file), join(dir, file));
+      }
+      await writeFile(join(withLog, 'run-events.jsonl'), '', 'utf8');
+
+      expect(await new MarkdownReportBuilder().build(withLog, 'completed')).toContain(
+        '- run-events.jsonl',
+      );
+      expect(await new MarkdownReportBuilder().build(without, 'completed')).not.toContain(
+        'run-events.jsonl',
+      );
+      await rm(withLog, { recursive: true, force: true });
+      await rm(without, { recursive: true, force: true });
+    });
+
+    it('omits it from a pre-FEAT-063 agentic run directory', async () => {
+      const runDir = await mkdtemp(join(tmpdir(), 'yantra-report-run-events-none-'));
+      await writeAgenticRun(runDir, []);
+
+      expect(await new MarkdownReportBuilder().build(runDir, 'completed')).not.toContain(
+        'run-events.jsonl',
+      );
+      await rm(runDir, { recursive: true, force: true });
+    });
+
+    it('never reads the file: garbage or an unreadable entry changes only the listing', async () => {
+      const runDir = await mkdtemp(join(tmpdir(), 'yantra-report-run-events-opaque-'));
+      await writeAgenticRun(runDir, []);
+      const line = '- run-events.jsonl\n';
+      const builder = new MarkdownReportBuilder();
+      const before = await builder.build(runDir, 'completed');
+
+      await writeFile(join(runDir, 'run-events.jsonl'), '\u0000not json{{{\n', 'utf8');
+      const withGarbage = await builder.build(runDir, 'completed');
+      await rm(join(runDir, 'run-events.jsonl'));
+      // A directory where the file should be cannot be read as a file at all.
+      await mkdir(join(runDir, 'run-events.jsonl'));
+      const withDirectory = await builder.build(runDir, 'completed');
+
+      expect(withGarbage).toContain(line);
+      expect(withGarbage.replace(line, '')).toBe(before);
+      expect(withDirectory).toBe(withGarbage);
+      await rm(runDir, { recursive: true, force: true });
+    });
   });
 
   it('omits runtime.jsonl from a pre-feature run directory that has none', async () => {
