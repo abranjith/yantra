@@ -74,7 +74,7 @@ TASK-002 onward do not start until its report is accepted.
     this claim. This matters for a resumed run whose earlier execution already ended.
   - `claimed_at` (ISO-8601) and `heartbeat_at` (ISO-8601) — the owner rewrites `heartbeat_at`
     every 5 s.
-    > **Amended by spike S2 RC2** (accepted 2026-11-09): the lease is immutable after its `link` claim. `heartbeat_at` is not rewritten (it equals `claimed_at`), and `owned_browsers` is not stored here: owned-browser identities live in the append-only `<runDir>/owned-browsers.jsonl` (`{op: 'spawned' | 'exited', pid, start_token, at}`, owner-only), folded by readers that ignore a trailing partial line.
+    > **Amended by spike S2 RC2** (accepted 2026-11-09): the lease is immutable after its `link` claim. `heartbeat_at` is dropped (liveness comes from creation identity and the socket heartbeat), and `owned_browsers` is not stored here: owned-browser identities live in the append-only `<runDir>/owned-browsers.jsonl` (`{op: 'spawned' | 'exited', pid, start_token, at}`, owner-only), folded by readers that ignore a trailing partial line.
 - **ExecutionState** (protocol enum, plan §6 "Protocol additions"): exactly one value,
   `interrupted`. It is absent for every execution that ended on its own, so the enum has no dead
   values.
@@ -502,9 +502,9 @@ All paths above are under `packages/core/src/run-channel/`.
 command, log, logger})`: - claims the lease, with `log_seq_at_claim` taken from the FEAT-063 writer; - starts the heartbeat timer (5 s, `unref`). Heartbeat write failures are logged once and never
     crash the run; - exposes `recorder: BrowserOwnershipRecorder`.
 
-                                            `finish()` runs in this order: stop the timers, close the channel (TASK-005), then
-                                            `releaseLease`. The caller has already flushed the terminal event and manifest. `finish()` is
-                                            idempotent.
+                                                `finish()` runs in this order: stop the timers, close the channel (TASK-005), then
+                                                `releaseLease`. The caller has already flushed the terminal event and manifest. `finish()` is
+                                                idempotent.
 
   - **`browser-ownership-recorder.ts`.**
     - `recordSpawned(identity)` appends to `owned_browsers` and flushes before returning.
@@ -974,7 +974,7 @@ tests/commands/list-reconcile.spec.ts` passes;
 process.execPath, workerPath})`.** 1. Exclusively create the launch file (`wx`, `0600`) in `launch.dir`. 2. Call `spawn(nodePath, [workerPath, '--launch', file], {cwd: invocation.cwd, env, detached:
 true, shell: false, stdio: 'ignore', windowsHide: true})`, then `child.unref()`. 3. Return `{pid, identity}`, with the identity captured through `identifyProcess`.
 
-                                            Apply any mitigation the S2 report requires, for example Job-object breakaway on Windows.
+                                                Apply any mitigation the S2 report requires, for example Job-object breakaway on Windows.
 
 - [ ] **Unit Tests** (`launch.spec.ts`, `result-sink.spec.ts`, `spawn.spec.ts`):
   - **Launch validation:**
@@ -1138,7 +1138,7 @@ Error`, `RunChannelFrameError` and `RunOwnershipError`, all with safe, actionabl
 ## 8. State Tracking
 
 - [x] TASK-001: Spike S2 — detached worker and recovery on Windows, macOS and Linux (Windows run; Linux/macOS waived by user 2026-11-09, see TODO)
-- [ ] TASK-002: Protocol schemas — lease, execution state, channel messages, worker launch
+- [x] TASK-002: Protocol schemas — lease, execution state, channel messages, worker launch
 - [ ] TASK-003: Frame codec — one framing grammar with size limits
 - [ ] TASK-004: Exclusive run lease — claim, heartbeat, owned browsers, verdict, release
 - [ ] TASK-005: Authenticated run socket with version and capability handshake

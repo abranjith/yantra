@@ -1299,6 +1299,16 @@ Example:
 }
 ```
 
+## ExecutionState
+
+Set only by the reconciler when the owning process died before writing a terminal result (plan D7). Separate from the outcome, which follows the evidence and is never `aborted`. Absent for every run that ended on its own.
+
+Example:
+
+```json
+"interrupted"
+```
+
 ## ExitCode
 
 No description provided.
@@ -2007,6 +2017,30 @@ Example:
 }
 ```
 
+## OwnedBrowserEvent
+
+An append-only record of a browser process the run spawned or proved exited. Readers fold the lines by identity and ignore a trailing partial line.
+
+| Field          | Description                                                                                 |
+| -------------- | ------------------------------------------------------------------------------------------- |
+| schema_version |                                                                                             |
+| op             | `spawned` as soon as a browser child handle exists; `exited` only after its exit is proved. |
+| pid            |                                                                                             |
+| start_token    | Creation identity; `unknown` keeps the entry uncertain.                                     |
+| at             |                                                                                             |
+
+Example:
+
+```json
+{
+  "schema_version": "<schema_version>",
+  "op": "<op>",
+  "pid": "<pid>",
+  "start_token": "<start_token>",
+  "at": "<at>"
+}
+```
+
 ## ParamDeclaration
 
 Workflow parameter declaration.
@@ -2089,6 +2123,24 @@ Example:
 
 ```json
 "<value>"
+```
+
+## ProcessIdentityRecord
+
+A process creation identity: a PID plus its start token.
+
+| Field       | Description                                                                                                                                 |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| pid         | Process ID.                                                                                                                                 |
+| start_token | Creation identity (platform start time). `unknown` when the platform could not tell; a liveness check then answers `unknown`, never `dead`. |
+
+Example:
+
+```json
+{
+  "pid": "<pid>",
+  "start_token": "<start_token>"
+}
 ```
 
 ## RankedCandidateSchema
@@ -2287,6 +2339,46 @@ Example:
 "button"
 ```
 
+## RunChannelClientMessage
+
+A run-channel message from a client to the run owner.
+
+Example:
+
+```json
+"<value>"
+```
+
+## RunChannelEventPayload
+
+A RunEvent, or an event of a kind this executable does not know.
+
+Example:
+
+```json
+"<value>"
+```
+
+## RunChannelMessage
+
+A run-channel JSON message (frame type 0x01), in either direction.
+
+Example:
+
+```json
+"<value>"
+```
+
+## RunChannelServerMessage
+
+A run-channel message from the run owner to a client.
+
+Example:
+
+```json
+"<value>"
+```
+
 ## RunEvent
 
 One run event, discriminated by `kind`.
@@ -2357,9 +2449,67 @@ Example:
 }
 ```
 
+## RunLease
+
+Exclusive ownership of a run directory, written once by `link` and removed only after the terminal event and manifest are flushed. Owner-only file.
+
+| Field            | Description                                                                                                                               |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| schema_version   | Lease envelope version.                                                                                                                   |
+| run_id           | The owned run; equals the run directory name.                                                                                             |
+| owner            | Creation identity of the owning process.                                                                                                  |
+| origin           | Who launched the run: a terminal command, a detached app worker, or the daemon.                                                           |
+| execution_class  | The command registry's execution class for the invocation (normally `run`).                                                               |
+| command          | Command path, for example `["research"]`. Display only.                                                                                   |
+| socket           | The run socket address: a Unix socket in an owner-only directory, or a named pipe.                                                        |
+| run_token        | Secret that authenticates run-socket clients (32 random bytes, base64url). Never logged, never sent to the model or served to the app.    |
+| channel_version  | Highest run-channel version the owner speaks (D17).                                                                                       |
+| yantra_version   | Version of the Yantra executable that owns the run.                                                                                       |
+| log_seq_at_claim | Last committed `run-events.jsonl` seq at claim: the start of this ownership epoch. A reconciler looks for a terminal event only above it. |
+| claimed_at       | When the lease was claimed.                                                                                                               |
+
+Example:
+
+```json
+{
+  "schema_version": "<schema_version>",
+  "run_id": "<run_id>",
+  "owner": "<owner>",
+  "origin": "<origin>",
+  "execution_class": "<execution_class>",
+  "command": "<command>",
+  "socket": "<socket>",
+  "run_token": "<run_token>",
+  "channel_version": "<channel_version>",
+  "yantra_version": "<yantra_version>",
+  "log_seq_at_claim": "<log_seq_at_claim>",
+  "claimed_at": "<claimed_at>"
+}
+```
+
+## RunLeaseOrigin
+
+Who launched the run: a terminal command, a detached app worker, or the daemon.
+
+Example:
+
+```json
+"terminal"
+```
+
 ## RunRelativePath
 
 Run-relative POSIX path of a file inside the run directory.
+
+Example:
+
+```json
+"<value>"
+```
+
+## RunSocketAddress
+
+The run socket address: a Unix socket in an owner-only directory, or a named pipe.
 
 Example:
 
@@ -2960,6 +3110,50 @@ Example:
   "locator": "<locator>",
   "state": "<state>",
   "timeout_ms": "<timeout_ms>"
+}
+```
+
+## WorkerLaunch
+
+What a detached worker runs. Owner-only, exclusively created; user text never reaches the worker argv.
+
+| Field          | Description                                             |
+| -------------- | ------------------------------------------------------- |
+| schema_version |                                                         |
+| invocation     | A requested command invocation.                         |
+| run_id         | Run ID preallocated by the host slot reservation (D11). |
+| result_path    | Where the worker writes its WorkerResult, once.         |
+
+Example:
+
+```json
+{
+  "schema_version": "<schema_version>",
+  "invocation": "<invocation>",
+  "run_id": "<run_id>",
+  "result_path": "<result_path>"
+}
+```
+
+## WorkerResult
+
+A detached worker's completion: the command's result or error, written once.
+
+| Field          | Description                                                     |
+| -------------- | --------------------------------------------------------------- |
+| schema_version |                                                                 |
+| invocation_id  |                                                                 |
+| run_id         |                                                                 |
+| outcome        | The final completion of a command executed on a worker surface. |
+
+Example:
+
+```json
+{
+  "schema_version": "<schema_version>",
+  "invocation_id": "<invocation_id>",
+  "run_id": "<run_id>",
+  "outcome": "<outcome>"
 }
 ```
 

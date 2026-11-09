@@ -8,6 +8,7 @@
 import type {
   AgentManifestSection,
   Brief,
+  ExecutionState,
   FailureClass,
   Plan,
   TaskOutcome,
@@ -238,6 +239,16 @@ export interface RunManifest {
   taskOutcome?: TaskOutcome;
   /** Why the run stopped, recorded beside the outcome; absent on older runs. */
   terminationReason?: TerminationReason;
+  /**
+   * `interrupted` when the run's owning process died before it could end the
+   * run, and a reconciler wrote the terminal result instead (FEAT-064, plan D7).
+   *
+   * Execution state is separate from the outcome: `taskOutcome` still follows
+   * the evidence (`partial` when a result was persisted, otherwise `failed`,
+   * never `aborted`). The reconciler is the only writer; a resume that takes
+   * over the run clears it. Absent for every run that ended on its own.
+   */
+  executionState?: ExecutionState;
 }
 
 /** Stable agent startup codes persisted without importing the agent package into core. */

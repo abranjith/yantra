@@ -1,0 +1,3 @@
+{"schema_version":1,"op":"spawned","pid":5150,"start_token":"win32:134387061082204350","at":"2026-11-09T12:00:01.000Z"}
+{"schema_version":1,"op":"spawned","pid":5151,"start_token":"unknown","at":"2026-11-09T12:00:02.000Z"}
+{"schema_version":1,"op":"exited","pid":5150,"start_token":"win32:134387061082204350","at":"2026-11-09T12:02:00.000Z"}

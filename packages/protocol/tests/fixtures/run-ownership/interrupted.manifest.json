@@ -1,0 +1,18 @@
+{
+  "runId": "20261109T120000Z-research-0000abcd",
+  "taskId": "01ARZ3NDEKTSV4RRFFQ69G5FAW",
+  "workflowName": "research",
+  "workflowVersion": null,
+  "params": {},
+  "startedAt": "2026-11-09T12:00:00.000Z",
+  "endedAt": "2026-11-09T12:03:10.000Z",
+  "status": "completed",
+  "durationMs": 190000,
+  "profileKind": "ephemeral",
+  "cookieProfilePath": null,
+  "outputBindingNames": [],
+  "runKind": "workflow",
+  "taskOutcome": "partial",
+  "terminationReason": "owner_lost",
+  "executionState": "interrupted"
+}

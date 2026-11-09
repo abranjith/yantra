@@ -3,67 +3,73 @@
   "files": [
     {
       "path": ".github/workflows/spike-s2.yml",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
+      "path": "docs/protocol-spec.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
       "path": "e2e/spikes/s2-worker-recovery/actors/host.mjs",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "e2e/spikes/s2-worker-recovery/actors/job.ps1",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "e2e/spikes/s2-worker-recovery/actors/launcher.mjs",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "e2e/spikes/s2-worker-recovery/actors/sleeper.mjs",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "e2e/spikes/s2-worker-recovery/actors/worker.mjs",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "e2e/spikes/s2-worker-recovery/lib/channel.mjs",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "e2e/spikes/s2-worker-recovery/lib/frame.mjs",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "e2e/spikes/s2-worker-recovery/lib/util.mjs",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "e2e/spikes/s2-worker-recovery/README.md",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "e2e/spikes/s2-worker-recovery/run-spike.mjs",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
@@ -72,6 +78,84 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/workflow/replay/types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/generated/json-schema/run-channel-message.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/generated/json-schema/run-lease.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/generated/json-schema/worker-launch.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/src/emit/json-schema.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/src/schemas/run-channel.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/src/schemas/run-lease.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-ownership/interrupted.manifest.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-ownership/lease-unknown-tokens.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/tests/fixtures/run-ownership/owned-browsers.jsonl",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/tests/run-channel.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/tests/run-lease.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
     }
   ],
   "excluded": [
