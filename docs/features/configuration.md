@@ -364,6 +364,20 @@ path, it requires an absolute target, refuses the current directory and its
 descendants, checks that no daemon/run lock is held, and refuses a non-empty
 target unless `--force` is present.
 
+Before anything moves, it also refuses (exit `3`) while something is still
+writing into the data directory:
+
+- **A live run.** Any run whose owning process is alive, or whose owner cannot
+  be verified, blocks relocation: "data relocation is unavailable while a run is
+  live (run `<id>`, pid `<pid>`); wait for it to finish or stop it, then retry".
+  A run whose owner has died does not block.
+- **The Yantra app.** While the app host is running, relocate in three steps:
+  close the app, run `yantra config data-dir <path>`, then run `yantra ui`. A
+  host lock left by an app that is no longer running does not block, and an
+  unreadable one is reported as a warning and ignored.
+
+`--dry-run` reports the same refusals.
+
 The normal operation moves the current data tree, using copy-then-delete when
 an atomic rename is unavailable across volumes, and writes
 `paths.data_dir` only after the move succeeds. A failed copy leaves the source

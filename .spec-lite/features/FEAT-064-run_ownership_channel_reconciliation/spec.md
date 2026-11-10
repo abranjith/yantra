@@ -502,9 +502,9 @@ All paths above are under `packages/core/src/run-channel/`.
 command, log, logger})`: - claims the lease, with `log_seq_at_claim` taken from the FEAT-063 writer; - starts the heartbeat timer (5 s, `unref`). Heartbeat write failures are logged once and never
     crash the run; - exposes `recorder: BrowserOwnershipRecorder`.
 
-                                                                                        `finish()` runs in this order: stop the timers, close the channel (TASK-005), then
-                                                                                        `releaseLease`. The caller has already flushed the terminal event and manifest. `finish()` is
-                                                                                        idempotent.
+                                                                                            `finish()` runs in this order: stop the timers, close the channel (TASK-005), then
+                                                                                            `releaseLease`. The caller has already flushed the terminal event and manifest. `finish()` is
+                                                                                            idempotent.
 
   - **`browser-ownership-recorder.ts`.**
     - `recordSpawned(identity)` appends to `owned_browsers` and flushes before returning.
@@ -974,7 +974,7 @@ tests/commands/list-reconcile.spec.ts` passes;
 process.execPath, workerPath})`.** 1. Exclusively create the launch file (`wx`, `0600`) in `launch.dir`. 2. Call `spawn(nodePath, [workerPath, '--launch', file], {cwd: invocation.cwd, env, detached:
 true, shell: false, stdio: 'ignore', windowsHide: true})`, then `child.unref()`. 3. Return `{pid, identity}`, with the identity captured through `identifyProcess`.
 
-                                                                                        Apply any mitigation the S2 report requires, for example Job-object breakaway on Windows.
+                                                                                            Apply any mitigation the S2 report requires, for example Job-object breakaway on Windows.
 
 - [x] **Unit Tests** (`launch.spec.ts`, `result-sink.spec.ts`, `spawn.spec.ts`):
   - **Launch validation:**
@@ -1012,7 +1012,7 @@ true, shell: false, stdio: 'ignore', windowsHide: true})`, then `child.unref()`.
 
 > **Amended by spike S2** (accepted 2026-11-09): RC4 (`findLiveOwners` uses the batched probe). See the TASK-001 notes and `spike_s2_report.md` → Required changes.
 
-- [ ] **Implementation**: In `runDataDir` (`apps/cli/src/commands/config.ts`), keep the existing
+- [x] **Implementation**: In `runDataDir` (`apps/cli/src/commands/config.ts`), keep the existing
       `FileDaemonLock.probe()` and managed-use checks. Add two more before any filesystem mutation,
       injected as a dependency with the core function as the default, per the memory note on spying on
       same-module calls:
@@ -1026,7 +1026,7 @@ true, shell: false, stdio: 'ignore', windowsHide: true})`, then `child.unref()`.
 
   `--dry-run` reports the same refusals.
 
-- [ ] **Unit Tests** (`config-data-dir-guard.spec.ts`, sandboxed `YANTRA_HOME`):
+- [x] **Unit Tests** (`config-data-dir-guard.spec.ts`, sandboxed `YANTRA_HOME`):
   - **Live leases:**
     - a live-owner lease refuses with exit 3 and the run ID in the message, and nothing moves (the
       directory is unchanged);
@@ -1036,7 +1036,7 @@ true, shell: false, stdio: 'ignore', windowsHide: true})`, then `child.unref()`.
   - **Host lock:**
     - a live host lock refuses with the D15 steps text;
     - a dead or corrupt host lock does not block. A corrupt file is reported as a warning.
-- [ ] **Documentation Update**: Invoke **Document** update mode for configuration (`config data-dir`
+- [x] **Documentation Update**: Invoke **Document** update mode for configuration (`config data-dir`
       refusals and the close-the-app steps).
 - **Verify**: after building core, `cd apps/cli && npx vitest run
 tests/commands/config-data-dir-guard.spec.ts` passes.
@@ -1154,7 +1154,7 @@ Error`, `RunChannelFrameError` and `RunOwnershipError`, all with safe, actionabl
 - [x] TASK-010: Resume takeover and reconciliation triggers (`yantra list`, CLI run start, host start)
 - [x] TASK-011: Stop service — graceful cancel, identity-verified forced termination, always reconcile
 - [x] TASK-012: Detached worker entry point and the single cross-OS spawn helper
-- [ ] TASK-013: `config data-dir` guard — refuse while live leases or a host lock exist (D15)
+- [x] TASK-013: `config data-dir` guard — refuse while live leases or a host lock exist (D15)
 - [ ] TASK-014: Cross-OS acceptance suite with real processes
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

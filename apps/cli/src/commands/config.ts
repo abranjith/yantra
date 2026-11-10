@@ -11,6 +11,13 @@ import {
   dataDir,
   defaultConfig,
   FileDaemonLock,
+  NodeProcessLivenessProbe,
+  UNKNOWN_START_TOKEN,
+  findLiveOwners,
+  uiHostLockPath,
+  type LiveOwner,
+  type LivenessVerdict,
+  type ProcessLivenessProbe,
   indexDbPath,
   loadConfig,
   profilePath,
@@ -75,6 +82,47 @@ export interface DataDirDependencies {
    * untestable without a second real volume.
    */
   readonly decideManagedTree?: (source: string, target: string) => Promise<ManagedTreeDecision>;
+  /** Runs whose owner is alive or unverifiable (FEAT-064 D15); defaults to core. */
+  readonly findLiveOwners?: () => Promise<readonly LiveOwner[]>;
+  /** The app host lock's state (FEAT-064 D15); defaults to {@link readHostLock}. */
+  readonly hostLock?: () => Promise<HostLockState>;
+}
+
+/** What the app host lock says about a running app host. */
+export type HostLockState =
+  | { readonly kind: 'absent' }
+  | { readonly kind: 'corrupt' }
+  | { readonly kind: 'held'; readonly pid: number; readonly verdict: LivenessVerdict };
+
+/**
+ * Reads `<data>/ui/host.lock` leniently: FEAT-065 owns its schema, so only
+ * `pid` and `start_token` are used. A lock without a start token cannot be
+ * verified and reads as `unknown` (live).
+ */
+export async function readHostLock(
+  probe: ProcessLivenessProbe = new NodeProcessLivenessProbe(),
+): Promise<HostLockState> {
+  let raw: string;
+  try {
+    raw = await readFile(uiHostLockPath(), 'utf8');
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'ENOENT'
+      ? { kind: 'absent' }
+      : { kind: 'corrupt' };
+  }
+  let parsed: { pid?: unknown; start_token?: unknown };
+  try {
+    parsed = JSON.parse(raw) as { pid?: unknown; start_token?: unknown };
+  } catch {
+    return { kind: 'corrupt' };
+  }
+  const pid = parsed.pid;
+  if (typeof pid !== 'number' || !Number.isInteger(pid) || pid <= 0) return { kind: 'corrupt' };
+  const startToken =
+    typeof parsed.start_token === 'string' && parsed.start_token.length > 0
+      ? parsed.start_token
+      : UNKNOWN_START_TOKEN;
+  return { kind: 'held', pid, verdict: await probe.check({ pid, startToken }) };
 }
 
 const DATA_DIR_DEPENDENCIES: DataDirDependencies = {
@@ -392,6 +440,27 @@ async function runDataDir(
     fail(
       context,
       'data relocation is unavailable while a Yantra-managed browser run is active; stop the running sessions and retry',
+      3,
+    );
+  // FEAT-064 D15: a live run or app host still writes into the data directory.
+  // An owner that cannot be verified counts as live.
+  const live = await (deps.findLiveOwners ?? (() => findLiveOwners()))();
+  const first = live[0];
+  if (first !== undefined)
+    fail(
+      context,
+      `data relocation is unavailable while a run is live (run ${first.runId}, pid ${first.pid}); wait for it to finish or stop it, then retry`,
+      3,
+    );
+  const host = await (deps.hostLock ?? (() => readHostLock()))();
+  if (host.kind === 'corrupt')
+    context.output.stderr.write(
+      'Warning: the app host lock could not be read; ignoring it for this relocation.\n',
+    );
+  if (host.kind === 'held' && host.verdict !== 'dead')
+    fail(
+      context,
+      `data relocation is unavailable while the Yantra app is running (pid ${host.pid}): close the app, run \`yantra config data-dir <path>\`, then run \`yantra ui\``,
       3,
     );
   let targetEntries: readonly string[] = [];

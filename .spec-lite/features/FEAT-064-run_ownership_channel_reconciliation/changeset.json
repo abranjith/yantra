@@ -14,6 +14,12 @@
       "task": "TASK-008"
     },
     {
+      "path": "apps/cli/src/commands/config.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
       "path": "apps/cli/src/commands/list.ts",
       "status": "M",
       "role": "implement",
@@ -57,43 +63,43 @@
     },
     {
       "path": "apps/cli/src/worker.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
     {
       "path": "apps/cli/src/worker/entry.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
     {
       "path": "apps/cli/src/worker/launch.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
     {
       "path": "apps/cli/src/worker/result-sink.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
     {
       "path": "apps/cli/src/worker/spawn-options.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
     {
       "path": "apps/cli/src/worker/spawn.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
     {
       "path": "apps/cli/src/worker/trampoline.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
@@ -102,6 +108,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-010"
+    },
+    {
+      "path": "apps/cli/tests/commands/config-data-dir-guard.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-013"
     },
     {
       "path": "apps/cli/tests/commands/list-reconcile.spec.ts",
@@ -123,19 +135,19 @@
     },
     {
       "path": "apps/cli/tests/worker/launch.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
     {
       "path": "apps/cli/tests/worker/result-sink.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
     {
       "path": "apps/cli/tests/worker/spawn.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
@@ -144,6 +156,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "docs/features/configuration.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-013"
     },
     {
       "path": "docs/features/diagnostics-and-audit.md",
