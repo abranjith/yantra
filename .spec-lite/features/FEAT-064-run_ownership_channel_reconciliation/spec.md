@@ -502,9 +502,9 @@ All paths above are under `packages/core/src/run-channel/`.
 command, log, logger})`: - claims the lease, with `log_seq_at_claim` taken from the FEAT-063 writer; - starts the heartbeat timer (5 s, `unref`). Heartbeat write failures are logged once and never
     crash the run; - exposes `recorder: BrowserOwnershipRecorder`.
 
-                                                                                `finish()` runs in this order: stop the timers, close the channel (TASK-005), then
-                                                                                `releaseLease`. The caller has already flushed the terminal event and manifest. `finish()` is
-                                                                                idempotent.
+                                                                                    `finish()` runs in this order: stop the timers, close the channel (TASK-005), then
+                                                                                    `releaseLease`. The caller has already flushed the terminal event and manifest. `finish()` is
+                                                                                    idempotent.
 
   - **`browser-ownership-recorder.ts`.**
     - `recordSpawned(identity)` appends to `owned_browsers` and flushes before returning.
@@ -914,7 +914,7 @@ tests/commands/list-reconcile.spec.ts` passes;
 
 ### TASK-011: Stop service — graceful cancel, identity-verified forced termination, always reconcile
 
-- [ ] **Implementation**: Implement `stopRun({runDir, graceMs = 10_000}, deps)` in `stop-run.ts`.
+- [x] **Implementation**: Implement `stopRun({runDir, graceMs = 10_000}, deps)` in `stop-run.ts`.
   1. Read the lease. If there is none, return `not_running`.
   2. Connect with `RunChannelClient` and send `cancel`. If the owner is `live_unavailable` or
      `unreachable`, skip to step 4 without sending anything else.
@@ -931,7 +931,7 @@ tests/commands/list-reconcile.spec.ts` passes;
 
   This is a core service consumed by FEAT-065 and FEAT-067 (Stop). There is no new CLI command.
 
-- [ ] **Unit Tests** (`stop-run.spec.ts`, using a fake channel, probe, terminator and clock):
+- [x] **Unit Tests** (`stop-run.spec.ts`, using a fake channel, probe, terminator and clock):
   - a cooperative owner removes its lease within the grace period, so the result is
     `stopped_gracefully` and the terminator is never called;
   - an unresponsive owner that ignores `cancel` is terminated after exactly 10 s (stepped clock),
@@ -942,7 +942,7 @@ tests/commands/list-reconcile.spec.ts` passes;
   - a reused PID (`dead` verdict) is never signalled and is reconciled;
   - forced termination is always followed by reconciliation, even when `terminate` throws;
   - an incompatible owner is still stoppable through identity-verified termination.
-- [ ] **Documentation Update**: Invoke **Document** update mode for architecture (the stop and
+- [x] **Documentation Update**: Invoke **Document** update mode for architecture (the stop and
       forced-termination policy from the §8 reliability matrix).
 - **Verify**: `cd packages/core && npx vitest run tests/run-ownership/stop-run.spec.ts` passes. The
   TASK-014 e2e covers real processes.
@@ -974,7 +974,7 @@ tests/commands/list-reconcile.spec.ts` passes;
 process.execPath, workerPath})`.** 1. Exclusively create the launch file (`wx`, `0600`) in `launch.dir`. 2. Call `spawn(nodePath, [workerPath, '--launch', file], {cwd: invocation.cwd, env, detached:
 true, shell: false, stdio: 'ignore', windowsHide: true})`, then `child.unref()`. 3. Return `{pid, identity}`, with the identity captured through `identifyProcess`.
 
-                                                                                Apply any mitigation the S2 report requires, for example Job-object breakaway on Windows.
+                                                                                    Apply any mitigation the S2 report requires, for example Job-object breakaway on Windows.
 
 - [ ] **Unit Tests** (`launch.spec.ts`, `result-sink.spec.ts`, `spawn.spec.ts`):
   - **Launch validation:**
@@ -1147,7 +1147,7 @@ Error`, `RunChannelFrameError` and `RunOwnershipError`, all with safe, actionabl
 - [x] TASK-008: Every run is owned — lease, socket and owned browsers on all run paths, with `cancel`
 - [x] TASK-009: Reconciler — exactly one terminal result for a dead owner, identity-verified browser reaping
 - [x] TASK-010: Resume takeover and reconciliation triggers (`yantra list`, CLI run start, host start)
-- [ ] TASK-011: Stop service — graceful cancel, identity-verified forced termination, always reconcile
+- [x] TASK-011: Stop service — graceful cancel, identity-verified forced termination, always reconcile
 - [ ] TASK-012: Detached worker entry point and the single cross-OS spawn helper
 - [ ] TASK-013: `config data-dir` guard — refuse while live leases or a host lock exist (D15)
 - [ ] TASK-014: Cross-OS acceptance suite with real processes

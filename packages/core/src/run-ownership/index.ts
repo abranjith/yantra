@@ -56,3 +56,4 @@ export {
   type SweepOptions,
   type SweepResult,
 } from './sweep.js';
+export { stopRun, type StopChannel, type StopDeps, type StopResult } from './stop-run.js';

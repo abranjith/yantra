@@ -33,7 +33,7 @@
     },
     {
       "path": "apps/cli/src/ownership.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
@@ -63,7 +63,7 @@
     },
     {
       "path": "apps/cli/tests/commands/list-reconcile.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
@@ -75,7 +75,7 @@
     },
     {
       "path": "apps/cli/tests/ownership.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
@@ -356,14 +356,20 @@
       "task": "TASK-009"
     },
     {
-      "path": "packages/core/src/run-ownership/sweep.ts",
+      "path": "packages/core/src/run-ownership/stop-run.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "packages/core/src/run-ownership/sweep.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
     {
       "path": "packages/core/src/run-ownership/takeover.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
@@ -452,6 +458,12 @@
       "task": "TASK-008"
     },
     {
+      "path": "packages/core/tests/run-ownership/stop-run.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
       "path": "packages/core/tests/run-ownership/support.ts",
       "status": "A",
       "role": "implement",
@@ -459,13 +471,13 @@
     },
     {
       "path": "packages/core/tests/run-ownership/sweep.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
     {
       "path": "packages/core/tests/run-ownership/takeover.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },

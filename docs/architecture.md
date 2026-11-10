@@ -1568,6 +1568,15 @@ runDir))`; a `subscribe` that arrives earlier waits for it. On `subscribe {from_
   no frame of any kind for 30 s reports `not_responding`, logs it once, and returns to `attached` on
   the next frame. Every threshold (hello deadline, heartbeat, not responding, queue bound, drain
   window, stop grace) lives in `src/run-ownership/constants.ts`.
+- **Stopping a run.** `stopRun({runDir})` (`src/run-ownership/stop-run.ts`) is the one stop
+  policy, for the app to call; there is no CLI command. It reads the lease (none: `not_running`),
+  sends `cancel` over the run socket, and waits up to 10 s for the owner to end the run and remove
+  its lease (`stopped_gracefully`). It skips that wait when the owner answers `honored: false`, and
+  it never sends anything to an owner it cannot speak to. Otherwise it decides by identity: an
+  owner it cannot verify is never signalled (`stop_unverifiable`), a reused PID reads as dead and is
+  not signalled, and a live owner is re-verified, terminated forcefully as a process tree, and
+  waited on. After any forced stop it always reconciles the run, which also reaps the run's
+  browsers by identity (`stopped_forcefully`).
 - **Close.** `close(drainMs)` stops accepting, ends every connection, waits up to 1 s for them to
   close, destroys any left, and only then does `finish()` release the lease, so an attached client
   receives the run's terminal event.
