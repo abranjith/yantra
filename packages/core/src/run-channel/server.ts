@@ -29,12 +29,22 @@ import {
 } from '@yantra/protocol';
 
 import type { Logger } from '../browser/types.js';
-import { HELLO_DEADLINE_MS } from '../run-ownership/constants.js';
+import {
+  HEARTBEAT_INTERVAL_MS,
+  HELLO_DEADLINE_MS,
+  OUTBOUND_EVENT_QUEUE_BYTES,
+} from '../run-ownership/constants.js';
 import { yantraVersion } from '../run-ownership/lease-store.js';
 import type { RunChannelEndpoint, StartRunChannel } from '../run-ownership/ownership-session.js';
 
 import type { CommittedEvent, RunEventSource } from './event-source.js';
-import { FrameDecoder, RunChannelFrameError, encodeJsonFrame } from './frame-codec.js';
+import {
+  FrameDecoder,
+  RunChannelFrameError,
+  encodeJsonFrame,
+  encodeScreencastFrame,
+} from './frame-codec.js';
+import { OutboundQueues } from './outbound-queues.js';
 import { allocateSocketAddress, removeStaleSocket } from './socket-address.js';
 
 /** Timer seam; the defaults are unref'd so the socket never holds the process open. */
@@ -97,6 +107,10 @@ export interface RunChannelServerOptions {
   readonly builtInCapabilities?: readonly string[];
   /** The run's events; may be attached later with {@link RunChannelServer.attachEvents}. */
   readonly events?: RunEventSource;
+  /** Per-connection event-queue bound in encoded bytes. */
+  readonly maxEventBytes?: number;
+  /** Interval of the per-connection `heartbeat`. */
+  readonly heartbeatMs?: number;
 }
 
 type ConnectionState = 'hello' | 'open' | 'closed';
@@ -185,6 +199,19 @@ export class RunChannelServer implements RunChannelEndpoint {
     return count;
   }
 
+  /**
+   * Offers one screencast frame to every connection (FEAT-069 produces them).
+   * Each connection keeps only the newest unsent frame, behind its events.
+   */
+  public publishFrame(meta: unknown, jpeg: Uint8Array): void {
+    let frame: Buffer | null = null;
+    for (const connection of this.connections) {
+      if (connection.state !== 'open') continue;
+      frame ??= encodeScreencastFrame(meta, jpeg);
+      connection.offerFrame(frame);
+    }
+  }
+
   /** Sends a message to every authenticated connection. */
   public broadcast(message: RunChannelServerMessage): void {
     for (const connection of this.connections) {
@@ -239,12 +266,16 @@ export class RunChannelServer implements RunChannelEndpoint {
     readonly clock: () => Date;
     readonly logger: Logger;
     readonly helloDeadlineMs: number;
+    readonly heartbeatMs: number;
+    readonly maxEventBytes: number;
   } {
     return {
       timers: this.timers,
       clock: this.clock,
       logger: this.logger,
       helloDeadlineMs: this.options.helloDeadlineMs ?? HELLO_DEADLINE_MS,
+      heartbeatMs: this.options.heartbeatMs ?? HEARTBEAT_INTERVAL_MS,
+      maxEventBytes: this.options.maxEventBytes ?? OUTBOUND_EVENT_QUEUE_BYTES,
     };
   }
 
@@ -320,7 +351,9 @@ class ServerConnection implements ChannelConnection {
   public readonly closed: Promise<void>;
   private readonly decoder = new FrameDecoder({ limit: MAX_HELLO_FRAME_BYTES });
   private helloTimer: unknown;
+  private heartbeatTimer: unknown = null;
   private attachedAt = 0;
+  private readonly queues: OutboundQueues;
   /** Bumped by every `subscribe`, so a superseded replay stops. */
   private generation = 0;
   private pendingFromSeq: number | null = null;
@@ -337,6 +370,12 @@ class ServerConnection implements ChannelConnection {
         resolve();
       });
     });
+    this.queues = new OutboundQueues(socket, {
+      maxEventBytes: server.deps.maxEventBytes,
+      onOverflow: () => {
+        this.onOverflow();
+      },
+    });
     socket.on('error', () => undefined); // 'close' follows; nothing to report
     socket.on('data', (chunk: Buffer) => {
       this.onData(chunk);
@@ -346,29 +385,47 @@ class ServerConnection implements ChannelConnection {
     }, helloDeadlineMs);
   }
 
+  /** Queues a control message; never waits. */
   public send(message: RunChannelServerMessage): void {
-    if (this.state !== 'open' || this.socket.destroyed) return;
-    this.socket.write(encodeJsonFrame(message));
+    if (this.state !== 'open') return;
+    this.queues.enqueue(encodeJsonFrame(message));
   }
 
-  /** Writes one replayed event and waits for the socket to drain when it is full. */
-  private async sendPaced(event: CommittedEvent): Promise<void> {
-    if (this.state !== 'open' || this.socket.destroyed) return;
-    if (this.socket.write(eventFrame(event))) return;
-    await new Promise<void>((resolve) => {
-      const done = (): void => {
-        this.socket.off('drain', done);
-        this.socket.off('close', done);
-        resolve();
-      };
-      this.socket.on('drain', done);
-      this.socket.on('close', done);
-    });
+  /** @internal Offers a screencast frame to this connection's one-frame slot. */
+  public offerFrame(frame: Buffer): void {
+    if (this.state === 'open') this.queues.offerFrame(frame);
   }
 
+  /** @internal Screencast frames replaced before they were written. */
+  public get droppedFrames(): number {
+    return this.queues.droppedFrames;
+  }
+
+  /** Hands one replayed event to the socket, waiting while the socket is full. */
+  private sendPaced(event: CommittedEvent): Promise<void> {
+    if (this.state !== 'open') return Promise.resolve();
+    return this.queues.enqueueReplay(eventFrame(event));
+  }
+
+  /** Queues one live event; never waits. */
   private sendEvent(event: CommittedEvent): void {
-    if (this.state !== 'open' || this.socket.destroyed) return;
-    this.socket.write(eventFrame(event));
+    if (this.state !== 'open') return;
+    this.queues.enqueue(eventFrame(event));
+  }
+
+  /**
+   * The client stopped reading: send one best-effort `error{overflow}` and
+   * drop this connection only. Its client reconnects and replays from the file.
+   */
+  private onOverflow(): void {
+    this.server.deps.logger.warn(
+      { event: 'channel_overflow', client_kind: this.clientKind },
+      'channel_overflow',
+    );
+    this.socket.write(
+      encodeJsonFrame({ type: 'error', code: 'overflow', message: 'event queue overflow' }),
+    );
+    this.destroy();
   }
 
   /**
@@ -421,8 +478,13 @@ class ServerConnection implements ChannelConnection {
 
   /** Graceful close: unauthenticated connections are destroyed instead. */
   public end(): void {
-    if (this.state === 'open') this.socket.end();
-    else this.destroy();
+    if (this.state !== 'open') {
+      this.destroy();
+      return;
+    }
+    this.queues.drainThen(() => {
+      this.socket.end();
+    });
   }
 
   public destroy(): void {
@@ -472,6 +534,9 @@ class ServerConnection implements ChannelConnection {
     this.channelVersion = negotiated.version;
     this.state = 'open';
     this.attachedAt = clock().getTime();
+    this.heartbeatTimer = timers.setInterval(() => {
+      this.send({ type: 'heartbeat', at: clock().toISOString() });
+    }, this.server.deps.heartbeatMs);
     this.send({
       type: 'hello_ok',
       channel_version: negotiated.version,
@@ -525,6 +590,7 @@ class ServerConnection implements ChannelConnection {
     this.disposeListener = null;
     const { timers, clock, logger } = this.server.deps;
     timers.clearTimeout(this.helloTimer);
+    timers.clearInterval(this.heartbeatTimer);
     if (wasOpen) {
       logger.info(
         {

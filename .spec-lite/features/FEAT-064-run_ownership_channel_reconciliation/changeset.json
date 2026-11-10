@@ -147,7 +147,7 @@
     },
     {
       "path": "packages/core/src/run-channel/event-source.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
@@ -162,6 +162,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/run-channel/outbound-queues.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "packages/core/src/run-channel/server.ts",
@@ -236,8 +242,14 @@
       "task": "TASK-003"
     },
     {
-      "path": "packages/core/tests/run-channel/replay.spec.ts",
+      "path": "packages/core/tests/run-channel/outbound-queues.spec.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/core/tests/run-channel/replay.spec.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },

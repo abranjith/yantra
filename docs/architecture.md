@@ -1555,6 +1555,19 @@ runDir))`; a `subscribe` that arrives earlier waits for it. On `subscribe {from_
   event may never send it. `reconnect()` backs off from 250 ms to 5 s, re-reads the lease (a resumed
   run has a new token and socket) and resubscribes from `lastSeq + 1`. `getSnapshot()` and
   `subscribeSnapshot()` fit `useSyncExternalStore`.
+- **Queues and backpressure.** Each connection has an `OutboundQueues` (`outbound-queues.ts`): a
+  FIFO event queue for control and event frames, bounded at 8 MiB of encoded bytes, and a one-slot
+  screencast frame queue in which a newer frame replaces an unsent one. The writer always empties
+  the event queue before taking the frame slot and waits for `drain` whenever `write()` returns
+  false. Enqueueing is synchronous and never waits, so a slow client cannot stall the owner's event
+  loop or another client. A client that stops reading overflows its own queue: it gets one
+  best-effort `error{overflow}`, only its connection is dropped (`channel_overflow` is logged), and
+  it can reconnect and replay from the file. Replayed events are paced by writes and do not count
+  against the bound. `publishFrame(meta, jpeg)` is the entry point for screencast producers.
+- **Liveness.** The owner sends `heartbeat {at}` on every connection every 5 s. A client that hears
+  no frame of any kind for 30 s reports `not_responding`, logs it once, and returns to `attached` on
+  the next frame. Every threshold (hello deadline, heartbeat, not responding, queue bound, drain
+  window, stop grace) lives in `src/run-ownership/constants.ts`.
 - **Close.** `close(drainMs)` stops accepting, ends every connection, waits up to 1 s for them to
   close, destroys any left, and only then does `finish()` release the lease, so an attached client
   receives the run's terminal event.

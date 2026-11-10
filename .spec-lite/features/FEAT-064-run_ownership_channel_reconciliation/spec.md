@@ -502,9 +502,9 @@ All paths above are under `packages/core/src/run-channel/`.
 command, log, logger})`: - claims the lease, with `log_seq_at_claim` taken from the FEAT-063 writer; - starts the heartbeat timer (5 s, `unref`). Heartbeat write failures are logged once and never
     crash the run; - exposes `recorder: BrowserOwnershipRecorder`.
 
-                                                                `finish()` runs in this order: stop the timers, close the channel (TASK-005), then
-                                                                `releaseLease`. The caller has already flushed the terminal event and manifest. `finish()` is
-                                                                idempotent.
+                                                                    `finish()` runs in this order: stop the timers, close the channel (TASK-005), then
+                                                                    `releaseLease`. The caller has already flushed the terminal event and manifest. `finish()` is
+                                                                    idempotent.
 
   - **`browser-ownership-recorder.ts`.**
     - `recordSpawned(identity)` appends to `owned_browsers` and flushes before returning.
@@ -647,7 +647,7 @@ tests/run-channel/client.spec.ts` passes.
 
 ### TASK-007: Bounded, prioritized outbound queues, backpressure and heartbeat
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - **`outbound-queues.ts`.** Each connection has two queues.
     - **Event queue:** control and event JSON frames, FIFO, bounded at 8 MiB of encoded bytes.
       Overflow sends one best-effort `error{overflow}` and destroys **that** connection only. The
@@ -668,7 +668,7 @@ tests/run-channel/client.spec.ts` passes.
   - All thresholds live in `run-ownership/constants.ts`: heartbeat 5 s, not-responding 30 s, queue
     bound 8 MiB, stop grace 10 s and hello deadline 5 s. They are open questions in plan §15, so they
     live in one place.
-- [ ] **Unit Tests** (`outbound-queues.spec.ts`, `server.spec.ts`):
+- [x] **Unit Tests** (`outbound-queues.spec.ts`, `server.spec.ts`):
   - **Prioritization:** with 20 queued 3 MiB frames and a control message, the control message is
     written before any frame.
   - **Slow-client isolation:**
@@ -681,7 +681,7 @@ tests/run-channel/client.spec.ts` passes.
   - **Backpressure:** an injected `write() → false` waits for `drain`.
   - **Heartbeat:** there is one heartbeat per 5 s on an injected clock. The client flips to
     `not_responding` at exactly 30 s and back on the next heartbeat.
-- [ ] **Documentation Update**: Invoke **Document** update mode for architecture (queues,
+- [x] **Documentation Update**: Invoke **Document** update mode for architecture (queues,
       backpressure and liveness thresholds).
 - **Verify**: `cd packages/core && npx vitest run tests/run-channel` passes. The e2e slow-client case
   in TASK-014 confirms it with real processes.
@@ -974,7 +974,7 @@ tests/commands/list-reconcile.spec.ts` passes;
 process.execPath, workerPath})`.** 1. Exclusively create the launch file (`wx`, `0600`) in `launch.dir`. 2. Call `spawn(nodePath, [workerPath, '--launch', file], {cwd: invocation.cwd, env, detached:
 true, shell: false, stdio: 'ignore', windowsHide: true})`, then `child.unref()`. 3. Return `{pid, identity}`, with the identity captured through `identifyProcess`.
 
-                                                                Apply any mitigation the S2 report requires, for example Job-object breakaway on Windows.
+                                                                    Apply any mitigation the S2 report requires, for example Job-object breakaway on Windows.
 
 - [ ] **Unit Tests** (`launch.spec.ts`, `result-sink.spec.ts`, `spawn.spec.ts`):
   - **Launch validation:**
@@ -1143,7 +1143,7 @@ Error`, `RunChannelFrameError` and `RunOwnershipError`, all with safe, actionabl
 - [x] TASK-004: Exclusive run lease — claim, heartbeat, owned browsers, verdict, release
 - [x] TASK-005: Authenticated run socket with version and capability handshake
 - [x] TASK-006: Atomic replay-to-live subscription with gap-free reconnect
-- [ ] TASK-007: Bounded, prioritized outbound queues, backpressure and heartbeat
+- [x] TASK-007: Bounded, prioritized outbound queues, backpressure and heartbeat
 - [ ] TASK-008: Every run is owned — lease, socket and owned browsers on all run paths, with `cancel`
 - [ ] TASK-009: Reconciler — exactly one terminal result for a dead owner, identity-verified browser reaping
 - [ ] TASK-010: Resume takeover and reconciliation triggers (`yantra list`, CLI run start, host start)
