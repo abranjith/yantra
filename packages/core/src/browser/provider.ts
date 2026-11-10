@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { basename } from 'node:path';
 
 import type { ResourceLockOptions } from '../locks/resource-lock.js';
+import type { BrowserOwnershipRecorder } from '../run-ownership/browser-ownership-recorder.js';
 
 import { identifyExecutable, toChromeInstall } from './browser-resolver.js';
 import { detectChrome } from './chrome-discovery.js';
@@ -78,6 +79,7 @@ export class LocalBrowserProvider implements BrowserProvider {
   private readonly installService: ManagedInstallService | undefined;
   private readonly identify: typeof identifyExecutable;
   private readonly spawnBrowser: typeof launchResolvedChrome;
+  private readonly ownershipRecorder: BrowserOwnershipRecorder | undefined;
 
   constructor(deps: {
     profileStore: ProfileStore;
@@ -106,6 +108,8 @@ export class LocalBrowserProvider implements BrowserProvider {
     identify?: typeof identifyExecutable;
     /** External boundary: spawning the browser process. */
     launch?: typeof launchResolvedChrome;
+    /** The owning run's recorder (FEAT-064); every browser launched is recorded. */
+    ownershipRecorder?: BrowserOwnershipRecorder;
   }) {
     this.profileStore = deps.profileStore;
     this.logger = deps.logger ?? noopLogger;
@@ -121,6 +125,7 @@ export class LocalBrowserProvider implements BrowserProvider {
     this.installService = deps.installService ?? this.services.installService;
     this.identify = deps.identify ?? identifyExecutable;
     this.spawnBrowser = deps.launch ?? launchResolvedChrome;
+    this.ownershipRecorder = deps.ownershipRecorder;
   }
 
   /**
@@ -193,7 +198,13 @@ export class LocalBrowserProvider implements BrowserProvider {
         `launching Chrome ${installation.version}`,
       );
 
-      const launched = await this.spawnBrowser(opts, installation, profile, ownership);
+      const launched = await this.spawnBrowser(
+        opts,
+        installation,
+        profile,
+        ownership,
+        this.ownershipRecorder === undefined ? {} : { recorder: this.ownershipRecorder },
+      );
 
       // Ownership of the process, the profile, and the reservation transfers
       // into the session exactly once, here.
@@ -414,6 +425,8 @@ export interface BrowserRuntimeOptions {
   readonly logger?: Logger;
   readonly installOfferGateway?: InstallOfferGateway | null;
   readonly installService?: ManagedInstallService;
+  /** The owning run's browser recorder (FEAT-064). */
+  readonly ownershipRecorder?: BrowserOwnershipRecorder;
 }
 
 /**
@@ -446,6 +459,7 @@ export function createSelectedBrowserProvider(opts: BrowserRuntimeOptions = {}):
       ? {}
       : { installOfferGateway: opts.installOfferGateway }),
     ...(opts.installService === undefined ? {} : { installService: opts.installService }),
+    ...(opts.ownershipRecorder === undefined ? {} : { ownershipRecorder: opts.ownershipRecorder }),
   });
 }
 

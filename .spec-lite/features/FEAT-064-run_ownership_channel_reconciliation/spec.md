@@ -477,7 +477,7 @@ All paths above are under `packages/core/src/run-channel/`.
 
 > **Amended by spike S2** (accepted 2026-11-09): RC2 (immutable lease; no `updateLease`, no heartbeat rewrite; `recordSpawned`/`recordExited` append to `owned-browsers.jsonl`) and RC4 (signal-0 short-circuit, batched `checkMany`). See the TASK-001 notes and `spike_s2_report.md` → Required changes.
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - **`paths.ts`.** Add `socketsRoot()`:
     - POSIX: `<yantraHome>/run` when `<that>/<24-char name>.sock` is ≤ 100 bytes; otherwise
       `<os.tmpdir()>/yantra-<uid>`. The directory is created `0700`, then `lstat`-verified to be a
@@ -502,9 +502,9 @@ All paths above are under `packages/core/src/run-channel/`.
 command, log, logger})`: - claims the lease, with `log_seq_at_claim` taken from the FEAT-063 writer; - starts the heartbeat timer (5 s, `unref`). Heartbeat write failures are logged once and never
     crash the run; - exposes `recorder: BrowserOwnershipRecorder`.
 
-                                                    `finish()` runs in this order: stop the timers, close the channel (TASK-005), then
-                                                    `releaseLease`. The caller has already flushed the terminal event and manifest. `finish()` is
-                                                    idempotent.
+                                                        `finish()` runs in this order: stop the timers, close the channel (TASK-005), then
+                                                        `releaseLease`. The caller has already flushed the terminal event and manifest. `finish()` is
+                                                        idempotent.
 
   - **`browser-ownership-recorder.ts`.**
     - `recordSpawned(identity)` appends to `owned_browsers` and flushes before returning.
@@ -515,7 +515,7 @@ command, log, logger})`: - claims the lease, with `log_seq_at_claim` taken from 
       the child handle exists. It uses `identify(child.pid)`, falling back to `UNKNOWN_START_TOKEN`
       as the managed path does today. `shutdownAndRelease` calls `recordExited` after verified exit.
 
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - **`lease-store.spec.ts`:**
     - two concurrent `claimLease` calls on one directory: exactly one wins and the other gets
       `RunLeaseHeldError`;
@@ -535,7 +535,7 @@ command, log, logger})`: - claims the lease, with `log_seq_at_claim` taken from 
     - an unprovable exit (`BrowserProcessError`) keeps it;
     - the session heartbeat advances `heartbeat_at` on an injected clock;
     - `finish()` order is asserted with a call log.
-- [ ] **Documentation Update**: Invoke **Document** update mode for diagnostics and audit (the
+- [x] **Documentation Update**: Invoke **Document** update mode for diagnostics and audit (the
       `lease.json` artifact and what it contains, never the token value) and safety and privacy (the
       owner-only lease, and the Windows ACL statement from §7).
 - **Verify**: `cd packages/core && npx vitest run tests/run-ownership/lease-store.spec.ts
@@ -974,7 +974,7 @@ tests/commands/list-reconcile.spec.ts` passes;
 process.execPath, workerPath})`.** 1. Exclusively create the launch file (`wx`, `0600`) in `launch.dir`. 2. Call `spawn(nodePath, [workerPath, '--launch', file], {cwd: invocation.cwd, env, detached:
 true, shell: false, stdio: 'ignore', windowsHide: true})`, then `child.unref()`. 3. Return `{pid, identity}`, with the identity captured through `identifyProcess`.
 
-                                                    Apply any mitigation the S2 report requires, for example Job-object breakaway on Windows.
+                                                        Apply any mitigation the S2 report requires, for example Job-object breakaway on Windows.
 
 - [ ] **Unit Tests** (`launch.spec.ts`, `result-sink.spec.ts`, `spawn.spec.ts`):
   - **Launch validation:**
@@ -1140,7 +1140,7 @@ Error`, `RunChannelFrameError` and `RunOwnershipError`, all with safe, actionabl
 - [x] TASK-001: Spike S2 — detached worker and recovery on Windows, macOS and Linux (Windows run; Linux/macOS waived by user 2026-11-09, see TODO)
 - [x] TASK-002: Protocol schemas — lease, execution state, channel messages, worker launch
 - [x] TASK-003: Frame codec — one framing grammar with size limits
-- [ ] TASK-004: Exclusive run lease — claim, heartbeat, owned browsers, verdict, release
+- [x] TASK-004: Exclusive run lease — claim, heartbeat, owned browsers, verdict, release
 - [ ] TASK-005: Authenticated run socket with version and capability handshake
 - [ ] TASK-006: Atomic replay-to-live subscription with gap-free reconnect
 - [ ] TASK-007: Bounded, prioritized outbound queues, backpressure and heartbeat

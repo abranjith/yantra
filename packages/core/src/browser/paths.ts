@@ -30,6 +30,43 @@ export function runsRoot(): string {
   return join(dataDir(), 'runs');
 }
 
+/** Longest Unix socket path used; `sun_path` is 104 bytes on macOS, 108 on Linux. */
+export const MAX_UNIX_SOCKET_PATH_BYTES = 100;
+
+/** A run socket file name: 24 hex characters plus `.sock`. */
+const SOCKET_NAME_SAMPLE = `${'0'.repeat(24)}.sock`;
+
+/** The Windows named-pipe prefix every run socket name starts with. */
+export const RUN_PIPE_PREFIX = '\\\\.\\pipe\\yantra-';
+
+/**
+ * Where run sockets live (FEAT-064).
+ *
+ * - POSIX: `<yantraHome>/run` when a socket path inside it fits in
+ *   {@link MAX_UNIX_SOCKET_PATH_BYTES}; otherwise `<os.tmpdir()>/yantra-<uid>`.
+ *   The caller creates it `0700` and verifies ownership before use.
+ * - Windows: the named-pipe prefix `\\.\pipe\yantra-`; pipes have no directory.
+ */
+export function socketsRoot(platform: NodeJS.Platform = process.platform): string {
+  if (platform === 'win32') return RUN_PIPE_PREFIX;
+  const preferred = join(yantraHome(), 'run');
+  if (Buffer.byteLength(join(preferred, SOCKET_NAME_SAMPLE)) <= MAX_UNIX_SOCKET_PATH_BYTES) {
+    return preferred;
+  }
+  const uid = typeof process.getuid === 'function' ? process.getuid() : 0;
+  return join(tmpdir(), `yantra-${uid}`);
+}
+
+/** Where the app host writes detached-worker launch and result files. */
+export function workerLaunchRoot(): string {
+  return join(dataDir(), 'ui', 'launch');
+}
+
+/** The app host's single-instance lock (owned by FEAT-065; read here only). */
+export function uiHostLockPath(): string {
+  return join(dataDir(), 'ui', 'host.lock');
+}
+
 /** Returns the path to the doctor diagnostic cache file. */
 export function doctorCachePath(): string {
   return join(cacheDir(), 'doctor.json');

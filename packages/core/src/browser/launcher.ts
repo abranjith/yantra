@@ -13,6 +13,8 @@ import type { ChildProcess } from 'node:child_process';
 import type { Browser, LaunchOptions as PuppeteerLaunchOptions } from 'puppeteer-core';
 import puppeteer from 'puppeteer-core';
 
+import type { BrowserOwnershipRecorder } from '../run-ownership/browser-ownership-recorder.js';
+
 import { toChromeInstall } from './browser-resolver.js';
 import { BrowserLaunchError, BrowserProcessError, ManagedCoordinationError } from './errors.js';
 import type { ProcessIdentity, ResolvedBrowserInstallation } from './installation-types.js';
@@ -79,6 +81,11 @@ export interface LaunchDeps extends SupervisorDeps {
   readonly environment?: UserSimulationEnvironment;
   /** Cancels startup. A browser that still arrives afterwards is disposed. */
   readonly signal?: AbortSignal;
+  /**
+   * Records the browser in the owning run's `owned-browsers.jsonl` (FEAT-064),
+   * for every ownership kind, so a reconciler can reap it by identity.
+   */
+  readonly recorder?: BrowserOwnershipRecorder;
 }
 
 /**
@@ -178,22 +185,28 @@ export async function launchResolvedChrome(
   }
 
   const supervisor = new BrowserProcessSupervisor(child, deps);
+  const recorder = deps.recorder;
+  let recorded: ProcessIdentity | null = null;
 
   try {
-    if (ownership.kind === 'managed') {
+    if (ownership.kind === 'managed' || recorder !== undefined) {
       // Persisted as soon as a handle exists — the spawn-to-success window is
       // exactly where an unrecorded browser would otherwise be left behind.
       const identity = (await identify(child.pid)) ?? {
         pid: child.pid,
         startToken: UNKNOWN_START_TOKEN,
       };
-      await ownership.reservation.attachChild(identity);
+      if (recorder !== undefined) {
+        await recorder.recordSpawned(identity);
+        recorded = identity;
+      }
+      if (ownership.kind === 'managed') await ownership.reservation.attachChild(identity);
     }
     if (ownership.kind === 'candidate-probe') {
       trackCandidateProbeProcess(ownership.permit, supervisor.whenExited());
     }
   } catch (cause) {
-    await shutdownAndRelease(browser, supervisor, ownership);
+    await shutdownAndRelease(browser, supervisor, ownership, recorder, recorded);
     throw cause;
   }
 
@@ -204,7 +217,7 @@ export async function launchResolvedChrome(
     supervisor,
     ownership,
     shutdown: () => {
-      done ??= shutdownAndRelease(browser, supervisor, ownership);
+      done ??= shutdownAndRelease(browser, supervisor, ownership, recorder, recorded);
       return done;
     },
   };
@@ -221,8 +234,15 @@ async function shutdownAndRelease(
   browser: Browser,
   supervisor: BrowserProcessSupervisor,
   ownership: LaunchOwnership,
+  recorder?: BrowserOwnershipRecorder,
+  recorded?: ProcessIdentity | null,
 ): Promise<void> {
   await supervisor.shutdown(() => browser.close());
+  if (recorder !== undefined && recorded !== undefined && recorded !== null) {
+    // Exit is proved; an unrecorded exit only leaves a dead identity for a
+    // reconciler to drop, so a failure here never fails the shutdown.
+    await recorder.recordExited(recorded).catch(() => undefined);
+  }
   if (ownership.kind === 'managed') {
     try {
       await ownership.reservation.releaseAfterExit();
