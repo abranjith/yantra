@@ -2964,6 +2964,44 @@ Terminal collectors wrap terminal prompts. Worker collectors use the same core q
 with channel-backed select, text, password, and confirmation input. Non-interactive and JSON init
 select defaults; `--yes` also skips questions. The service has no terminal or provider SDK dependency.
 
+#### Detached workers
+
+The app host runs commands as detached worker processes so a run outlives the host and the terminal
+(FEAT-064). There is one way to start one, `spawnDetachedWorker` (`src/worker/spawn.ts`):
+
+```mermaid
+sequenceDiagram
+  participant H as Host
+  participant T as Trampoline
+  participant W as Worker (dist/worker.js)
+  H->>H: create <launchDir>/<id>.launch.json (wx, 0600)
+  H->>T: spawn node trampoline.js node worker.js --launch <file>
+  T->>W: spawn detached, shell false, stdio ignore, windowsHide
+  T-->>H: worker PID on stdout, then exit
+  H->>H: identifyProcess(PID)
+  W->>W: validate launch, gate class, run via the worker adapter
+  W->>H: <id>.result.json (exclusive, once)
+```
+
+- **No user text in argv.** The invocation (and any goal text) travels in the owner-only launch
+  file, created exclusively so an existing one is never overwritten. The worker's command line holds
+  only the launch path.
+- **The trampoline** (spike S2, RC1) leaves the worker with a dead parent, so a process-tree kill of
+  the host (`taskkill /T`, Task Manager's "End process tree") cannot reach it; on POSIX the worker
+  leads its own session, so a process-group kill misses it. A host inside a Windows Job object with
+  `KILL_ON_JOB_CLOSE` and no `SILENT_BREAKAWAY_OK` still takes its workers with it: Node offers no
+  breakaway flag, and WMI process creation would lose the host's environment.
+- **The worker** (`src/worker/entry.ts`) accepts exactly `--launch <absolute path>` inside
+  `workerLaunchRoot()` (`<data>/ui/launch`), validates `WorkerLaunch`, and refuses any class but
+  `run`, `mutate` and `exclusive` with `WORKER_CLASS_REFUSED`. An optional start gate (FEAT-065's
+  invocation claim) may decline before any side effect; the worker then exits 0 and writes nothing.
+  It changes to the invocation's working directory and runs it through the FEAT-072 worker adapter
+  with no one attached (prompts answer no, confirmations are denied), so its runs are owned with
+  origin `worker`.
+- **The result** is written exactly once, atomically and owner-only (`WorkerResultSink`); an
+  uncaught failure becomes an `error` result with exit 2. If handles remain 5 s after the result is
+  written, the entry hard-exits.
+
 #### Execution receipts and shared-resource locks
 
 Task commands (`ask`, `research`, `do`), workflow replay (`run`), scheduled fires, and live

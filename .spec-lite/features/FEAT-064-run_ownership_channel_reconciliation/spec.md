@@ -502,9 +502,9 @@ All paths above are under `packages/core/src/run-channel/`.
 command, log, logger})`: - claims the lease, with `log_seq_at_claim` taken from the FEAT-063 writer; - starts the heartbeat timer (5 s, `unref`). Heartbeat write failures are logged once and never
     crash the run; - exposes `recorder: BrowserOwnershipRecorder`.
 
-                                                                                    `finish()` runs in this order: stop the timers, close the channel (TASK-005), then
-                                                                                    `releaseLease`. The caller has already flushed the terminal event and manifest. `finish()` is
-                                                                                    idempotent.
+                                                                                        `finish()` runs in this order: stop the timers, close the channel (TASK-005), then
+                                                                                        `releaseLease`. The caller has already flushed the terminal event and manifest. `finish()` is
+                                                                                        idempotent.
 
   - **`browser-ownership-recorder.ts`.**
     - `recordSpawned(identity)` appends to `owned_browsers` and flushes before returning.
@@ -952,7 +952,7 @@ tests/commands/list-reconcile.spec.ts` passes;
 
 > **Amended by spike S2** (accepted 2026-11-09): RC1 (`spawnDetachedWorker` spawns through a short-lived trampoline that reports the worker PID and exits; add a tree-kill/process-group survival test; document the kill-on-close Job limitation). See the TASK-001 notes and `spike_s2_report.md` → Required changes.
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - **`apps/cli/src/worker.ts`**, built to `dist/worker.js` (add it to the build, not to `bin`).
     1. Parse exactly `--launch <abs path>`; anything else gives exit 1.
     2. Read and validate `WorkerLaunch`. Refuse a path outside `workerLaunchRoot()` unless
@@ -974,9 +974,9 @@ tests/commands/list-reconcile.spec.ts` passes;
 process.execPath, workerPath})`.** 1. Exclusively create the launch file (`wx`, `0600`) in `launch.dir`. 2. Call `spawn(nodePath, [workerPath, '--launch', file], {cwd: invocation.cwd, env, detached:
 true, shell: false, stdio: 'ignore', windowsHide: true})`, then `child.unref()`. 3. Return `{pid, identity}`, with the identity captured through `identifyProcess`.
 
-                                                                                    Apply any mitigation the S2 report requires, for example Job-object breakaway on Windows.
+                                                                                        Apply any mitigation the S2 report requires, for example Job-object breakaway on Windows.
 
-- [ ] **Unit Tests** (`launch.spec.ts`, `result-sink.spec.ts`, `spawn.spec.ts`):
+- [x] **Unit Tests** (`launch.spec.ts`, `result-sink.spec.ts`, `spawn.spec.ts`):
   - **Launch validation:**
     - a malformed launch file gives exit 1 and an `error` result;
     - `secret set` (`in-process-secure`) and `ui` (`exemption`) are refused with
@@ -994,7 +994,7 @@ true, shell: false, stdio: 'ignore', windowsHide: true})`, then `child.unref()`.
     - **survival:** a parent script spawns a worker running a `mutate` command (`prefs set` in a
       sandboxed `YANTRA_HOME`) and exits immediately, and the worker still completes and writes its
       result.
-- [ ] **Documentation Update**: Invoke **Document** update mode for architecture (the process
+- [x] **Documentation Update**: Invoke **Document** update mode for architecture (the process
       model: the detached worker and the launch and result files).
 - **Verify**:
   - `npx turbo run build`, then `cd apps/cli && npx vitest run tests/worker` passes on the CI
@@ -1002,6 +1002,11 @@ true, shell: false, stdio: 'ignore', windowsHide: true})`, then `child.unref()`.
   - manual: write a launch file for `research --no-llm "x"`, spawn it, close the terminal, then
     check that the run directory completes and `WorkerResult` has exit 0.
 - **Depends on**: TASK-008; FEAT-062; FEAT-072
+
+> **Implementation notes (TASK-012):** DEVIATION: a start-gate refusal writes no result file (the
+> spec's "exits 0 with no side effects"), because another worker owns the invocation and a result
+> would race it. DEVIATION: a preallocated `run_id` is echoed into `WorkerResult`; threading it into
+> the run stores is left to FEAT-065, which owns the slot reservation (D11).
 
 ### TASK-013: `config data-dir` guard — refuse while live leases or a host lock exist (D15)
 
@@ -1148,7 +1153,7 @@ Error`, `RunChannelFrameError` and `RunOwnershipError`, all with safe, actionabl
 - [x] TASK-009: Reconciler — exactly one terminal result for a dead owner, identity-verified browser reaping
 - [x] TASK-010: Resume takeover and reconciliation triggers (`yantra list`, CLI run start, host start)
 - [x] TASK-011: Stop service — graceful cancel, identity-verified forced termination, always reconcile
-- [ ] TASK-012: Detached worker entry point and the single cross-OS spawn helper
+- [x] TASK-012: Detached worker entry point and the single cross-OS spawn helper
 - [ ] TASK-013: `config data-dir` guard — refuse while live leases or a host lock exist (D15)
 - [ ] TASK-014: Cross-OS acceptance suite with real processes
 

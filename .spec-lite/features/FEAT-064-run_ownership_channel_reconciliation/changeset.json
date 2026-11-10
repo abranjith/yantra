@@ -56,6 +56,48 @@
       "task": "TASK-010"
     },
     {
+      "path": "apps/cli/src/worker.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "apps/cli/src/worker/entry.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "apps/cli/src/worker/launch.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "apps/cli/src/worker/result-sink.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "apps/cli/src/worker/spawn-options.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "apps/cli/src/worker/spawn.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "apps/cli/src/worker/trampoline.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
       "path": "apps/cli/tests/characterization/adapter-parity.spec.ts",
       "status": "M",
       "role": "implement",
@@ -78,6 +120,24 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-010"
+    },
+    {
+      "path": "apps/cli/tests/worker/launch.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "apps/cli/tests/worker/result-sink.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "apps/cli/tests/worker/spawn.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
     },
     {
       "path": "docs/architecture.md",
@@ -357,7 +417,7 @@
     },
     {
       "path": "packages/core/src/run-ownership/stop-run.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
@@ -459,7 +519,7 @@
     },
     {
       "path": "packages/core/tests/run-ownership/stop-run.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
