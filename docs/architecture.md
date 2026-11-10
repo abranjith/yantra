@@ -216,7 +216,8 @@ is never persisted. The same feature adds `owner_lost` to `TerminationReason` an
 - ethics, robots, rate limiting, sanitization, user-input masking, secret resolution, and security
   scope enforcement;
 - filesystem stores for workflows, run artifacts, profiles, report templates, and ask cache;
-- the run-event stream and its single-writer `run-events.jsonl` log (`src/run-events/`);
+- the run-event stream and its single-writer `run-events.jsonl` log (`src/run-events/`), and the
+  run channel's frame codec (`src/run-channel/`);
 - the local SQLite index for history, preferences, persistent rate limits, schedules, and domain
   ranks; and
 - the local scheduler daemon, notification adapters, audit writers, and diagnostics.
@@ -1464,6 +1465,38 @@ pipelines record the run as failed (manifest and report), the agent finalizes it
 `MarkdownReportBuilder` lists `run-events.jsonl` under the Audit Trail of both its agentic and its
 non-agentic report when the file exists. It checks presence only and never parses the file, so older
 run directories render unchanged.
+
+#### Run channel framing
+
+The run channel is the local socket through which a run's owner serves its events to other
+processes. Everything on it uses one framing grammar, implemented in
+`src/run-channel/frame-codec.ts` with the limits that `@yantra/protocol` (`run-channel.ts`) pins:
+
+```text
+[type: u8][length: u32 BE][payload]
+  0x01  UTF-8 JSON message                          payload ≤ 1 MiB
+  0x02  screencast: [meta_len: u16 BE][meta JSON][JPEG bytes]   payload ≤ 4 MiB
+```
+
+- **Encoding.** `encodeJsonFrame` and `encodeScreencastFrame` throw a typed
+  `RunChannelFrameError` instead of producing an over-limit frame: `FRAME_TOO_LARGE` (the owner
+  answers it with an `event_oversize` placeholder, so no `seq` goes missing),
+  `FRAME_META_TOO_LARGE` for screencast meta over 65,535 bytes, or `FRAME_NOT_JSON`. The message
+  never carries the payload.
+- **Decoding.** One `FrameDecoder` per connection takes chunks as they arrive. It reassembles a
+  frame split across chunks, including across the 5-byte header, and returns every frame a chunk
+  completes, in order. A frame that arrived in one chunk is decoded as a view of it, and only a
+  fragmented one is copied.
+- **Header-first limits.** The type byte and length are checked as soon as the header is in, before
+  any payload is buffered, so a peer that declares a 4 GiB frame costs at most 5 buffered bytes. An
+  optional per-state limit caps every type on top of its own maximum. The socket uses it for the
+  16 KiB `hello` frame that must arrive before authentication, then lifts it with `setLimit(null)`,
+  which applies from the next header.
+- **Fatal results.** An unknown type, an over-limit length, a JSON payload that is not valid UTF-8
+  JSON, or a screencast whose `meta_len` overruns the payload (or whose meta is not JSON) yields one
+  `{kind: 'fatal', reason}` after any frames decoded before it. The decoder is then spent: it holds
+  nothing and returns nothing, and the caller closes the connection. There is no resynchronization,
+  because a length that cannot be trusted leaves no frame boundary to resume from.
 
 ### `packages/agent`
 

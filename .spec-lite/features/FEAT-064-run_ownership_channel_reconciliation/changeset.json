@@ -8,6 +8,12 @@
       "task": "TASK-001"
     },
     {
+      "path": "docs/architecture.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
       "path": "docs/protocol-spec.md",
       "status": "M",
       "role": "implement",
@@ -80,26 +86,50 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/core/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/run-channel/frame-codec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/run-channel/index.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
       "path": "packages/core/src/workflow/replay/types.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-002"
     },
     {
-      "path": "packages/protocol/generated/json-schema/run-channel-message.json",
+      "path": "packages/core/tests/run-channel/frame-codec.spec.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/protocol/generated/json-schema/run-channel-message.json",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "packages/protocol/generated/json-schema/run-lease.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "packages/protocol/generated/json-schema/worker-launch.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
@@ -117,43 +147,43 @@
     },
     {
       "path": "packages/protocol/src/schemas/run-channel.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "packages/protocol/src/schemas/run-lease.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-ownership/interrupted.manifest.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-ownership/lease-unknown-tokens.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "packages/protocol/tests/fixtures/run-ownership/owned-browsers.jsonl",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "packages/protocol/tests/run-channel.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "packages/protocol/tests/run-lease.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     }

@@ -444,7 +444,7 @@ All paths above are under `packages/core/src/run-channel/`.
 
 ### TASK-003: Frame codec — one framing grammar with size limits
 
-- [ ] **Implementation**: Implement `packages/core/src/run-channel/frame-codec.ts`.
+- [x] **Implementation**: Implement `packages/core/src/run-channel/frame-codec.ts`.
   - **`encodeJsonFrame(message)`** returns a `Buffer`. It throws `RunChannelFrameError` over 1 MiB.
   - **`encodeScreencastFrame(meta, jpeg)`** returns a `Buffer`. It throws over 4 MiB or when the meta
     JSON exceeds `u16`.
@@ -456,7 +456,7 @@ All paths above are under `packages/core/src/run-channel/`.
     - It returns `{kind: 'fatal', reason}` on an unknown type, an over-limit length, malformed UTF-8
       or JSON, or a `meta_len` larger than the payload. The caller then closes the connection.
     - It takes an optional per-state limit, used for the 16 KiB `hello` limit.
-- [ ] **Unit Tests** (`frame-codec.spec.ts`):
+- [x] **Unit Tests** (`frame-codec.spec.ts`):
   - encode and decode round-trip for both types;
   - one frame delivered one byte at a time;
   - three frames coalesced in one chunk;
@@ -469,7 +469,7 @@ All paths above are under `packages/core/src/run-channel/`.
   - `meta_len` greater than the payload is fatal;
   - a hello-state limit of 16 KiB is enforced;
   - a property test: random message sequences split at random boundaries decode identically.
-- [ ] **Documentation Update**: Invoke **Document** update mode for architecture (run channel
+- [x] **Documentation Update**: Invoke **Document** update mode for architecture (run channel
       framing).
 - **Verify**: `cd packages/core && npx vitest run tests/run-channel/frame-codec.spec.ts` passes.
 
@@ -502,9 +502,9 @@ All paths above are under `packages/core/src/run-channel/`.
 command, log, logger})`: - claims the lease, with `log_seq_at_claim` taken from the FEAT-063 writer; - starts the heartbeat timer (5 s, `unref`). Heartbeat write failures are logged once and never
     crash the run; - exposes `recorder: BrowserOwnershipRecorder`.
 
-                                                `finish()` runs in this order: stop the timers, close the channel (TASK-005), then
-                                                `releaseLease`. The caller has already flushed the terminal event and manifest. `finish()` is
-                                                idempotent.
+                                                    `finish()` runs in this order: stop the timers, close the channel (TASK-005), then
+                                                    `releaseLease`. The caller has already flushed the terminal event and manifest. `finish()` is
+                                                    idempotent.
 
   - **`browser-ownership-recorder.ts`.**
     - `recordSpawned(identity)` appends to `owned_browsers` and flushes before returning.
@@ -974,7 +974,7 @@ tests/commands/list-reconcile.spec.ts` passes;
 process.execPath, workerPath})`.** 1. Exclusively create the launch file (`wx`, `0600`) in `launch.dir`. 2. Call `spawn(nodePath, [workerPath, '--launch', file], {cwd: invocation.cwd, env, detached:
 true, shell: false, stdio: 'ignore', windowsHide: true})`, then `child.unref()`. 3. Return `{pid, identity}`, with the identity captured through `identifyProcess`.
 
-                                                Apply any mitigation the S2 report requires, for example Job-object breakaway on Windows.
+                                                    Apply any mitigation the S2 report requires, for example Job-object breakaway on Windows.
 
 - [ ] **Unit Tests** (`launch.spec.ts`, `result-sink.spec.ts`, `spawn.spec.ts`):
   - **Launch validation:**
@@ -1139,7 +1139,7 @@ Error`, `RunChannelFrameError` and `RunOwnershipError`, all with safe, actionabl
 
 - [x] TASK-001: Spike S2 — detached worker and recovery on Windows, macOS and Linux (Windows run; Linux/macOS waived by user 2026-11-09, see TODO)
 - [x] TASK-002: Protocol schemas — lease, execution state, channel messages, worker launch
-- [ ] TASK-003: Frame codec — one framing grammar with size limits
+- [x] TASK-003: Frame codec — one framing grammar with size limits
 - [ ] TASK-004: Exclusive run lease — claim, heartbeat, owned browsers, verdict, release
 - [ ] TASK-005: Authenticated run socket with version and capability handshake
 - [ ] TASK-006: Atomic replay-to-live subscription with gap-free reconnect
