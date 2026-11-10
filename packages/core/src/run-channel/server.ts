@@ -33,7 +33,8 @@ import { HELLO_DEADLINE_MS } from '../run-ownership/constants.js';
 import { yantraVersion } from '../run-ownership/lease-store.js';
 import type { RunChannelEndpoint, StartRunChannel } from '../run-ownership/ownership-session.js';
 
-import { FrameDecoder, encodeJsonFrame } from './frame-codec.js';
+import type { CommittedEvent, RunEventSource } from './event-source.js';
+import { FrameDecoder, RunChannelFrameError, encodeJsonFrame } from './frame-codec.js';
 import { allocateSocketAddress, removeStaleSocket } from './socket-address.js';
 
 /** Timer seam; the defaults are unref'd so the socket never holds the process open. */
@@ -92,8 +93,10 @@ export interface RunChannelServerOptions {
   readonly timers?: RunChannelTimers;
   readonly clock?: () => Date;
   readonly helloDeadlineMs?: number;
-  /** Advertised however no handler is registered; the event stream adds `events`. */
+  /** Advertised capabilities that need no handler; defaults to `events`. */
   readonly builtInCapabilities?: readonly string[];
+  /** The run's events; may be attached later with {@link RunChannelServer.attachEvents}. */
+  readonly events?: RunEventSource;
 }
 
 type ConnectionState = 'hello' | 'open' | 'closed';
@@ -110,6 +113,7 @@ export class RunChannelServer implements RunChannelEndpoint {
   private readonly clock: () => Date;
   private readonly expectedToken: Buffer;
   private closing: Promise<void> | null = null;
+  private eventSource: RunEventSource | null;
 
   private constructor(
     private readonly server: Server,
@@ -120,7 +124,24 @@ export class RunChannelServer implements RunChannelEndpoint {
     this.timers = options.timers ?? realTimers;
     this.clock = options.clock ?? (() => new Date());
     this.expectedToken = Buffer.from(options.token, 'utf8');
-    for (const capability of options.builtInCapabilities ?? []) this.capabilities.add(capability);
+    for (const capability of options.builtInCapabilities ?? ['events']) {
+      this.capabilities.add(capability);
+    }
+    this.eventSource = options.events ?? null;
+  }
+
+  /**
+   * Attaches the run's event log once it is open. A `subscribe` that arrived
+   * earlier waits for this, then replays and goes live.
+   */
+  public attachEvents(source: RunEventSource): void {
+    this.eventSource = source;
+    for (const connection of this.connections) connection.onEventsAttached();
+  }
+
+  /** @internal */
+  public get events(): RunEventSource | null {
+    return this.eventSource;
   }
 
   /** Allocates an address (unless given), listens, and resolves once accepting. */
@@ -300,6 +321,10 @@ class ServerConnection implements ChannelConnection {
   private readonly decoder = new FrameDecoder({ limit: MAX_HELLO_FRAME_BYTES });
   private helloTimer: unknown;
   private attachedAt = 0;
+  /** Bumped by every `subscribe`, so a superseded replay stops. */
+  private generation = 0;
+  private pendingFromSeq: number | null = null;
+  private disposeListener: (() => void) | null = null;
 
   public constructor(
     private readonly socket: Socket,
@@ -324,6 +349,74 @@ class ServerConnection implements ChannelConnection {
   public send(message: RunChannelServerMessage): void {
     if (this.state !== 'open' || this.socket.destroyed) return;
     this.socket.write(encodeJsonFrame(message));
+  }
+
+  /** Writes one replayed event and waits for the socket to drain when it is full. */
+  private async sendPaced(event: CommittedEvent): Promise<void> {
+    if (this.state !== 'open' || this.socket.destroyed) return;
+    if (this.socket.write(eventFrame(event))) return;
+    await new Promise<void>((resolve) => {
+      const done = (): void => {
+        this.socket.off('drain', done);
+        this.socket.off('close', done);
+        resolve();
+      };
+      this.socket.on('drain', done);
+      this.socket.on('close', done);
+    });
+  }
+
+  private sendEvent(event: CommittedEvent): void {
+    if (this.state !== 'open' || this.socket.destroyed) return;
+    this.socket.write(eventFrame(event));
+  }
+
+  /**
+   * Replay-to-live (plan §8), all on the owner's event loop: register a
+   * buffering listener, read the watermark W, stream the file from `fromSeq`
+   * to W paced by drain, flush buffered events above W in order, then forward
+   * live. A later `subscribe` supersedes this one.
+   */
+  private subscribe(fromSeq: number): void {
+    this.generation += 1;
+    this.disposeListener?.();
+    this.disposeListener = null;
+    const source = this.server.events;
+    if (source === null) {
+      this.pendingFromSeq = fromSeq;
+      return;
+    }
+    this.pendingFromSeq = null;
+    const generation = this.generation;
+    const buffered: CommittedEvent[] = [];
+    let live = false;
+    this.disposeListener = source.subscribe((event) => {
+      if (generation !== this.generation || event.seq < fromSeq) return;
+      if (live) this.sendEvent(event);
+      else buffered.push(event);
+    });
+    const watermark = source.lastSeq;
+    const current = (): boolean => generation === this.generation && this.state === 'open';
+    void (async () => {
+      if (fromSeq <= watermark) {
+        for await (const event of source.read(fromSeq)) {
+          if (!current()) return;
+          if (event.seq > watermark) break;
+          await this.sendPaced(event);
+        }
+      }
+      if (!current()) return;
+      for (const event of buffered) if (event.seq > watermark) this.sendEvent(event);
+      buffered.length = 0;
+      live = true;
+    })().catch(() => {
+      this.destroy();
+    });
+  }
+
+  /** @internal */
+  public onEventsAttached(): void {
+    if (this.pendingFromSeq !== null && this.state === 'open') this.subscribe(this.pendingFromSeq);
   }
 
   /** Graceful close: unauthenticated connections are destroyed instead. */
@@ -413,6 +506,9 @@ class ServerConnection implements ChannelConnection {
       case 'hello':
         this.send({ type: 'error', code: 'bad_request', message: 'hello' });
         return;
+      case 'subscribe':
+        this.subscribe((message as unknown as { from_seq: number }).from_seq);
+        return;
       case 'ping':
         this.send({ type: 'heartbeat', at: this.server.deps.clock().toISOString() });
         return;
@@ -424,6 +520,9 @@ class ServerConnection implements ChannelConnection {
   private onClose(): void {
     const wasOpen = this.state === 'open';
     this.state = 'closed';
+    this.generation += 1;
+    this.disposeListener?.();
+    this.disposeListener = null;
     const { timers, clock, logger } = this.server.deps;
     timers.clearTimeout(this.helloTimer);
     if (wasOpen) {
@@ -437,6 +536,18 @@ class ServerConnection implements ChannelConnection {
         'channel_detached',
       );
     }
+  }
+}
+
+/** One event as a frame; an event too large for a frame becomes `event_oversize`. */
+function eventFrame(event: CommittedEvent): Buffer {
+  try {
+    return encodeJsonFrame({ type: 'event', seq: event.seq, event: event.event });
+  } catch (error) {
+    if (error instanceof RunChannelFrameError && error.code === 'FRAME_TOO_LARGE') {
+      return encodeJsonFrame({ type: 'event_oversize', seq: event.seq });
+    }
+    throw error;
   }
 }
 

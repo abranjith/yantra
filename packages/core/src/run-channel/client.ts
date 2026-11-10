@@ -18,7 +18,6 @@
  */
 
 import { connect as netConnect, type Socket } from 'node:net';
-import { join } from 'node:path';
 
 import {
   CHANNEL_CAPABILITY_CANCEL,
@@ -28,13 +27,10 @@ import {
   SUPPORTED_CHANNEL_VERSIONS,
   type RunChannelClientMessage,
   type RunChannelEventPayload,
-  type RunEventReadItem,
   type RunLease,
 } from '@yantra/protocol';
 
 import type { Logger } from '../browser/types.js';
-import { RUN_EVENTS_FILENAME } from '../run-events/log.js';
-import { readRunEvents } from '../run-events/reader.js';
 import {
   HELLO_DEADLINE_MS,
   NOT_RESPONDING_AFTER_MS,
@@ -43,6 +39,7 @@ import {
 } from '../run-ownership/constants.js';
 import { readLease } from '../run-ownership/lease-store.js';
 
+import { readCommittedEvents } from './event-source.js';
 import { FrameDecoder, encodeJsonFrame } from './frame-codec.js';
 import { realTimers, type RunChannelTimers } from './server.js';
 
@@ -400,11 +397,9 @@ export class RunChannelClient {
 
   /** Reads `run-events.jsonl` from `lastSeq + 1`, delivering what it holds. */
   public async readFromFile(): Promise<void> {
-    const path = join(this.options.runDir, RUN_EVENTS_FILENAME);
     try {
-      for await (const item of readRunEvents(path, { fromSeq: this.lastSeq + 1 })) {
-        const delivered = fileDelivery(item);
-        if (delivered !== null) this.deliver(delivered.seq, delivered.event, true);
+      for await (const item of readCommittedEvents(this.options.runDir, this.lastSeq + 1)) {
+        this.deliver(item.seq, item.event, true);
       }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
@@ -444,14 +439,4 @@ export class RunChannelClient {
     this.snapshot = { state: this.state, lastSeq: this.lastSeq, ownerVersion: this.ownerVersion };
     for (const listener of this.snapshotListeners) listener();
   }
-}
-
-function fileDelivery(
-  item: RunEventReadItem,
-): { readonly seq: number; readonly event: RunChannelEventPayload } | null {
-  if (item.status === 'event') return { seq: item.record.seq, event: item.record.event };
-  if (item.status === 'unknown_kind') {
-    return { seq: item.seq, event: item.raw as RunChannelEventPayload };
-  }
-  return null;
 }

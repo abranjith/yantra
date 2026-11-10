@@ -141,9 +141,15 @@
     },
     {
       "path": "packages/core/src/run-channel/client.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/run-channel/event-source.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
     },
     {
       "path": "packages/core/src/run-channel/frame-codec.ts",
@@ -159,15 +165,21 @@
     },
     {
       "path": "packages/core/src/run-channel/server.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
     {
       "path": "packages/core/src/run-channel/socket-address.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/run-events/stream.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
     },
     {
       "path": "packages/core/src/run-ownership/browser-ownership-recorder.ts",
@@ -213,7 +225,7 @@
     },
     {
       "path": "packages/core/tests/run-channel/client.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
@@ -224,14 +236,20 @@
       "task": "TASK-003"
     },
     {
-      "path": "packages/core/tests/run-channel/server.spec.ts",
+      "path": "packages/core/tests/run-channel/replay.spec.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/tests/run-channel/server.spec.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
     {
       "path": "packages/core/tests/run-channel/support.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },

@@ -29,3 +29,10 @@ export {
   type RunChannelClientSnapshot,
   type RunChannelClientState,
 } from './client.js';
+export {
+  committedFromItem,
+  readCommittedEvents,
+  streamEventSource,
+  type CommittedEvent,
+  type RunEventSource,
+} from './event-source.js';

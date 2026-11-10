@@ -1540,6 +1540,21 @@ sequenceDiagram
   served by handlers registered with a capability, which `hello_ok` advertises to clients that ask
   for it. A type with no handler gets `error{unsupported}` and the connection stays open; a
   malformed known message gets `error{bad_request}`; malformed framing or JSON closes it.
+- **Replay to live.** The run attaches its event log with `attachEvents(streamEventSource(stream,
+runDir))`; a `subscribe` that arrives earlier waits for it. On `subscribe {from_seq}` the
+  connection, all on the owner's event loop, registers a buffering committed-event listener, reads
+  the watermark `W = stream.lastSeq`, streams `from_seq..W` from `run-events.jsonl` (paced by socket
+  drain, so a 50,000-event replay never piles up in memory), flushes buffered events above `W` in
+  order, and then forwards live. Persist-before-publish means the listener only ever sees committed
+  events, and the reader never yields a partial tail. An event whose frame would exceed 1 MiB is
+  sent as `event_oversize {seq}`, so no `seq` is missing. A second `subscribe` restarts from its own
+  `from_seq`.
+- **Client side.** `RunChannelClient` delivers each `seq` once, in increasing order, and counts any
+  gap (there should be none). When a connection closes before the run's `run_outcome`, it reads
+  `run-events.jsonl` from `lastSeq + 1` first, because an owner that exits right after its terminal
+  event may never send it. `reconnect()` backs off from 250 ms to 5 s, re-reads the lease (a resumed
+  run has a new token and socket) and resubscribes from `lastSeq + 1`. `getSnapshot()` and
+  `subscribeSnapshot()` fit `useSyncExternalStore`.
 - **Close.** `close(drainMs)` stops accepting, ends every connection, waits up to 1 s for them to
   close, destroys any left, and only then does `finish()` release the lease, so an attached client
   receives the run's terminal event.
