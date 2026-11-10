@@ -4,6 +4,7 @@ import type { ExecutionClass, RunLease, RunLeaseOrigin, RunSocketAddress } from 
 
 import type { ProcessIdentity, ProcessLivenessProbe } from '../browser/installation-types.js';
 import type { Logger } from '../browser/types.js';
+import { startRunChannelServer } from '../run-channel/server.js';
 import { RUN_EVENTS_FILENAME } from '../run-events/log.js';
 import { scanRunEventsTail } from '../run-events/reader.js';
 
@@ -69,9 +70,6 @@ const noopLogger: Logger = {
   debug: () => undefined,
 };
 
-// STUB: no default run socket until TASK-005 adds RunChannelServer.
-const defaultStartChannel: StartRunChannel | null = null;
-
 /**
  * One ownership epoch of a run: the lease, the run socket that the lease
  * names, and the recorder for browsers the run spawns.
@@ -97,10 +95,7 @@ export class RunOwnershipSession {
    */
   public static async open(options: RunOwnershipSessionOptions): Promise<RunOwnershipSession> {
     const logger = options.logger ?? noopLogger;
-    const startChannel = options.startChannel ?? defaultStartChannel;
-    if (startChannel === null) {
-      throw new Error('No run channel is wired; import @yantra/core run-channel first.');
-    }
+    const startChannel = options.startChannel ?? startRunChannelServer;
     const token = generateRunToken();
     const channel = await startChannel({
       runId: options.runId,

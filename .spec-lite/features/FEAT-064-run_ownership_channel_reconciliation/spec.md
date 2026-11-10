@@ -502,9 +502,9 @@ All paths above are under `packages/core/src/run-channel/`.
 command, log, logger})`: - claims the lease, with `log_seq_at_claim` taken from the FEAT-063 writer; - starts the heartbeat timer (5 s, `unref`). Heartbeat write failures are logged once and never
     crash the run; - exposes `recorder: BrowserOwnershipRecorder`.
 
-                                                        `finish()` runs in this order: stop the timers, close the channel (TASK-005), then
-                                                        `releaseLease`. The caller has already flushed the terminal event and manifest. `finish()` is
-                                                        idempotent.
+                                                            `finish()` runs in this order: stop the timers, close the channel (TASK-005), then
+                                                            `releaseLease`. The caller has already flushed the terminal event and manifest. `finish()` is
+                                                            idempotent.
 
   - **`browser-ownership-recorder.ts`.**
     - `recordSpawned(identity)` appends to `owned_browsers` and flushes before returning.
@@ -547,7 +547,7 @@ tests/browser` passes. A manual `YANTRA_HOME=<tmp> yantra research --no-llm "x"`
 
 > **Amended by spike S2** (accepted 2026-11-09): RC3 (the server exposes a bounded graceful close that ends every connection before `finish()` releases the lease). See the TASK-001 notes and `spike_s2_report.md` → Required changes.
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - **`socket-address.ts`.** `allocateSocketAddress()` returns `{kind: 'unix', address:
 <socketsRoot>/<random 24 hex>.sock}` or `{kind: 'pipe', address: \\.\pipe\yantra-<random 32
 hex>}`. A stale Unix socket file at the address is unlinked only when its path is inside
@@ -573,7 +573,7 @@ hex>}`. A stale Unix socket file at the address is unlinked only when its path i
         the lease's `channel_version` is outside the client's range. In that case the client does
         not connect at all, and never sends `cancel`;
       - `{state: 'unreachable'}`.
-- [ ] **Unit Tests** (`server.spec.ts`, `client.spec.ts`, over real `node:net` sockets in a temp
+- [x] **Unit Tests** (`server.spec.ts`, `client.spec.ts`, over real `node:net` sockets in a temp
       directory or pipe):
   - **Unauthenticated clients get nothing:**
     - no hello within 5 s (injected timer) means the socket closes and the client received 0 bytes;
@@ -590,7 +590,7 @@ hex>}`. A stale Unix socket file at the address is unlinked only when its path i
     bytes the fake received).
   - An unregistered `intervention.answer` gets `error{unsupported}` and the connection survives.
   - A canary `run_token` never appears in the captured logger output.
-- [ ] **Documentation Update**: Invoke **Document** update mode for architecture (run socket and
+- [x] **Documentation Update**: Invoke **Document** update mode for architecture (run socket and
       handshake) and safety and privacy (token-first authentication, Unix socket directory permissions,
       named pipes on Windows).
 - **Verify**: `cd packages/core && npx vitest run tests/run-channel` passes on the CI three-OS
@@ -974,7 +974,7 @@ tests/commands/list-reconcile.spec.ts` passes;
 process.execPath, workerPath})`.** 1. Exclusively create the launch file (`wx`, `0600`) in `launch.dir`. 2. Call `spawn(nodePath, [workerPath, '--launch', file], {cwd: invocation.cwd, env, detached:
 true, shell: false, stdio: 'ignore', windowsHide: true})`, then `child.unref()`. 3. Return `{pid, identity}`, with the identity captured through `identifyProcess`.
 
-                                                        Apply any mitigation the S2 report requires, for example Job-object breakaway on Windows.
+                                                            Apply any mitigation the S2 report requires, for example Job-object breakaway on Windows.
 
 - [ ] **Unit Tests** (`launch.spec.ts`, `result-sink.spec.ts`, `spawn.spec.ts`):
   - **Launch validation:**
@@ -1141,7 +1141,7 @@ Error`, `RunChannelFrameError` and `RunOwnershipError`, all with safe, actionabl
 - [x] TASK-002: Protocol schemas — lease, execution state, channel messages, worker launch
 - [x] TASK-003: Frame codec — one framing grammar with size limits
 - [x] TASK-004: Exclusive run lease — claim, heartbeat, owned browsers, verdict, release
-- [ ] TASK-005: Authenticated run socket with version and capability handshake
+- [x] TASK-005: Authenticated run socket with version and capability handshake
 - [ ] TASK-006: Atomic replay-to-live subscription with gap-free reconnect
 - [ ] TASK-007: Bounded, prioritized outbound queues, backpressure and heartbeat
 - [ ] TASK-008: Every run is owned — lease, socket and owned browsers on all run paths, with `cancel`

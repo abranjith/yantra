@@ -1498,6 +1498,54 @@ processes. Everything on it uses one framing grammar, implemented in
   nothing and returns nothing, and the caller closes the connection. There is no resynchronization,
   because a length that cannot be trusted leaves no frame boundary to resume from.
 
+#### Run ownership and the run socket
+
+Each run epoch is owned through `src/run-ownership/`. `RunOwnershipSession.open` starts the run
+socket first, then claims `lease.json` naming that socket and its token, so a client that reads the
+lease always finds a listener. The lease is published once by `link` and never rewritten; browsers
+the run launches are appended to `owned-browsers.jsonl` by a `BrowserOwnershipRecorder` threaded
+through `BrowserRuntimeOptions` → `LocalBrowserProvider` → `launchResolvedChrome`, for every
+ownership kind. Owner liveness is a creation-identity check (`ProcessLivenessProbe`): a signal-0
+test answers a missing PID without a platform query, and `checkMany` checks many identities with
+one CIM query on Windows or one `ps` on macOS.
+
+`RunChannelServer` (`src/run-channel/server.ts`) listens on a Unix socket in an owner-only
+directory (`socketsRoot()`: `<yantraHome>/run`, or `<tmpdir>/yantra-<uid>` when that path would
+not fit `sun_path`; created `0700` and refused, never repaired, if it is a symlink, not owned by
+the user, or group- or world-accessible) or on a named pipe `\\.\pipe\yantra-<32 hex>` on Windows.
+
+```mermaid
+sequenceDiagram
+  participant C as Client
+  participant S as RunChannelServer
+  C->>S: hello {token, channel_version, capabilities, client_kind}
+  Note over S: first frame only, ≤ 16 KiB, within 5 s
+  alt wrong token, late, oversized or not hello
+    S--xC: destroy (0 bytes written)
+  else version below the supported range
+    S->>C: hello_incompatible {supported, yantra_version}, then close
+  else
+    S->>C: hello_ok {channel_version, supported, capabilities ∩, run_id}
+    C->>S: subscribe / cancel / ping / later types
+    S->>C: event / cancel_ack / heartbeat / error{unsupported | bad_request}
+  end
+```
+
+- **Token first.** The token is compared with `timingSafeEqual`; a different length is simply
+  wrong. Until `hello` authenticates, the server writes nothing at all.
+- **Versions.** The negotiated version is `min(client, CHANNEL_VERSION)`. An owner a client cannot
+  speak to is `live_unavailable` to `RunChannelClient`, which then sends nothing more, never
+  `cancel`.
+- **Handlers.** `subscribe` and `ping` (answered with a `heartbeat`) are built in. Other types are
+  served by handlers registered with a capability, which `hello_ok` advertises to clients that ask
+  for it. A type with no handler gets `error{unsupported}` and the connection stays open; a
+  malformed known message gets `error{bad_request}`; malformed framing or JSON closes it.
+- **Close.** `close(drainMs)` stops accepting, ends every connection, waits up to 1 s for them to
+  close, destroys any left, and only then does `finish()` release the lease, so an attached client
+  receives the run's terminal event.
+- **Logging.** `channel_attached` and `channel_detached` carry the client kind, negotiated version
+  and duration. The token and the socket address are never logged.
+
 ### `packages/agent`
 
 `@yantra/agent` owns live model-driven execution. `runAgenticTask()` creates the auditable run,

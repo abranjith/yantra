@@ -140,6 +140,12 @@
       "task": "TASK-004"
     },
     {
+      "path": "packages/core/src/run-channel/client.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
       "path": "packages/core/src/run-channel/frame-codec.ts",
       "status": "A",
       "role": "implement",
@@ -152,38 +158,50 @@
       "task": "TASK-003"
     },
     {
-      "path": "packages/core/src/run-ownership/browser-ownership-recorder.ts",
+      "path": "packages/core/src/run-channel/server.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/run-channel/socket-address.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/run-ownership/browser-ownership-recorder.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/core/src/run-ownership/constants.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/core/src/run-ownership/errors.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/core/src/run-ownership/index.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/core/src/run-ownership/lease-store.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/core/src/run-ownership/ownership-session.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
@@ -194,26 +212,44 @@
       "task": "TASK-002"
     },
     {
+      "path": "packages/core/tests/run-channel/client.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
       "path": "packages/core/tests/run-channel/frame-codec.spec.ts",
       "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
-      "path": "packages/core/tests/run-ownership/lease-store.spec.ts",
+      "path": "packages/core/tests/run-channel/server.spec.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/tests/run-channel/support.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/tests/run-ownership/lease-store.spec.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/core/tests/run-ownership/ownership-session.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "packages/core/tests/run-ownership/support.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
