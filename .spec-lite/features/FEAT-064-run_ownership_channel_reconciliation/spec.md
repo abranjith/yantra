@@ -502,9 +502,9 @@ All paths above are under `packages/core/src/run-channel/`.
 command, log, logger})`: - claims the lease, with `log_seq_at_claim` taken from the FEAT-063 writer; - starts the heartbeat timer (5 s, `unref`). Heartbeat write failures are logged once and never
     crash the run; - exposes `recorder: BrowserOwnershipRecorder`.
 
-                                                                            `finish()` runs in this order: stop the timers, close the channel (TASK-005), then
-                                                                            `releaseLease`. The caller has already flushed the terminal event and manifest. `finish()` is
-                                                                            idempotent.
+                                                                                `finish()` runs in this order: stop the timers, close the channel (TASK-005), then
+                                                                                `releaseLease`. The caller has already flushed the terminal event and manifest. `finish()` is
+                                                                                idempotent.
 
   - **`browser-ownership-recorder.ts`.**
     - `recordSpawned(identity)` appends to `owned_browsers` and flushes before returning.
@@ -854,7 +854,7 @@ tests/run-ownership/result-evidence.spec.ts` passes.
 
 > **Amended by spike S2** (accepted 2026-11-09): RC2 (takeover replaces the lease by unlink then `link` under `reconcile.lock`; uncertain entries stay in the sidecar) and RC4 (`reconcileAll`, `listPossibleOrphans`, `findLiveOwners` use `checkMany`). See the TASK-001 notes and `spike_s2_report.md` → Required changes.
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - **`takeover.ts`: `claimExistingRun(runDir, init)`**, used by `RunOrchestrator.resume` and
     replacing the TASK-008 stub.
     - No lease: plain `claimLease`.
@@ -883,7 +883,7 @@ budgetMs: 5_000})`. Errors are logged at debug, never surfaced. It is awaited fo
     budget before process exit.
   - Export `reconcileAll` for FEAT-065's host start (`trigger: 'host'`).
 
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - **`takeover.spec.ts`:**
     - two concurrent `claimExistingRun` calls: exactly one succeeds;
     - a live owner gives `busy`;
@@ -902,7 +902,7 @@ budgetMs: 5_000})`. Errors are logged at debug, never surfaced. It is awaited fo
     - `list` against a live fake owner leaves it `running`.
   - **CLI run start:** a dead run is reconciled after an unrelated `research --no-llm` run starts,
     and the run's own exit is not delayed beyond the budget (stepped clock).
-- [ ] **Documentation Update**: Invoke **Document** update mode for usage (`yantra list` shows
+- [x] **Documentation Update**: Invoke **Document** update mode for usage (`yantra list` shows
       `interrupted`; `resume` can answer `busy`) and diagnostics and audit.
 - **Verify**:
   - `cd packages/core && npx vitest run tests/run-ownership` passes;
@@ -974,7 +974,7 @@ tests/commands/list-reconcile.spec.ts` passes;
 process.execPath, workerPath})`.** 1. Exclusively create the launch file (`wx`, `0600`) in `launch.dir`. 2. Call `spawn(nodePath, [workerPath, '--launch', file], {cwd: invocation.cwd, env, detached:
 true, shell: false, stdio: 'ignore', windowsHide: true})`, then `child.unref()`. 3. Return `{pid, identity}`, with the identity captured through `identifyProcess`.
 
-                                                                            Apply any mitigation the S2 report requires, for example Job-object breakaway on Windows.
+                                                                                Apply any mitigation the S2 report requires, for example Job-object breakaway on Windows.
 
 - [ ] **Unit Tests** (`launch.spec.ts`, `result-sink.spec.ts`, `spawn.spec.ts`):
   - **Launch validation:**
@@ -1146,7 +1146,7 @@ Error`, `RunChannelFrameError` and `RunOwnershipError`, all with safe, actionabl
 - [x] TASK-007: Bounded, prioritized outbound queues, backpressure and heartbeat
 - [x] TASK-008: Every run is owned — lease, socket and owned browsers on all run paths, with `cancel`
 - [x] TASK-009: Reconciler — exactly one terminal result for a dead owner, identity-verified browser reaping
-- [ ] TASK-010: Resume takeover and reconciliation triggers (`yantra list`, CLI run start, host start)
+- [x] TASK-010: Resume takeover and reconciliation triggers (`yantra list`, CLI run start, host start)
 - [ ] TASK-011: Stop service — graceful cancel, identity-verified forced termination, always reconcile
 - [ ] TASK-012: Detached worker entry point and the single cross-OS spawn helper
 - [ ] TASK-013: `config data-dir` guard — refuse while live leases or a host lock exist (D15)

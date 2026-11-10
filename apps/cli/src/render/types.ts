@@ -63,6 +63,8 @@ export type ListItem =
       readonly durationMs: number | null;
       /** The task-outcome word (FEAT-054); present only on runs that recorded one. */
       readonly taskOutcome?: string;
+      /** `interrupted` when the run's owner died and a reconciler ended it (FEAT-064). */
+      readonly executionState?: 'interrupted';
     };
 
 /** A payload accepted by `OutputRenderer.renderShow`. */

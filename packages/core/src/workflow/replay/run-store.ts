@@ -22,8 +22,10 @@ import { openTaskEventBus } from '../../run-events/mirroring-event-bus.js';
 import type { RunEventStream } from '../../run-events/stream.js';
 import {
   RunOwnershipSession,
+  type ClaimRunLease,
   type RunOwnershipSessionOptions,
 } from '../../run-ownership/ownership-session.js';
+import { claimExistingRun } from '../../run-ownership/takeover.js';
 
 import { RunDirMissingError } from './errors.js';
 import { writeManifest, readManifest } from './manifest-writer.js';
@@ -208,7 +210,11 @@ export class LocalRunStore implements RunStore, AgentRunStore {
   private async openSession(
     runId: string,
     runDir: string,
-    ownership: { readonly command: readonly string[]; readonly origin: RunLeaseOrigin },
+    ownership: {
+      readonly command: readonly string[];
+      readonly origin: RunLeaseOrigin;
+      readonly claim?: ClaimRunLease;
+    },
   ): Promise<RunOwnershipSession> {
     const open = this.options.openSession ?? ((options) => RunOwnershipSession.open(options));
     const session = await open({
@@ -217,6 +223,7 @@ export class LocalRunStore implements RunStore, AgentRunStore {
       origin: ownership.origin,
       executionClass: 'run',
       command: ownership.command,
+      ...(ownership.claim === undefined ? {} : { claim: ownership.claim }),
       ...(this.options.logger === undefined ? {} : { logger: this.options.logger }),
     });
     this.sessions.set(runId, session);
@@ -229,11 +236,11 @@ export class LocalRunStore implements RunStore, AgentRunStore {
   }
 
   /**
-   * Takes ownership of an existing run directory for `resume`.
+   * Takes ownership of an existing run directory for `resume`: a dead
+   * owner's run is reconciled first, then its lease replaced (FEAT-064).
    *
-   * STUB: plain claim until TASK-010 — any existing lease answers busy.
-   *
-   * @throws RunLeaseHeldError when the run already has a lease.
+   * @throws RunLeaseHeldError when an owner that is alive, or cannot be
+   *   verified, holds the run.
    */
   public async acquireOwnership(
     runId: string,
@@ -244,6 +251,11 @@ export class LocalRunStore implements RunStore, AgentRunStore {
     return this.openSession(runId, join(this.root, runId), {
       command: init.command,
       origin: init.origin ?? 'terminal',
+      claim: (runDir, claimInit, deps) =>
+        claimExistingRun(runDir, claimInit, {
+          ...deps,
+          ...(this.options.logger === undefined ? {} : { logger: this.options.logger }),
+        }),
     });
   }
 

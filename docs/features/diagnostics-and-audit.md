@@ -366,6 +366,8 @@ When the process that owned a run dies (a crash, a killed terminal, Task Manager
 - **Browsers.** Each browser in `owned-browsers.jsonl` is checked by identity: a live one is stopped and confirmed gone, a gone one is marked `exited`, and one whose identity cannot be verified is never signalled. While any such browser remains, `lease.json` is kept as a **possible orphan** record, and a later reconcile tries again.
 - **`reconciled`** is appended to the run's `runtime.jsonl`: who triggered it (`list`, `cli`, `host`, `stop` or `resume`), which evidence decided the outcome (`event`, `manifest` or `owner_lost`), and how many owned browsers were reaped or left uncertain.
 
+**When it runs.** `yantra list` reconciles before it lists (blocking), every command that starts a run sweeps in the background for at most five seconds, and `resume` reconciles a run whose owner died before taking it over. A sweep checks every lease's owner with one batched identity query and skips its own process's runs.
+
 Run directories from before run ownership are reconciled too: a `.lock` whose PID no longer exists, or a `running` manifest with neither a lease nor a `.lock`. A `.lock` whose PID is alive cannot be verified (it has no start token) and is left alone.
 
 #### `run-events.jsonl`

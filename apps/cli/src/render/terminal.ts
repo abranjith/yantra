@@ -78,9 +78,14 @@ export class TerminalRenderer implements OutputRenderer {
         );
       } else {
         const duration = item.durationMs === null ? '—' : `${item.durationMs}ms`;
-        // The outcome word sits beside the status when the run recorded one.
+        // The outcome word sits beside the status when the run recorded one;
+        // a run whose owner died reads `interrupted · <outcome>` (FEAT-064).
         const status =
-          item.taskOutcome === undefined ? item.status : `${item.status} ${item.taskOutcome}`;
+          item.executionState === 'interrupted'
+            ? `interrupted · ${item.taskOutcome ?? item.status}`
+            : item.taskOutcome === undefined
+              ? item.status
+              : `${item.status} ${item.taskOutcome}`;
         lines.push(
           `${item.runId.padEnd(48)}  ${status.padEnd(10)}  ${duration.padStart(8)}  ` +
             `workflow=${item.workflowName}`,

@@ -142,7 +142,9 @@ describe('@no-llm yantra run flag surface', () => {
     }) as never);
 
     await expect(
-      executeCommand(['run', 'weekly', '--template', 'exec-brief'], createTerminalContext()),
+      executeCommand(['run', 'weekly', '--template', 'exec-brief'], createTerminalContext(), {
+        runStartSweep: null,
+      }),
     ).resolves.toMatchObject({ exitCode: 1 });
     expect(stderr).toBe(
       'templates are not yet supported on run; see docs/features/report-templates.md\n',

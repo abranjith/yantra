@@ -11,7 +11,17 @@
  *   yantra list runs --workflow bank-statement --status failed
  */
 
-import { FileWorkflowStore, workflowsRoot, type HistoryEntry, type Logger } from '@yantra/core';
+import { join } from 'node:path';
+
+import {
+  FileWorkflowStore,
+  readExecutionState,
+  reconcileAll,
+  runsRoot,
+  workflowsRoot,
+  type HistoryEntry,
+  type Logger,
+} from '@yantra/core';
 import { LocalRunStore, type RunSummary } from '@yantra/core/workflow/replay';
 import { COMMAND_REGISTRY } from '@yantra/protocol';
 import type { Command } from 'commander';
@@ -110,6 +120,16 @@ async function listRuns(
   logger: Logger,
   context: CommandContext,
 ): Promise<ListItem[]> {
+  const history = await openHistory(logger);
+  // FEAT-064: end every run whose owner died before reading, so a killed run
+  // reads `interrupted`, never `running`. Blocking; failures never fail list.
+  await reconcileAll({
+    trigger: 'list',
+    includeRunningManifests: true,
+    history: history?.store ?? null,
+    logger,
+  }).catch(() => undefined);
+
   const runStore = new LocalRunStore();
   const fileRuns = await runStore.listRuns({ limit: 500 });
 
@@ -118,7 +138,6 @@ async function listRuns(
     byId.set(run.runId, fileRunToItem(run));
   }
 
-  const history = await openHistory(logger);
   if (history === null) {
     context.output.stderr.write(
       'note: history index unavailable — showing runs from files only ' +
@@ -149,7 +168,13 @@ async function listRuns(
     const bAt = b.kind === 'run' ? b.startedAt : '';
     return bAt.localeCompare(aAt);
   });
-  return items.slice(0, limit);
+  return Promise.all(
+    items.slice(0, limit).map(async (item) => {
+      if (item.kind !== 'run') return item;
+      const executionState = await readExecutionState(join(runsRoot(), item.runId));
+      return executionState === undefined ? item : { ...item, executionState };
+    }),
+  );
 }
 
 function fileRunToItem(run: RunSummary): ListItem {

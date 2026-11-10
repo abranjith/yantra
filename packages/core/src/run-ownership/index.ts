@@ -45,3 +45,14 @@ export {
   type ReconcileTrigger,
   type ReconciledRecord,
 } from './runtime-record.js';
+export { claimExistingRun, type TakeoverDeps } from './takeover.js';
+export {
+  findLiveOwners,
+  listPossibleOrphans,
+  readExecutionState,
+  reconcileAll,
+  type LiveOwner,
+  type PossibleOrphan,
+  type SweepOptions,
+  type SweepResult,
+} from './sweep.js';
