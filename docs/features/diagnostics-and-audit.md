@@ -356,6 +356,18 @@ Every run holds a lease while it runs: `ask`, `research`, `do`, `run`, `resume`,
 
 The owner removes `lease.json` (and `owned-browsers.jsonl`) as its last act, after the run's final event and final manifest are on disk. If a browser's exit could not be proved, both files are kept as a "possible orphan" record so that the browser can be found and stopped later. The lease holds the secret token for the run's local socket; treat it like the rest of the run directory, and see [Safety and Privacy](safety-and-privacy.md#audit-records-and-sensitive-local-artifacts).
 
+#### Interrupted runs
+
+When the process that owned a run dies (a crash, a killed terminal, Task Manager, `kill -9`), it cannot write the run's end. A reconciler does it instead, once it has verified by creation identity that the owner is really gone; an owner that might still be alive, or whose identity cannot be checked, is left alone.
+
+- **Exactly one ending.** The reconciler appends one `run_outcome` to `run-events.jsonl` with `termination_reason: "owner_lost"`, unless the run had already recorded its own outcome before dying (then that outcome stands) or its manifest already holds a final outcome (then the event mirrors it). Running it again, or running several at once, never adds a second ending.
+- **The outcome follows the evidence.** It is `partial` (exit `2`) when the run had already saved a result (a Brief, document, `outputs.json`, or a result-bearing `artifact_saved` event), otherwise `failed` (exit `2`). It is never `aborted`: nobody chose to stop the run.
+- **`executionState: "interrupted"`** is added to the manifest, separately from `taskOutcome`, so `interrupted · partial` means "the owner died, and a partial result exists". Runs that ended on their own never carry it. Older Yantra versions cannot read `owner_lost`.
+- **Browsers.** Each browser in `owned-browsers.jsonl` is checked by identity: a live one is stopped and confirmed gone, a gone one is marked `exited`, and one whose identity cannot be verified is never signalled. While any such browser remains, `lease.json` is kept as a **possible orphan** record, and a later reconcile tries again.
+- **`reconciled`** is appended to the run's `runtime.jsonl`: who triggered it (`list`, `cli`, `host`, `stop` or `resume`), which evidence decided the outcome (`event`, `manifest` or `owner_lost`), and how many owned browsers were reaped or left uncertain.
+
+Run directories from before run ownership are reconciled too: a `.lock` whose PID no longer exists, or a `running` manifest with neither a lease nor a `.lock`. A `.lock` whose PID is alive cannot be verified (it has no start token) and is left alone.
+
 #### `run-events.jsonl`
 
 Every new run directory holds `run-events.jsonl`, one ordered record of what the run showed and did while it ran. `ask`, `research`, `do`, `run`, `resume`, and daemon-fired workflows all write it. It is the surface-neutral counterpart of the live terminal and `--json` output, and it adds facts the terminal never printed, such as fetch outcomes, consent waits, and saved files. Terminal and `--json` output is unchanged: the CLI renders from these same events, and every line it printed before still prints byte for byte.

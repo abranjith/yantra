@@ -30,3 +30,18 @@ export {
   type RunOwnershipSessionOptions,
   type StartRunChannel,
 } from './ownership-session.js';
+export {
+  acquireReconcileLock,
+  reconcileRun,
+  type ReconcileDeps,
+  type ReconcileHistory,
+  type ReconcileResult,
+} from './reconciler.js';
+export { resultEvidence } from './result-evidence.js';
+export {
+  RUNTIME_LOG_FILENAME,
+  appendReconciledRecord,
+  type ReconcileEvidence,
+  type ReconcileTrigger,
+  type ReconciledRecord,
+} from './runtime-record.js';

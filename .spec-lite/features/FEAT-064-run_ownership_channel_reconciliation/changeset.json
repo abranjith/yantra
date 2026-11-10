@@ -272,6 +272,24 @@
       "task": "TASK-004"
     },
     {
+      "path": "packages/core/src/run-ownership/reconciler.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/core/src/run-ownership/result-evidence.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/core/src/run-ownership/runtime-record.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
       "path": "packages/core/src/workflow/replay/run-orchestrator.ts",
       "status": "M",
       "role": "implement",
@@ -338,8 +356,20 @@
       "task": "TASK-004"
     },
     {
-      "path": "packages/core/tests/run-ownership/run-paths.spec.ts",
+      "path": "packages/core/tests/run-ownership/reconciler.spec.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/core/tests/run-ownership/result-evidence.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/core/tests/run-ownership/run-paths.spec.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },

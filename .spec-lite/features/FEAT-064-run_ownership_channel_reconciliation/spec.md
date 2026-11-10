@@ -502,9 +502,9 @@ All paths above are under `packages/core/src/run-channel/`.
 command, log, logger})`: - claims the lease, with `log_seq_at_claim` taken from the FEAT-063 writer; - starts the heartbeat timer (5 s, `unref`). Heartbeat write failures are logged once and never
     crash the run; - exposes `recorder: BrowserOwnershipRecorder`.
 
-                                                                        `finish()` runs in this order: stop the timers, close the channel (TASK-005), then
-                                                                        `releaseLease`. The caller has already flushed the terminal event and manifest. `finish()` is
-                                                                        idempotent.
+                                                                            `finish()` runs in this order: stop the timers, close the channel (TASK-005), then
+                                                                            `releaseLease`. The caller has already flushed the terminal event and manifest. `finish()` is
+                                                                            idempotent.
 
   - **`browser-ownership-recorder.ts`.**
     - `recordSpawned(identity)` appends to `owned_browsers` and flushes before returning.
@@ -766,7 +766,7 @@ tests/run-channel/client.spec.ts` passes.
 
 > **Amended by spike S2** (accepted 2026-11-09): RC2 (step 7 appends `exited` lines and never rewrites the lease; owned browsers are read from `owned-browsers.jsonl`) and RC4 (verdicts through the batched probe). See the TASK-001 notes and `spike_s2_report.md` → Required changes.
 
-- [ ] **Implementation**: Implement `reconcileRun(runDir, deps)` in `reconciler.ts`.
+- [x] **Implementation**: Implement `reconcileRun(runDir, deps)` in `reconciler.ts`.
   - **Dependencies:** `probe`, `terminator`, `clock`, `history` and `logger` are all injectable.
   - **Result:** a union of `no_lease | owner_alive | owner_unknown | busy | reconciled |
 completed_by_evidence`.
@@ -814,7 +814,7 @@ completed_by_evidence`.
       `owner_unknown`, because without a start token it cannot be verified;
     - a `running` manifest with neither file reconciles, by the ordering invariant.
 
-- [ ] **Unit Tests** (`reconciler.spec.ts`, `result-evidence.spec.ts`), using fake probes and
+- [x] **Unit Tests** (`reconciler.spec.ts`, `result-evidence.spec.ts`), using fake probes and
       terminators and a temp run directory:
   - **Dead owner:**
     - a dead owner with no terminal event gives exactly one `run_outcome` (`owner_lost`), a manifest
@@ -843,7 +843,7 @@ completed_by_evidence`.
     - legacy `.lock` with a dead PID is reconciled; with a live PID it is `owner_unknown`;
     - an ask-shaped manifest keeps its unknown fields.
   - Outcome is never `aborted`. A property test over random evidence sets enforces it.
-- [ ] **Documentation Update**: Invoke **Document** update mode for diagnostics and audit
+- [x] **Documentation Update**: Invoke **Document** update mode for diagnostics and audit
       (`interrupted` execution state versus outcome, `owner_lost`, the `reconciled` runtime line, and
       "possible orphan").
 - **Verify**: `cd packages/core && npx vitest run tests/run-ownership/reconciler.spec.ts
@@ -974,7 +974,7 @@ tests/commands/list-reconcile.spec.ts` passes;
 process.execPath, workerPath})`.** 1. Exclusively create the launch file (`wx`, `0600`) in `launch.dir`. 2. Call `spawn(nodePath, [workerPath, '--launch', file], {cwd: invocation.cwd, env, detached:
 true, shell: false, stdio: 'ignore', windowsHide: true})`, then `child.unref()`. 3. Return `{pid, identity}`, with the identity captured through `identifyProcess`.
 
-                                                                        Apply any mitigation the S2 report requires, for example Job-object breakaway on Windows.
+                                                                            Apply any mitigation the S2 report requires, for example Job-object breakaway on Windows.
 
 - [ ] **Unit Tests** (`launch.spec.ts`, `result-sink.spec.ts`, `spawn.spec.ts`):
   - **Launch validation:**
@@ -1145,7 +1145,7 @@ Error`, `RunChannelFrameError` and `RunOwnershipError`, all with safe, actionabl
 - [x] TASK-006: Atomic replay-to-live subscription with gap-free reconnect
 - [x] TASK-007: Bounded, prioritized outbound queues, backpressure and heartbeat
 - [x] TASK-008: Every run is owned — lease, socket and owned browsers on all run paths, with `cancel`
-- [ ] TASK-009: Reconciler — exactly one terminal result for a dead owner, identity-verified browser reaping
+- [x] TASK-009: Reconciler — exactly one terminal result for a dead owner, identity-verified browser reaping
 - [ ] TASK-010: Resume takeover and reconciliation triggers (`yantra list`, CLI run start, host start)
 - [ ] TASK-011: Stop service — graceful cancel, identity-verified forced termination, always reconcile
 - [ ] TASK-012: Detached worker entry point and the single cross-OS spawn helper
