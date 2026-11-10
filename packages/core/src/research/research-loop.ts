@@ -60,6 +60,11 @@ import {
 import { recordReceiptWritten } from '../run-events/receipt-written.js';
 import { abandonOwnedStream, emitArtifactSaved, runOutcomeEvent } from '../run-events/run-facts.js';
 import { RunEventStream } from '../run-events/stream.js';
+import type { DeferredBrowserOwnershipRecorder } from '../run-ownership/browser-ownership-recorder.js';
+import {
+  RunOwnershipSession,
+  type RunOwnershipSessionOptions,
+} from '../run-ownership/ownership-session.js';
 import { DeterministicSynthesizer } from '../synthesis/deterministic.js';
 import type { SourceFailure, Synthesizer } from '../synthesis/types.js';
 
@@ -115,6 +120,13 @@ export interface ResearchLoopDependencies {
   readonly interimSynthesizer?: Synthesizer;
   /** Run-directory root; defaults to `<dataDir>/runs`. */
   readonly runRootDir?: string;
+  /** Opens the run's ownership session (FEAT-064); tests inject a fake socket. */
+  readonly openOwnership?: (options: RunOwnershipSessionOptions) => Promise<RunOwnershipSession>;
+  /**
+   * The recorder the caller's browser provider was built with; the run binds
+   * it to its ownership session, so every browser it launches is recorded.
+   */
+  readonly ownershipRecorder?: DeferredBrowserOwnershipRecorder;
   /** Wall-clock timestamp source for artifacts/freshness; defaults to `Date`. */
   readonly clock?: () => Date;
   /** Monotonic ms clock for the budget tracker; defaults to `Date.now`. */
@@ -190,8 +202,21 @@ export class ResearchLoop {
     let prevCoverage = 0;
 
     await this.prepareRunDir(runDir);
+    // FEAT-064: own the run directory (lease and run socket) before any manifest.
+    const ownership = await (this.deps.openOwnership ?? ((opts) => RunOwnershipSession.open(opts)))(
+      {
+        runDir,
+        runId,
+        origin: options.receipt?.invoked_by ?? 'terminal',
+        executionClass: 'run',
+        command: ['research'],
+        logger: this.deps.logger,
+      },
+    );
+    this.deps.ownershipRecorder?.bind(ownership.recorder);
     try {
       runEvents.open({ runDir, runId, logger: this.deps.logger });
+      ownership.attachEvents(runEvents);
     } catch (error) {
       // An unopenable log is an environment failure before the run proceeds.
       await this.writeManifest(runDir, taskId, options, startedAt, 'failed');
@@ -199,6 +224,7 @@ export class ResearchLoop {
         () => undefined,
       );
       if (abortTimer) clearTimeout(abortTimer);
+      await ownership.finish();
       throw error;
     }
     const events = openTaskEventBus(runDir, runEvents);
@@ -397,6 +423,8 @@ export class ResearchLoop {
       await events.flush();
       await events.close();
       if (!threw) runEvents.close();
+      // After the final manifest and the terminal event (FEAT-064 order).
+      await ownership.finish();
       this.deps.logger.info({ runId, terminationReason }, 'research loop finished');
     }
   }

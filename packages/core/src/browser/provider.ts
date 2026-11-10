@@ -36,6 +36,7 @@ import { LocalProfileStore } from './profile-store.js';
 import { createLocalBrowserRuntimeServices } from './runtime-services.js';
 import { LocalBrowserSession } from './session.js';
 import type {
+  BrowserLaunchContext,
   BrowserProvider,
   BrowserSession,
   ChromeInstall,
@@ -147,8 +148,12 @@ export class LocalBrowserProvider implements BrowserProvider {
    * @throws {BrowserResolutionError} when the selection names no usable browser
    * @throws {BrowserCompatibilityError} when the browser fails a required primitive
    */
-  async launch(options: Partial<LaunchOptions>): Promise<BrowserSession> {
+  async launch(
+    options: Partial<LaunchOptions>,
+    context: BrowserLaunchContext = {},
+  ): Promise<BrowserSession> {
     const opts = parseLaunchOptions(options);
+    const recorder = context.ownershipRecorder ?? this.ownershipRecorder;
 
     // The startup phase is tracked rather than inferred from the error class:
     // the same class can be thrown from two steps (a resolution failure during
@@ -203,7 +208,7 @@ export class LocalBrowserProvider implements BrowserProvider {
         installation,
         profile,
         ownership,
-        this.ownershipRecorder === undefined ? {} : { recorder: this.ownershipRecorder },
+        recorder === undefined ? {} : { recorder },
       );
 
       // Ownership of the process, the profile, and the reservation transfers

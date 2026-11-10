@@ -352,6 +352,8 @@ A live run is owned by exactly one process, recorded in the run directory's `lea
 
 Whether the owner is still alive is decided by its creation identity (PID plus the operating system's start time), never by the PID alone or by the lease's age, so a reused PID is never mistaken for the owner. When the platform cannot tell, the answer is "unknown", and unknown is never treated as dead.
 
+Every run holds a lease while it runs: `ask`, `research`, `do`, `run`, `resume`, and daemon-fired workflows. The lease names a local socket the owning process serves, through which another Yantra process can follow the run's events live (replaying `run-events.jsonl` first) or ask it to stop. A stop request is acknowledged with whether the running command can honor it: `do` and the agentic `ask` and `research` paths abort exactly as on Ctrl+C (outcome `aborted`, exit `130`), while `run`, `resume` and the `--no-llm` `ask` and `research` paths acknowledge it as not honored and keep running. The run directory no longer gets a `.lock` file.
+
 The owner removes `lease.json` (and `owned-browsers.jsonl`) as its last act, after the run's final event and final manifest are on disk. If a browser's exit could not be proved, both files are kept as a "possible orphan" record so that the browser can be found and stopped later. The lease holds the secret token for the run's local socket; treat it like the rest of the run directory, and see [Safety and Privacy](safety-and-privacy.md#audit-records-and-sensitive-local-artifacts).
 
 #### `run-events.jsonl`

@@ -502,9 +502,9 @@ All paths above are under `packages/core/src/run-channel/`.
 command, log, logger})`: - claims the lease, with `log_seq_at_claim` taken from the FEAT-063 writer; - starts the heartbeat timer (5 s, `unref`). Heartbeat write failures are logged once and never
     crash the run; - exposes `recorder: BrowserOwnershipRecorder`.
 
-                                                                    `finish()` runs in this order: stop the timers, close the channel (TASK-005), then
-                                                                    `releaseLease`. The caller has already flushed the terminal event and manifest. `finish()` is
-                                                                    idempotent.
+                                                                        `finish()` runs in this order: stop the timers, close the channel (TASK-005), then
+                                                                        `releaseLease`. The caller has already flushed the terminal event and manifest. `finish()` is
+                                                                        idempotent.
 
   - **`browser-ownership-recorder.ts`.**
     - `recordSpawned(identity)` appends to `owned_browsers` and flushes before returning.
@@ -691,7 +691,7 @@ tests/run-channel/client.spec.ts` passes.
 
 > **Amended by spike S2** (accepted 2026-11-09): RC3 (`finish()` drains connections, ≤ 1 s, before `releaseLease`; assert the terminal event reaches an attached client). See the TASK-001 notes and `spike_s2_report.md` → Required changes.
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - **`LocalRunStore.createRunDirectory`** claims the lease **instead of writing `.lock`**. This is a
     clean break: pre-release, and `.lock` was internal. The claim happens inside
     `RunOwnershipSession.open`, after `mkdir`, before any manifest. `createAgentRun` therefore
@@ -728,7 +728,7 @@ tests/run-channel/client.spec.ts` passes.
   - **`resume()`** claims through `takeover` (TASK-010). Until TASK-010 lands it uses a plain claim
     and refuses `busy` if any lease exists. Mark that `STUB: plain claim until TASK-010`.
 
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - **`run-store.spec.ts`**, rewritten from the `.lock` assertions:
     - a new run has `lease.json` with the current identity and no `.lock`;
     - the manifest is written after the lease (spy on call order);
@@ -751,7 +751,7 @@ tests/run-channel/client.spec.ts` passes.
       verified shutdown;
     - a canary `run_token` never appears in `run-events.jsonl`, `runtime.jsonl`, `events.jsonl`,
       `report.md` or the `--json` envelope.
-- [ ] **Documentation Update**: Invoke **Document** update mode for diagnostics and audit (the run
+- [x] **Documentation Update**: Invoke **Document** update mode for diagnostics and audit (the run
       directory now holds `lease.json` while live, and every run serves a local socket) and for
       scheduling (daemon runs also hold leases).
 - **Verify**:
@@ -974,7 +974,7 @@ tests/commands/list-reconcile.spec.ts` passes;
 process.execPath, workerPath})`.** 1. Exclusively create the launch file (`wx`, `0600`) in `launch.dir`. 2. Call `spawn(nodePath, [workerPath, '--launch', file], {cwd: invocation.cwd, env, detached:
 true, shell: false, stdio: 'ignore', windowsHide: true})`, then `child.unref()`. 3. Return `{pid, identity}`, with the identity captured through `identifyProcess`.
 
-                                                                    Apply any mitigation the S2 report requires, for example Job-object breakaway on Windows.
+                                                                        Apply any mitigation the S2 report requires, for example Job-object breakaway on Windows.
 
 - [ ] **Unit Tests** (`launch.spec.ts`, `result-sink.spec.ts`, `spawn.spec.ts`):
   - **Launch validation:**
@@ -1144,7 +1144,7 @@ Error`, `RunChannelFrameError` and `RunOwnershipError`, all with safe, actionabl
 - [x] TASK-005: Authenticated run socket with version and capability handshake
 - [x] TASK-006: Atomic replay-to-live subscription with gap-free reconnect
 - [x] TASK-007: Bounded, prioritized outbound queues, backpressure and heartbeat
-- [ ] TASK-008: Every run is owned — lease, socket and owned browsers on all run paths, with `cancel`
+- [x] TASK-008: Every run is owned — lease, socket and owned browsers on all run paths, with `cancel`
 - [ ] TASK-009: Reconciler — exactly one terminal result for a dead owner, identity-verified browser reaping
 - [ ] TASK-010: Resume takeover and reconciliation triggers (`yantra list`, CLI run start, host start)
 - [ ] TASK-011: Stop service — graceful cancel, identity-verified forced termination, always reconcile

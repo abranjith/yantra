@@ -4,9 +4,11 @@ import type { ExecutionClass, RunLease, RunLeaseOrigin, RunSocketAddress } from 
 
 import type { ProcessIdentity, ProcessLivenessProbe } from '../browser/installation-types.js';
 import type { Logger } from '../browser/types.js';
-import { startRunChannelServer } from '../run-channel/server.js';
+import { streamEventSource, type RunEventSource } from '../run-channel/event-source.js';
+import { startRunChannelServer, type ChannelHandler } from '../run-channel/server.js';
 import { RUN_EVENTS_FILENAME } from '../run-events/log.js';
 import { scanRunEventsTail } from '../run-events/reader.js';
+import type { RunEventStream } from '../run-events/stream.js';
 
 import {
   FileBrowserOwnershipRecorder,
@@ -29,6 +31,10 @@ export interface RunChannelEndpoint {
    * close, then destroys any left (spike S2, RC3). Idempotent.
    */
   close(drainMs: number): Promise<void>;
+  /** Serves a client message type (the real server; fakes may omit it). */
+  register?(type: string, capability: string | null, handler: ChannelHandler): void;
+  /** Feeds the run's committed events to subscribers (the real server). */
+  attachEvents?(source: RunEventSource): void;
 }
 
 /** Starts the run socket, listening, before the lease that names it is claimed. */
@@ -76,15 +82,51 @@ const noopLogger: Logger = {
  */
 export class RunOwnershipSession {
   private finishing: Promise<void> | null = null;
+  private abortRun: (() => void) | null = null;
+  private cancelRequested = false;
 
   private constructor(
     public readonly runDir: string,
     public readonly lease: RunLease,
     public readonly recorder: BrowserOwnershipRecorder,
-    private readonly channel: RunChannelEndpoint,
+    public readonly channel: RunChannelEndpoint,
     private readonly logger: Logger,
     private readonly drainMs: number,
-  ) {}
+  ) {
+    channel.register?.('cancel', 'cancel', (_request, connection) => {
+      const alreadyCancelling = this.cancelRequested;
+      this.cancelRequested = true;
+      const honored = this.abortRun !== null;
+      connection.send({ type: 'cancel_ack', already_cancelling: alreadyCancelling, honored });
+      if (!alreadyCancelling) {
+        this.logger.info({ event: 'run_cancel_requested', honored }, 'run_cancel_requested');
+        this.abortRun?.();
+      }
+    });
+  }
+
+  /**
+   * Feeds the run's event stream to the run socket once the stream is open,
+   * so subscribers replay its file and then follow it live.
+   */
+  public attachEvents(stream: RunEventStream): void {
+    this.channel.attachEvents?.(streamEventSource(stream, this.runDir));
+  }
+
+  /**
+   * Declares that this run honors cancellation: a `cancel` from the run socket
+   * calls `abort` (the same abort a terminal interrupt triggers) and is
+   * acknowledged `honored: true`. Runs that never call this acknowledge
+   * `honored: false` and keep running.
+   */
+  public onCancel(abort: () => void): void {
+    this.abortRun = abort;
+  }
+
+  /** True once any client asked to cancel. */
+  public get cancelled(): boolean {
+    return this.cancelRequested;
+  }
 
   /**
    * Starts the run socket, then claims the lease naming it, with

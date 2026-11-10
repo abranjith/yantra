@@ -51,6 +51,7 @@ import type { Page as PuppeteerPage } from 'puppeteer-core';
 
 import type { InjectedScriptHost } from '../locator/types.js';
 import type { ResourceLease } from '../locks/resource-lock.js';
+import type { BrowserOwnershipRecorder } from '../run-ownership/browser-ownership-recorder.js';
 
 import type { BrowserSelection } from './installation-types.js';
 
@@ -88,8 +89,14 @@ export interface Page {
 }
 
 /** Strategy interface for launching Chrome sessions. MVP impl: LocalBrowserProvider. */
+/** Per-launch context a shared provider cannot know at construction. */
+export interface BrowserLaunchContext {
+  /** The owning run's recorder (FEAT-064): the browser is recorded by identity. */
+  readonly ownershipRecorder?: BrowserOwnershipRecorder;
+}
+
 export interface BrowserProvider {
-  launch(options: Partial<LaunchOptions>): Promise<BrowserSession>;
+  launch(options: Partial<LaunchOptions>, context?: BrowserLaunchContext): Promise<BrowserSession>;
   detectChrome(): Promise<ChromeInstall | null>;
 }
 

@@ -57,13 +57,51 @@ describe('LocalRunStore', () => {
       expect(runDir).toContain(runId);
     });
 
-    it('creates a .lock file in the run directory', async () => {
-      const { readFile, stat } = await import('node:fs/promises');
+    it('claims lease.json naming this process, and writes no .lock (FEAT-064)', async () => {
       const store = new LocalRunStore(tmpDir);
-      const { runDir } = await store.createRun(makeRequest());
-      await expect(stat(join(runDir, '.lock'))).resolves.toBeTruthy();
-      const lock = JSON.parse(await readFile(join(runDir, '.lock'), 'utf8')) as { pid: number };
-      expect(lock.pid).toBe(process.pid);
+      const { runId, runDir } = await store.createRun(makeRequest());
+      const lease = JSON.parse(await readFile(join(runDir, 'lease.json'), 'utf8')) as {
+        run_id: string;
+        owner: { pid: number };
+        origin: string;
+        command: string[];
+      };
+      expect(lease).toMatchObject({
+        run_id: runId,
+        owner: { pid: process.pid },
+        origin: 'terminal',
+        command: ['run'],
+      });
+      expect(await readdir(runDir)).not.toContain('.lock');
+      expect(store.ownership(runId)?.lease.run_id).toBe(runId);
+      await store.releaseOwnership(runId);
+    });
+
+    it('takes the lease origin from the receipt', async () => {
+      const store = new LocalRunStore(tmpDir);
+      const { runId } = await store.createRun({
+        ...makeRequest(),
+        receipt: { invoked_by: 'daemon' } as unknown as NonNullable<RunRequest['receipt']>,
+      });
+      expect(store.ownership(runId)?.lease.origin).toBe('daemon');
+      await store.releaseOwnership(runId);
+    });
+
+    it('claims before the first manifest is written', async () => {
+      const order: string[] = [];
+      const store = new LocalRunStore(tmpDir, {
+        openSession: async (options) => {
+          const files = await readdir(options.runDir);
+          order.push(`claim(manifest=${files.includes('manifest.json')})`);
+          const { RunOwnershipSession } =
+            await import('../../../src/run-ownership/ownership-session.js');
+          return RunOwnershipSession.open(options);
+        },
+      });
+      const { runId, runDir } = await store.createAgentRun({ taskId: 't', command: 'do' });
+      order.push(`manifest=${(await readdir(runDir)).includes('manifest.json')}`);
+      expect(order).toEqual(['claim(manifest=false)', 'manifest=true']);
+      await store.releaseOwnership(runId);
     });
   });
 
@@ -142,7 +180,8 @@ describe('LocalRunStore', () => {
           },
         }),
       ).toBe(2);
-    });
+      // The dynamic import of the orchestrator module dominates this test.
+    }, 30_000);
   });
 
   describe('listRuns', () => {
@@ -211,18 +250,19 @@ describe('LocalRunStore', () => {
     });
   });
 
-  describe('releaseLock', () => {
-    it('does not throw if .lock file does not exist', async () => {
+  describe('releaseOwnership', () => {
+    it('is a no-op for a run this store never owned', async () => {
       const store = new LocalRunStore(tmpDir);
-      await expect(store.releaseLock('nonexistent-run-id')).resolves.toBeUndefined();
+      await expect(store.releaseOwnership('nonexistent-run-id')).resolves.toBeUndefined();
     });
 
-    it('removes the .lock file after createRun', async () => {
-      const { stat } = await import('node:fs/promises');
+    it('removes lease.json, and is idempotent', async () => {
       const store = new LocalRunStore(tmpDir);
       const { runId, runDir } = await store.createRun(makeRequest());
-      await store.releaseLock(runId);
-      await expect(stat(join(runDir, '.lock'))).rejects.toMatchObject({ code: 'ENOENT' });
+      await store.releaseOwnership(runId);
+      await store.releaseOwnership(runId);
+      expect(await readdir(runDir)).not.toContain('lease.json');
+      expect(store.ownership(runId)).toBeUndefined();
     });
   });
 });

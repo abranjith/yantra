@@ -11,6 +11,7 @@ import type {
   ExecutionState,
   FailureClass,
   Plan,
+  RunLeaseOrigin,
   TaskOutcome,
   TerminationReason,
   WorkflowSynthesis,
@@ -21,6 +22,7 @@ import type { Checkpoint } from '../../executor/types.js';
 import type { EngineLocatorChain } from '../../locator/types.js';
 import type { ExecutionReceiptDraft } from '../../receipt/execution-receipt.js';
 import type { RunEventStream } from '../../run-events/stream.js';
+import type { RunOwnershipSession } from '../../run-ownership/ownership-session.js';
 
 export type { FailureClass, TaskOutcome, TerminationReason };
 
@@ -278,6 +280,8 @@ export interface AgentRunRequest {
   readonly command: string;
   readonly partialAgent?: Partial<AgentManifestSection>;
   readonly template?: RunTemplateRecord;
+  /** Who launched the run, recorded in its lease (FEAT-064); defaults to `terminal`. */
+  readonly origin?: RunLeaseOrigin;
 }
 
 /** Run-store operations used by agentic commands before and during startup. */
@@ -387,5 +391,21 @@ export interface RunStore {
       terminationReason?: TerminationReason;
     },
   ): Promise<void>;
-  releaseLock(runId: string): Promise<void>;
+  /**
+   * Ends this process's ownership of the run: closes its run socket (after
+   * draining it) and removes `lease.json`. Call it only after the run's
+   * terminal event and terminal manifest are flushed (FEAT-064). Idempotent.
+   */
+  releaseOwnership(runId: string): Promise<void>;
+  /** The run's ownership session while this process owns it. */
+  ownership?(runId: string): RunOwnershipSession | undefined;
+  /**
+   * Takes ownership of an existing run directory (resume).
+   *
+   * @throws RunLeaseHeldError when another owner holds it.
+   */
+  acquireOwnership?(
+    runId: string,
+    init: { readonly command: readonly string[]; readonly origin?: RunLeaseOrigin },
+  ): Promise<RunOwnershipSession>;
 }

@@ -70,7 +70,7 @@ function makeStore(overrides: Partial<RunStore> = {}): RunStore {
     listRuns: vi.fn().mockResolvedValue([]),
     getRun: vi.fn().mockResolvedValue(null),
     updateRunStatus: vi.fn().mockResolvedValue(undefined),
-    releaseLock: vi.fn().mockResolvedValue(undefined),
+    releaseOwnership: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }

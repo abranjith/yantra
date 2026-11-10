@@ -19,6 +19,7 @@ export {
   type LeaseRead,
 } from './lease-store.js';
 export {
+  DeferredBrowserOwnershipRecorder,
   FileBrowserOwnershipRecorder,
   type BrowserOwnershipRecorder,
 } from './browser-ownership-recorder.js';

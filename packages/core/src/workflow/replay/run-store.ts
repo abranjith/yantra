@@ -5,15 +5,25 @@
  * Implements `RunStore` for use by `RunOrchestrator`.
  */
 
-import { mkdir, readdir, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import type { FailureClass, TaskOutcome, TerminationReason } from '@yantra/protocol';
+import type {
+  FailureClass,
+  RunLeaseOrigin,
+  TaskOutcome,
+  TerminationReason,
+} from '@yantra/protocol';
 
 import { MarkdownReportBuilder } from '../../audit/report-builder.js';
 import { runsRoot } from '../../browser/paths.js';
+import type { Logger } from '../../browser/types.js';
 import { openTaskEventBus } from '../../run-events/mirroring-event-bus.js';
 import type { RunEventStream } from '../../run-events/stream.js';
+import {
+  RunOwnershipSession,
+  type RunOwnershipSessionOptions,
+} from '../../run-ownership/ownership-session.js';
 
 import { RunDirMissingError } from './errors.js';
 import { writeManifest, readManifest } from './manifest-writer.js';
@@ -60,18 +70,32 @@ function makeShortUuid(): string {
 // LocalRunStore
 // ---------------------------------------------------------------------------
 
+/** Seams for the ownership session each run directory gets (tests). */
+export interface LocalRunStoreOptions {
+  readonly logger?: Logger;
+  /** Overrides how a session is opened (tests inject a fake socket). */
+  readonly openSession?: (options: RunOwnershipSessionOptions) => Promise<RunOwnershipSession>;
+}
+
 export class LocalRunStore implements RunStore, AgentRunStore {
   private readonly root: string;
+  private readonly sessions = new Map<string, RunOwnershipSession>();
+  private readonly options: LocalRunStoreOptions;
 
-  public constructor(root?: string) {
+  public constructor(root?: string, options: LocalRunStoreOptions = {}) {
     this.root = root ?? runsRoot();
+    this.options = options;
   }
 
   /**
-   * Creates the run directory + .lock file, returns the canonical runId.
+   * Creates the run directory and claims it (`lease.json` plus the run
+   * socket), returning the canonical runId.
    */
   public async createRun(request: RunRequest): Promise<{ runId: string; runDir: string }> {
-    return this.createRunDirectory(request.workflowName);
+    return this.createRunDirectory(request.workflowName, {
+      command: ['run'],
+      origin: request.receipt?.invoked_by ?? 'terminal',
+    });
   }
 
   /**
@@ -85,7 +109,10 @@ export class LocalRunStore implements RunStore, AgentRunStore {
   public async createAgentRun(
     request: AgentRunRequest,
   ): Promise<{ runId: string; runDir: string }> {
-    const { runId, runDir } = await this.createRunDirectory(request.command);
+    const { runId, runDir } = await this.createRunDirectory(request.command, {
+      command: [request.command],
+      origin: request.origin ?? 'terminal',
+    });
     const startedAt = new Date().toISOString();
     const manifest: RunManifest = {
       runId,
@@ -158,20 +185,66 @@ export class LocalRunStore implements RunStore, AgentRunStore {
       failureClass: error.code,
       message: error.message,
     });
-    await this.releaseLock(runId);
+    // The failure manifest and its event are durable above (FEAT-064 order).
+    await this.releaseOwnership(runId);
   }
 
-  private async createRunDirectory(name: string): Promise<{ runId: string; runDir: string }> {
+  /**
+   * Creates the run directory and claims it before any manifest exists, so a
+   * `running` manifest always has a lease behind it (FEAT-064).
+   */
+  private async createRunDirectory(
+    name: string,
+    ownership: { readonly command: readonly string[]; readonly origin: RunLeaseOrigin },
+  ): Promise<{ runId: string; runDir: string }> {
     const runId = formatRunId(new Date(), name, makeShortUuid());
     const runDir = join(this.root, runId);
 
     await mkdir(runDir, { recursive: true, mode: 0o700 });
-
-    // Write .lock file with PID and start timestamp
-    const lock = JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() });
-    await writeFile(join(runDir, '.lock'), lock, { encoding: 'utf8', mode: 0o600 });
-
+    await this.openSession(runId, runDir, ownership);
     return { runId, runDir };
+  }
+
+  private async openSession(
+    runId: string,
+    runDir: string,
+    ownership: { readonly command: readonly string[]; readonly origin: RunLeaseOrigin },
+  ): Promise<RunOwnershipSession> {
+    const open = this.options.openSession ?? ((options) => RunOwnershipSession.open(options));
+    const session = await open({
+      runDir,
+      runId,
+      origin: ownership.origin,
+      executionClass: 'run',
+      command: ownership.command,
+      ...(this.options.logger === undefined ? {} : { logger: this.options.logger }),
+    });
+    this.sessions.set(runId, session);
+    return session;
+  }
+
+  /** The run's ownership session while this process owns it. */
+  public ownership(runId: string): RunOwnershipSession | undefined {
+    return this.sessions.get(runId);
+  }
+
+  /**
+   * Takes ownership of an existing run directory for `resume`.
+   *
+   * STUB: plain claim until TASK-010 — any existing lease answers busy.
+   *
+   * @throws RunLeaseHeldError when the run already has a lease.
+   */
+  public async acquireOwnership(
+    runId: string,
+    init: { readonly command: readonly string[]; readonly origin?: RunLeaseOrigin },
+  ): Promise<RunOwnershipSession> {
+    const existing = this.sessions.get(runId);
+    if (existing !== undefined) return existing;
+    return this.openSession(runId, join(this.root, runId), {
+      command: init.command,
+      origin: init.origin ?? 'terminal',
+    });
   }
 
   /**
@@ -285,16 +358,15 @@ export class LocalRunStore implements RunStore, AgentRunStore {
   }
 
   /**
-   * Removes the .lock file. Idempotent — no error if already absent.
+   * Ends ownership: drains and closes the run socket, then removes
+   * `lease.json`. Call only after the terminal event and terminal manifest are
+   * flushed. Idempotent; a run this store never owned is left alone.
    */
-  public async releaseLock(runId: string): Promise<void> {
-    const lockPath = join(this.root, runId, '.lock');
-    try {
-      await unlink(lockPath);
-    } catch (err) {
-      const code = (err as NodeJS.ErrnoException).code;
-      if (code !== 'ENOENT') throw err;
-    }
+  public async releaseOwnership(runId: string): Promise<void> {
+    const session = this.sessions.get(runId);
+    if (session === undefined) return;
+    this.sessions.delete(runId);
+    await session.finish();
   }
 }
 

@@ -8,6 +8,18 @@
       "task": "TASK-001"
     },
     {
+      "path": "apps/cli/src/commands/ask.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/cli/src/commands/research.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "docs/architecture.md",
       "status": "M",
       "role": "implement",
@@ -24,6 +36,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "docs/features/scheduling.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "docs/protocol-spec.md",
@@ -98,6 +116,18 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/agent/src/runtime/orchestrator.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/agent/tests/runtime/orchestrator.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "packages/core/src/browser/installation-types.ts",
       "status": "M",
       "role": "implement",
@@ -128,6 +158,18 @@
       "task": "TASK-004"
     },
     {
+      "path": "packages/core/src/browser/types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/core/src/extraction/ask-pipeline.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "packages/core/src/index.ts",
       "status": "M",
       "role": "implement",
@@ -138,6 +180,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/research/research-loop.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "packages/core/src/run-channel/client.ts",
@@ -165,7 +213,7 @@
     },
     {
       "path": "packages/core/src/run-channel/outbound-queues.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
@@ -224,6 +272,18 @@
       "task": "TASK-004"
     },
     {
+      "path": "packages/core/src/workflow/replay/run-orchestrator.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/core/src/workflow/replay/run-store.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "packages/core/src/workflow/replay/types.ts",
       "status": "M",
       "role": "implement",
@@ -243,7 +303,7 @@
     },
     {
       "path": "packages/core/tests/run-channel/outbound-queues.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
@@ -278,10 +338,28 @@
       "task": "TASK-004"
     },
     {
+      "path": "packages/core/tests/run-ownership/run-paths.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "packages/core/tests/run-ownership/support.ts",
       "status": "A",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/workflow/replay/resume.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/core/tests/workflow/replay/run-store.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "packages/protocol/generated/json-schema/run-channel-message.json",

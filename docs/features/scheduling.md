@@ -254,6 +254,13 @@ zero-LLM execution and include no provider or model settings. Receipts contain
 no resolved secrets or full environment snapshot and are written with
 owner-only permissions where supported.
 
+A daemon-fired run is owned like any other run: while it runs, its directory
+holds `lease.json` with origin `daemon` and the daemon serves the run's local
+socket. A run that parks for a human decision ends its execution and releases
+the lease, because no process is running it while it waits; `resume` (or the
+daemon picking up a granted parked run) claims a new lease. See
+[Run ownership](diagnostics-and-audit.md#run-ownership).
+
 The scheduling layer adds `schedule.json` after the outcome is known. The
 history row and this sidecar are best-effort additions: failure to write either
 does not change the completed browser run's outcome. Use:

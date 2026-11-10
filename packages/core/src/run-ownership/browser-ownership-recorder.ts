@@ -63,3 +63,27 @@ export class FileBrowserOwnershipRecorder implements BrowserOwnershipRecorder {
     return next;
   }
 }
+
+/**
+ * A recorder whose destination is known only later: a browser provider built
+ * before the run directory exists records through it, and the run binds it to
+ * its session's recorder once it owns the run. Before `bind` there is no run
+ * to own a browser, so calls are no-ops rather than waits that could hang a
+ * launch.
+ */
+export class DeferredBrowserOwnershipRecorder implements BrowserOwnershipRecorder {
+  private target: BrowserOwnershipRecorder | null = null;
+
+  /** Directs every later call to `target`. */
+  public bind(target: BrowserOwnershipRecorder): void {
+    this.target = target;
+  }
+
+  public recordSpawned(identity: ProcessIdentity): Promise<void> {
+    return this.target?.recordSpawned(identity) ?? Promise.resolve();
+  }
+
+  public recordExited(identity: ProcessIdentity): Promise<void> {
+    return this.target?.recordExited(identity) ?? Promise.resolve();
+  }
+}

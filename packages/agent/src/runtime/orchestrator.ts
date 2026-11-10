@@ -62,6 +62,7 @@ import {
   type PayloadSanitizer,
   type RankSignalSink,
   type ReportBuilder,
+  type RunOwnershipSession,
   type Sanitized,
   type WorkflowStore,
 } from '@yantra/core';
@@ -402,7 +403,10 @@ export interface AgenticRunStore extends AgentRunStore {
       readonly terminationReason?: TerminationReason;
     },
   ): Promise<void>;
-  releaseLock(runId: string): Promise<void>;
+  /** Ends ownership; only after the terminal event and manifest (FEAT-064). */
+  releaseOwnership(runId: string): Promise<void>;
+  /** The run's ownership session while this process owns it. */
+  ownership?(runId: string): RunOwnershipSession | undefined;
 }
 
 /** SDK-neutral environment assembled once after the run directory exists. */
@@ -571,9 +575,19 @@ export interface AgenticTaskDependencies {
  * @returns A closed terminal outcome whose `runId` owns every produced artifact.
  */
 export async function runAgenticTask(
-  request: AgenticTaskRequest,
+  taskRequest: AgenticTaskRequest,
   dependencies: AgenticTaskDependencies = {},
 ): Promise<AgenticTaskOutcome> {
+  // FEAT-064: a `cancel` from the run socket aborts exactly as a terminal
+  // interrupt does, so both arrive through the request's one abort signal.
+  const socketCancel = new AbortController();
+  const request: AgenticTaskRequest = {
+    ...taskRequest,
+    signal:
+      taskRequest.signal === undefined
+        ? socketCancel.signal
+        : AbortSignal.any([taskRequest.signal, socketCancel.signal]),
+  };
   // Privacy ingress invariant: parse and redact every user-authored field once,
   // before run state, browser state, or provider state can exist. Every new
   // consumer of `request.goal` must use this redacted form instead.
@@ -599,6 +613,7 @@ export async function runAgenticTask(
   const created = await runStore.createAgentRun({
     taskId,
     command: profile.command,
+    origin: request.receipt?.invoked_by ?? 'terminal',
     partialAgent: { provider: request.model.provider, model: request.model.id },
     ...(request.template === undefined
       ? {}
@@ -611,8 +626,13 @@ export async function runAgenticTask(
         }),
   });
 
+  const ownership = runStore.ownership?.(created.runId);
+  ownership?.onCancel(() => {
+    socketCancel.abort('cancel');
+  });
   try {
     runEvents.open({ runDir: created.runDir, runId: created.runId });
+    ownership?.attachEvents(runEvents);
   } catch (error) {
     // An unopenable run-event log is an environment failure before the run
     // proceeds: finalized like any startup failure, then rethrown typed.
@@ -701,6 +721,7 @@ export async function runAgenticTask(
         ...(dependencies.browserInstallOfferGateway === undefined
           ? {}
           : { installOfferGateway: dependencies.browserInstallOfferGateway }),
+        ...(ownership === undefined ? {} : { ownershipRecorder: ownership.recorder }),
       },
     });
     const runAbort = new AbortController();
@@ -1879,7 +1900,7 @@ async function finalizeRun(input: {
   // The outcome is committed (and the log closed) before the lock is
   // released and before the connector renders the final line.
   recordRunEnd(input.runEvents, input.outcome, input.now);
-  await input.runStore.releaseLock(input.outcome.runId);
+  await input.runStore.releaseOwnership(input.outcome.runId);
 }
 
 /** Budget snapshots during tool activity are at most this frequent. */
