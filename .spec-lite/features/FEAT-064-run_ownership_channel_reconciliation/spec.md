@@ -502,9 +502,9 @@ All paths above are under `packages/core/src/run-channel/`.
 command, log, logger})`: - claims the lease, with `log_seq_at_claim` taken from the FEAT-063 writer; - starts the heartbeat timer (5 s, `unref`). Heartbeat write failures are logged once and never
     crash the run; - exposes `recorder: BrowserOwnershipRecorder`.
 
-                                                                                                `finish()` runs in this order: stop the timers, close the channel (TASK-005), then
-                                                                                                `releaseLease`. The caller has already flushed the terminal event and manifest. `finish()` is
-                                                                                                idempotent.
+                                                                                                        `finish()` runs in this order: stop the timers, close the channel (TASK-005), then
+                                                                                                        `releaseLease`. The caller has already flushed the terminal event and manifest. `finish()` is
+                                                                                                        idempotent.
 
   - **`browser-ownership-recorder.ts`.**
     - `recordSpawned(identity)` appends to `owned_browsers` and flushes before returning.
@@ -974,7 +974,7 @@ tests/commands/list-reconcile.spec.ts` passes;
 process.execPath, workerPath})`.** 1. Exclusively create the launch file (`wx`, `0600`) in `launch.dir`. 2. Call `spawn(nodePath, [workerPath, '--launch', file], {cwd: invocation.cwd, env, detached:
 true, shell: false, stdio: 'ignore', windowsHide: true})`, then `child.unref()`. 3. Return `{pid, identity}`, with the identity captured through `identifyProcess`.
 
-                                                                                                Apply any mitigation the S2 report requires, for example Job-object breakaway on Windows.
+                                                                                                        Apply any mitigation the S2 report requires, for example Job-object breakaway on Windows.
 
 - [x] **Unit Tests** (`launch.spec.ts`, `result-sink.spec.ts`, `spawn.spec.ts`):
   - **Launch validation:**
