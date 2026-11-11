@@ -74,6 +74,8 @@ export function rawRequest(port: number, options: RawRequest = {}): Promise<RawR
         method: options.method ?? 'GET',
         path: options.path ?? '/',
         headers,
+        // A fresh connection per request: no pooled socket the host may have closed.
+        agent: false,
         setHost: !omitHost && headers.host === undefined,
       },
       (res) => {

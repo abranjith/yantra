@@ -50,14 +50,20 @@ export async function applyPreferences(
 }
 
 /**
- * Applies now and on every `prefs.changed`. `runs.subscribe` is what delivers
- * `prefs.changed`, so this subscribes too. Returns the stop function.
+ * Applies on every (re)connect (`host.build` arrives on each one) and on every
+ * `prefs.changed`. `runs.subscribe` is what delivers `prefs.changed`, so this
+ * subscribes too. Returns the stop function.
  */
 export function startPreferences(rpc: PreferencesRpc, root: HTMLElement): () => void {
-  const off = rpc.on('prefs.changed', () => {
+  const apply = (): void => {
     void applyPreferences(rpc, root);
-  });
+  };
+  const offChanged = rpc.on('prefs.changed', apply);
+  const offConnect = rpc.on('host.build', apply);
   rpc.subscribe('runs.subscribe');
-  void applyPreferences(rpc, root);
-  return off;
+  apply();
+  return () => {
+    offChanged();
+    offConnect();
+  };
 }

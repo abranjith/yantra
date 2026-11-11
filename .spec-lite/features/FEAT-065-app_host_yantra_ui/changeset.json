@@ -9,7 +9,7 @@
     },
     {
       "path": "apps/cli/scripts/embed-web.mjs",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
@@ -219,7 +219,7 @@
     },
     {
       "path": "apps/cli/tests/ui/host/embed.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
@@ -270,6 +270,24 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "apps/cli/tests/ui/security/expiry.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "apps/cli/tests/ui/security/real-host.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "apps/cli/tests/ui/security/support.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-013"
     },
     {
       "path": "apps/cli/tests/ui/window-launcher.spec.ts",
@@ -387,7 +405,7 @@
     },
     {
       "path": "apps/web/tests/build-id.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
@@ -456,6 +474,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "e2e/app-host.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-013"
     },
     {
       "path": "eslint.config.js",

@@ -60,6 +60,8 @@ export function connect(port: number, options: ConnectOptions = {}): Promise<Tes
       resolve(code);
     });
   });
+  // A reset after the host closes is reported through `closed`, never thrown.
+  ws.on('error', () => undefined);
   const socket: TestSocket = {
     ws,
     received,

@@ -102,3 +102,28 @@ describe('startPreferences', () => {
     expect(root.dataset.theme).toBe('dark');
   });
 });
+
+describe('reconnects', () => {
+  it('re-applies on every host.build (each connect), so a read that failed before connecting is retried', async () => {
+    // Arrange: the first read fails (not connected yet).
+    const rpc = new FakeRpc();
+    const original = rpc.request.bind(rpc);
+    let calls = 0;
+    rpc.request = <T>(method: string): Promise<T> => {
+      calls += 1;
+      return calls === 1 ? Promise.reject(new Error('not connected')) : original<T>(method);
+    };
+    rpc.current = profile('dark', 'solid');
+    startPreferences(rpc, root);
+    await flush();
+    expect(root.hasAttribute('data-surfaces')).toBe(false);
+
+    // Act: the socket connects.
+    rpc.emit('host.build');
+    await flush();
+
+    // Assert
+    expect(root.dataset.theme).toBe('dark');
+    expect(root.dataset.surfaces).toBe('solid');
+  });
+});
