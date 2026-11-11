@@ -38,6 +38,12 @@
       "task": "TASK-005"
     },
     {
+      "path": "apps/cli/src/ui/host/artifact-urls.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
       "path": "apps/cli/src/ui/host/change-feed.ts",
       "status": "A",
       "role": "implement",
@@ -111,7 +117,7 @@
     },
     {
       "path": "apps/cli/tests/commands/prefs-ui.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
@@ -186,6 +192,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/artifact-urls.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
     },
     {
       "path": "apps/cli/tests/ui/host/change-feed.spec.ts",
@@ -333,7 +345,7 @@
     },
     {
       "path": "packages/core/tests/profile/ui-preferences.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },

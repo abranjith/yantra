@@ -247,6 +247,42 @@ Example:
 "viewport"
 ```
 
+## ArtifactUrlParams
+
+Ask for a signed, window-bound URL to one public run artifact.
+
+| Field  | Description                                       |
+| ------ | ------------------------------------------------- |
+| run_id | The run the artifact belongs to.                  |
+| path   | Path inside the run directory, with / separators. |
+
+Example:
+
+```json
+{
+  "run_id": "<run_id>",
+  "path": "<path>"
+}
+```
+
+## ArtifactUrlResult
+
+No description provided.
+
+| Field      | Description                                                    |
+| ---------- | -------------------------------------------------------------- |
+| url        | Same-origin URL, valid for 5 minutes and only for this window. |
+| expires_at |                                                                |
+
+Example:
+
+```json
+{
+  "url": "<url>",
+  "expires_at": "<expires_at>"
+}
+```
+
 ## AssertCondition
 
 Assertion condition payload.

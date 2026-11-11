@@ -262,3 +262,25 @@ export const PrefsChangedNotification = z
   .strict()
   .describe('Preferences changed; re-read them.');
 export type PrefsChangedNotification = z.infer<typeof PrefsChangedNotification>;
+
+/** `artifact.url {run_id, path}` params. */
+export const ArtifactUrlParams = z
+  .object({
+    run_id: z.string().min(1).max(128).describe('The run the artifact belongs to.'),
+    path: z.string().min(1).max(512).describe('Path inside the run directory, with / separators.'),
+  })
+  .strict()
+  .describe('Ask for a signed, window-bound URL to one public run artifact.');
+export type ArtifactUrlParams = z.infer<typeof ArtifactUrlParams>;
+
+/** `artifact.url` result. */
+export const ArtifactUrlResult = z
+  .object({
+    url: z
+      .string()
+      .startsWith('/a/')
+      .describe('Same-origin URL, valid for 5 minutes and only for this window.'),
+    expires_at: z.string().datetime(),
+  })
+  .strict();
+export type ArtifactUrlResult = z.infer<typeof ArtifactUrlResult>;

@@ -215,6 +215,17 @@ export class SessionStore {
     return live;
   }
 
+  /**
+   * The live window `windowId` when `cookie` is its cookie (constant-time),
+   * else null. Signed artifact URLs are bound this way (TASK-010).
+   */
+  public windowForCookie(cookie: string | null, windowId: string): WindowSession | null {
+    if (cookie === null) return null;
+    const window = this.liveWindow(windowId);
+    if (window === null) return null;
+    return this.equal(window.cookieHash, sha256(cookie)) ? window : null;
+  }
+
   /** The live window, or null. */
   public liveWindow(windowId: string): WindowSession | null {
     const window = this.windows.get(windowId);

@@ -29,6 +29,7 @@ import {
 } from '@yantra/core';
 import { APP_CHANNEL_VERSION, type HostLockRecord } from '@yantra/protocol';
 
+import { ArtifactUrls, registerArtifactUrls } from './artifact-urls.js';
 import { ChangeFeed, openDefaultSources, registerChangeFeed } from './change-feed.js';
 import { ControlSocketServer } from './control-socket.js';
 import { HostStartError } from './errors.js';
@@ -150,11 +151,13 @@ export async function startHostRuntime(deps: HostRuntimeDeps): Promise<RunningHo
       feed.close();
     });
     registerChangeFeed(methods, feed);
+    const artifacts = new ArtifactUrls({ sessions, runsRoot: runsRoot(), logger });
+    registerArtifactUrls(methods, artifacts);
     deps.registerMethods?.(methods, core);
     const http = new AppHost({
       assetsRoot: deps.assetsRoot,
       logger,
-      routes: [sessionRoute(sessions, () => buildId), ...(deps.routes ?? [])],
+      routes: [sessionRoute(sessions, () => buildId), artifacts.route, ...(deps.routes ?? [])],
       upgrade: rpc.handleUpgrade,
     });
     const { port } = await http.start();
