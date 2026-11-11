@@ -50,6 +50,12 @@
       "task": "TASK-010"
     },
     {
+      "path": "apps/cli/src/ui/host/attendance.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-018"
+    },
+    {
       "path": "apps/cli/src/ui/host/change-feed.ts",
       "status": "A",
       "role": "implement",
@@ -63,7 +69,7 @@
     },
     {
       "path": "apps/cli/src/ui/host/drift-review.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-017"
     },
@@ -90,6 +96,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "apps/cli/src/ui/host/idle-exit.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-018"
     },
     {
       "path": "apps/cli/src/ui/host/reads.ts",
@@ -242,6 +254,12 @@
       "task": "TASK-010"
     },
     {
+      "path": "apps/cli/tests/ui/host/attendance.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-018"
+    },
+    {
       "path": "apps/cli/tests/ui/host/change-feed.spec.ts",
       "status": "A",
       "role": "implement",
@@ -255,7 +273,7 @@
     },
     {
       "path": "apps/cli/tests/ui/host/drift-review.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-017"
     },
@@ -270,6 +288,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/idle-exit.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-018"
     },
     {
       "path": "apps/cli/tests/ui/host/reads.spec.ts",

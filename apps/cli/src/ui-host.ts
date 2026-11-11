@@ -26,8 +26,12 @@ const assetsRoot =
 const log = openHostLog(hostLogPath());
 const identity = await currentProcessIdentity();
 
+let onIdle: () => void = () => undefined;
 try {
   const host = await startHostRuntime({
+    onIdle: () => {
+      onIdle();
+    },
     assetsRoot,
     identity,
     yantraVersion: yantraVersion(),
@@ -41,6 +45,9 @@ try {
       log.flush();
       process.exitCode = 0;
     });
+  };
+  onIdle = () => {
+    shutdown('idle');
   };
   process.once('SIGINT', () => {
     shutdown('SIGINT');

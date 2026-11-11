@@ -36,6 +36,7 @@ import { APP_CHANNEL_VERSION, type HostLockRecord } from '@yantra/protocol';
 import { spawnDetachedWorker } from '../../worker/spawn.js';
 
 import { ArtifactUrls, registerArtifactUrls } from './artifact-urls.js';
+import { Attendance } from './attendance.js';
 import { ChangeFeed, openDefaultSources, registerChangeFeed } from './change-feed.js';
 import { ControlSocketServer } from './control-socket.js';
 import {
@@ -46,6 +47,7 @@ import {
 } from './drift-review.js';
 import { HostStartError } from './errors.js';
 import { AppHost, SILENT_HOST_LOGGER, type HostLogger, type HostRoute } from './host.js';
+import { IdleExit } from './idle-exit.js';
 import { registerReads } from './reads.js';
 import { recoverHost } from './recovery.js';
 import { RpcMethodRegistry, RpcServer } from './rpc-server.js';
@@ -69,6 +71,10 @@ export interface HostRuntimeDeps {
   readonly routes?: readonly HostRoute[];
   /** Re-resolves effective settings for drift review (tests). */
   readonly resolveEffective?: EffectiveResolver;
+  /** Called when the host has been idle for 10 minutes; the entry shuts down. */
+  readonly onIdle?: () => void;
+  /** Overrides the idle period (tests). */
+  readonly idleMs?: number;
   /** Liveness probe for recovery (tests). */
   readonly probe?: ProcessLivenessProbe;
   /** Overrides for the supervisor (tests: a fake spawner, a stepped clock). */
@@ -176,8 +182,28 @@ export async function startHostRuntime(deps: HostRuntimeDeps): Promise<RunningHo
     registerArtifactUrls(methods, artifacts);
     const store = new FileInvocationStore();
     const resolveEffective = deps.resolveEffective ?? settingsResolver(deps.env ?? {});
-    const relay = new RunRelay({ runsRoot: runsRoot(), logger });
+    let attendance: Attendance | null = null;
+    const relay = new RunRelay({
+      runsRoot: runsRoot(),
+      logger,
+      onAttach: (runId) => attendance?.attached(runId),
+      onLiveEvent: (runId, seq, event) => attendance?.forward(runId, seq, event),
+    });
     relay.register(methods);
+    attendance = new Attendance({
+      broadcast: (count) => relay.sendToWorkers({ type: 'attendance', count }),
+      sendTo: (runId, count) => {
+        relay.sendToWorker(runId, { type: 'attendance', count });
+      },
+      now: () => now().getTime(),
+      logger,
+    });
+    attendance.register(methods);
+    attendance.start();
+    const attendanceRef = attendance;
+    cleanups.push(() => {
+      attendanceRef.stop();
+    });
     cleanups.push(() => {
       relay.close();
     });
@@ -241,6 +267,29 @@ export async function startHostRuntime(deps: HostRuntimeDeps): Promise<RunningHo
     });
     supervisor.start();
     void supervisor.dequeue();
+    const idle = new IdleExit({
+      signals: {
+        connectedWindows: () => sessions.connectedWindows().length,
+        pendingStarts: async () =>
+          (await store.list()).some((item) =>
+            ['queued', 'reserved', 'spawning'].includes(item.state),
+          ),
+      },
+      onIdle: () => {
+        logger.info({}, 'idle exit');
+        deps.onIdle?.();
+      },
+      ...(deps.idleMs === undefined ? {} : { idleMs: deps.idleMs }),
+    });
+    const idleCheck = setInterval(() => {
+      void idle.check();
+    }, 5_000);
+    idleCheck.unref();
+    cleanups.push(() => {
+      clearInterval(idleCheck);
+      idle.cancel();
+    });
+    void idle.check();
     logger.info(
       {
         port,

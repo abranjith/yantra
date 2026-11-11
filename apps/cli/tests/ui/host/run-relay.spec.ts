@@ -72,6 +72,10 @@ class FakeClient implements RelayClient {
     this.snapshotListeners.add(listener);
     return () => this.snapshotListeners.delete(listener);
   }
+  public readonly sent: unknown[] = [];
+  public send(message: unknown): void {
+    this.sent.push(message);
+  }
   public close(): void {
     this.closed = true;
   }

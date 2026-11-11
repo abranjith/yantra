@@ -44,6 +44,8 @@ export interface RelayClient {
   onEvent(listener: (delivery: ChannelEventDelivery) => void): () => void;
   getSnapshot(): RunChannelClientSnapshot;
   subscribeSnapshot(listener: () => void): () => void;
+  /** Sends one message to the owner (attendance, FEAT-065 TASK-018). */
+  send(message: { readonly type: string } & Record<string, unknown>): void;
   close(): void;
 }
 
@@ -53,6 +55,10 @@ export interface RunRelayDeps {
   readonly createClient?: (runDir: string) => RelayClient;
   readonly readEvents?: typeof readCommittedEvents;
   readonly readLease?: typeof readLease;
+  /** Called when a live client attaches (attendance sends the current count). */
+  readonly onAttach?: (runId: string) => void;
+  /** Called with every live event of an attached run (intervention forwarding). */
+  readonly onLiveEvent?: (runId: string, seq: number, event: unknown) => void;
 }
 
 /** How a followed run is served. */
@@ -196,6 +202,7 @@ export class RunRelay {
     attachment.channel = 'live';
     attachment.dispose.push(
       client.onEvent((delivery) => {
+        this.deps.onLiveEvent?.(attachment.runId, delivery.seq, delivery.event);
         for (const follower of attachment.followers.values()) {
           this.deliver(attachment, follower, delivery.seq, delivery.event);
         }
@@ -205,6 +212,26 @@ export class RunRelay {
       }),
     );
     client.subscribe(fromSeq);
+    this.deps.onAttach?.(attachment.runId);
+  }
+
+  /** Sends `message` to every attached live owner; returns how many got it. */
+  public sendToWorkers(message: { readonly type: string } & Record<string, unknown>): number {
+    let sent = 0;
+    for (const attachment of this.runs.values()) {
+      if (attachment.client === null) continue;
+      attachment.client.send(message);
+      sent += 1;
+    }
+    return sent;
+  }
+
+  /** Sends `message` to one run's live owner, if attached. */
+  public sendToWorker(
+    runId: string,
+    message: { readonly type: string } & Record<string, unknown>,
+  ): void {
+    this.runs.get(runId)?.client?.send(message);
   }
 
   private watchHealth(attachment: Attachment, snapshot: RunChannelClientSnapshot): void {
