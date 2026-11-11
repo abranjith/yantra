@@ -21,11 +21,13 @@
   },
   "devDependencies": {
     "@types/pngjs": "6.0.5",
+    "@types/ws": "8.18.2",
     "@yantra/test-helpers": "workspace:*",
     "axe-core": "4.14.0",
     "pixelmatch": "8.0.0",
     "pngjs": "7.0.0",
     "puppeteer-core": "25.10.0",
+    "ws": "8.22.2",
     "zod": "^3.24.1"
   }
 }

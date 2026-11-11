@@ -1124,6 +1124,6 @@ event}` to each window from its own `from_seq`, deduplicating by `seq`.
 - [x] TASK-016: Host-start recovery, run reattach and `run.subscribe` relay (M2)
 - [x] TASK-017: Queue drift review (D13)
 - [x] TASK-018: Attendance relay (D5) and idle exit (M2)
-- [ ] TASK-019: Launch-ownership evidence (§10 B1) and the M2 end-to-end run
+- [x] TASK-019: Launch-ownership evidence (§10 B1) and the M2 end-to-end run
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

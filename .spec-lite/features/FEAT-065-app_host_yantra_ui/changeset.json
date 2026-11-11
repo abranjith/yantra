@@ -51,7 +51,7 @@
     },
     {
       "path": "apps/cli/src/ui/host/attendance.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-018"
     },
@@ -99,7 +99,7 @@
     },
     {
       "path": "apps/cli/src/ui/host/idle-exit.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-018"
     },
@@ -255,7 +255,7 @@
     },
     {
       "path": "apps/cli/tests/ui/host/attendance.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-018"
     },
@@ -291,7 +291,7 @@
     },
     {
       "path": "apps/cli/tests/ui/host/idle-exit.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-018"
     },
@@ -354,6 +354,24 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "apps/cli/tests/ui/launch-ownership/fixtures/fixture-host.mjs",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-019"
+    },
+    {
+      "path": "apps/cli/tests/ui/launch-ownership/fixtures/fixture-worker.mjs",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-019"
+    },
+    {
+      "path": "apps/cli/tests/ui/launch-ownership/launch-ownership.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-019"
     },
     {
       "path": "apps/cli/tests/ui/security/expiry.spec.ts",
@@ -566,10 +584,22 @@
       "task": "TASK-001"
     },
     {
+      "path": "e2e/app-host-m2.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-019"
+    },
+    {
       "path": "e2e/app-host.spec.ts",
       "status": "A",
       "role": "implement",
       "task": "TASK-013"
+    },
+    {
+      "path": "e2e/package.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-019"
     },
     {
       "path": "eslint.config.js",
