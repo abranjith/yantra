@@ -62,6 +62,8 @@ export const READERS: readonly ReaderSpec[] = [
   { method: 'read.report', path: ['report'] },
   { method: 'read.prefs.list', path: ['prefs'], fixedArgs: ['list'] },
   { method: 'read.prefs.get', path: ['prefs'], fixedArgs: ['get'] },
+  // The effective profile with defaults and provenance: what the app applies (TASK-011).
+  { method: 'read.profile', path: ['profile'] },
   { method: 'read.daemon.status', path: ['daemon', 'status'] },
 ];
 
@@ -81,7 +83,6 @@ export const UNMAPPED_READS: readonly UnmappedRead[] = [
   'schedules',
   'model list',
   'usage',
-  'profile',
   'sites list',
   'template list',
   'template show',
