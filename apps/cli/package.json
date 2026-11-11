@@ -20,7 +20,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -b tsconfig.build.json",
+    "build": "tsc -b tsconfig.build.json && node scripts/embed-web.mjs",
     "test": "vitest run",
     "lint": "eslint src --max-warnings=0",
     "typecheck": "tsc --noEmit",
@@ -47,6 +47,7 @@
     "@types/prompts": "^2.4.9",
     "@types/ws": "8.18.2",
     "@yantra/test-helpers": "workspace:*",
+    "@yantra/web": "workspace:*",
     "fast-check": "^4.7.0"
   }
 }

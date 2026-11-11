@@ -8,6 +8,12 @@
       "task": "TASK-004"
     },
     {
+      "path": "apps/cli/scripts/embed-web.mjs",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
       "path": "apps/cli/src/commands/list.ts",
       "status": "M",
       "role": "implement",
@@ -212,6 +218,12 @@
       "task": "TASK-005"
     },
     {
+      "path": "apps/cli/tests/ui/host/embed.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
       "path": "apps/cli/tests/ui/host/host-log.spec.ts",
       "status": "A",
       "role": "implement",
@@ -267,169 +279,175 @@
     },
     {
       "path": "apps/web/index.html",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
     {
       "path": "apps/web/package.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
     {
       "path": "apps/web/src/app/bootstrap.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
     {
       "path": "apps/web/src/app/nav-registry.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
     {
       "path": "apps/web/src/app/router.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
     {
       "path": "apps/web/src/app/shell/AppShell.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
     {
       "path": "apps/web/src/app/shell/ConnectionBanner.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
     {
       "path": "apps/web/src/app/shell/SessionEnded.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
     {
       "path": "apps/web/src/app/shell/TopBar.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
     {
       "path": "apps/web/src/boot/take-launch-code.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
     {
       "path": "apps/web/src/host/connection-store.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
     {
       "path": "apps/web/src/host/rpc-client.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
     {
       "path": "apps/web/src/host/session.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
     {
       "path": "apps/web/src/host/stale-assets.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
     {
       "path": "apps/web/src/main.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
     {
       "path": "apps/web/src/prefs/apply-preferences.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
     {
       "path": "apps/web/src/styles.css",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
     {
       "path": "apps/web/tests/app/shell.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
     {
-      "path": "apps/web/tests/host/rpc-client.spec.ts",
+      "path": "apps/web/tests/build-id.spec.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "apps/web/tests/host/rpc-client.spec.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
     {
       "path": "apps/web/tests/host/session.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
     {
       "path": "apps/web/tests/host/stale-assets.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
     {
       "path": "apps/web/tests/lint.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
     {
       "path": "apps/web/tests/prefs/apply-preferences.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
     {
       "path": "apps/web/tests/setup.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
     {
       "path": "apps/web/tests/support/fake-socket.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
     {
       "path": "apps/web/tsconfig.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
     {
       "path": "apps/web/vite.config.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
     {
       "path": "apps/web/vitest.config.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
@@ -597,13 +615,13 @@
     },
     {
       "path": "packages/ui/src/instruments/bindu.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
     {
       "path": "packages/ui/tests/instruments/bindu.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     }

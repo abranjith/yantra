@@ -580,7 +580,7 @@ export default tseslint.config(
     ...tseslint.configs.disableTypeChecked,
     files: [
       'apps/cli/tests/**/*.ts',
-      'apps/cli/scripts/**/*.ts',
+      'apps/cli/scripts/**/*.{ts,mjs}',
       'packages/test-helpers/tests/**/*.ts',
     ],
     rules: {

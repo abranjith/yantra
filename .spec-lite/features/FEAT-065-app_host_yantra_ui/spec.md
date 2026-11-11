@@ -1103,7 +1103,7 @@ event}` to each window from its own `from_seq`, deduplicating by `seq`.
 - [x] TASK-009: Preferences `ui.theme` and `ui.surfaces` (M1)
 - [x] TASK-010: Signed artifact URLs `/a/<signed>` with a public allowlist (M1)
 - [x] TASK-011: `apps/web` skeleton: boot, session, RPC client, shell, Bindu and preferences (M1)
-- [ ] TASK-012: Build and embed `apps/web` into the CLI, with the build ID (M1)
+- [x] TASK-012: Build and embed `apps/web` into the CLI, with the build ID (M1)
 - [ ] TASK-013: Localhost security suite (merge gate) and the no-third-party-request check (M1)
 - [ ] TASK-014: Launch ownership core: invocation records, slot lock, reservation and worker claim (M2)
 - [ ] TASK-015: Supervisor: `command.invoke`, the queue, worker spawn, cancel and results (M2)
