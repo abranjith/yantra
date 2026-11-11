@@ -81,6 +81,13 @@ later app feature (FEAT-066 to FEAT-071) builds on this host.
 >   `profile.yaml` (or left at its default) never appears in `read.prefs.list`. `read.profile`
 >   (`yantra profile --json`: effective values, defaults and provenance) is mapped as an M1 reader,
 >   and the app applies preferences from it (TASK-011).
+> - **DEVIATION — recovery of an `unknown` owner.** A `claimed | running` record whose worker the
+>   probe calls `unknown` is reported `unverifiable` and left unchanged, not moved to
+>   `start_unknown`: the closed transition table has no `claimed → start_unknown`, and an
+>   unverifiable owner is never treated as dead (memory → Architecture).
+> - **DEVIATION — record creation.** `create` gets uniqueness from `slots.lock` plus an existence
+>   check and publishes by rename, not by exclusive hard link (`wx`): on Windows a hard-linked file
+>   cannot be replaced by the next transition's rename for seconds (`EPERM`).
 > - **No-Host requests.** Node's HTTP parser answers a request without `Host` with 400 before any
 >   route runs; that is the refusal for that case (the guard's 421 covers every wrong `Host`).
 
@@ -1105,7 +1112,7 @@ event}` to each window from its own `from_seq`, deduplicating by `seq`.
 - [x] TASK-011: `apps/web` skeleton: boot, session, RPC client, shell, Bindu and preferences (M1)
 - [x] TASK-012: Build and embed `apps/web` into the CLI, with the build ID (M1)
 - [x] TASK-013: Localhost security suite (merge gate) and the no-third-party-request check (M1)
-- [ ] TASK-014: Launch ownership core: invocation records, slot lock, reservation and worker claim (M2)
+- [x] TASK-014: Launch ownership core: invocation records, slot lock, reservation and worker claim (M2)
 - [ ] TASK-015: Supervisor: `command.invoke`, the queue, worker spawn, cancel and results (M2)
 - [ ] TASK-016: Host-start recovery, run reattach and `run.subscribe` relay (M2)
 - [ ] TASK-017: Queue drift review (D13)

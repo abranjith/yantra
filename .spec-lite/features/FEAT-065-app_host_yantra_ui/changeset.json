@@ -273,19 +273,19 @@
     },
     {
       "path": "apps/cli/tests/ui/security/expiry.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-013"
     },
     {
       "path": "apps/cli/tests/ui/security/real-host.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-013"
     },
     {
       "path": "apps/cli/tests/ui/security/support.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-013"
     },
@@ -477,7 +477,7 @@
     },
     {
       "path": "e2e/app-host.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-013"
     },
@@ -504,6 +504,18 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/app-host/invocation-recovery.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-014"
+    },
+    {
+      "path": "packages/core/src/app-host/invocation-store.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-014"
     },
     {
       "path": "packages/core/src/browser/chrome-discovery.ts",
@@ -536,10 +548,28 @@
       "task": "TASK-009"
     },
     {
+      "path": "packages/core/tests/app-host/fixtures/reserve-child.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-014"
+    },
+    {
       "path": "packages/core/tests/app-host/host-lock.spec.ts",
       "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/app-host/invocation-recovery.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-014"
+    },
+    {
+      "path": "packages/core/tests/app-host/invocation-store.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-014"
     },
     {
       "path": "packages/core/tests/browser/app-window-discovery.spec.ts",
