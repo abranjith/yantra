@@ -1003,6 +1003,26 @@ Example:
 }
 ```
 
+## ControlClientMessage
+
+A control-socket message from a client to the app host.
+
+Example:
+
+```json
+"<value>"
+```
+
+## ControlServerMessage
+
+A control-socket message from the app host to a client.
+
+Example:
+
+```json
+"<value>"
+```
+
 ## DangerSpec
 
 Whether a generated surface must ask for explicit confirmation first.

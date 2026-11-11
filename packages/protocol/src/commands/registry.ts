@@ -5,6 +5,7 @@
  */
 
 import { ask, doCommand, research } from './entries/agentic.js';
+import { ui } from './entries/app.js';
 import {
   browser,
   browserCheck,
@@ -121,6 +122,7 @@ const ENTRIES = [
   browserUse,
   browserCheck,
   browserUpdate,
+  ui,
 ] as const;
 
 /** The dotted id of every executable command in the registry. */

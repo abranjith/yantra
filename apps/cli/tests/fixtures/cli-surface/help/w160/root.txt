@@ -34,4 +34,5 @@ Commands:
   report [options] <run-id>               Open or print a run's report.md
   init [options]                          Create or update ~/.yantra/config.yaml
   browser                                 Manage Yantra-owned browser installations
+  ui [options]                            Open the Yantra app in a browser window
   help [command]                          display help for command

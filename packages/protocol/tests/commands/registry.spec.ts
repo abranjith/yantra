@@ -274,8 +274,8 @@ describe('@no-llm remaining families', () => {
     });
   });
 
-  it('covers all 59 command paths: 7 groups and 52 leaves', () => {
-    expect(COMMAND_REGISTRY.commands).toHaveLength(59);
+  it('covers all 60 command paths: 7 groups and 53 leaves', () => {
+    expect(COMMAND_REGISTRY.commands).toHaveLength(60);
     expect(COMMAND_REGISTRY.commands.filter((entry) => entry.kind === 'group')).toHaveLength(7);
   });
 });

@@ -432,12 +432,14 @@ export default tseslint.config(
   {
     files: ['apps/cli/src/**/*.ts'],
     // Process entry points own the process: the terminal adapter, the bin, and
-    // the detached worker and its trampoline (FEAT-064).
+    // the detached worker and its trampoline (FEAT-064), and the detached app
+    // host (FEAT-065).
     ignores: [
       'apps/cli/src/adapters/terminal/**/*.ts',
       'apps/cli/src/bin.ts',
       'apps/cli/src/worker.ts',
       'apps/cli/src/worker/trampoline.ts',
+      'apps/cli/src/ui-host.ts',
     ],
     rules: {
       'no-restricted-syntax': ['error', ...SITE_SPECIFIC_SELECTORS, ...HANDLER_PURITY_SELECTORS],

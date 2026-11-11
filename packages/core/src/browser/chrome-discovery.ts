@@ -375,3 +375,89 @@ export function detectChrome(opts?: { readonly override?: string }): ChromeInsta
       return discoverOnLinux(); // best-effort on unknown platforms
   }
 }
+
+/** A system Chromium that can open an `--app` window (FEAT-065 D10). */
+export interface AppWindowBrowser {
+  readonly kind: 'chrome' | 'edge';
+  readonly path: string;
+  /** Display name for messages. */
+  readonly name: string;
+}
+
+export interface AppWindowDiscoveryDeps {
+  readonly platform?: NodeJS.Platform;
+  readonly env?: NodeJS.ProcessEnv;
+  readonly detectChrome?: () => ChromeInstall | null;
+  /** True when `path` is an existing executable file. */
+  readonly isExecutable?: (path: string) => boolean;
+}
+
+/** True for a Chrome for Testing build, which is an automation binary, never an app window. */
+export function isChromeForTesting(install: ChromeInstall): boolean {
+  return (
+    install.source === 'managed' ||
+    /chrome[\s_-]*for[\s_-]*testing/iu.test(install.path) ||
+    /[\\/]chrome-(win|win64|win32|linux|linux64|mac|mac-x64|mac-arm64)[\\/]/iu.test(install.path)
+  );
+}
+
+const GOOGLE_CHROME_CHANNELS: ReadonlySet<ChromeInstall['channel']> = new Set([
+  'stable',
+  'beta',
+  'dev',
+  'canary',
+]);
+
+function defaultIsExecutable(path: string): boolean {
+  try {
+    accessSync(path, process.platform === 'win32' ? constants.F_OK : constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Standard Microsoft Edge locations for `platform` (Linux: `microsoft-edge[-stable]` on PATH). */
+export function edgeCandidates(platform: NodeJS.Platform, env: NodeJS.ProcessEnv): string[] {
+  switch (platform) {
+    case 'win32': {
+      const programFilesX86 = env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)';
+      const programFiles = env.ProgramFiles ?? 'C:\\Program Files';
+      return [
+        `${programFilesX86}\\Microsoft\\Edge\\Application\\msedge.exe`,
+        `${programFiles}\\Microsoft\\Edge\\Application\\msedge.exe`,
+      ];
+    }
+    case 'darwin':
+      return ['/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge'];
+    default: {
+      const dirs = (env.PATH ?? '').split(':').filter((dir) => dir.length > 0);
+      return ['microsoft-edge', 'microsoft-edge-stable'].flatMap((name) =>
+        dirs.map((dir) => join(dir, name)),
+      );
+    }
+  }
+}
+
+/**
+ * The first installed system Chromium able to open an `--app` window:
+ * Google Chrome (never Chrome for Testing), then Microsoft Edge. Null when
+ * neither is installed; the caller then falls back to the Yantra browser.
+ */
+export function detectAppWindowBrowser(deps: AppWindowDiscoveryDeps = {}): AppWindowBrowser | null {
+  const platform = deps.platform ?? process.platform;
+  const env = deps.env ?? process.env;
+  const isExecutable = deps.isExecutable ?? defaultIsExecutable;
+  const chrome = (deps.detectChrome ?? (() => detectChrome()))();
+  if (
+    chrome !== null &&
+    GOOGLE_CHROME_CHANNELS.has(chrome.channel) &&
+    !isChromeForTesting(chrome)
+  ) {
+    return { kind: 'chrome', path: chrome.path, name: 'Google Chrome' };
+  }
+  for (const path of edgeCandidates(platform, env)) {
+    if (isExecutable(path)) return { kind: 'edge', path, name: 'Microsoft Edge' };
+  }
+  return null;
+}

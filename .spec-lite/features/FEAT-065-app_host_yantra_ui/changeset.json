@@ -8,10 +8,46 @@
       "task": "TASK-004"
     },
     {
+      "path": "apps/cli/src/commands/ui.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/src/registry/handlers.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/src/ui-host.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/src/ui/host/control-socket.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
       "path": "apps/cli/src/ui/host/errors.ts",
       "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "apps/cli/src/ui/host/host-log.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/src/ui/host/host-runtime.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "apps/cli/src/ui/host/host.ts",
@@ -27,7 +63,7 @@
     },
     {
       "path": "apps/cli/src/ui/host/rpc-server.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
@@ -44,6 +80,96 @@
       "task": "TASK-002"
     },
     {
+      "path": "apps/cli/src/ui/window-launcher.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/commands/ui.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/fixtures/cli-surface/errors/root.unknown-command.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/fixtures/cli-surface/errors/ui.excess-arguments.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/fixtures/cli-surface/errors/ui.unknown-option.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/fixtures/cli-surface/help/w160/help__ui.txt",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/fixtures/cli-surface/help/w160/root.txt",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/fixtures/cli-surface/help/w160/ui.txt",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/fixtures/cli-surface/help/w80/help__ui.txt",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/fixtures/cli-surface/help/w80/root.txt",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/fixtures/cli-surface/help/w80/ui.txt",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/registry/cli-surface.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/registry/completeness.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/control-socket.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/host-log.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
       "path": "apps/cli/tests/ui/host/request-guard.spec.ts",
       "status": "A",
       "role": "implement",
@@ -51,13 +177,13 @@
     },
     {
       "path": "apps/cli/tests/ui/host/rpc-server.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "apps/cli/tests/ui/host/rpc-support.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
@@ -86,6 +212,12 @@
       "task": "TASK-001"
     },
     {
+      "path": "eslint.config.js",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
       "path": "packages/core/src/app-host/errors.ts",
       "status": "A",
       "role": "implement",
@@ -102,6 +234,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/browser/chrome-discovery.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "packages/core/src/browser/paths.ts",
@@ -134,6 +272,18 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/protocol/src/commands/entries/app.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/protocol/src/commands/registry.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
       "path": "packages/protocol/src/emit/json-schema.ts",
       "status": "M",
       "role": "implement",
@@ -153,7 +303,7 @@
     },
     {
       "path": "packages/protocol/src/schemas/app-rpc.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
@@ -165,9 +315,15 @@
     },
     {
       "path": "packages/protocol/tests/app-rpc.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/commands/registry.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
     }
   ],
   "excluded": [

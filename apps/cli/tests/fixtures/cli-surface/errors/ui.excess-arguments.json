@@ -1,0 +1,10 @@
+{
+  "argv": [
+    "ui",
+    "extra"
+  ],
+  "exitCode": 1,
+  "code": "commander.excessArguments",
+  "stdout": "",
+  "stderr": "error: too many arguments for 'ui'. Expected 0 arguments but got 1.\n"
+}

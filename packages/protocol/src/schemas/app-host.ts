@@ -248,3 +248,68 @@ export const UiOpenResult = z
   .strict()
   .describe('What `yantra ui` opened or printed.');
 export type UiOpenResult = z.infer<typeof UiOpenResult>;
+
+/**
+ * The host's control socket (FEAT-065 TASK-005): how `yantra ui` asks a
+ * running host for a launch code. Same framing as the run channel (FEAT-064):
+ * JSON frames only. The first client message must be `hello` with the
+ * `control_token` from `host.lock`; anything else is closed without a reply.
+ */
+export const ControlClientMessage = z
+  .discriminatedUnion('type', [
+    z
+      .object({
+        type: z.literal('hello'),
+        control_token: z.string().min(1).max(128).describe('The token from host.lock.'),
+        channel_version: z.number().int().positive(),
+      })
+      .strict()
+      .describe('First message; compared in constant time.'),
+    z
+      .object({ type: z.literal('launch_code.issue'), id: z.number().int().nonnegative() })
+      .strict()
+      .describe('Ask for a single-use launch code.'),
+    z
+      .object({ type: z.literal('host.status'), id: z.number().int().nonnegative() })
+      .strict()
+      .describe('Ask for the host status.'),
+  ])
+  .describe('A control-socket message from a client to the app host.');
+export type ControlClientMessage = z.infer<typeof ControlClientMessage>;
+
+/** A control-socket message from the app host to a client. */
+export const ControlServerMessage = z
+  .discriminatedUnion('type', [
+    z
+      .object({ type: z.literal('hello_ok'), channel_version: z.number().int().positive() })
+      .strict(),
+    z
+      .object({
+        type: z.literal('launch_code'),
+        id: z.number().int().nonnegative(),
+        code: z.string().min(1).describe('Single-use, valid for 60 seconds.'),
+        expires_at: isoDateTime,
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal('host.status'),
+        id: z.number().int().nonnegative(),
+        pid: z.number().int().positive(),
+        port: z.number().int().min(1).max(65_535),
+        build_id: z.string().min(1),
+        yantra_version: z.string().min(1),
+        started_at: isoDateTime,
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal('error'),
+        id: z.number().int().nonnegative().nullable(),
+        code: z.string().min(1),
+        message: z.string().min(1),
+      })
+      .strict(),
+  ])
+  .describe('A control-socket message from the app host to a client.');
+export type ControlServerMessage = z.infer<typeof ControlServerMessage>;

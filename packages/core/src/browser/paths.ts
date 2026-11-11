@@ -100,6 +100,14 @@ export function invocationResultPath(invocationId: string): string {
   return join(invocationsRoot(), `${checkedInvocationId(invocationId)}.result.json`);
 }
 
+/**
+ * Why the last app host start failed (`{pid, code, message, remediation}`),
+ * written by a host that cannot start so `yantra ui` can report the cause.
+ */
+export function hostStartFailurePath(): string {
+  return join(uiRoot(), 'host-start-failure.json');
+}
+
 /** The app host's own Pino log (rotated once to `host.log.1`). */
 export function hostLogPath(): string {
   return join(uiRoot(), 'host.log');
