@@ -182,6 +182,8 @@ export type LivenessVerdict = 'alive' | 'dead' | 'unknown';
 export interface ProcessLivenessProbe {
   identify(pid: number): Promise<ProcessIdentity | null>;
   check(identity: ProcessIdentity): Promise<LivenessVerdict>;
+  /** Batched {@link check}, one platform query for many identities; results in input order. */
+  checkMany?(identities: readonly ProcessIdentity[]): Promise<LivenessVerdict[]>;
 }
 
 export type ManagedUsePhase = 'starting' | 'running' | 'stopping';

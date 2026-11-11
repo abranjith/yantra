@@ -1,0 +1,157 @@
+{
+  "$ref": "#/definitions/RunLease",
+  "definitions": {
+    "RunLease": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "type": "number",
+          "const": 1,
+          "description": "Lease envelope version."
+        },
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The owned run; equals the run directory name."
+        },
+        "owner": {
+          "type": "object",
+          "properties": {
+            "pid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "description": "Process ID."
+            },
+            "start_token": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Creation identity (platform start time). `unknown` when the platform could not tell; a liveness check then answers `unknown`, never `dead`."
+            }
+          },
+          "required": [
+            "pid",
+            "start_token"
+          ],
+          "additionalProperties": false,
+          "description": "Creation identity of the owning process."
+        },
+        "origin": {
+          "type": "string",
+          "enum": [
+            "terminal",
+            "worker",
+            "daemon"
+          ],
+          "description": "Who launched the run: a terminal command, a detached app worker, or the daemon."
+        },
+        "execution_class": {
+          "type": "string",
+          "enum": [
+            "run",
+            "read",
+            "mutate",
+            "exclusive",
+            "in-process-secure",
+            "adapter",
+            "exemption"
+          ],
+          "description": "The command registry's execution class for the invocation (normally `run`)."
+        },
+        "command": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "description": "Command path, for example `[\"research\"]`. Display only."
+        },
+        "socket": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "const": "unix"
+                },
+                "address": {
+                  "type": "string",
+                  "pattern": "^\\/.*\\/[0-9a-f]{24}\\.sock$",
+                  "description": "Absolute Unix socket path `<owner-only dir>/<24 hex>.sock`."
+                }
+              },
+              "required": [
+                "kind",
+                "address"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "const": "pipe"
+                },
+                "address": {
+                  "type": "string",
+                  "pattern": "^\\\\\\\\\\.\\\\pipe\\\\yantra-[0-9a-f]{32}$",
+                  "description": "Windows named pipe `\\\\.\\pipe\\yantra-<32 hex>`."
+                }
+              },
+              "required": [
+                "kind",
+                "address"
+              ],
+              "additionalProperties": false
+            }
+          ],
+          "description": "The run socket address: a Unix socket in an owner-only directory, or a named pipe."
+        },
+        "run_token": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{43}$",
+          "description": "Secret that authenticates run-socket clients (32 random bytes, base64url). Never logged, never sent to the model or served to the app."
+        },
+        "channel_version": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "Highest run-channel version the owner speaks (D17)."
+        },
+        "yantra_version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Version of the Yantra executable that owns the run."
+        },
+        "log_seq_at_claim": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Last committed `run-events.jsonl` seq at claim: the start of this ownership epoch. A reconciler looks for a terminal event only above it."
+        },
+        "claimed_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the lease was claimed."
+        }
+      },
+      "required": [
+        "schema_version",
+        "run_id",
+        "owner",
+        "origin",
+        "execution_class",
+        "command",
+        "socket",
+        "run_token",
+        "channel_version",
+        "yantra_version",
+        "log_seq_at_claim",
+        "claimed_at"
+      ],
+      "additionalProperties": false,
+      "description": "Exclusive ownership of a run directory, written once by `link` and removed only after the terminal event and manifest are flushed. Owner-only file."
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

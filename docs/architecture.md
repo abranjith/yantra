@@ -216,7 +216,8 @@ is never persisted. The same feature adds `owner_lost` to `TerminationReason` an
 - ethics, robots, rate limiting, sanitization, user-input masking, secret resolution, and security
   scope enforcement;
 - filesystem stores for workflows, run artifacts, profiles, report templates, and ask cache;
-- the run-event stream and its single-writer `run-events.jsonl` log (`src/run-events/`);
+- the run-event stream and its single-writer `run-events.jsonl` log (`src/run-events/`), and the
+  run channel's frame codec (`src/run-channel/`);
 - the local SQLite index for history, preferences, persistent rate limits, schedules, and domain
   ranks; and
 - the local scheduler daemon, notification adapters, audit writers, and diagnostics.
@@ -1464,6 +1465,135 @@ pipelines record the run as failed (manifest and report), the agent finalizes it
 `MarkdownReportBuilder` lists `run-events.jsonl` under the Audit Trail of both its agentic and its
 non-agentic report when the file exists. It checks presence only and never parses the file, so older
 run directories render unchanged.
+
+#### Run channel framing
+
+The run channel is the local socket through which a run's owner serves its events to other
+processes. Everything on it uses one framing grammar, implemented in
+`src/run-channel/frame-codec.ts` with the limits that `@yantra/protocol` (`run-channel.ts`) pins:
+
+```text
+[type: u8][length: u32 BE][payload]
+  0x01  UTF-8 JSON message                          payload ≤ 1 MiB
+  0x02  screencast: [meta_len: u16 BE][meta JSON][JPEG bytes]   payload ≤ 4 MiB
+```
+
+- **Encoding.** `encodeJsonFrame` and `encodeScreencastFrame` throw a typed
+  `RunChannelFrameError` instead of producing an over-limit frame: `FRAME_TOO_LARGE` (the owner
+  answers it with an `event_oversize` placeholder, so no `seq` goes missing),
+  `FRAME_META_TOO_LARGE` for screencast meta over 65,535 bytes, or `FRAME_NOT_JSON`. The message
+  never carries the payload.
+- **Decoding.** One `FrameDecoder` per connection takes chunks as they arrive. It reassembles a
+  frame split across chunks, including across the 5-byte header, and returns every frame a chunk
+  completes, in order. A frame that arrived in one chunk is decoded as a view of it, and only a
+  fragmented one is copied.
+- **Header-first limits.** The type byte and length are checked as soon as the header is in, before
+  any payload is buffered, so a peer that declares a 4 GiB frame costs at most 5 buffered bytes. An
+  optional per-state limit caps every type on top of its own maximum. The socket uses it for the
+  16 KiB `hello` frame that must arrive before authentication, then lifts it with `setLimit(null)`,
+  which applies from the next header.
+- **Fatal results.** An unknown type, an over-limit length, a JSON payload that is not valid UTF-8
+  JSON, or a screencast whose `meta_len` overruns the payload (or whose meta is not JSON) yields one
+  `{kind: 'fatal', reason}` after any frames decoded before it. The decoder is then spent: it holds
+  nothing and returns nothing, and the caller closes the connection. There is no resynchronization,
+  because a length that cannot be trusted leaves no frame boundary to resume from.
+
+#### Run ownership and the run socket
+
+Each run epoch is owned through `src/run-ownership/`. `RunOwnershipSession.open` starts the run
+socket first, then claims `lease.json` naming that socket and its token, so a client that reads the
+lease always finds a listener. The lease is published once by `link` and never rewritten; browsers
+the run launches are appended to `owned-browsers.jsonl` by a `BrowserOwnershipRecorder` threaded
+through `BrowserRuntimeOptions` → `LocalBrowserProvider` → `launchResolvedChrome`, for every
+ownership kind. Owner liveness is a creation-identity check (`ProcessLivenessProbe`): a signal-0
+test answers a missing PID without a platform query, and `checkMany` checks many identities with
+one CIM query on Windows or one `ps` on macOS.
+
+`RunChannelServer` (`src/run-channel/server.ts`) listens on a Unix socket in an owner-only
+directory (`socketsRoot()`: `<yantraHome>/run`, or `<tmpdir>/yantra-<uid>` when that path would
+not fit `sun_path`; created `0700` and refused, never repaired, if it is a symlink, not owned by
+the user, or group- or world-accessible) or on a named pipe `\\.\pipe\yantra-<32 hex>` on Windows.
+
+```mermaid
+sequenceDiagram
+  participant C as Client
+  participant S as RunChannelServer
+  C->>S: hello {token, channel_version, capabilities, client_kind}
+  Note over S: first frame only, ≤ 16 KiB, within 5 s
+  alt wrong token, late, oversized or not hello
+    S--xC: destroy (0 bytes written)
+  else version below the supported range
+    S->>C: hello_incompatible {supported, yantra_version}, then close
+  else
+    S->>C: hello_ok {channel_version, supported, capabilities ∩, run_id}
+    C->>S: subscribe / cancel / ping / later types
+    S->>C: event / cancel_ack / heartbeat / error{unsupported | bad_request}
+  end
+```
+
+- **Token first.** The token is compared with `timingSafeEqual`; a different length is simply
+  wrong. Until `hello` authenticates, the server writes nothing at all.
+- **Versions.** The negotiated version is `min(client, CHANNEL_VERSION)`. An owner a client cannot
+  speak to is `live_unavailable` to `RunChannelClient`, which then sends nothing more, never
+  `cancel`.
+- **Handlers.** `subscribe` and `ping` (answered with a `heartbeat`) are built in. Other types are
+  served by handlers registered with a capability, which `hello_ok` advertises to clients that ask
+  for it. A type with no handler gets `error{unsupported}` and the connection stays open; a
+  malformed known message gets `error{bad_request}`; malformed framing or JSON closes it.
+- **Replay to live.** The run attaches its event log with `attachEvents(streamEventSource(stream,
+runDir))`; a `subscribe` that arrives earlier waits for it. On `subscribe {from_seq}` the
+  connection, all on the owner's event loop, registers a buffering committed-event listener, reads
+  the watermark `W = stream.lastSeq`, streams `from_seq..W` from `run-events.jsonl` (paced by socket
+  drain, so a 50,000-event replay never piles up in memory), flushes buffered events above `W` in
+  order, and then forwards live. Persist-before-publish means the listener only ever sees committed
+  events, and the reader never yields a partial tail. An event whose frame would exceed 1 MiB is
+  sent as `event_oversize {seq}`, so no `seq` is missing. A second `subscribe` restarts from its own
+  `from_seq`.
+- **Client side.** `RunChannelClient` delivers each `seq` once, in increasing order, and counts any
+  gap (there should be none). When a connection closes before the run's `run_outcome`, it reads
+  `run-events.jsonl` from `lastSeq + 1` first, because an owner that exits right after its terminal
+  event may never send it. `reconnect()` backs off from 250 ms to 5 s, re-reads the lease (a resumed
+  run has a new token and socket) and resubscribes from `lastSeq + 1`. `getSnapshot()` and
+  `subscribeSnapshot()` fit `useSyncExternalStore`.
+- **Queues and backpressure.** Each connection has an `OutboundQueues` (`outbound-queues.ts`): a
+  FIFO event queue for control and event frames, bounded at 8 MiB of encoded bytes, and a one-slot
+  screencast frame queue in which a newer frame replaces an unsent one. The writer always empties
+  the event queue before taking the frame slot and waits for `drain` whenever `write()` returns
+  false. Enqueueing is synchronous and never waits, so a slow client cannot stall the owner's event
+  loop or another client. A client that stops reading overflows its own queue: it gets one
+  best-effort `error{overflow}`, only its connection is dropped (`channel_overflow` is logged), and
+  it can reconnect and replay from the file. Replayed events are paced by writes and do not count
+  against the bound. `publishFrame(meta, jpeg)` is the entry point for screencast producers.
+- **Liveness.** The owner sends `heartbeat {at}` on every connection every 5 s. A client that hears
+  no frame of any kind for 30 s reports `not_responding`, logs it once, and returns to `attached` on
+  the next frame. Every threshold (hello deadline, heartbeat, not responding, queue bound, drain
+  window, stop grace) lives in `src/run-ownership/constants.ts`.
+- **Stopping a run.** `stopRun({runDir})` (`src/run-ownership/stop-run.ts`) is the one stop
+  policy, for the app to call; there is no CLI command. It reads the lease (none: `not_running`),
+  sends `cancel` over the run socket, and waits up to 10 s for the owner to end the run and remove
+  its lease (`stopped_gracefully`). It skips that wait when the owner answers `honored: false`, and
+  it never sends anything to an owner it cannot speak to. Otherwise it decides by identity: an
+  owner it cannot verify is never signalled (`stop_unverifiable`), a reused PID reads as dead and is
+  not signalled, and a live owner is re-verified, terminated forcefully as a process tree, and
+  waited on. After any forced stop it always reconciles the run, which also reaps the run's
+  browsers by identity (`stopped_forcefully`).
+- **Close.** `close(drainMs)` stops accepting, ends every connection, waits up to 1 s for them to
+  close, destroys any left, and only then does `finish()` release the lease, so an attached client
+  receives the run's terminal event.
+- **Logging.** `channel_attached` and `channel_detached` carry the client kind, negotiated version
+  and duration. The token and the socket address are never logged.
+
+#### Run ownership reliability
+
+| Failure                                        | What happens                                                                                                                                                                                                                                                                                                                                                                                      |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Worker (or any run owner) crashes or is killed | The lease stays behind on purpose. The next `yantra list`, run-start sweep, host start, `resume` or stop verifies the owner is dead by creation identity and reconciles: exactly one `run_outcome` with `owner_lost`, outcome `partial` or `failed` from the evidence, `executionState: interrupted`, lease removed. Attached clients read the rest of `run-events.jsonl` from the file.          |
+| Owned Chrome orphaned                          | Every browser a run launches is in `owned-browsers.jsonl`. The reconciler stops a live one only after re-verifying its creation identity, confirms it gone, and never signals one whose identity is unknown; while any remains uncertain the lease is kept as a possible orphan (`listPossibleOrphans`). On Windows, Chrome launched over a CDP pipe usually exits by itself when its owner dies. |
+| User stops a run                               | `stopRun` sends `cancel`; an owner that honors it ends the run cleanly within 10 s. Otherwise, or at once when the owner answers `honored: false`, the owner is terminated by verified identity (never when unverifiable) and the run is always reconciled.                                                                                                                                       |
+| A client stops reading                         | Only that connection overflows its 8 MiB queue (including live events held during its replay) and is dropped; other clients and the run are unaffected, and it can replay from the file.                                                                                                                                                                                                          |
+| Host killed or its process tree ended          | Detached workers started through the trampoline have a dead parent and their own session, so they keep running. A host inside a Windows `KILL_ON_JOB_CLOSE` Job without `SILENT_BREAKAWAY_OK` still takes them with it.                                                                                                                                                                           |
+
+The acceptance suite `e2e/run-ownership.spec.ts` exercises each row with real processes.
 
 ### `packages/agent`
 
@@ -2845,6 +2975,44 @@ key step returns a manual-storage instruction when the keychain is unavailable.
 Terminal collectors wrap terminal prompts. Worker collectors use the same core questionnaires
 with channel-backed select, text, password, and confirmation input. Non-interactive and JSON init
 select defaults; `--yes` also skips questions. The service has no terminal or provider SDK dependency.
+
+#### Detached workers
+
+The app host runs commands as detached worker processes so a run outlives the host and the terminal
+(FEAT-064). There is one way to start one, `spawnDetachedWorker` (`src/worker/spawn.ts`):
+
+```mermaid
+sequenceDiagram
+  participant H as Host
+  participant T as Trampoline
+  participant W as Worker (dist/worker.js)
+  H->>H: create <launchDir>/<id>.launch.json (wx, 0600)
+  H->>T: spawn node trampoline.js node worker.js --launch <file>
+  T->>W: spawn detached, shell false, stdio ignore, windowsHide
+  T-->>H: worker PID on stdout, then exit
+  H->>H: identifyProcess(PID)
+  W->>W: validate launch, gate class, run via the worker adapter
+  W->>H: <id>.result.json (exclusive, once)
+```
+
+- **No user text in argv.** The invocation (and any goal text) travels in the owner-only launch
+  file, created exclusively so an existing one is never overwritten. The worker's command line holds
+  only the launch path.
+- **The trampoline** (spike S2, RC1) leaves the worker with a dead parent, so a process-tree kill of
+  the host (`taskkill /T`, Task Manager's "End process tree") cannot reach it; on POSIX the worker
+  leads its own session, so a process-group kill misses it. A host inside a Windows Job object with
+  `KILL_ON_JOB_CLOSE` and no `SILENT_BREAKAWAY_OK` still takes its workers with it: Node offers no
+  breakaway flag, and WMI process creation would lose the host's environment.
+- **The worker** (`src/worker/entry.ts`) accepts exactly `--launch <absolute path>` inside
+  `workerLaunchRoot()` (`<data>/ui/launch`), validates `WorkerLaunch`, and refuses any class but
+  `run`, `mutate` and `exclusive` with `WORKER_CLASS_REFUSED`. An optional start gate (FEAT-065's
+  invocation claim) may decline before any side effect; the worker then exits 0 and writes nothing.
+  It changes to the invocation's working directory and runs it through the FEAT-072 worker adapter
+  with no one attached (prompts answer no, confirmations are denied), so its runs are owned with
+  origin `worker`.
+- **The result** is written exactly once, atomically and owner-only (`WorkerResultSink`); an
+  uncaught failure becomes an `error` result with exit 2. If handles remain 5 s after the result is
+  written, the entry hard-exits.
 
 #### Execution receipts and shared-resource locks
 

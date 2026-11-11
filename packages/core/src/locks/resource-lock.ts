@@ -7,6 +7,7 @@ import { z } from 'zod';
 
 import {
   configPath,
+  runsRoot,
   scheduleRegistryLockTarget,
   templatesRoot,
   workflowsRoot,
@@ -22,7 +23,9 @@ export type LockedResource =
   | { readonly kind: 'workflow'; readonly name: string }
   | { readonly kind: 'template'; readonly name: string }
   | { readonly kind: 'schedules' }
-  | { readonly kind: 'browser-profile'; readonly path: string };
+  | { readonly kind: 'browser-profile'; readonly path: string }
+  /** A run directory, held by its `lease.json` rather than a lock file (FEAT-064). */
+  | { readonly kind: 'run'; readonly runId: string };
 
 const OwnerSchema = z
   .object({
@@ -56,8 +59,8 @@ const FILE_RETRIES = { retries: 25, factor: 1, minTimeout: 200, maxTimeout: 200 
 
 /** Contention only. Other filesystem failures retain their original error. */
 export class ResourceBusyError extends Error {
-  public override readonly name = 'ResourceBusyError';
-  public readonly remediation = 'Try again when it finishes.';
+  public override readonly name: string = 'ResourceBusyError';
+  public readonly remediation: string = 'Try again when it finishes.';
   public constructor(
     public readonly resource: LockedResource,
     public readonly holder: ResourceLockOwner | null,
@@ -69,6 +72,7 @@ export class ResourceBusyError extends Error {
 }
 
 function resourceLabel(resource: LockedResource): string {
+  if (resource.kind === 'run') return `run ${resource.runId}`;
   return 'name' in resource ? `${resource.kind} "${resource.name}"` : resource.kind;
 }
 
@@ -84,6 +88,8 @@ export function resourceLockTarget(resource: LockedResource): string {
       return scheduleRegistryLockTarget();
     case 'browser-profile':
       return resolve(resource.path);
+    case 'run':
+      return join(runsRoot(), resource.runId);
     case 'workflow':
     case 'template': {
       return resource.kind === 'workflow'
@@ -96,6 +102,8 @@ export function resourceLockTarget(resource: LockedResource): string {
 function validateResourceKey(resource: LockedResource): void {
   if ('name' in resource && !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(resource.name))
     throw new Error(`Invalid ${resource.kind} lock name`);
+  if (resource.kind === 'run' && !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(resource.runId))
+    throw new Error('Invalid run ID');
   if (resource.kind === 'browser-profile' && !isAbsolute(resource.path))
     throw new Error('Browser profile lock path must be absolute');
 }

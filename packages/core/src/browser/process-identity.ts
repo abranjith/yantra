@@ -130,6 +130,14 @@ export async function currentProcessIdentity(): Promise<ProcessIdentity> {
   return ownIdentity;
 }
 
+/**
+ * Starts computing this process's identity in the background, so the first
+ * lease claim does not wait for it (~0.6 s on Windows; spike S2, RC4).
+ */
+export function warmProcessIdentity(): void {
+  void currentProcessIdentity().catch(() => undefined);
+}
+
 /** @internal Test seam — forgets the memoized identity of this process. */
 export function resetCurrentProcessIdentity(): void {
   ownIdentity = null;
@@ -157,10 +165,106 @@ export class NodeProcessLivenessProbe implements ProcessLivenessProbe {
    * reused and the recorded owner is gone.
    */
   async check(identity: ProcessIdentity): Promise<LivenessVerdict> {
+    // Signal 0 first: a missing PID is dead without a platform query, which
+    // costs ~0.6 s per call on Windows (spike S2, RC4).
+    if (!processExists(identity.pid)) return 'dead';
     const token = await readStartToken(identity.pid, this.platform);
-    if (token === null) return 'dead';
-    if (token === UNKNOWN_START_TOKEN || identity.startToken === UNKNOWN_START_TOKEN)
-      return 'unknown';
-    return token === identity.startToken ? 'alive' : 'dead';
+    return verdictFor(identity, token);
   }
+
+  /**
+   * Checks several identities with one platform query for every PID that
+   * exists (one CIM query on Windows, one `ps` on macOS). Results are in input
+   * order. A failed batch query answers `unknown`, never `dead`.
+   */
+  async checkMany(identities: readonly ProcessIdentity[]): Promise<LivenessVerdict[]> {
+    const existing = [
+      ...new Set(identities.filter((entry) => processExists(entry.pid)).map((entry) => entry.pid)),
+    ];
+    const tokens = await readStartTokens(existing, this.platform);
+    return identities.map((identity) =>
+      existing.includes(identity.pid)
+        ? verdictFor(identity, tokens.get(identity.pid) ?? null)
+        : 'dead',
+    );
+  }
+}
+
+function verdictFor(identity: ProcessIdentity, token: string | null): LivenessVerdict {
+  if (token === null) return 'dead';
+  if (token === UNKNOWN_START_TOKEN || identity.startToken === UNKNOWN_START_TOKEN)
+    return 'unknown';
+  return token === identity.startToken ? 'alive' : 'dead';
+}
+
+/**
+ * Start tokens for several PIDs. A PID missing from a successful batch answer
+ * re-checks existence (null when gone); a failed batch query answers
+ * {@link UNKNOWN_START_TOKEN} for every PID that still exists.
+ */
+export async function readStartTokens(
+  pids: readonly number[],
+  platform: NodeJS.Platform = process.platform,
+): Promise<Map<number, string | null>> {
+  const result = new Map<number, string | null>();
+  const valid = pids.filter((pid) => Number.isInteger(pid) && pid > 0);
+  if (valid.length === 0) return result;
+  if (platform !== 'win32' && platform !== 'darwin') {
+    await Promise.all(
+      valid.map(async (pid) => result.set(pid, await readStartToken(pid, platform))),
+    );
+    return result;
+  }
+  let lines: string[];
+  try {
+    const { stdout } =
+      platform === 'win32'
+        ? await run(
+            'powershell',
+            [
+              '-NoProfile',
+              '-NonInteractive',
+              '-Command',
+              `Get-CimInstance Win32_Process -Filter "${valid.map((pid) => `ProcessId=${pid}`).join(' OR ')}" -ErrorAction SilentlyContinue | ForEach-Object { "$($_.ProcessId) $($_.CreationDate.ToFileTimeUtc())" }`,
+            ],
+            { timeout: QUERY_TIMEOUT_MS * 2, windowsHide: true },
+          )
+        : await run('ps', ['-o', 'pid=,lstart=', '-p', valid.join(',')], {
+            timeout: QUERY_TIMEOUT_MS * 2,
+            windowsHide: true,
+          });
+    lines = stdout.split(/\r?\n/u);
+  } catch (error) {
+    // `ps` exits 1 when none of the PIDs exist; its stdout still holds any rows.
+    const stdout = (error as { stdout?: unknown }).stdout;
+    if (platform === 'darwin' && typeof stdout === 'string') lines = stdout.split(/\r?\n/u);
+    else {
+      for (const pid of valid) result.set(pid, processExists(pid) ? UNKNOWN_START_TOKEN : null);
+      return result;
+    }
+  }
+  const prefix = platform === 'win32' ? 'win32' : 'darwin';
+  for (const line of lines) {
+    const match = /^\s*(\d+)\s+(.+?)\s*$/u.exec(line);
+    if (match === null) continue;
+    const pid = Number(match[1]);
+    if (valid.includes(pid)) result.set(pid, `${prefix}:${match[2]}`);
+  }
+  for (const pid of valid) {
+    if (!result.has(pid)) result.set(pid, processExists(pid) ? UNKNOWN_START_TOKEN : null);
+  }
+  return result;
+}
+
+/**
+ * Checks identities through {@link ProcessLivenessProbe.checkMany} when the
+ * probe has it, otherwise one `check` per identity.
+ */
+export async function checkIdentities(
+  probe: ProcessLivenessProbe,
+  identities: readonly ProcessIdentity[],
+): Promise<LivenessVerdict[]> {
+  if (identities.length === 0) return [];
+  if (probe.checkMany !== undefined) return probe.checkMany(identities);
+  return Promise.all(identities.map((identity) => probe.check(identity)));
 }

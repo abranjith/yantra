@@ -118,6 +118,15 @@ export class RunEventStream {
     return this.outcomeSeen;
   }
 
+  /**
+   * `seq` of the last committed event, or 0 before open. This is the replay
+   * watermark a run socket reads, on this event loop, before streaming the
+   * file (FEAT-064).
+   */
+  public get lastSeq(): number {
+    return this.log === null ? 0 : this.log.nextSequence - 1;
+  }
+
   /** The run this stream was opened for, or null before open. */
   public get runId(): string | null {
     return this.openedRunId;

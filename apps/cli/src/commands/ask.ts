@@ -17,6 +17,7 @@ import {
   HttpFetcher,
   HybridContentFetcher,
   createSelectedBrowserProvider,
+  DeferredBrowserOwnershipRecorder,
   type BrowserRuntimeOptions,
   type BrowserSelection,
   LocalProfileStore,
@@ -385,7 +386,15 @@ export async function createDefaultAskPipeline(
   });
   // The same seam every other launch-capable path uses; building it starts no
   // browser, so the lazy fetch fallback stays lazy.
-  const browserProvider = createSelectedBrowserProvider({ ...browser, profileStore, logger });
+  // FEAT-064: the run binds this to its lease once it owns its directory, so
+  // every browser the per-use page source launches is recorded.
+  const ownershipRecorder = new DeferredBrowserOwnershipRecorder();
+  const browserProvider = createSelectedBrowserProvider({
+    ...browser,
+    profileStore,
+    logger,
+    ownershipRecorder,
+  });
   // One browser launch per SERP scrape or fetch fallback, as before FEAT-050:
   // the deterministic loop keeps its own wiring and gains only the honest
   // timeout the page source enforces.
@@ -436,6 +445,7 @@ export async function createDefaultAskPipeline(
   const rankSink = await createBestEffortRankSignalSink(logger);
 
   return new AskPipeline({
+    ownershipRecorder,
     searchProvider,
     fetcher,
     extractor: new ReadabilityExtractor(),

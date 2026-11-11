@@ -16,8 +16,10 @@ import { ExecutionReceiptSchema } from '../schemas/execution-receipt.js';
 import { ExtractionResultEnvelopeUnknown } from '../schemas/extraction.js';
 import { PlanSchema } from '../schemas/plan.js';
 import { LocatorChain, ValueRef } from '../schemas/refs.js';
+import { RunChannelMessage, WorkerLaunch } from '../schemas/run-channel.js';
 import { RunEvent, RunEventRecord } from '../schemas/run-event.js';
 import { RunHealth } from '../schemas/run-health.js';
+import { RunLease } from '../schemas/run-lease.js';
 import { Step } from '../schemas/steps.js';
 import { TaskContractRecord } from '../schemas/task-contract.js';
 import { TaskRequest } from '../schemas/task.js';
@@ -54,6 +56,9 @@ export const JSON_SCHEMA_ARTIFACTS: Record<string, { schema: z.ZodType<unknown>;
   'task-contract.json': { schema: TaskContractRecord, name: 'TaskContractRecord' },
   'command-registry.json': { schema: CommandRegistry, name: 'CommandRegistry' },
   'command-invocation.json': { schema: CommandInvocation, name: 'CommandInvocation' },
+  'run-lease.json': { schema: RunLease, name: 'RunLease' },
+  'run-channel-message.json': { schema: RunChannelMessage, name: 'RunChannelMessage' },
+  'worker-launch.json': { schema: WorkerLaunch, name: 'WorkerLaunch' },
 } as const;
 
 export type JsonSchemaArtifactName = keyof typeof JSON_SCHEMA_ARTIFACTS;

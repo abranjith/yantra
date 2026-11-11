@@ -5,6 +5,9 @@ import { join } from 'node:path';
 import {
   brandSanitized,
   DefaultSanitizer,
+  RunChannelClient,
+  readLease,
+  type CancelAck,
   parseTemplate,
   ScriptRegistry,
   UserInputMarkerError,
@@ -2522,6 +2525,42 @@ describe('@no-llm runAgenticTask task outcome (FEAT-054)', () => {
       taskOutcome: 'aborted',
       failureClass: 'user_aborted',
     });
+  });
+
+  it('aborts on a run-socket cancel exactly as on a user abort, acknowledged honored (FEAT-064)', async () => {
+    const silent = {
+      info: () => undefined,
+      warn: () => undefined,
+      error: () => undefined,
+      debug: () => undefined,
+    };
+    let acks: (CancelAck | null)[] = [];
+    const { outcome } = await scriptedRun({
+      command: 'do',
+      calls: [ACTIONS_CONTRACT, PUBLISH_UNMET],
+      afterCalls: async (services) => {
+        const read = await readLease(services.runDir);
+        if (read.kind !== 'lease') throw new Error('the run holds no lease');
+        expect(read.lease).toMatchObject({ command: ['do'], origin: 'terminal' });
+        const client = new RunChannelClient({
+          clientKind: 'test',
+          runDir: services.runDir,
+          logger: silent,
+        });
+        expect((await client.connect(read.lease)).state).toBe('attached');
+        acks = [await client.cancel(), await client.cancel()];
+        client.close();
+      },
+    });
+
+    expect(acks).toEqual([
+      { alreadyCancelling: false, honored: true },
+      { alreadyCancelling: true, honored: true },
+    ]);
+    expect(outcome).toMatchObject({ kind: 'aborted', terminationReason: 'user_abort' });
+    expect(exitCodeForAgenticOutcome(outcome)).toBe(130);
+    expect(await manifestOf(outcome)).toMatchObject({ status: 'aborted', taskOutcome: 'aborted' });
+    expect(await readLease(outcome.runDir)).toEqual({ kind: 'absent' });
   });
 
   it('keeps research fulfilled and exit 0 even with contract gaps', async () => {

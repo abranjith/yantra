@@ -74,17 +74,18 @@ TASK-002 onward do not start until its report is accepted.
     this claim. This matters for a resumed run whose earlier execution already ended.
   - `claimed_at` (ISO-8601) and `heartbeat_at` (ISO-8601) — the owner rewrites `heartbeat_at`
     every 5 s.
+    > **Amended by spike S2 RC2** (accepted 2026-11-09): the lease is immutable after its `link` claim. `heartbeat_at` is dropped (liveness comes from creation identity and the socket heartbeat), and `owned_browsers` is not stored here: owned-browser identities live in the append-only `<runDir>/owned-browsers.jsonl` (`{op: 'spawned' | 'exited', pid, start_token, at}`, owner-only), folded by readers that ignore a trailing partial line.
 - **ExecutionState** (protocol enum, plan §6 "Protocol additions"): exactly one value,
   `interrupted`. It is absent for every execution that ended on its own, so the enum has no dead
   values.
 - **RunManifest extension** (`packages/core/src/workflow/replay/types.ts`):
   - `executionState?: ExecutionState` — set only by the reconciler, and cleared when a resume takes
     over the run.
-  - > **DEVIATION (naming only):** plan §6 and D7 spell the field `execution_state`, but every
-    > existing top-level `RunManifest` key is camelCase (`taskOutcome`, `terminationReason`,
-    > `runKind`). The spec persists it as **`executionState`** so the manifest keeps one casing.
-    > Protocol-level schemas (lease, channel messages) stay snake_case. Awaiting confirmation; if the
-    > plan spelling is required, only the key name in TASK-002 changes.
+  - > **RESOLVED (naming, user 2026-11-09: "be consistent across the app"):** the field is
+    > **`executionState`**, because every top-level `RunManifest` key on disk is camelCase (`runId`,
+    > `taskOutcome`, `terminationReason`, `runKind`). Protocol-owned schemas (lease, channel
+    > messages, read views) stay snake_case. The plan and FEAT-066's manifest references now say
+    > `executionState` too.
 - **Run channel messages** (protocol schema `RunChannelMessage`; frame type `0x01`, UTF-8 JSON, at
   most 1 MiB; discriminated by `type`):
   - **client → owner:**
@@ -378,6 +379,34 @@ All paths above are under `packages/core/src/run-channel/`.
 - **Verify**: `spike_s2_report.md` exists, lists every scenario above for all three OSes with
   results, and states a verdict. The CI run links are recorded in the report.
 
+> **Spike S2 outcome (2026-11-09, Windows only).** Verdict: plan D3/D6/§6/§8 hold in shape, with
+> the changes below. **All four were ACCEPTED by the user on 2026-11-09** and override the task text
+> they amend; each affected task carries an "Amended by RC#" pointer. Linux/macOS verification was
+> **waived** by the user for now and is tracked in `.spec-lite/TODO.md`; TASK-014's cross-OS suite is
+> the first place a POSIX difference would surface. Evidence: `spike_s2_report.md`.
+>
+> - **DEVIATION (RC1, TASK-012):** `spawnDetachedWorker` spawns through a short-lived trampoline
+>   that starts the worker detached, reports its PID and exits, because `taskkill /T` of a live
+>   host kills directly spawned workers on Windows. A host inside a `KILL_ON_JOB_CLOSE` Job
+>   without `SILENT_BREAKAWAY_OK` still kills its workers (Node has no breakaway flag; WMI drops
+>   the environment). That is an accepted, documented limitation.
+> - **DEVIATION (RC2, §2 RunLease, TASK-004/008/009/010):** `lease.json` is immutable after its
+>   `link` claim. There is no `heartbeat_at` rewrite, and `owned_browsers` moves to an append-only
+>   `<runDir>/owned-browsers.jsonl` (`spawned`/`exited` lines). Reconciliation appends `exited`
+>   rather than rewriting the lease, and takeover replaces the lease by unlink then `link` under
+>   `reconcile.lock`. The reason: on Windows, rename over `lease.json` fails with `EPERM` while any
+>   reader holds it open, even with `FILE_SHARE_DELETE`.
+> - **DEVIATION (RC3, TASK-005/006/008):** `finish()` ends every channel connection and waits (≤ 1 s)
+>   before releasing the lease. `RunChannelClient` reads `run-events.jsonl` from `lastSeq + 1` when
+>   the connection closes before `run_outcome`. Without the drain, the terminal frame was lost to
+>   live clients in 3 of 3 runs.
+> - **DEVIATION (RC4, TASK-009/010/013):** `NodeProcessLivenessProbe` short-circuits non-existent
+>   PIDs with signal 0 and gains a batched `checkMany`, used by sweeps, `list` and the data-dir
+>   guard. The reason: `identifyProcess` costs about 0.6–0.9 s per call on Windows.
+> - **DEVIATION (spike CI):** the temporary three-OS job is `.github/workflows/spike-s2.yml`, run
+>   on pushes to the feature branch, not a `workflow_dispatch` job in `ci.yml`. GitHub only
+>   dispatches workflows whose default-branch copy declares the trigger. TASK-014 removes that file.
+
 ### TASK-002: Protocol schemas — lease, execution state, channel messages, worker launch
 
 - [ ] **Implementation**:
@@ -415,7 +444,7 @@ All paths above are under `packages/core/src/run-channel/`.
 
 ### TASK-003: Frame codec — one framing grammar with size limits
 
-- [ ] **Implementation**: Implement `packages/core/src/run-channel/frame-codec.ts`.
+- [x] **Implementation**: Implement `packages/core/src/run-channel/frame-codec.ts`.
   - **`encodeJsonFrame(message)`** returns a `Buffer`. It throws `RunChannelFrameError` over 1 MiB.
   - **`encodeScreencastFrame(meta, jpeg)`** returns a `Buffer`. It throws over 4 MiB or when the meta
     JSON exceeds `u16`.
@@ -427,7 +456,7 @@ All paths above are under `packages/core/src/run-channel/`.
     - It returns `{kind: 'fatal', reason}` on an unknown type, an over-limit length, malformed UTF-8
       or JSON, or a `meta_len` larger than the payload. The caller then closes the connection.
     - It takes an optional per-state limit, used for the 16 KiB `hello` limit.
-- [ ] **Unit Tests** (`frame-codec.spec.ts`):
+- [x] **Unit Tests** (`frame-codec.spec.ts`):
   - encode and decode round-trip for both types;
   - one frame delivered one byte at a time;
   - three frames coalesced in one chunk;
@@ -440,13 +469,15 @@ All paths above are under `packages/core/src/run-channel/`.
   - `meta_len` greater than the payload is fatal;
   - a hello-state limit of 16 KiB is enforced;
   - a property test: random message sequences split at random boundaries decode identically.
-- [ ] **Documentation Update**: Invoke **Document** update mode for architecture (run channel
+- [x] **Documentation Update**: Invoke **Document** update mode for architecture (run channel
       framing).
 - **Verify**: `cd packages/core && npx vitest run tests/run-channel/frame-codec.spec.ts` passes.
 
 ### TASK-004: Exclusive run lease — claim, heartbeat, owned browsers, verdict, release
 
-- [ ] **Implementation**:
+> **Amended by spike S2** (accepted 2026-11-09): RC2 (immutable lease; no `updateLease`, no heartbeat rewrite; `recordSpawned`/`recordExited` append to `owned-browsers.jsonl`) and RC4 (signal-0 short-circuit, batched `checkMany`). See the TASK-001 notes and `spike_s2_report.md` → Required changes.
+
+- [x] **Implementation**:
   - **`paths.ts`.** Add `socketsRoot()`:
     - POSIX: `<yantraHome>/run` when `<that>/<24-char name>.sock` is ≤ 100 bytes; otherwise
       `<os.tmpdir()>/yantra-<uid>`. The directory is created `0700`, then `lstat`-verified to be a
@@ -471,9 +502,9 @@ All paths above are under `packages/core/src/run-channel/`.
 command, log, logger})`: - claims the lease, with `log_seq_at_claim` taken from the FEAT-063 writer; - starts the heartbeat timer (5 s, `unref`). Heartbeat write failures are logged once and never
     crash the run; - exposes `recorder: BrowserOwnershipRecorder`.
 
-                                        `finish()` runs in this order: stop the timers, close the channel (TASK-005), then
-                                        `releaseLease`. The caller has already flushed the terminal event and manifest. `finish()` is
-                                        idempotent.
+                                                                                                        `finish()` runs in this order: stop the timers, close the channel (TASK-005), then
+                                                                                                        `releaseLease`. The caller has already flushed the terminal event and manifest. `finish()` is
+                                                                                                        idempotent.
 
   - **`browser-ownership-recorder.ts`.**
     - `recordSpawned(identity)` appends to `owned_browsers` and flushes before returning.
@@ -484,7 +515,7 @@ command, log, logger})`: - claims the lease, with `log_seq_at_claim` taken from 
       the child handle exists. It uses `identify(child.pid)`, falling back to `UNKNOWN_START_TOKEN`
       as the managed path does today. `shutdownAndRelease` calls `recordExited` after verified exit.
 
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - **`lease-store.spec.ts`:**
     - two concurrent `claimLease` calls on one directory: exactly one wins and the other gets
       `RunLeaseHeldError`;
@@ -504,7 +535,7 @@ command, log, logger})`: - claims the lease, with `log_seq_at_claim` taken from 
     - an unprovable exit (`BrowserProcessError`) keeps it;
     - the session heartbeat advances `heartbeat_at` on an injected clock;
     - `finish()` order is asserted with a call log.
-- [ ] **Documentation Update**: Invoke **Document** update mode for diagnostics and audit (the
+- [x] **Documentation Update**: Invoke **Document** update mode for diagnostics and audit (the
       `lease.json` artifact and what it contains, never the token value) and safety and privacy (the
       owner-only lease, and the Windows ACL statement from §7).
 - **Verify**: `cd packages/core && npx vitest run tests/run-ownership/lease-store.spec.ts
@@ -514,7 +545,9 @@ tests/browser` passes. A manual `YANTRA_HOME=<tmp> yantra research --no-llm "x"`
 
 ### TASK-005: Authenticated run socket with version and capability handshake
 
-- [ ] **Implementation**:
+> **Amended by spike S2** (accepted 2026-11-09): RC3 (the server exposes a bounded graceful close that ends every connection before `finish()` releases the lease). See the TASK-001 notes and `spike_s2_report.md` → Required changes.
+
+- [x] **Implementation**:
   - **`socket-address.ts`.** `allocateSocketAddress()` returns `{kind: 'unix', address:
 <socketsRoot>/<random 24 hex>.sock}` or `{kind: 'pipe', address: \\.\pipe\yantra-<random 32
 hex>}`. A stale Unix socket file at the address is unlinked only when its path is inside
@@ -540,7 +573,7 @@ hex>}`. A stale Unix socket file at the address is unlinked only when its path i
         the lease's `channel_version` is outside the client's range. In that case the client does
         not connect at all, and never sends `cancel`;
       - `{state: 'unreachable'}`.
-- [ ] **Unit Tests** (`server.spec.ts`, `client.spec.ts`, over real `node:net` sockets in a temp
+- [x] **Unit Tests** (`server.spec.ts`, `client.spec.ts`, over real `node:net` sockets in a temp
       directory or pipe):
   - **Unauthenticated clients get nothing:**
     - no hello within 5 s (injected timer) means the socket closes and the client received 0 bytes;
@@ -557,7 +590,7 @@ hex>}`. A stale Unix socket file at the address is unlinked only when its path i
     bytes the fake received).
   - An unregistered `intervention.answer` gets `error{unsupported}` and the connection survives.
   - A canary `run_token` never appears in the captured logger output.
-- [ ] **Documentation Update**: Invoke **Document** update mode for architecture (run socket and
+- [x] **Documentation Update**: Invoke **Document** update mode for architecture (run socket and
       handshake) and safety and privacy (token-first authentication, Unix socket directory permissions,
       named pipes on Windows).
 - **Verify**: `cd packages/core && npx vitest run tests/run-channel` passes on the CI three-OS
@@ -566,7 +599,9 @@ hex>}`. A stale Unix socket file at the address is unlinked only when its path i
 
 ### TASK-006: Atomic replay-to-live subscription with gap-free reconnect
 
-- [ ] **Implementation**:
+> **Amended by spike S2** (accepted 2026-11-09): RC3 (on a close before `run_outcome`, the client reads `run-events.jsonl` from `lastSeq + 1` before reconnecting or reporting `unreachable`). See the TASK-001 notes and `spike_s2_report.md` → Required changes.
+
+- [x] **Implementation**:
   - **Server, on `subscribe {from_seq}`.** All steps run on the owner's event loop (plan §8):
     1. register a per-connection buffering listener on the FEAT-063 committed-event listener;
     2. read the watermark `W` = last committed `seq`;
@@ -589,7 +624,7 @@ hex>}`. A stale Unix socket file at the address is unlinked only when its path i
     - `onEvent(listener)` and a `useSyncExternalStore`-friendly `getSnapshot()` of `lastSeq` and
       state.
 
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - Use a fake FEAT-063 log (an in-memory committed listener plus a range reader) and also the real
     writer once it is available.
   - **Gap-free attach:**
@@ -604,7 +639,7 @@ hex>}`. A stale Unix socket file at the address is unlinked only when its path i
     - an oversize event yields `event_oversize` with the right `seq`;
     - a trailing partial line in the file is not delivered;
     - `from_seq` beyond `W` goes straight to live.
-- [ ] **Documentation Update**: Invoke **Document** update mode for architecture (the event log
+- [x] **Documentation Update**: Invoke **Document** update mode for architecture (the event log
       contract and the replay-to-live watermark).
 - **Verify**: `cd packages/core && npx vitest run tests/run-channel/server.spec.ts
 tests/run-channel/client.spec.ts` passes.
@@ -612,7 +647,7 @@ tests/run-channel/client.spec.ts` passes.
 
 ### TASK-007: Bounded, prioritized outbound queues, backpressure and heartbeat
 
-- [ ] **Implementation**:
+- [x] **Implementation**:
   - **`outbound-queues.ts`.** Each connection has two queues.
     - **Event queue:** control and event JSON frames, FIFO, bounded at 8 MiB of encoded bytes.
       Overflow sends one best-effort `error{overflow}` and destroys **that** connection only. The
@@ -633,7 +668,7 @@ tests/run-channel/client.spec.ts` passes.
   - All thresholds live in `run-ownership/constants.ts`: heartbeat 5 s, not-responding 30 s, queue
     bound 8 MiB, stop grace 10 s and hello deadline 5 s. They are open questions in plan §15, so they
     live in one place.
-- [ ] **Unit Tests** (`outbound-queues.spec.ts`, `server.spec.ts`):
+- [x] **Unit Tests** (`outbound-queues.spec.ts`, `server.spec.ts`):
   - **Prioritization:** with 20 queued 3 MiB frames and a control message, the control message is
     written before any frame.
   - **Slow-client isolation:**
@@ -646,7 +681,7 @@ tests/run-channel/client.spec.ts` passes.
   - **Backpressure:** an injected `write() → false` waits for `drain`.
   - **Heartbeat:** there is one heartbeat per 5 s on an injected clock. The client flips to
     `not_responding` at exactly 30 s and back on the next heartbeat.
-- [ ] **Documentation Update**: Invoke **Document** update mode for architecture (queues,
+- [x] **Documentation Update**: Invoke **Document** update mode for architecture (queues,
       backpressure and liveness thresholds).
 - **Verify**: `cd packages/core && npx vitest run tests/run-channel` passes. The e2e slow-client case
   in TASK-014 confirms it with real processes.
@@ -654,7 +689,9 @@ tests/run-channel/client.spec.ts` passes.
 
 ### TASK-008: Every run is owned — lease, socket and owned browsers on all run paths, with `cancel`
 
-- [ ] **Implementation**:
+> **Amended by spike S2** (accepted 2026-11-09): RC3 (`finish()` drains connections, ≤ 1 s, before `releaseLease`; assert the terminal event reaches an attached client). See the TASK-001 notes and `spike_s2_report.md` → Required changes.
+
+- [x] **Implementation**:
   - **`LocalRunStore.createRunDirectory`** claims the lease **instead of writing `.lock`**. This is a
     clean break: pre-release, and `.lock` was internal. The claim happens inside
     `RunOwnershipSession.open`, after `mkdir`, before any manifest. `createAgentRun` therefore
@@ -691,7 +728,7 @@ tests/run-channel/client.spec.ts` passes.
   - **`resume()`** claims through `takeover` (TASK-010). Until TASK-010 lands it uses a plain claim
     and refuses `busy` if any lease exists. Mark that `STUB: plain claim until TASK-010`.
 
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - **`run-store.spec.ts`**, rewritten from the `.lock` assertions:
     - a new run has `lease.json` with the current identity and no `.lock`;
     - the manifest is written after the lease (spy on call order);
@@ -714,7 +751,7 @@ tests/run-channel/client.spec.ts` passes.
       verified shutdown;
     - a canary `run_token` never appears in `run-events.jsonl`, `runtime.jsonl`, `events.jsonl`,
       `report.md` or the `--json` envelope.
-- [ ] **Documentation Update**: Invoke **Document** update mode for diagnostics and audit (the run
+- [x] **Documentation Update**: Invoke **Document** update mode for diagnostics and audit (the run
       directory now holds `lease.json` while live, and every run serves a local socket) and for
       scheduling (daemon runs also hold leases).
 - **Verify**:
@@ -727,7 +764,9 @@ tests/run-channel/client.spec.ts` passes.
 
 ### TASK-009: Reconciler — exactly one terminal result for a dead owner, identity-verified browser reaping
 
-- [ ] **Implementation**: Implement `reconcileRun(runDir, deps)` in `reconciler.ts`.
+> **Amended by spike S2** (accepted 2026-11-09): RC2 (step 7 appends `exited` lines and never rewrites the lease; owned browsers are read from `owned-browsers.jsonl`) and RC4 (verdicts through the batched probe). See the TASK-001 notes and `spike_s2_report.md` → Required changes.
+
+- [x] **Implementation**: Implement `reconcileRun(runDir, deps)` in `reconciler.ts`.
   - **Dependencies:** `probe`, `terminator`, `clock`, `history` and `logger` are all injectable.
   - **Result:** a union of `no_lease | owner_alive | owner_unknown | busy | reconciled |
 completed_by_evidence`.
@@ -775,7 +814,7 @@ completed_by_evidence`.
       `owner_unknown`, because without a start token it cannot be verified;
     - a `running` manifest with neither file reconciles, by the ordering invariant.
 
-- [ ] **Unit Tests** (`reconciler.spec.ts`, `result-evidence.spec.ts`), using fake probes and
+- [x] **Unit Tests** (`reconciler.spec.ts`, `result-evidence.spec.ts`), using fake probes and
       terminators and a temp run directory:
   - **Dead owner:**
     - a dead owner with no terminal event gives exactly one `run_outcome` (`owner_lost`), a manifest
@@ -804,7 +843,7 @@ completed_by_evidence`.
     - legacy `.lock` with a dead PID is reconciled; with a live PID it is `owner_unknown`;
     - an ask-shaped manifest keeps its unknown fields.
   - Outcome is never `aborted`. A property test over random evidence sets enforces it.
-- [ ] **Documentation Update**: Invoke **Document** update mode for diagnostics and audit
+- [x] **Documentation Update**: Invoke **Document** update mode for diagnostics and audit
       (`interrupted` execution state versus outcome, `owner_lost`, the `reconciled` runtime line, and
       "possible orphan").
 - **Verify**: `cd packages/core && npx vitest run tests/run-ownership/reconciler.spec.ts
@@ -813,7 +852,9 @@ tests/run-ownership/result-evidence.spec.ts` passes.
 
 ### TASK-010: Resume takeover and reconciliation triggers (`yantra list`, CLI run start, host start)
 
-- [ ] **Implementation**:
+> **Amended by spike S2** (accepted 2026-11-09): RC2 (takeover replaces the lease by unlink then `link` under `reconcile.lock`; uncertain entries stay in the sidecar) and RC4 (`reconcileAll`, `listPossibleOrphans`, `findLiveOwners` use `checkMany`). See the TASK-001 notes and `spike_s2_report.md` → Required changes.
+
+- [x] **Implementation**:
   - **`takeover.ts`: `claimExistingRun(runDir, init)`**, used by `RunOrchestrator.resume` and
     replacing the TASK-008 stub.
     - No lease: plain `claimLease`.
@@ -842,7 +883,7 @@ budgetMs: 5_000})`. Errors are logged at debug, never surfaced. It is awaited fo
     budget before process exit.
   - Export `reconcileAll` for FEAT-065's host start (`trigger: 'host'`).
 
-- [ ] **Unit Tests**:
+- [x] **Unit Tests**:
   - **`takeover.spec.ts`:**
     - two concurrent `claimExistingRun` calls: exactly one succeeds;
     - a live owner gives `busy`;
@@ -861,7 +902,7 @@ budgetMs: 5_000})`. Errors are logged at debug, never surfaced. It is awaited fo
     - `list` against a live fake owner leaves it `running`.
   - **CLI run start:** a dead run is reconciled after an unrelated `research --no-llm` run starts,
     and the run's own exit is not delayed beyond the budget (stepped clock).
-- [ ] **Documentation Update**: Invoke **Document** update mode for usage (`yantra list` shows
+- [x] **Documentation Update**: Invoke **Document** update mode for usage (`yantra list` shows
       `interrupted`; `resume` can answer `busy`) and diagnostics and audit.
 - **Verify**:
   - `cd packages/core && npx vitest run tests/run-ownership` passes;
@@ -873,7 +914,7 @@ tests/commands/list-reconcile.spec.ts` passes;
 
 ### TASK-011: Stop service — graceful cancel, identity-verified forced termination, always reconcile
 
-- [ ] **Implementation**: Implement `stopRun({runDir, graceMs = 10_000}, deps)` in `stop-run.ts`.
+- [x] **Implementation**: Implement `stopRun({runDir, graceMs = 10_000}, deps)` in `stop-run.ts`.
   1. Read the lease. If there is none, return `not_running`.
   2. Connect with `RunChannelClient` and send `cancel`. If the owner is `live_unavailable` or
      `unreachable`, skip to step 4 without sending anything else.
@@ -890,7 +931,7 @@ tests/commands/list-reconcile.spec.ts` passes;
 
   This is a core service consumed by FEAT-065 and FEAT-067 (Stop). There is no new CLI command.
 
-- [ ] **Unit Tests** (`stop-run.spec.ts`, using a fake channel, probe, terminator and clock):
+- [x] **Unit Tests** (`stop-run.spec.ts`, using a fake channel, probe, terminator and clock):
   - a cooperative owner removes its lease within the grace period, so the result is
     `stopped_gracefully` and the terminator is never called;
   - an unresponsive owner that ignores `cancel` is terminated after exactly 10 s (stepped clock),
@@ -901,7 +942,7 @@ tests/commands/list-reconcile.spec.ts` passes;
   - a reused PID (`dead` verdict) is never signalled and is reconciled;
   - forced termination is always followed by reconciliation, even when `terminate` throws;
   - an incompatible owner is still stoppable through identity-verified termination.
-- [ ] **Documentation Update**: Invoke **Document** update mode for architecture (the stop and
+- [x] **Documentation Update**: Invoke **Document** update mode for architecture (the stop and
       forced-termination policy from the §8 reliability matrix).
 - **Verify**: `cd packages/core && npx vitest run tests/run-ownership/stop-run.spec.ts` passes. The
   TASK-014 e2e covers real processes.
@@ -909,7 +950,9 @@ tests/commands/list-reconcile.spec.ts` passes;
 
 ### TASK-012: Detached worker entry point and the single cross-OS spawn helper
 
-- [ ] **Implementation**:
+> **Amended by spike S2** (accepted 2026-11-09): RC1 (`spawnDetachedWorker` spawns through a short-lived trampoline that reports the worker PID and exits; add a tree-kill/process-group survival test; document the kill-on-close Job limitation). See the TASK-001 notes and `spike_s2_report.md` → Required changes.
+
+- [x] **Implementation**:
   - **`apps/cli/src/worker.ts`**, built to `dist/worker.js` (add it to the build, not to `bin`).
     1. Parse exactly `--launch <abs path>`; anything else gives exit 1.
     2. Read and validate `WorkerLaunch`. Refuse a path outside `workerLaunchRoot()` unless
@@ -931,9 +974,9 @@ tests/commands/list-reconcile.spec.ts` passes;
 process.execPath, workerPath})`.** 1. Exclusively create the launch file (`wx`, `0600`) in `launch.dir`. 2. Call `spawn(nodePath, [workerPath, '--launch', file], {cwd: invocation.cwd, env, detached:
 true, shell: false, stdio: 'ignore', windowsHide: true})`, then `child.unref()`. 3. Return `{pid, identity}`, with the identity captured through `identifyProcess`.
 
-                                        Apply any mitigation the S2 report requires, for example Job-object breakaway on Windows.
+                                                                                                        Apply any mitigation the S2 report requires, for example Job-object breakaway on Windows.
 
-- [ ] **Unit Tests** (`launch.spec.ts`, `result-sink.spec.ts`, `spawn.spec.ts`):
+- [x] **Unit Tests** (`launch.spec.ts`, `result-sink.spec.ts`, `spawn.spec.ts`):
   - **Launch validation:**
     - a malformed launch file gives exit 1 and an `error` result;
     - `secret set` (`in-process-secure`) and `ui` (`exemption`) are refused with
@@ -951,7 +994,7 @@ true, shell: false, stdio: 'ignore', windowsHide: true})`, then `child.unref()`.
     - **survival:** a parent script spawns a worker running a `mutate` command (`prefs set` in a
       sandboxed `YANTRA_HOME`) and exits immediately, and the worker still completes and writes its
       result.
-- [ ] **Documentation Update**: Invoke **Document** update mode for architecture (the process
+- [x] **Documentation Update**: Invoke **Document** update mode for architecture (the process
       model: the detached worker and the launch and result files).
 - **Verify**:
   - `npx turbo run build`, then `cd apps/cli && npx vitest run tests/worker` passes on the CI
@@ -960,9 +1003,16 @@ true, shell: false, stdio: 'ignore', windowsHide: true})`, then `child.unref()`.
     check that the run directory completes and `WorkerResult` has exit 0.
 - **Depends on**: TASK-008; FEAT-062; FEAT-072
 
+> **Implementation notes (TASK-012):** DEVIATION: a start-gate refusal writes no result file (the
+> spec's "exits 0 with no side effects"), because another worker owns the invocation and a result
+> would race it. DEVIATION: a preallocated `run_id` is echoed into `WorkerResult`; threading it into
+> the run stores is left to FEAT-065, which owns the slot reservation (D11).
+
 ### TASK-013: `config data-dir` guard — refuse while live leases or a host lock exist (D15)
 
-- [ ] **Implementation**: In `runDataDir` (`apps/cli/src/commands/config.ts`), keep the existing
+> **Amended by spike S2** (accepted 2026-11-09): RC4 (`findLiveOwners` uses the batched probe). See the TASK-001 notes and `spike_s2_report.md` → Required changes.
+
+- [x] **Implementation**: In `runDataDir` (`apps/cli/src/commands/config.ts`), keep the existing
       `FileDaemonLock.probe()` and managed-use checks. Add two more before any filesystem mutation,
       injected as a dependency with the core function as the default, per the memory note on spying on
       same-module calls:
@@ -976,7 +1026,7 @@ true, shell: false, stdio: 'ignore', windowsHide: true})`, then `child.unref()`.
 
   `--dry-run` reports the same refusals.
 
-- [ ] **Unit Tests** (`config-data-dir-guard.spec.ts`, sandboxed `YANTRA_HOME`):
+- [x] **Unit Tests** (`config-data-dir-guard.spec.ts`, sandboxed `YANTRA_HOME`):
   - **Live leases:**
     - a live-owner lease refuses with exit 3 and the run ID in the message, and nothing moves (the
       directory is unchanged);
@@ -986,7 +1036,7 @@ true, shell: false, stdio: 'ignore', windowsHide: true})`, then `child.unref()`.
   - **Host lock:**
     - a live host lock refuses with the D15 steps text;
     - a dead or corrupt host lock does not block. A corrupt file is reported as a warning.
-- [ ] **Documentation Update**: Invoke **Document** update mode for configuration (`config data-dir`
+- [x] **Documentation Update**: Invoke **Document** update mode for configuration (`config data-dir`
       refusals and the close-the-app steps).
 - **Verify**: after building core, `cd apps/cli && npx vitest run
 tests/commands/config-data-dir-guard.spec.ts` passes.
@@ -994,7 +1044,7 @@ tests/commands/config-data-dir-guard.spec.ts` passes.
 
 ### TASK-014: Cross-OS acceptance suite with real processes
 
-- [ ] **Implementation**: Add `e2e/run-ownership.spec.ts`, tagged `@no-llm`, plus fixtures in
+- [x] **Implementation**: Add `e2e/run-ownership.spec.ts`, tagged `@no-llm`, plus fixtures in
       `e2e/fixtures/run-ownership/`. It runs on the existing three-OS CI matrix and uses built `dist/`
       (memory → Testing). Each case gets its own timeout for real-process work. Remove the temporary
       spike CI job from TASK-001.
@@ -1023,9 +1073,9 @@ tests/commands/config-data-dir-guard.spec.ts` passes.
     `owner_lost`.
   - **Worker survival.** `spawnDetachedWorker` runs a `research --no-llm` from a parent that exits
     at once; the run completes, and the `WorkerResult` exit code matches the manifest outcome.
-- [ ] **Unit Tests**: This task is the integration suite. Unit coverage lives in TASK-002 to
+- [x] **Unit Tests**: This task is the integration suite. Unit coverage lives in TASK-002 to
       TASK-013.
-- [ ] **Documentation Update**: Invoke **Document** update mode for diagnostics and audit (recovery
+- [x] **Documentation Update**: Invoke **Document** update mode for diagnostics and audit (recovery
       after a killed run) and architecture (the reliability matrix rows for "Worker crashes", "Owned
       Chrome orphaned" and "User stops a run").
 - **Verify**:
@@ -1033,6 +1083,17 @@ tests/commands/config-data-dir-guard.spec.ts` passes.
   - the CI three-OS matrix is green;
   - `npx turbo run lint typecheck` and the full `e2e` suite (including `format.spec.ts`) pass.
 - **Depends on**: TASK-010, TASK-011, TASK-012, TASK-013
+
+> **Implementation notes (TASK-014):** The killed and stopped "real research" runs are a fixture
+> process (`research-owner.mjs`) that drives the real CLI `research --no-llm` path, `ResearchLoop`
+> and ownership session through `run()` with fixture search and fetch, because the CLI has no way
+> to point search at a local server. DEVIATION: the orphaned browser is a detached stand-in process
+> recorded through the real recorder, not Chrome (Chrome over a CDP pipe exits with its owner on
+> Windows, so it leaves nothing to reap there). The uncertain-browser case needs no probe seam: a
+> live process recorded with an `unknown` start token is uncertain to the real probe. FINDING
+> (fixed): live events held for a client during its replay were not counted against the 8 MiB
+> bound, so a client that stalled mid-replay grew memory without limit; they now count, and such a
+> client overflows like any other (unit test in `outbound-queues.spec.ts`).
 
 ## 6. Cross-Cutting Concerns
 
@@ -1092,19 +1153,19 @@ Error`, `RunChannelFrameError` and `RunOwnershipError`, all with safe, actionabl
 
 ## 8. State Tracking
 
-- [ ] TASK-001: Spike S2 — detached worker and recovery on Windows, macOS and Linux
-- [ ] TASK-002: Protocol schemas — lease, execution state, channel messages, worker launch
-- [ ] TASK-003: Frame codec — one framing grammar with size limits
-- [ ] TASK-004: Exclusive run lease — claim, heartbeat, owned browsers, verdict, release
-- [ ] TASK-005: Authenticated run socket with version and capability handshake
-- [ ] TASK-006: Atomic replay-to-live subscription with gap-free reconnect
-- [ ] TASK-007: Bounded, prioritized outbound queues, backpressure and heartbeat
-- [ ] TASK-008: Every run is owned — lease, socket and owned browsers on all run paths, with `cancel`
-- [ ] TASK-009: Reconciler — exactly one terminal result for a dead owner, identity-verified browser reaping
-- [ ] TASK-010: Resume takeover and reconciliation triggers (`yantra list`, CLI run start, host start)
-- [ ] TASK-011: Stop service — graceful cancel, identity-verified forced termination, always reconcile
-- [ ] TASK-012: Detached worker entry point and the single cross-OS spawn helper
-- [ ] TASK-013: `config data-dir` guard — refuse while live leases or a host lock exist (D15)
-- [ ] TASK-014: Cross-OS acceptance suite with real processes
+- [x] TASK-001: Spike S2 — detached worker and recovery on Windows, macOS and Linux (Windows run; Linux/macOS waived by user 2026-11-09, see TODO)
+- [x] TASK-002: Protocol schemas — lease, execution state, channel messages, worker launch
+- [x] TASK-003: Frame codec — one framing grammar with size limits
+- [x] TASK-004: Exclusive run lease — claim, heartbeat, owned browsers, verdict, release
+- [x] TASK-005: Authenticated run socket with version and capability handshake
+- [x] TASK-006: Atomic replay-to-live subscription with gap-free reconnect
+- [x] TASK-007: Bounded, prioritized outbound queues, backpressure and heartbeat
+- [x] TASK-008: Every run is owned — lease, socket and owned browsers on all run paths, with `cancel`
+- [x] TASK-009: Reconciler — exactly one terminal result for a dead owner, identity-verified browser reaping
+- [x] TASK-010: Resume takeover and reconciliation triggers (`yantra list`, CLI run start, host start)
+- [x] TASK-011: Stop service — graceful cancel, identity-verified forced termination, always reconcile
+- [x] TASK-012: Detached worker entry point and the single cross-OS spawn helper
+- [x] TASK-013: `config data-dir` guard — refuse while live leases or a host lock exist (D15)
+- [x] TASK-014: Cross-OS acceptance suite with real processes
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

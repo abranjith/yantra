@@ -7,6 +7,7 @@ import { appendNotice, generateUlid } from '@yantra/protocol';
 
 import { writeBriefArtifacts, type BriefArtifactPaths } from '../brief/write-artifacts.js';
 import { dataDir } from '../browser/paths.js';
+import { warmProcessIdentity } from '../browser/process-identity.js';
 import type { Logger } from '../browser/types.js';
 import {
   domainFromUrl,
@@ -20,6 +21,11 @@ import { asToken, boundedQuery, sourceFetchedEvent } from '../run-events/phase-f
 import { recordReceiptWritten } from '../run-events/receipt-written.js';
 import { abandonOwnedStream, emitArtifactSaved, runOutcomeEvent } from '../run-events/run-facts.js';
 import { RunEventStream } from '../run-events/stream.js';
+import type { DeferredBrowserOwnershipRecorder } from '../run-ownership/browser-ownership-recorder.js';
+import {
+  RunOwnershipSession,
+  type RunOwnershipSessionOptions,
+} from '../run-ownership/ownership-session.js';
 import type { Synthesizer } from '../synthesis/types.js';
 
 import { cacheKey, utcDayFrom } from './cache-key.js';
@@ -72,6 +78,13 @@ interface AskPipelineDependencies {
   readonly rankSink?: RankSignalSink;
   readonly runRootDir?: string;
   readonly clock?: () => Date;
+  /** Opens the run's ownership session (FEAT-064); tests inject a fake socket. */
+  readonly openOwnership?: (options: RunOwnershipSessionOptions) => Promise<RunOwnershipSession>;
+  /**
+   * The recorder the caller's browser provider was built with; the run binds
+   * it to its ownership session, so every browser it launches is recorded.
+   */
+  readonly ownershipRecorder?: DeferredBrowserOwnershipRecorder;
 }
 
 /**
@@ -90,6 +103,10 @@ export class AskPipeline {
   private readonly synthesizer: Synthesizer;
   private readonly rankSink: RankSignalSink | null;
   private readonly runRootDir: string;
+  private readonly ownershipRecorder: DeferredBrowserOwnershipRecorder | undefined;
+  private readonly openOwnership: (
+    options: RunOwnershipSessionOptions,
+  ) => Promise<RunOwnershipSession>;
   private readonly clock: () => Date;
 
   public constructor(deps: AskPipelineDependencies) {
@@ -102,7 +119,10 @@ export class AskPipeline {
     this.synthesizer = deps.synthesizer;
     this.rankSink = deps.rankSink ?? null;
     this.runRootDir = deps.runRootDir ?? join(dataDir(), 'runs');
+    this.ownershipRecorder = deps.ownershipRecorder;
+    this.openOwnership = deps.openOwnership ?? ((options) => RunOwnershipSession.open(options));
     this.clock = deps.clock ?? (() => new Date());
+    if (deps.openOwnership === undefined) warmProcessIdentity();
   }
 
   public async run(query: AskQuery): Promise<AskRunResult> {
@@ -119,7 +139,23 @@ export class AskPipeline {
     let failureClass: FailureClass | null = null;
 
     await this.prepareRunDir(runDir);
-    await this.openRunEvents(runEvents, runDir, runId, taskId, query, startedAt);
+    // FEAT-064: own the run directory (lease and run socket) before any manifest.
+    const ownership = await this.openOwnership({
+      runDir,
+      runId,
+      origin: query.receipt?.invoked_by ?? 'terminal',
+      executionClass: 'run',
+      command: ['ask'],
+      logger: this.logger,
+    });
+    this.ownershipRecorder?.bind(ownership.recorder);
+    try {
+      await this.openRunEvents(runEvents, runDir, runId, taskId, query, startedAt);
+    } catch (error) {
+      await ownership.finish();
+      throw error;
+    }
+    ownership.attachEvents(runEvents);
     const events = openTaskEventBus(runDir, runEvents);
     const emit = (event: TaskEvent): void => {
       events.publish(event);
@@ -347,6 +383,8 @@ export class AskPipeline {
       await events.flush();
       await events.close();
       if (!threw) runEvents.close();
+      // After the final manifest and the terminal event (FEAT-064 order).
+      await ownership.finish();
       this.logger.info({ runId, status, failureClass }, 'ask pipeline finished');
     }
   }

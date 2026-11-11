@@ -38,6 +38,14 @@ Source spec: [spec.md](.spec-lite/features/FEAT-044-managed_stable_installation/
 
 ---
 
+## Run Ownership
+
+**FEAT-064 — Run Ownership, Run Socket & Reconciliation** _(completed: 2026-11-10 by implement)_
+Source spec: [spec.md](features/FEAT-064-run_ownership_channel_reconciliation/spec.md)
+Every run (`ask`, `research`, `do`, `run`, `resume`, daemon fires) is owned by exactly one process through `lease.json`, published once by an exclusive link and never rewritten; `.lock` is no longer written. Browsers a run launches are appended to `owned-browsers.jsonl` by identity. The owner serves a per-run local socket (owner-only Unix directory or random named pipe): token-first `hello` (unauthenticated peers get zero bytes), version and capability handshake, replay-to-live subscription from `run-events.jsonl` with a watermark on the owner's loop, bounded per-connection queues (8 MiB, counting events held during replay) with a one-slot screencast frame, 5 s heartbeat and 30 s not-responding, and `cancel` (honored by agentic runs, acknowledged `honored: false` by deterministic ones). Liveness is decided by creation identity, batched and short-circuited for dead PIDs; unknown is never dead. A reconciler ends a dead owner's run with exactly one `run_outcome` (`owner_lost`, outcome `partial` or `failed` from evidence, never `aborted`), marks the manifest `executionState: interrupted`, reaps owned browsers by verified identity, keeps a possible-orphan lease for unverifiable ones, and logs `reconciled` to `runtime.jsonl`; it runs in `yantra list` (rows show `interrupted · <outcome>`), in a 5 s background sweep when a run starts, on `resume` (which takes over the lease), and in `stopRun` (cancel, 10 s grace, identity-verified termination, always reconcile). `config data-dir` refuses while a run or the app host is live. Detached workers start through a trampoline (`spawnDetachedWorker`), read user text only from an owner-only launch file, run only `run`/`mutate`/`exclusive` commands, and write their result exactly once; they survive the host exiting or a process-tree kill. Spike S2 ran on Windows only (POSIX waived to TODO). The acceptance suite `e2e/run-ownership.spec.ts` covers every case with real processes and found one defect (unbounded replay-time buffering), fixed.
+
+---
+
 ## Configuration & Storage
 
 **FEAT-063 — Run-Event Log (`run-events.jsonl`)** _(updated: 2026-11-08 by implement)_

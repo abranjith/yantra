@@ -20,6 +20,7 @@ import {
   HttpFetcher,
   HybridContentFetcher,
   createSelectedBrowserProvider,
+  DeferredBrowserOwnershipRecorder,
   type BrowserRuntimeOptions,
   type BrowserSelection,
   LocalProfileStore,
@@ -416,7 +417,15 @@ export async function createDefaultResearchLoop(
     logger,
     leaseOptions: browser.resourceLockOptions ?? {},
   });
-  const browserProvider = createSelectedBrowserProvider({ ...browser, profileStore, logger });
+  // FEAT-064: the run binds this to its lease once it owns its directory, so
+  // every browser the per-use page source launches is recorded.
+  const ownershipRecorder = new DeferredBrowserOwnershipRecorder();
+  const browserProvider = createSelectedBrowserProvider({
+    ...browser,
+    profileStore,
+    logger,
+    ownershipRecorder,
+  });
   // One browser launch per SERP scrape or fetch fallback, as before FEAT-050:
   // the deterministic loop keeps its own wiring and gains only the honest
   // timeout the page source enforces.
@@ -464,6 +473,7 @@ export async function createDefaultResearchLoop(
   const rankSink = await createBestEffortRankSignalSink(logger);
 
   return new ResearchLoop({
+    ownershipRecorder,
     searchProvider: resolved.value,
     fetcher,
     extractor: new ReadabilityExtractor(),

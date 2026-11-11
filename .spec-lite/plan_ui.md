@@ -55,7 +55,7 @@ observed, nor durability across power loss between flush points.
 | FEAT-062 | Command Registry: declarative command and option data in `@yantra/protocol` (types, defaults, precedence chain, applicability, option-dependent execution class, effect and danger level, input kinds, option relations, exit codes, `--json` schema); the CLI's commander tree generated from it with byte-identical `--help`; `CommandInvocation` with parse and shell-aware format (POSIX, PowerShell, cmd)                                                                                                                                                                                | `features/FEAT-062-command_registry/spec.md`                     | [x] Complete    |
 | FEAT-072 | Command Handler Seams, Execution Receipts & Shared-Resource Locks: handlers take connector, confirmation and install gateways, input collection, output and completion as explicit dependencies (no `process.exit`, TTY checks or direct stdout inside handlers); terminal and worker adapters; an `init` application service with pluggable answer collection; a per-run execution receipt of effective non-secret settings and content identities; core process-safe locks with unique temporary files for config, profile, workflows, templates, schedules and persistent browser profiles | `features/FEAT-072-command_handler_seams_receipts_locks/spec.md` | [x] Complete    |
 | FEAT-063 | Unified Run-Event Stream: one `RunEvent` union in protocol (workflow `TaskEvent`s, agent progress events promoted from `@yantra/agent`, intervention, budget, artifact, receipt and outcome events, deterministic `ask`/`research` phase events); `run-events.jsonl` with a single writer, persist-before-publish ordering, partial-tail recovery and defined flush points; CLI renderers consume it; new schema variants (`owner_lost`, `user_app`) with fixtures                                                                                                                            | `features/FEAT-063-unified_run_event_stream/spec.md`             | [x] Complete    |
-| FEAT-064 | Run Ownership, Channel & Reconciliation: exclusive lease claim per run; the per-run local socket with one framing grammar, size limits, bounded and prioritized queues, version and capability handshake, and an atomic replay-to-live watermark; the detached worker entry point; idempotent reconciliation under a claim; identity-verified cleanup of owned browser processes; separate execution state from task outcome; spike S2 (worker and recovery) as task 1                                                                                                                        | `features/FEAT-064-run_ownership_channel_reconciliation/spec.md` | [ ] Not started |
+| FEAT-064 | Run Ownership, Channel & Reconciliation: exclusive lease claim per run; the per-run local socket with one framing grammar, size limits, bounded and prioritized queues, version and capability handshake, and an atomic replay-to-live watermark; the detached worker entry point; idempotent reconciliation under a claim; identity-verified cleanup of owned browser processes; separate execution state from task outcome; spike S2 (worker and recovery) as task 1                                                                                                                        | `features/FEAT-064-run_ownership_channel_reconciliation/spec.md` | [x] Complete    |
 | FEAT-065 | App Host & `yantra ui`: single-instance host; launch ownership with idempotent invocation IDs, a durable slot reservation and an atomic worker claim; queue with drift review; loopback threat model with per-window capabilities, signed artifact URLs and session expiry; JSON-RPC over WebSocket; Chrome `--app` launcher; stale-asset detection; `apps/web` skeleton bundled into the CLI; security suite                                                                                                                                                                                 | `features/FEAT-065-app_host_yantra_ui/spec.md`                   | [ ] Not started |
 | FEAT-066 | Run Results & Audit: Ledger with cursor pagination and change detection; a run-result route that renders a Brief or document when present and otherwise outputs, terminal reason, notices and artifacts; source evidence and `A<n>` action evidence; Audit; a public-artifact allowlist with bounded viewers; resilience to corrupt, missing, legacy and very large artifacts                                                                                                                                                                                                                 | `features/FEAT-066-run_results_audit/spec.md`                    | [ ] Not started |
 | FEAT-067 | Mission — Composer & Live Run Screen: composer generated from the registry with effective values and their sources; live cockpit (Bindu, ContractRing, RunTimeline, BudgetGauge, CliTwin, Stop) with polite announcements of meaningful changes; explicit run states (queued, starting, waiting for you, disconnected, worker not responding, engine stalled); Resume only when resumable; Run again with current or prior settings and an external-effects warning                                                                                                                           | `features/FEAT-067-mission_composer_live_run/spec.md`            | [ ] Not started |
@@ -147,7 +147,7 @@ D11–D18 added, after the plan critique the same day.
 - **D6 — Host death does not stop runs.** Workers continue and try to complete; only an
   intervention falls back to D5.
 - **D7 (revised) — Execution state is separate from task outcome.** A run whose owner died gets
-  `execution_state: interrupted`, recorded separately from its outcome.
+  `executionState: interrupted`, recorded separately from its outcome.
   - **Outcome** follows the evidence: `partial` if a result was persisted, otherwise `failed`. It
     is **never** `aborted`, which means the user interrupted.
   - **New enum variant.** `TerminationReason` gains `owner_lost`. The current closed enum has no
@@ -452,7 +452,7 @@ class.
   Structure).
 - **Unchanged files.** `events.jsonl`, `runtime.jsonl`, `tool-calls.jsonl`, `manifest.json`,
   `brief.*` and `confirmations.jsonl` keep their shapes. Manifests gain the optional
-  `execution_state`.
+  `executionState`.
 
 ### Protocol additions
 
@@ -460,7 +460,7 @@ class.
   `Intervention`, `RunLease`, the socket and RPC messages, `DecisionResponse`.
 - Optional binding fields on `ConfirmationRequest`.
 - `ConfirmationDecidedBy` gains `user_app`; `TerminationReason` gains `owner_lost`.
-- `execution_state` on manifests.
+- `executionState` on manifests.
 
 ## 7. Security Considerations
 
@@ -559,7 +559,7 @@ yantra daemon: unchanged and hard zero-LLM; its runs also write leases; parked d
   2. re-verify the owner is dead by identity;
   3. if no terminal event exists, truncate any partial tail and append one `run_outcome` with
      `owner_lost`;
-  4. update the manifest (`execution_state: interrupted`; outcome per D7) with an atomic write;
+  4. update the manifest (`executionState: interrupted`; outcome per D7) with an atomic write;
   5. update the history index.
 
   A crash mid-reconcile is finished by the next reconciler, and only one terminal result ever
@@ -572,7 +572,7 @@ yantra daemon: unchanged and hard zero-LLM; its runs also write leases; parked d
 ### Run lifecycle and displayed states
 
 - **Execution:** `queued → reserved → starting → running ⇄ waiting-for-you → finished`.
-- **Outcome:** `fulfilled | partial | handoff | failed | aborted`, plus `execution_state:
+- **Outcome:** `fulfilled | partial | handoff | failed | aborted`, plus `executionState:
 interrupted` when the owner was lost.
 - **Separate displayed conditions**, each with a next action:
   - **Disconnected**: the app lost its host connection.
@@ -951,7 +951,7 @@ It also provides:
 
 **Acceptance.**
 
-- A killed run reconciles to exactly one terminal result with `execution_state: interrupted`, even
+- A killed run reconciles to exactly one terminal result with `executionState: interrupted`, even
   with simultaneous reconcilers.
 - A reused PID is never treated as an owner.
 - An uncertain browser identity is never killed.

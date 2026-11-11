@@ -365,5 +365,7 @@ describe('@no-llm FEAT-051 integrated contract — shape-aware extraction with l
     );
     expect(ids.length).toBeGreaterThan(6);
     for (const id of ids) expect(driver.services.documents.resolveAnchor(id)).not.toBeNull();
-  });
+    // A full agentic run, including its run lease and socket (FEAT-064), takes
+    // about 3.5 s alone; the default 5 s leaves no room on a loaded machine.
+  }, 15_000);
 });

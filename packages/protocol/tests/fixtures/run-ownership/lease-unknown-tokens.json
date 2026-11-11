@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "run_id": "20261109T120000Z-research-0000abcd",
+  "owner": { "pid": 4242, "start_token": "unknown" },
+  "origin": "terminal",
+  "execution_class": "run",
+  "command": ["research"],
+  "socket": { "kind": "pipe", "address": "\\\\.\\pipe\\yantra-0123456789abcdef0123456789abcdef" },
+  "run_token": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+  "channel_version": 1,
+  "yantra_version": "0.0.1",
+  "log_seq_at_claim": 0,
+  "claimed_at": "2026-11-09T12:00:00.000Z"
+}

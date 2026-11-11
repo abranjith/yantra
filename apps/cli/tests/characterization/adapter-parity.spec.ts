@@ -33,6 +33,7 @@ describe('@no-llm adapter parity', () => {
       }),
     });
     const options: CliRunOptions = {
+      runStartSweep: null,
       researchRuntime: {
         resolveDefaults: () => Promise.resolve(new Map()),
         createLoop: () =>
@@ -77,6 +78,7 @@ describe('@no-llm adapter parity', () => {
       }),
     });
     const options: CliRunOptions = {
+      runStartSweep: null,
       researchRuntime: {
         resolveDefaults: () => Promise.resolve(new Map()),
         createLoop: () => Promise.reject(new Error('fixture failed')),

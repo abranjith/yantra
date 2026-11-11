@@ -1,6 +1,6 @@
 import { AGENT_PROTOCOL_VERSION } from '@yantra/agent';
 import { PROTOCOL_VERSION as CORE_PROTOCOL_VERSION, ResourceBusyError } from '@yantra/core';
-import { COMMAND_REGISTRY, PROTOCOL_VERSION } from '@yantra/protocol';
+import { COMMAND_REGISTRY, PROTOCOL_VERSION, executionClassFor } from '@yantra/protocol';
 import { CommanderError, type Command } from 'commander';
 
 import {
@@ -9,6 +9,7 @@ import {
   type CommandResult,
   type ExitCode,
 } from './context/command-context.js';
+import { startRunStartSweep, type RunStartSweep } from './ownership.js';
 import { buildProgram, type CliRunOptions } from './program.js';
 import type { HandlerTable } from './registry/build-command-tree.js';
 import { buildHandlers } from './registry/handlers.js';
@@ -36,13 +37,28 @@ export async function executeCommand(
         ? fn
         : async (args, opts, command) => {
             const entry = COMMAND_REGISTRY.commands.find((e) => e.id === id);
+            let sweep: RunStartSweep | null = null;
             if (entry?.kind === 'leaf') {
               context.settings.bind(entry, command);
               activeKind = entry.id;
               json = opts.json === true || opts.format === 'json';
+              // FEAT-064: a run-class command reconciles dead owners' runs in
+              // the background, never delaying its own start.
+              const start =
+                options.runStartSweep === undefined ? startRunStartSweep : options.runStartSweep;
+              if (
+                start !== null &&
+                executionClassFor(entry, { options: opts, arguments: {} }) === 'run'
+              ) {
+                sweep = start();
+              }
             }
-            const value = await fn(args, opts, command, context);
-            if (value) result = value;
+            try {
+              const value = await fn(args, opts, command, context);
+              if (value) result = value;
+            } finally {
+              await sweep?.settle();
+            }
           },
     ]),
   ) as HandlerTable;

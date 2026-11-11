@@ -11,6 +11,7 @@ import type { ResearchRuntime } from './commands/research.js';
 import type { SitesRuntime } from './commands/sites.js';
 import type { TemplateCommandRuntime } from './commands/template.js';
 import type { ReplayRuntimeDependencies } from './context/replay-runtime.js';
+import type { RunStartSweep } from './ownership.js';
 import { buildCommandTree, type HandlerTable } from './registry/build-command-tree.js';
 import { buildHandlers } from './registry/handlers.js';
 
@@ -25,6 +26,11 @@ export interface CliRunOptions {
   readonly doRuntime?: Partial<DoRuntime> & TerminalOptions;
   readonly sitesRuntime?: Partial<SitesRuntime>;
   readonly templateRuntime?: Partial<TemplateCommandRuntime>;
+  /**
+   * Starts the background reconcile sweep for a `run`-class command
+   * (FEAT-064); tests replace it. `null` disables it.
+   */
+  readonly runStartSweep?: (() => RunStartSweep) | null;
 }
 
 /**

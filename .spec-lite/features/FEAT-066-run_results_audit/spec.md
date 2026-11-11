@@ -387,7 +387,7 @@ mtimes)` for the host. CLI output is byte-identical.
   - the `apps/web` skeleton (router, React Query client, app shell);
   - `command.invoke` for "Show in folder".
 - **FEAT-064, soft.**
-  - **What it supplies:** `execution_state: interrupted`, lease liveness and the reconcile hook.
+  - **What it supplies:** `executionState: interrupted` (manifest), lease liveness and the reconcile hook.
   - **STUB if it has not landed:** `live` comes from manifest `status: running` alone, shown as
     `unknown_owner`, and the reconcile hook is a no-op. Remove the stub once FEAT-064 lands.
 - **FEAT-063, soft.**
@@ -582,7 +582,7 @@ independent slot, so one bad file never fails the page.
     `RunNotFoundError`. 2. **Reconcile:** if FEAT-064 is present, call its reconcile-if-dead hook first, mirroring
     `yantra list`. 3. **Manifest:** read and normalize both manifest shapes (the ask, research and do pipeline,
     and the workflow `RunManifest`) into the mode, title, times, status, `taskOutcome`,
-    `terminationReason` and `execution_state`. A corrupt manifest still yields a view: `mode:
+    `terminationReason` and `executionState`. A corrupt manifest still yields a view: `mode:
 unknown`, the title is the run id, and the other slots are still read. 4. **Document:** - `brief.json` → `Brief.safeParse`: success is `ok`; a `schema_version` other than `0.2` is
     `unsupported`; any other failure is `corrupt`. - Otherwise `document.json` → `TemplatedReport`, with the same rules. - Otherwise `{kind: 'none'}`. 5. **Outputs:** for workflow runs, `outputs.json`, capped at 256 KiB. 6. **`run_health`:** `RunHealth.safeParse`. 7. **Report:** `report` exists, with its size. 8. **Inventory:** `listRunArtifacts` (TASK-001 registry; denied files omitted). 9. **Terminal reason:** `run-view/terminal-reason.ts` (step 10 order). 10. **Live flag:** from the FEAT-064 lease probe (`running` or `waiting_for_you`). A manifest
     that says running but whose owner cannot be verified becomes `unknown_owner`, never "dead".
@@ -770,7 +770,7 @@ Health` section of `report.md`. 5. **Notices:** from `run_health` when `notices_
     present.
   - **A pre-Brief failure** (`agentError` `AGENT_AUTH_UNAVAILABLE`): the terminal panel shows the
     code and message, and the page has no empty sections.
-  - **An interrupted legacy run** (manifest `execution_state: interrupted`, outcome `failed`, no
+  - **An interrupted legacy run** (manifest `executionState: interrupted`, outcome `failed`, no
     `run-events.jsonl`): the interrupted wording, evidence-based outcome and report.
   - **A legacy run with only `manifest.json` and `report.md`:** the page is complete.
   - **`unknown_owner`:** shows the unknown wording.

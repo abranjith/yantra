@@ -431,7 +431,14 @@ export default tseslint.config(
 
   {
     files: ['apps/cli/src/**/*.ts'],
-    ignores: ['apps/cli/src/adapters/terminal/**/*.ts', 'apps/cli/src/bin.ts'],
+    // Process entry points own the process: the terminal adapter, the bin, and
+    // the detached worker and its trampoline (FEAT-064).
+    ignores: [
+      'apps/cli/src/adapters/terminal/**/*.ts',
+      'apps/cli/src/bin.ts',
+      'apps/cli/src/worker.ts',
+      'apps/cli/src/worker/trampoline.ts',
+    ],
     rules: {
       'no-restricted-syntax': ['error', ...SITE_SPECIFIC_SELECTORS, ...HANDLER_PURITY_SELECTORS],
     },
@@ -483,6 +490,31 @@ export default tseslint.config(
       ...tseslint.configs.disableTypeChecked.rules,
       'import/no-default-export': 'off',
       'import/order': 'off',
+    },
+  },
+
+  // FEAT-064 spike S2: a throwaway evidence harness of standalone Node scripts (TASK-001).
+  {
+    ...tseslint.configs.disableTypeChecked,
+    files: ['e2e/spikes/**/*.{js,mjs,cjs}', 'e2e/fixtures/run-ownership/**/*.mjs'],
+    languageOptions: {
+      globals: {
+        process: 'readonly',
+        console: 'readonly',
+        Buffer: 'readonly',
+        TextDecoder: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        setInterval: 'readonly',
+        clearInterval: 'readonly',
+        setImmediate: 'readonly',
+      },
+      parserOptions: { projectService: false, project: false },
+    },
+    rules: {
+      ...tseslint.configs.disableTypeChecked.rules,
+      'import/no-default-export': 'off',
+      'no-console': 'off',
     },
   },
 

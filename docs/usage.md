@@ -867,6 +867,11 @@ yantra resume <run-id>
 yantra resume <run-id> --force
 ```
 
+If another process still owns the run (it is running, or its process cannot be
+verified), `resume` exits `3` and names that process's PID. When the run's
+previous owner died, `resume` first records the run as interrupted and then
+takes it over, so a resumed run starts a fresh, clean ownership.
+
 Only eligible failed or paused `cookies: auto` runs can resume. The checkpoint
 does not restore prior captures, page state, named locators, or final synthesis;
 rerun ordinary browser workflows from the beginning when the remaining suffix
@@ -941,6 +946,14 @@ yantra usage --type ask --since 7d
 `list runs` shows a run's outcome word beside its status, such as
 `failed partial`, when the run recorded one; `--json` carries it as
 `taskOutcome`. Runs recorded before outcome words existed show the status alone.
+
+Before listing, `list` ends every run whose process died without finishing it
+(a crash, a closed terminal, a killed process), so such a run shows
+`interrupted · failed` or `interrupted · partial` instead of staying `running`
+forever; `--json` adds `"executionState": "interrupted"`. A run whose process
+is still alive, or whose process cannot be verified, stays `running`. Commands
+that start a run do the same cleanup in the background, for at most five
+seconds. See [Interrupted runs](features/diagnostics-and-audit.md#interrupted-runs).
 
 `usage --since` accepts `YYYY-MM-DD`, whole days such as `7d`, or whole hours
 such as `24h`. The history index is a rebuildable cache; run directories remain

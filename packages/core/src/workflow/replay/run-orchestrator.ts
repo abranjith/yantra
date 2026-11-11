@@ -26,7 +26,7 @@ import {
 } from '@yantra/protocol';
 
 import { runsRoot } from '../../browser/paths.js';
-import type { BrowserProvider } from '../../browser/types.js';
+import type { BrowserLaunchContext, BrowserProvider } from '../../browser/types.js';
 import type { Logger } from '../../browser/types.js';
 import type { ConfirmationGateway } from '../../executor/confirmation-gateway.js';
 import { createExecutionContext } from '../../executor/execution-context.js';
@@ -265,23 +265,30 @@ export class RunOrchestrator {
 
     // 6b. Open the run's event log (FEAT-063). Anything emitted so far is
     // committed as its first lines.
-    await this.openRunEvents(runEvents, runId, runDir, manifest);
     try {
-      return await this.runAfterOpen({
-        request,
-        workflow,
-        params,
-        translated,
-        manifest,
-        runId,
-        runDir,
-        taskId,
-        startedAt,
-        runEvents,
-      });
-    } catch (error) {
-      abandonOwnedStream(runEvents, ownsRunEvents, runId, error);
-      throw error;
+      await this.openRunEvents(runEvents, runId, runDir, manifest);
+      this.opts.runStore.ownership?.(runId)?.attachEvents(runEvents);
+      try {
+        return await this.runAfterOpen({
+          request,
+          workflow,
+          params,
+          translated,
+          manifest,
+          runId,
+          runDir,
+          taskId,
+          startedAt,
+          runEvents,
+        });
+      } catch (error) {
+        abandonOwnedStream(runEvents, ownsRunEvents, runId, error);
+        throw error;
+      }
+    } finally {
+      // FEAT-064 order: the terminal manifest and event are flushed, and the
+      // run's browser has exited, before the lease is released.
+      await this.opts.runStore.releaseOwnership(runId);
     }
   }
 
@@ -312,10 +319,13 @@ export class RunOrchestrator {
 
     // 8. Launch browser
     const browser = await this.opts.browserProvider
-      .launch({
-        profile: profileSpec,
-        headless: true,
-      })
+      .launch(
+        {
+          profile: profileSpec,
+          headless: true,
+        },
+        ownershipContext(this.opts.runStore, runId),
+      )
       .catch(async (error: unknown) => {
         if (error instanceof ResourceBusyError)
           await this.recordStartupRefusal(runId, runDir, manifest, error, runEvents);
@@ -467,7 +477,6 @@ export class RunOrchestrator {
       this.recordOutcome(runEvents, outcome, clock.now().toISOString());
       return outcome;
     } finally {
-      await this.opts.runStore.releaseLock(runId);
       await browser.close().catch(() => undefined);
     }
   }
@@ -501,18 +510,29 @@ export class RunOrchestrator {
       await recordReceiptWritten(runEvents, written.path);
     }
 
-    // Update status to running
-    manifest.status = 'running';
-    await writeManifest(runDir, manifest);
-
-    // A resume continues the run's own log: seq picks up after the original
-    // execution, and `task_resumed` opens the new segment.
-    await this.openRunEvents(runEvents, runId, runDir, manifest);
+    // FEAT-064: own the run before its manifest says running again.
+    await this.opts.runStore.acquireOwnership?.(runId, {
+      command: ['resume'],
+      origin: options.receipt?.invoked_by ?? 'terminal',
+    });
     try {
-      return await this.resumeAfterOpen(runId, point, runEvents);
-    } catch (error) {
-      abandonOwnedStream(runEvents, ownsRunEvents, runId, error);
-      throw error;
+      // Update status to running; a resumed run is no longer interrupted.
+      manifest.status = 'running';
+      delete (manifest as { executionState?: unknown }).executionState;
+      await writeManifest(runDir, manifest);
+
+      // A resume continues the run's own log: seq picks up after the original
+      // execution, and `task_resumed` opens the new segment.
+      await this.openRunEvents(runEvents, runId, runDir, manifest);
+      this.opts.runStore.ownership?.(runId)?.attachEvents(runEvents);
+      try {
+        return await this.resumeAfterOpen(runId, point, runEvents);
+      } catch (error) {
+        abandonOwnedStream(runEvents, ownsRunEvents, runId, error);
+        throw error;
+      }
+    } finally {
+      await this.opts.runStore.releaseOwnership(runId);
     }
   }
 
@@ -525,13 +545,16 @@ export class RunOrchestrator {
     const { plan, nextStepIndex, lastCheckpoint, manifest, runDir } = point;
 
     const browser = await this.opts.browserProvider
-      .launch({
-        profile:
-          point.profileKind === 'workflow' && point.cookieProfilePath !== null
-            ? { kind: 'explicit', absolutePath: point.cookieProfilePath }
-            : { kind: 'ephemeral' },
-        headless: true,
-      })
+      .launch(
+        {
+          profile:
+            point.profileKind === 'workflow' && point.cookieProfilePath !== null
+              ? { kind: 'explicit', absolutePath: point.cookieProfilePath }
+              : { kind: 'ephemeral' },
+          headless: true,
+        },
+        ownershipContext(this.opts.runStore, runId),
+      )
       .catch(async (error: unknown) => {
         if (error instanceof ResourceBusyError)
           await this.recordStartupRefusal(runId, runDir, manifest, error, runEvents);
@@ -625,7 +648,6 @@ export class RunOrchestrator {
       this.recordOutcome(runEvents, outcome, new Date().toISOString());
       return outcome;
     } finally {
-      await this.opts.runStore.releaseLock(runId);
       await browser.close().catch(() => undefined);
     }
   }
@@ -772,30 +794,27 @@ export class RunOrchestrator {
       },
       auditEntries: failure.auditEntries,
     };
-    try {
-      await writeManifest(runDir, manifest);
-      const reportPath = join(runDir, REPORT_FILE);
-      await writeFileAtomic(reportPath, this.renderer.render(report));
-      await writeFileAtomic(
-        join(runDir, REPORT_JSON_FILE),
-        JSON.stringify(this.renderer.renderJson(report), null, 2),
-      );
-      const taskFailed = {
-        kind: 'task_failed',
-        task_id: manifest.taskId,
-        at: endedAt,
-        failure_class: 'unexpected',
-        task_outcome: 'failed',
-        report_path: reportPath,
-      } as const;
-      await appendFile(join(runDir, 'events.jsonl'), `${JSON.stringify(taskFailed)}\n`, {
-        encoding: 'utf8',
-        mode: 0o600,
-      });
-      failure.runEvents?.emit(taskFailed);
-    } finally {
-      await this.opts.runStore.releaseLock(runId);
-    }
+    // Ownership is released by run()/resume() once the outcome is recorded.
+    await writeManifest(runDir, manifest);
+    const reportPath = join(runDir, REPORT_FILE);
+    await writeFileAtomic(reportPath, this.renderer.render(report));
+    await writeFileAtomic(
+      join(runDir, REPORT_JSON_FILE),
+      JSON.stringify(this.renderer.renderJson(report), null, 2),
+    );
+    const taskFailed = {
+      kind: 'task_failed',
+      task_id: manifest.taskId,
+      at: endedAt,
+      failure_class: 'unexpected',
+      task_outcome: 'failed',
+      report_path: reportPath,
+    } as const;
+    await appendFile(join(runDir, 'events.jsonl'), `${JSON.stringify(taskFailed)}\n`, {
+      encoding: 'utf8',
+      mode: 0o600,
+    });
+    failure.runEvents?.emit(taskFailed);
   }
 
   private mapExecutorOutcome(
@@ -857,4 +876,10 @@ function buildStepLog(plan: Plan, ctx: ExecutionContext): RunReport['stepLog'] {
     type: step.type,
     status: 'ok' as const,
   }));
+}
+
+/** The launch context that records the run's browsers in its lease (FEAT-064). */
+function ownershipContext(runStore: RunStore, runId: string): BrowserLaunchContext {
+  const recorder = runStore.ownership?.(runId)?.recorder;
+  return recorder === undefined ? {} : { ownershipRecorder: recorder };
 }
