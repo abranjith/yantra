@@ -502,9 +502,9 @@ All paths above are under `packages/core/src/run-channel/`.
 command, log, logger})`: - claims the lease, with `log_seq_at_claim` taken from the FEAT-063 writer; - starts the heartbeat timer (5 s, `unref`). Heartbeat write failures are logged once and never
     crash the run; - exposes `recorder: BrowserOwnershipRecorder`.
 
-                                                                                            `finish()` runs in this order: stop the timers, close the channel (TASK-005), then
-                                                                                            `releaseLease`. The caller has already flushed the terminal event and manifest. `finish()` is
-                                                                                            idempotent.
+                                                                                                `finish()` runs in this order: stop the timers, close the channel (TASK-005), then
+                                                                                                `releaseLease`. The caller has already flushed the terminal event and manifest. `finish()` is
+                                                                                                idempotent.
 
   - **`browser-ownership-recorder.ts`.**
     - `recordSpawned(identity)` appends to `owned_browsers` and flushes before returning.
@@ -974,7 +974,7 @@ tests/commands/list-reconcile.spec.ts` passes;
 process.execPath, workerPath})`.** 1. Exclusively create the launch file (`wx`, `0600`) in `launch.dir`. 2. Call `spawn(nodePath, [workerPath, '--launch', file], {cwd: invocation.cwd, env, detached:
 true, shell: false, stdio: 'ignore', windowsHide: true})`, then `child.unref()`. 3. Return `{pid, identity}`, with the identity captured through `identifyProcess`.
 
-                                                                                            Apply any mitigation the S2 report requires, for example Job-object breakaway on Windows.
+                                                                                                Apply any mitigation the S2 report requires, for example Job-object breakaway on Windows.
 
 - [x] **Unit Tests** (`launch.spec.ts`, `result-sink.spec.ts`, `spawn.spec.ts`):
   - **Launch validation:**
@@ -1044,7 +1044,7 @@ tests/commands/config-data-dir-guard.spec.ts` passes.
 
 ### TASK-014: Cross-OS acceptance suite with real processes
 
-- [ ] **Implementation**: Add `e2e/run-ownership.spec.ts`, tagged `@no-llm`, plus fixtures in
+- [x] **Implementation**: Add `e2e/run-ownership.spec.ts`, tagged `@no-llm`, plus fixtures in
       `e2e/fixtures/run-ownership/`. It runs on the existing three-OS CI matrix and uses built `dist/`
       (memory → Testing). Each case gets its own timeout for real-process work. Remove the temporary
       spike CI job from TASK-001.
@@ -1073,9 +1073,9 @@ tests/commands/config-data-dir-guard.spec.ts` passes.
     `owner_lost`.
   - **Worker survival.** `spawnDetachedWorker` runs a `research --no-llm` from a parent that exits
     at once; the run completes, and the `WorkerResult` exit code matches the manifest outcome.
-- [ ] **Unit Tests**: This task is the integration suite. Unit coverage lives in TASK-002 to
+- [x] **Unit Tests**: This task is the integration suite. Unit coverage lives in TASK-002 to
       TASK-013.
-- [ ] **Documentation Update**: Invoke **Document** update mode for diagnostics and audit (recovery
+- [x] **Documentation Update**: Invoke **Document** update mode for diagnostics and audit (recovery
       after a killed run) and architecture (the reliability matrix rows for "Worker crashes", "Owned
       Chrome orphaned" and "User stops a run").
 - **Verify**:
@@ -1083,6 +1083,17 @@ tests/commands/config-data-dir-guard.spec.ts` passes.
   - the CI three-OS matrix is green;
   - `npx turbo run lint typecheck` and the full `e2e` suite (including `format.spec.ts`) pass.
 - **Depends on**: TASK-010, TASK-011, TASK-012, TASK-013
+
+> **Implementation notes (TASK-014):** The killed and stopped "real research" runs are a fixture
+> process (`research-owner.mjs`) that drives the real CLI `research --no-llm` path, `ResearchLoop`
+> and ownership session through `run()` with fixture search and fetch, because the CLI has no way
+> to point search at a local server. DEVIATION: the orphaned browser is a detached stand-in process
+> recorded through the real recorder, not Chrome (Chrome over a CDP pipe exits with its owner on
+> Windows, so it leaves nothing to reap there). The uncertain-browser case needs no probe seam: a
+> live process recorded with an `unknown` start token is uncertain to the real probe. FINDING
+> (fixed): live events held for a client during its replay were not counted against the 8 MiB
+> bound, so a client that stalled mid-replay grew memory without limit; they now count, and such a
+> client overflows like any other (unit test in `outbound-queues.spec.ts`).
 
 ## 6. Cross-Cutting Concerns
 
@@ -1155,6 +1166,6 @@ Error`, `RunChannelFrameError` and `RunOwnershipError`, all with safe, actionabl
 - [x] TASK-011: Stop service — graceful cancel, identity-verified forced termination, always reconcile
 - [x] TASK-012: Detached worker entry point and the single cross-OS spawn helper
 - [x] TASK-013: `config data-dir` guard — refuse while live leases or a host lock exist (D15)
-- [ ] TASK-014: Cross-OS acceptance suite with real processes
+- [x] TASK-014: Cross-OS acceptance suite with real processes
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

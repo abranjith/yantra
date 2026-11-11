@@ -111,7 +111,7 @@
     },
     {
       "path": "apps/cli/tests/commands/config-data-dir-guard.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-013"
     },
@@ -192,6 +192,36 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-010"
+    },
+    {
+      "path": "e2e/fixtures/run-ownership/channel-v0-server.mjs",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-014"
+    },
+    {
+      "path": "e2e/fixtures/run-ownership/fake-owner.mjs",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-014"
+    },
+    {
+      "path": "e2e/fixtures/run-ownership/research-owner.mjs",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-014"
+    },
+    {
+      "path": "e2e/fixtures/run-ownership/slow-client.mjs",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-014"
+    },
+    {
+      "path": "e2e/run-ownership.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-014"
     },
     {
       "path": "e2e/spikes/s2-worker-recovery/actors/host.mjs",

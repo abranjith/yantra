@@ -496,7 +496,7 @@ export default tseslint.config(
   // FEAT-064 spike S2: a throwaway evidence harness of standalone Node scripts (TASK-001).
   {
     ...tseslint.configs.disableTypeChecked,
-    files: ['e2e/spikes/**/*.{js,mjs,cjs}'],
+    files: ['e2e/spikes/**/*.{js,mjs,cjs}', 'e2e/fixtures/run-ownership/**/*.mjs'],
     languageOptions: {
       globals: {
         process: 'readonly',

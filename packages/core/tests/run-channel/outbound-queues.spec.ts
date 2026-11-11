@@ -308,6 +308,36 @@ describe('@no-llm run socket under a slow client', () => {
     // Enqueue-to-delivery for the reading client, end to end; generous for CI.
     expect(p95).toBeLessThan(250);
   }, 30_000);
+
+  it('drops a client that stalls during its replay, counting the live events held for it', async () => {
+    const source = new GrowingSource();
+    const text = 'r'.repeat(4 * 1024);
+    // A backlog larger than any socket buffer, so the replay itself stalls.
+    for (let index = 0; index < 400; index += 1) {
+      source.emit({ kind: 'assistant_text', text, at: '2026-11-09T12:00:00.000Z' });
+    }
+    const { logger, lines } = capturingLogger();
+    const server = await RunChannelServer.listen({
+      runId: 'r1',
+      token: TOKEN,
+      logger,
+      events: source,
+      maxEventBytes: 256 * 1024,
+    });
+    closers.push(() => server.close(0));
+    const slow = await stalledClient(server.address);
+    closers.push(() => {
+      slow.release();
+    });
+    await until(() => server.connectionCount === 1);
+    const overflowed = (): boolean => lines.some((line) => line.includes('channel_overflow'));
+    for (let index = 0; index < 400 && !overflowed(); index += 1) {
+      source.emit({ kind: 'assistant_text', text, at: '2026-11-09T12:00:00.000Z' });
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    }
+    await until(overflowed, 5_000);
+    await until(() => server.connectionCount === 0, 5_000);
+  }, 30_000);
 });
 
 describe('@no-llm heartbeat and not_responding', () => {

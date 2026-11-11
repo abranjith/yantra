@@ -445,12 +445,29 @@ class ServerConnection implements ChannelConnection {
     }
     this.pendingFromSeq = null;
     const generation = this.generation;
-    const buffered: CommittedEvent[] = [];
+    // Live events that arrive during the replay wait here, encoded. They count
+    // against the same bound as the event queue: a client that stalls during
+    // its replay must overflow like any other, not grow this buffer forever.
+    const buffered: { readonly seq: number; readonly frame: Buffer }[] = [];
+    let bufferedBytes = 0;
     let live = false;
     this.disposeListener = source.subscribe((event) => {
       if (generation !== this.generation || event.seq < fromSeq) return;
-      if (live) this.sendEvent(event);
-      else buffered.push(event);
+      if (live) {
+        this.sendEvent(event);
+        return;
+      }
+      const frame = eventFrame(event);
+      bufferedBytes += frame.length;
+      if (bufferedBytes > this.server.deps.maxEventBytes) {
+        this.generation += 1;
+        this.disposeListener?.();
+        this.disposeListener = null;
+        buffered.length = 0;
+        this.onOverflow();
+        return;
+      }
+      buffered.push({ seq: event.seq, frame });
     });
     const watermark = source.lastSeq;
     const current = (): boolean => generation === this.generation && this.state === 'open';
@@ -463,7 +480,9 @@ class ServerConnection implements ChannelConnection {
         }
       }
       if (!current()) return;
-      for (const event of buffered) if (event.seq > watermark) this.sendEvent(event);
+      for (const entry of buffered) {
+        if (entry.seq > watermark && this.state === 'open') this.queues.enqueue(entry.frame);
+      }
       buffered.length = 0;
       live = true;
     })().catch(() => {

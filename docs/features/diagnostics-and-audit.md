@@ -368,6 +368,8 @@ When the process that owned a run dies (a crash, a killed terminal, Task Manager
 
 **When it runs.** `yantra list` reconciles before it lists (blocking), every command that starts a run sweeps in the background for at most five seconds, and `resume` reconciles a run whose owner died before taking it over. A sweep checks every lease's owner with one batched identity query and skips its own process's runs.
 
+**Recovering after a killed run.** Nothing needs to be done by hand. Run `yantra list` (or start any run): the killed run shows `interrupted · failed` or `interrupted · partial`, a browser it left behind is stopped if its identity can be verified, and `yantra resume <run-id>` works for a resumable workflow run. If a run keeps showing `running` after its process is gone, its owner could not be verified (for example a lease written by a process Yantra cannot inspect); it is left alone on purpose and is not reconciled automatically.
+
 Run directories from before run ownership are reconciled too: a `.lock` whose PID no longer exists, or a `running` manifest with neither a lease nor a `.lock`. A `.lock` whose PID is alive cannot be verified (it has no start token) and is left alone.
 
 #### `run-events.jsonl`

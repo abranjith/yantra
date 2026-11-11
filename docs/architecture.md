@@ -1583,6 +1583,18 @@ runDir))`; a `subscribe` that arrives earlier waits for it. On `subscribe {from_
 - **Logging.** `channel_attached` and `channel_detached` carry the client kind, negotiated version
   and duration. The token and the socket address are never logged.
 
+#### Run ownership reliability
+
+| Failure                                        | What happens                                                                                                                                                                                                                                                                                                                                                                                      |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Worker (or any run owner) crashes or is killed | The lease stays behind on purpose. The next `yantra list`, run-start sweep, host start, `resume` or stop verifies the owner is dead by creation identity and reconciles: exactly one `run_outcome` with `owner_lost`, outcome `partial` or `failed` from the evidence, `executionState: interrupted`, lease removed. Attached clients read the rest of `run-events.jsonl` from the file.          |
+| Owned Chrome orphaned                          | Every browser a run launches is in `owned-browsers.jsonl`. The reconciler stops a live one only after re-verifying its creation identity, confirms it gone, and never signals one whose identity is unknown; while any remains uncertain the lease is kept as a possible orphan (`listPossibleOrphans`). On Windows, Chrome launched over a CDP pipe usually exits by itself when its owner dies. |
+| User stops a run                               | `stopRun` sends `cancel`; an owner that honors it ends the run cleanly within 10 s. Otherwise, or at once when the owner answers `honored: false`, the owner is terminated by verified identity (never when unverifiable) and the run is always reconciled.                                                                                                                                       |
+| A client stops reading                         | Only that connection overflows its 8 MiB queue (including live events held during its replay) and is dropped; other clients and the run are unaffected, and it can replay from the file.                                                                                                                                                                                                          |
+| Host killed or its process tree ended          | Detached workers started through the trampoline have a dead parent and their own session, so they keep running. A host inside a Windows `KILL_ON_JOB_CLOSE` Job without `SILENT_BREAKAWAY_OK` still takes them with it.                                                                                                                                                                           |
+
+The acceptance suite `e2e/run-ownership.spec.ts` exercises each row with real processes.
+
 ### `packages/agent`
 
 `@yantra/agent` owns live model-driven execution. `runAgenticTask()` creates the auditable run,
