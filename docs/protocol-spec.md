@@ -3073,6 +3073,56 @@ Example:
 "<value>"
 ```
 
+## RunSubscribeParams
+
+No description provided.
+
+| Field    | Description                                             |
+| -------- | ------------------------------------------------------- |
+| run_id   | The run to follow.                                      |
+| from_seq | First event seq wanted; earlier ones are already shown. |
+
+Example:
+
+```json
+{
+  "run_id": "<run_id>",
+  "from_seq": "<from_seq>"
+}
+```
+
+## RunSubscribeResult
+
+No description provided.
+
+| Field   | Description                                                                                                                       |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| channel | `live`: replay then live; `replay_only`: the run has no live owner; `live_unavailable`: the owner speaks another channel version. |
+
+Example:
+
+```json
+{
+  "channel": "<channel>"
+}
+```
+
+## RunUnsubscribeParams
+
+No description provided.
+
+| Field  | Description |
+| ------ | ----------- |
+| run_id |             |
+
+Example:
+
+```json
+{
+  "run_id": "<run_id>"
+}
+```
+
 ## RunsChangedNotification
 
 Runs appeared, changed or ended; re-read what is shown.

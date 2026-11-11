@@ -21,6 +21,7 @@ import {
   FileHostLock,
   HostLockHeldError,
   FileInvocationStore,
+  NodeProcessLivenessProbe,
   dataDir,
   profilePath,
   runsRoot,
@@ -28,6 +29,7 @@ import {
   hostStartFailurePath,
   writeFileAtomic,
   type ProcessIdentity,
+  type ProcessLivenessProbe,
 } from '@yantra/core';
 import { APP_CHANNEL_VERSION, type HostLockRecord } from '@yantra/protocol';
 
@@ -39,7 +41,9 @@ import { ControlSocketServer } from './control-socket.js';
 import { HostStartError } from './errors.js';
 import { AppHost, SILENT_HOST_LOGGER, type HostLogger, type HostRoute } from './host.js';
 import { registerReads } from './reads.js';
+import { recoverHost } from './recovery.js';
 import { RpcMethodRegistry, RpcServer } from './rpc-server.js';
+import { RunRelay } from './run-relay.js';
 import { SessionStore, sessionRoute } from './sessions.js';
 import { Supervisor, type SupervisorDeps } from './supervisor.js';
 
@@ -57,6 +61,8 @@ export interface HostRuntimeDeps {
   readonly now?: () => Date;
   /** Extra HTTP routes (artifact URLs, TASK-010). */
   readonly routes?: readonly HostRoute[];
+  /** Liveness probe for recovery (tests). */
+  readonly probe?: ProcessLivenessProbe;
   /** Overrides for the supervisor (tests: a fake spawner, a stepped clock). */
   readonly supervisor?: Partial<SupervisorDeps>;
   /** Registers feature RPC methods (reads, supervisor, …) before the server starts. */
@@ -160,8 +166,14 @@ export async function startHostRuntime(deps: HostRuntimeDeps): Promise<RunningHo
     registerChangeFeed(methods, feed);
     const artifacts = new ArtifactUrls({ sessions, runsRoot: runsRoot(), logger });
     registerArtifactUrls(methods, artifacts);
+    const store = new FileInvocationStore();
+    const relay = new RunRelay({ runsRoot: runsRoot(), logger });
+    relay.register(methods);
+    cleanups.push(() => {
+      relay.close();
+    });
     const supervisor = new Supervisor({
-      store: new FileInvocationStore(),
+      store,
       launchDir: workerLaunchRoot(),
       spawn: (launch) =>
         spawnDetachedWorker({
@@ -177,7 +189,6 @@ export async function startHostRuntime(deps: HostRuntimeDeps): Promise<RunningHo
       ...(deps.supervisor ?? {}),
     });
     supervisor.register(methods);
-    supervisor.start();
     cleanups.push(() => {
       supervisor.stopLoop();
     });
@@ -207,6 +218,14 @@ export async function startHostRuntime(deps: HostRuntimeDeps): Promise<RunningHo
     cleanups.push(() => control.close());
 
     const record = await lock.markReady({ port, control_socket: control.address });
+    await recoverHost({
+      store,
+      probe: deps.probe ?? new NodeProcessLivenessProbe(),
+      runsRoot: runsRoot(),
+      logger,
+    });
+    supervisor.start();
+    void supervisor.dequeue();
     logger.info(
       {
         port,

@@ -355,3 +355,38 @@ export const QueueListResult = z
   .strict()
   .describe('Every app invocation, first-in first-out.');
 export type QueueListResult = z.infer<typeof QueueListResult>;
+
+/** `run.subscribe` params. */
+export const RunSubscribeParams = z
+  .object({
+    run_id: z
+      .string()
+      .regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u)
+      .describe('The run to follow.'),
+    from_seq: z
+      .number()
+      .int()
+      .positive()
+      .default(1)
+      .describe('First event seq wanted; earlier ones are already shown.'),
+  })
+  .strict();
+export type RunSubscribeParams = z.infer<typeof RunSubscribeParams>;
+
+/** `run.subscribe` result. */
+export const RunSubscribeResult = z
+  .object({
+    channel: z
+      .enum(['live', 'replay_only', 'live_unavailable'])
+      .describe(
+        '`live`: replay then live; `replay_only`: the run has no live owner; `live_unavailable`: the owner speaks another channel version.',
+      ),
+  })
+  .strict();
+export type RunSubscribeResult = z.infer<typeof RunSubscribeResult>;
+
+/** `run.unsubscribe` params. */
+export const RunUnsubscribeParams = z
+  .object({ run_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u) })
+  .strict();
+export type RunUnsubscribeParams = z.infer<typeof RunUnsubscribeParams>;

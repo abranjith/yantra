@@ -92,6 +92,12 @@
       "task": "TASK-007"
     },
     {
+      "path": "apps/cli/src/ui/host/recovery.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-016"
+    },
+    {
       "path": "apps/cli/src/ui/host/request-guard.ts",
       "status": "A",
       "role": "implement",
@@ -102,6 +108,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "apps/cli/src/ui/host/run-relay.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-016"
     },
     {
       "path": "apps/cli/src/ui/host/sessions.ts",
@@ -117,7 +129,7 @@
     },
     {
       "path": "apps/cli/src/ui/host/supervisor.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-015"
     },
@@ -129,7 +141,7 @@
     },
     {
       "path": "apps/cli/src/ui/worker-claim.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-015"
     },
@@ -254,6 +266,12 @@
       "task": "TASK-007"
     },
     {
+      "path": "apps/cli/tests/ui/host/recovery.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-016"
+    },
+    {
       "path": "apps/cli/tests/ui/host/request-guard.spec.ts",
       "status": "A",
       "role": "implement",
@@ -272,6 +290,12 @@
       "task": "TASK-004"
     },
     {
+      "path": "apps/cli/tests/ui/host/run-relay.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-016"
+    },
+    {
       "path": "apps/cli/tests/ui/host/sessions.spec.ts",
       "status": "A",
       "role": "implement",
@@ -285,7 +309,7 @@
     },
     {
       "path": "apps/cli/tests/ui/host/supervisor.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-015"
     },
@@ -321,7 +345,7 @@
     },
     {
       "path": "apps/cli/tests/ui/worker-claim.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-015"
     },
