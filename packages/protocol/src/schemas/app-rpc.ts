@@ -181,3 +181,56 @@ export const SessionGrantResponse = z
   .strict()
   .describe('A window session; the capability is kept in memory only.');
 export type SessionGrantResponse = z.infer<typeof SessionGrantResponse>;
+
+/** Default page size of a paged read. */
+export const READ_DEFAULT_LIMIT = 50 as const;
+/** Largest page size of a paged read; larger requests are clamped. */
+export const READ_MAX_LIMIT = 200 as const;
+
+/** Params of every `read.<command path>` method. */
+export const ReadParams = z
+  .object({
+    args: z
+      .array(z.string())
+      .max(16)
+      .optional()
+      .describe('Positional arguments, exactly as on the command line.'),
+    options: z
+      .record(z.union([z.string(), z.boolean()]))
+      .optional()
+      .describe(
+        'Options by long name without dashes (e.g. `{"status":"failed"}`); `true` sets a switch.',
+      ),
+    cursor: z
+      .string()
+      .min(1)
+      .max(512)
+      .optional()
+      .describe('Opaque cursor from a previous page’s `next_cursor` (paged reads only).'),
+    limit: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe('Page size (paged reads only); default 50, clamped to 200.'),
+  })
+  .strict()
+  .describe('Arguments of an in-process read.');
+export type ReadParams = z.infer<typeof ReadParams>;
+
+/** Result of every `read.<command path>` method. */
+export const ReadResult = z
+  .object({
+    schema: z
+      .string()
+      .nullable()
+      .describe('The registry `--json` schema name, or null when the shape is not yet described.'),
+    value: z.unknown().describe('Exactly what `yantra <command> --json` prints, parsed.'),
+    next_cursor: z
+      .string()
+      .nullable()
+      .describe('Cursor for the next page; null on the last page or for unpaged reads.'),
+  })
+  .strict()
+  .describe('The result of an in-process read.');
+export type ReadResult = z.infer<typeof ReadResult>;

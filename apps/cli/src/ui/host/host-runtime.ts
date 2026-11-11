@@ -20,6 +20,7 @@ import { join } from 'node:path';
 import {
   FileHostLock,
   HostLockHeldError,
+  dataDir,
   hostStartFailurePath,
   writeFileAtomic,
   type ProcessIdentity,
@@ -29,6 +30,7 @@ import { APP_CHANNEL_VERSION, type HostLockRecord } from '@yantra/protocol';
 import { ControlSocketServer } from './control-socket.js';
 import { HostStartError } from './errors.js';
 import { AppHost, SILENT_HOST_LOGGER, type HostLogger, type HostRoute } from './host.js';
+import { registerReads } from './reads.js';
 import { RpcMethodRegistry, RpcServer } from './rpc-server.js';
 import { SessionStore, sessionRoute } from './sessions.js';
 
@@ -37,6 +39,10 @@ export interface HostRuntimeDeps {
   readonly assetsRoot: string;
   readonly identity: ProcessIdentity;
   readonly yantraVersion: string;
+  /** The environment workers and reads inherit (D13); defaults to empty. */
+  readonly env?: Readonly<NodeJS.ProcessEnv>;
+  /** Working directory of in-process reads; defaults to the data directory. */
+  readonly cwd?: string;
   readonly lock?: FileHostLock;
   readonly logger?: HostLogger;
   readonly now?: () => Date;
@@ -130,6 +136,7 @@ export async function startHostRuntime(deps: HostRuntimeDeps): Promise<RunningHo
     cleanups.push(() => {
       rpc.close();
     });
+    registerReads(methods, { env: deps.env ?? {}, cwd: deps.cwd ?? dataDir() });
     deps.registerMethods?.(methods, core);
     const http = new AppHost({
       assetsRoot: deps.assetsRoot,

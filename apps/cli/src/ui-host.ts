@@ -9,7 +9,7 @@
 
 import { fileURLToPath } from 'node:url';
 
-import { currentProcessIdentity, hostLogPath, yantraVersion } from '@yantra/core';
+import { currentProcessIdentity, dataDir, hostLogPath, yantraVersion } from '@yantra/core';
 
 import { HostStartError } from './ui/host/errors.js';
 import { openHostLog } from './ui/host/host-log.js';
@@ -32,6 +32,8 @@ try {
     identity,
     yantraVersion: yantraVersion(),
     logger: log.logger,
+    env: process.env,
+    cwd: dataDir(),
   });
   const shutdown = (signal: string): void => {
     log.logger.info({ signal }, 'host shutting down');

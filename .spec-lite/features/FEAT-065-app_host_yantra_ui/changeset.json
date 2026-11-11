@@ -8,6 +8,12 @@
       "task": "TASK-004"
     },
     {
+      "path": "apps/cli/src/commands/list.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
       "path": "apps/cli/src/commands/ui.ts",
       "status": "A",
       "role": "implement",
@@ -18,6 +24,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/src/render/json.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "apps/cli/src/ui-host.ts",
@@ -54,6 +66,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "apps/cli/src/ui/host/reads.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "apps/cli/src/ui/host/request-guard.ts",
@@ -170,6 +188,12 @@
       "task": "TASK-005"
     },
     {
+      "path": "apps/cli/tests/ui/host/reads.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
       "path": "apps/cli/tests/ui/host/request-guard.spec.ts",
       "status": "A",
       "role": "implement",
@@ -207,7 +231,7 @@
     },
     {
       "path": "apps/cli/tests/ui/window-launcher.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
@@ -254,6 +278,12 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/core/src/index-db/history-store.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
       "path": "packages/core/src/index.ts",
       "status": "M",
       "role": "implement",
@@ -267,9 +297,21 @@
     },
     {
       "path": "packages/core/tests/browser/app-window-discovery.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/tests/index-db/history-store-cursor.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/core/tests/scheduler/fire-runner.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "packages/protocol/generated/json-schema/host-lock.json",

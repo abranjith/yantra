@@ -78,23 +78,15 @@ export async function listHandler(
       throw new CommandFailure(1, 'yantra.list.failed', '', null, true);
     }
 
-    const limit = parseLimit(options.limit);
-
-    if (target === 'workflows') {
-      const store = new FileWorkflowStore(workflowsRoot());
-      const workflows = await store.list();
-      const items: ListItem[] = workflows.slice(0, limit).map((w) => ({
-        kind: 'workflow',
-        name: w.name,
-        stepCount: w.step_count,
-        securityClass: w.security_class,
-        modifiedAt: w.last_modified.toISOString(),
-      }));
-      connector.renderResult({ kind: 'list', items }, renderOpts);
-      return;
-    }
-
-    const items = await listRuns(limit, options, logger, context);
+    const { items } = await buildListJson(
+      {
+        target,
+        limit: parseLimit(options.limit),
+        ...(options.workflow === undefined ? {} : { workflow: options.workflow }),
+        ...(options.status === undefined ? {} : { status: options.status }),
+      },
+      { logger, note: (text) => context.output.stderr.write(text) },
+    );
     connector.renderResult({ kind: 'list', items }, renderOpts);
     return;
   } catch (err) {
@@ -107,19 +99,78 @@ export async function listHandler(
   }
 }
 
+/** A position in `startedAt DESC, runId DESC` order; pages continue strictly after it. */
+export interface ListCursorKey {
+  readonly startedAt: string;
+  readonly runId: string;
+}
+
+/** What to list. */
+export interface ListQuery {
+  readonly target: 'runs' | 'workflows';
+  readonly limit: number;
+  readonly workflow?: string;
+  readonly status?: string;
+  /** Keyset cursor (runs only). */
+  readonly before?: ListCursorKey;
+}
+
+/** The items `list --json` renders, plus the key the next page starts after. */
+export interface ListJson {
+  readonly items: ListItem[];
+  /** Null when this page is the last one. */
+  readonly next: ListCursorKey | null;
+}
+
+/**
+ * The one builder behind `yantra list --json` and the app's `read.list`
+ * (FEAT-065 TASK-007), so the two shapes cannot drift. `note` receives the
+ * index-unavailable hint the terminal prints on stderr.
+ */
+export async function buildListJson(
+  query: ListQuery,
+  deps: { readonly logger: Logger; readonly note: (text: string) => void },
+): Promise<ListJson> {
+  if (query.target === 'workflows') {
+    const store = new FileWorkflowStore(workflowsRoot());
+    const workflows = await store.list();
+    const items: ListItem[] = workflows.slice(0, query.limit).map((w) => ({
+      kind: 'workflow',
+      name: w.name,
+      stepCount: w.step_count,
+      securityClass: w.security_class,
+      modifiedAt: w.last_modified.toISOString(),
+    }));
+    return { items, next: null };
+  }
+  const items = await listRuns(query, deps.logger, deps.note);
+  const last = items.at(-1);
+  const next =
+    items.length === query.limit && last?.kind === 'run'
+      ? { startedAt: last.startedAt, runId: last.runId }
+      : null;
+  return { items, next };
+}
+
+/** `a` sorts before `b` in `startedAt DESC, runId DESC` order. */
+function newerFirst(a: ListCursorKey, b: ListCursorKey): number {
+  const byTime = b.startedAt.localeCompare(a.startedAt);
+  return byTime !== 0 ? byTime : b.runId.localeCompare(a.runId);
+}
+
 /**
  * Builds the `runs` list by merging the fast history index (which includes
  * `ask`/`research` tasks) with the file-based run store (workflow runs),
  * de-duplicated by run id. When the index is unavailable it degrades to the
  * file scan alone (with a stderr hint) — the "delete index.db, list still
- * works" fallback (TASK-002 verify).
+ * works" fallback (TASK-002 verify). Both sources page by the same keyset.
  */
 async function listRuns(
-  limit: number,
-  options: ListOptions,
+  query: ListQuery,
   logger: Logger,
-  context: CommandContext,
+  note: (text: string) => void,
 ): Promise<ListItem[]> {
+  const { limit, before } = query;
   const history = await openHistory(logger);
   // FEAT-064: end every run whose owner died before reading, so a killed run
   // reads `interrupted`, never `running`. Blocking; failures never fail list.
@@ -139,13 +190,16 @@ async function listRuns(
   }
 
   if (history === null) {
-    context.output.stderr.write(
+    note(
       'note: history index unavailable — showing runs from files only ' +
         '(run `yantra doctor` to rebuild the index)\n',
     );
   } else {
     try {
-      const listed = await history.store.list({ limit: 500 });
+      const listed = await history.store.list({
+        limit: 500,
+        ...(before === undefined ? {} : { before }),
+      });
       if (listed.isOk) {
         for (const entry of listed.value) {
           byId.set(entry.runId, historyToItem(entry));
@@ -156,22 +210,21 @@ async function listRuns(
     }
   }
 
-  let items = [...byId.values()];
-  if (options.workflow !== undefined) {
-    items = items.filter((item) => item.kind === 'run' && item.workflowName === options.workflow);
+  let runs = [...byId.values()].filter((item) => item.kind === 'run');
+  if (before !== undefined) runs = runs.filter((item) => newerFirst(before, item) < 0);
+  if (query.workflow !== undefined) {
+    runs = runs.filter((item) => item.workflowName === query.workflow);
   }
-  if (options.status !== undefined) {
-    items = items.filter((item) => item.kind === 'run' && item.status === options.status);
+  if (query.status !== undefined) {
+    runs = runs.filter((item) => item.status === query.status);
   }
-  items.sort((a, b) => {
-    const aAt = a.kind === 'run' ? a.startedAt : '';
-    const bAt = b.kind === 'run' ? b.startedAt : '';
-    return bAt.localeCompare(aAt);
-  });
+  runs.sort(newerFirst);
   return Promise.all(
-    items.slice(0, limit).map(async (item) => {
-      if (item.kind !== 'run') return item;
-      const executionState = await readExecutionState(join(runsRoot(), item.runId));
+    runs.slice(0, limit).map(async (item) => {
+      // A corrupt manifest fails only its own detail, never the list.
+      const executionState = await readExecutionState(join(runsRoot(), item.runId)).catch(
+        () => undefined,
+      );
       return executionState === undefined ? item : { ...item, executionState };
     }),
   );
