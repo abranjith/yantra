@@ -2,6 +2,12 @@
   "vcs": "git",
   "files": [
     {
+      "path": "apps/cli/package.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "apps/cli/src/ui/host/errors.ts",
       "status": "A",
       "role": "implement",
@@ -20,8 +26,14 @@
       "task": "TASK-002"
     },
     {
-      "path": "apps/cli/src/ui/host/sessions.ts",
+      "path": "apps/cli/src/ui/host/rpc-server.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "apps/cli/src/ui/host/sessions.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -38,8 +50,20 @@
       "task": "TASK-002"
     },
     {
-      "path": "apps/cli/tests/ui/host/sessions.spec.ts",
+      "path": "apps/cli/tests/ui/host/rpc-server.spec.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/rpc-support.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/sessions.spec.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -128,10 +152,22 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/protocol/src/schemas/app-rpc.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "packages/protocol/tests/app-host.spec.ts",
       "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/protocol/tests/app-rpc.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
     }
   ],
   "excluded": [

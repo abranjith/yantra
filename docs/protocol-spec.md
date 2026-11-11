@@ -131,6 +131,46 @@ Example:
 }
 ```
 
+## AppRpcAuth
+
+First message on every socket; must match the cookie’s window.
+
+| Field   | Description |
+| ------- | ----------- |
+| jsonrpc |             |
+| method  |             |
+| params  |             |
+
+Example:
+
+```json
+{
+  "jsonrpc": "<jsonrpc>",
+  "method": "<method>",
+  "params": "<params>"
+}
+```
+
+## AppRpcErrorData
+
+Detail of a JSON-RPC error.
+
+| Field       | Description                                            |
+| ----------- | ------------------------------------------------------ |
+| code        | Stable machine-readable reason, e.g. `invalid_params`. |
+| message     | What actually happened.                                |
+| remediation | One next step, when there is one.                      |
+
+Example:
+
+```json
+{
+  "code": "<code>",
+  "message": "<message>",
+  "remediation": "<remediation>"
+}
+```
+
 ## ArgumentSpec
 
 One positional argument.
@@ -1251,6 +1291,16 @@ Example:
 }
 ```
 
+## EmptyParams
+
+No parameters.
+
+Example:
+
+```json
+{}
+```
+
 ## ExecutionClass
 
 How a surface executes the command: run (detached worker, slot counted), read (host, in-process), mutate (short-lived worker under locks), exclusive (blocks run starts), in-process-secure (value never in argv), adapter (an app-side adapter replaces the generated surface), exemption (a reviewed decision keeps it terminal-only).
@@ -1627,6 +1677,62 @@ Example:
 "captcha"
 ```
 
+## HostBuildNotification
+
+The build the host serves, repeated on every connect.
+
+| Field    | Description |
+| -------- | ----------- |
+| build_id |             |
+
+Example:
+
+```json
+{
+  "build_id": "<build_id>"
+}
+```
+
+## HostHelloParams
+
+No description provided.
+
+| Field           | Description                                            |
+| --------------- | ------------------------------------------------------ |
+| build_id        | The build ID in the page’s `yantra-build-id` meta tag. |
+| channel_version | The app channel version the page speaks.               |
+
+Example:
+
+```json
+{
+  "build_id": "<build_id>",
+  "channel_version": "<channel_version>"
+}
+```
+
+## HostHelloResult
+
+No description provided.
+
+| Field           | Description                                                     |
+| --------------- | --------------------------------------------------------------- |
+| build_id        | The build the host serves; a mismatch means stale assets (D17). |
+| channel_version |                                                                 |
+| yantra_version  |                                                                 |
+| server_time     | The host clock, for the app’s relative times.                   |
+
+Example:
+
+```json
+{
+  "build_id": "<build_id>",
+  "channel_version": "<channel_version>",
+  "yantra_version": "<yantra_version>",
+  "server_time": "<server_time>"
+}
+```
+
 ## HostLockRecord
 
 The single-instance app host lock, one per data directory.
@@ -1807,6 +1913,88 @@ Example:
   "shape": "<shape>",
   "schema": "<schema>"
 }
+```
+
+## JsonRpcErrorObject
+
+No description provided.
+
+| Field   | Description                                                   |
+| ------- | ------------------------------------------------------------- |
+| code    | A JSON-RPC standard code or an app code from AppRpcErrorCode. |
+| message |                                                               |
+| data    | Detail of a JSON-RPC error.                                   |
+
+Example:
+
+```json
+{
+  "code": "<code>",
+  "message": "<message>",
+  "data": "<data>"
+}
+```
+
+## JsonRpcId
+
+Request ID; echoed unchanged in the response.
+
+Example:
+
+```json
+"<value>"
+```
+
+## JsonRpcNotification
+
+A host → app notification (no `id`).
+
+| Field   | Description |
+| ------- | ----------- |
+| jsonrpc |             |
+| method  |             |
+| params  |             |
+
+Example:
+
+```json
+{
+  "jsonrpc": "<jsonrpc>",
+  "method": "<method>",
+  "params": "<params>"
+}
+```
+
+## JsonRpcRequest
+
+A JSON-RPC 2.0 request or notification.
+
+| Field   | Description                                                             |
+| ------- | ----------------------------------------------------------------------- |
+| jsonrpc |                                                                         |
+| method  | Method name, e.g. `host.hello` or `read.list`.                          |
+| params  | By-name (object) parameters; by-position arrays are refused per method. |
+| id      | Absent for a notification, which gets no response.                      |
+
+Example:
+
+```json
+{
+  "jsonrpc": "<jsonrpc>",
+  "method": "<method>",
+  "params": "<params>",
+  "id": "<id>"
+}
+```
+
+## JsonRpcResponse
+
+A JSON-RPC 2.0 response.
+
+Example:
+
+```json
+"<value>"
 ```
 
 ## JsonValue
@@ -2759,6 +2947,46 @@ Example:
 
 ```json
 "public"
+```
+
+## SessionCodeResult
+
+No description provided.
+
+| Field      | Description                                                  |
+| ---------- | ------------------------------------------------------------ |
+| code       | Single-use code, valid for 60 seconds, bound to this window. |
+| expires_at |                                                              |
+
+Example:
+
+```json
+{
+  "code": "<code>",
+  "expires_at": "<expires_at>"
+}
+```
+
+## SessionGrantResponse
+
+A window session; the capability is kept in memory only.
+
+| Field             | Description |
+| ----------------- | ----------- |
+| window_id         |             |
+| window_capability |             |
+| build_id          |             |
+| absolute_expiry   |             |
+
+Example:
+
+```json
+{
+  "window_id": "<window_id>",
+  "window_capability": "<window_capability>",
+  "build_id": "<build_id>",
+  "absolute_expiry": "<absolute_expiry>"
+}
 ```
 
 ## SettingSourceSchema

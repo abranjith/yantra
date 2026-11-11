@@ -1070,7 +1070,7 @@ event}` to each window from its own `from_seq`, deduplicating by `seq`.
 - [x] TASK-001: Host state paths, records and the single-instance host lock (M1)
 - [x] TASK-002: Loopback HTTP server: request guard, security headers and static assets (M1)
 - [x] TASK-003: Sessions: launch codes, `POST /session`, per-window capabilities and expiry (M1)
-- [ ] TASK-004: WebSocket JSON-RPC 2.0 endpoint with `auth`, limits and the build-ID handshake (M1)
+- [x] TASK-004: WebSocket JSON-RPC 2.0 endpoint with `auth`, limits and the build-ID handshake (M1)
 - [ ] TASK-005: Host entry, control socket, host log and `yantra ui --print` / `--json` (M1)
 - [ ] TASK-006: Chrome `--app` window launcher and the no-Chromium path (M1)
 - [ ] TASK-007: In-process reads (`read.<name>`) with cursor pagination (M1)
