@@ -211,7 +211,16 @@ async function stalledClient(address: RunSocketAddress): Promise<{ release(): vo
   });
   const subscribe = encodeJsonFrame({ type: 'subscribe', from_seq: 1 });
   if (process.platform === 'win32') {
-    const fd = openSync(address.address, 'r+');
+    // A busy pipe instance (EBUSY) is re-armed by the server shortly.
+    let fd = -1;
+    for (let attempt = 0; fd < 0; attempt += 1) {
+      try {
+        fd = openSync(address.address, 'r+');
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'EBUSY' || attempt >= 40) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+    }
     writeSync(fd, hello);
     writeSync(fd, subscribe);
     return {

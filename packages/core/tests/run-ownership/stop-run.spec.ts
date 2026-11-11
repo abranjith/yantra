@@ -45,7 +45,9 @@ function steppedClock(): { now: () => number; sleep: (ms: number) => Promise<voi
     now: () => t,
     sleep: async (ms) => {
       t += ms;
-      await new Promise((resolve) => setImmediate(resolve));
+      // A few real milliseconds per poll keep real file I/O ahead of the
+      // virtual clock even on a loaded machine.
+      await new Promise((resolve) => setTimeout(resolve, 5));
     },
   };
 }

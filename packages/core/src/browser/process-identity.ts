@@ -130,6 +130,14 @@ export async function currentProcessIdentity(): Promise<ProcessIdentity> {
   return ownIdentity;
 }
 
+/**
+ * Starts computing this process's identity in the background, so the first
+ * lease claim does not wait for it (~0.6 s on Windows; spike S2, RC4).
+ */
+export function warmProcessIdentity(): void {
+  void currentProcessIdentity().catch(() => undefined);
+}
+
 /** @internal Test seam — forgets the memoized identity of this process. */
 export function resetCurrentProcessIdentity(): void {
   ownIdentity = null;

@@ -17,6 +17,7 @@ import type {
 
 import { MarkdownReportBuilder } from '../../audit/report-builder.js';
 import { runsRoot } from '../../browser/paths.js';
+import { warmProcessIdentity } from '../../browser/process-identity.js';
 import type { Logger } from '../../browser/types.js';
 import { openTaskEventBus } from '../../run-events/mirroring-event-bus.js';
 import type { RunEventStream } from '../../run-events/stream.js';
@@ -87,6 +88,7 @@ export class LocalRunStore implements RunStore, AgentRunStore {
   public constructor(root?: string, options: LocalRunStoreOptions = {}) {
     this.root = root ?? runsRoot();
     this.options = options;
+    warmProcessIdentity();
   }
 
   /**

@@ -34,6 +34,7 @@ import { appendNotice, generateUlid } from '@yantra/protocol';
 
 import { writeBriefArtifacts, type BriefArtifactPaths } from '../brief/write-artifacts.js';
 import { dataDir } from '../browser/paths.js';
+import { warmProcessIdentity } from '../browser/process-identity.js';
 import type { Logger } from '../browser/types.js';
 import type { AskEthicsGate } from '../extraction/ethics-adapter.js';
 import type { ContentFetcher } from '../extraction/fetcher.js';
@@ -162,6 +163,7 @@ export class ResearchLoop {
     this.clock = deps.clock ?? (() => new Date());
     this.budgetNow = deps.budgetNow ?? Date.now;
     this.usingRealClock = deps.budgetNow === undefined;
+    if (deps.openOwnership === undefined) warmProcessIdentity();
   }
 
   /**

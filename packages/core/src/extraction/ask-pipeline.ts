@@ -7,6 +7,7 @@ import { appendNotice, generateUlid } from '@yantra/protocol';
 
 import { writeBriefArtifacts, type BriefArtifactPaths } from '../brief/write-artifacts.js';
 import { dataDir } from '../browser/paths.js';
+import { warmProcessIdentity } from '../browser/process-identity.js';
 import type { Logger } from '../browser/types.js';
 import {
   domainFromUrl,
@@ -121,6 +122,7 @@ export class AskPipeline {
     this.ownershipRecorder = deps.ownershipRecorder;
     this.openOwnership = deps.openOwnership ?? ((options) => RunOwnershipSession.open(options));
     this.clock = deps.clock ?? (() => new Date());
+    if (deps.openOwnership === undefined) warmProcessIdentity();
   }
 
   public async run(query: AskQuery): Promise<AskRunResult> {
