@@ -1074,7 +1074,7 @@ event}` to each window from its own `from_seq`, deduplicating by `seq`.
 - [x] TASK-005: Host entry, control socket, host log and `yantra ui --print` / `--json` (M1)
 - [x] TASK-006: Chrome `--app` window launcher and the no-Chromium path (M1)
 - [x] TASK-007: In-process reads (`read.<name>`) with cursor pagination (M1)
-- [ ] TASK-008: Change detection: `runs.subscribe` without reloads (M1)
+- [x] TASK-008: Change detection: `runs.subscribe` without reloads (M1)
 - [ ] TASK-009: Preferences `ui.theme` and `ui.surfaces` (M1)
 - [ ] TASK-010: Signed artifact URLs `/a/<signed>` with a public allowlist (M1)
 - [ ] TASK-011: `apps/web` skeleton: boot, session, RPC client, shell, Bindu and preferences (M1)

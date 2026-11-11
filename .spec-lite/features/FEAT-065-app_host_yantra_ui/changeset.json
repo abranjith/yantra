@@ -38,6 +38,12 @@
       "task": "TASK-005"
     },
     {
+      "path": "apps/cli/src/ui/host/change-feed.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "apps/cli/src/ui/host/control-socket.ts",
       "status": "A",
       "role": "implement",
@@ -69,7 +75,7 @@
     },
     {
       "path": "apps/cli/src/ui/host/reads.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
@@ -176,6 +182,12 @@
       "task": "TASK-005"
     },
     {
+      "path": "apps/cli/tests/ui/host/change-feed.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "apps/cli/tests/ui/host/control-socket.spec.ts",
       "status": "A",
       "role": "implement",
@@ -189,7 +201,7 @@
     },
     {
       "path": "apps/cli/tests/ui/host/reads.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
@@ -303,7 +315,7 @@
     },
     {
       "path": "packages/core/tests/index-db/history-store-cursor.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },

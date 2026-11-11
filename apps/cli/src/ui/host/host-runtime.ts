@@ -21,12 +21,15 @@ import {
   FileHostLock,
   HostLockHeldError,
   dataDir,
+  profilePath,
+  runsRoot,
   hostStartFailurePath,
   writeFileAtomic,
   type ProcessIdentity,
 } from '@yantra/core';
 import { APP_CHANNEL_VERSION, type HostLockRecord } from '@yantra/protocol';
 
+import { ChangeFeed, openDefaultSources, registerChangeFeed } from './change-feed.js';
 import { ControlSocketServer } from './control-socket.js';
 import { HostStartError } from './errors.js';
 import { AppHost, SILENT_HOST_LOGGER, type HostLogger, type HostRoute } from './host.js';
@@ -137,6 +140,16 @@ export async function startHostRuntime(deps: HostRuntimeDeps): Promise<RunningHo
       rpc.close();
     });
     registerReads(methods, { env: deps.env ?? {}, cwd: deps.cwd ?? dataDir() });
+    const feed = new ChangeFeed({
+      openSources: () => openDefaultSources({ runsRoot: runsRoot(), profilePath: profilePath() }),
+      runsRoot: runsRoot(),
+      profilePath: profilePath(),
+      logger,
+    });
+    cleanups.push(() => {
+      feed.close();
+    });
+    registerChangeFeed(methods, feed);
     deps.registerMethods?.(methods, core);
     const http = new AppHost({
       assetsRoot: deps.assetsRoot,

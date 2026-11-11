@@ -2493,6 +2493,16 @@ Example:
 "<value>"
 ```
 
+## PrefsChangedNotification
+
+Preferences changed; re-read them.
+
+Example:
+
+```json
+{}
+```
+
 ## ProcessIdentityRecord
 
 A process creation identity: a PID plus its start token.
@@ -2528,6 +2538,48 @@ Example:
   "candidate": "<candidate>",
   "score": "<score>",
   "rank_reason": "<rank_reason>"
+}
+```
+
+## ReadParams
+
+Arguments of an in-process read.
+
+| Field   | Description                                                                             |
+| ------- | --------------------------------------------------------------------------------------- |
+| args    | Positional arguments, exactly as on the command line.                                   |
+| options | Options by long name without dashes (e.g. `{"status":"failed"}`); `true` sets a switch. |
+| cursor  | Opaque cursor from a previous page’s `next_cursor` (paged reads only).                  |
+| limit   | Page size (paged reads only); default 50, clamped to 200.                               |
+
+Example:
+
+```json
+{
+  "args": "<args>",
+  "options": "<options>",
+  "cursor": "<cursor>",
+  "limit": "<limit>"
+}
+```
+
+## ReadResult
+
+The result of an in-process read.
+
+| Field       | Description                                                                     |
+| ----------- | ------------------------------------------------------------------------------- |
+| schema      | The registry `--json` schema name, or null when the shape is not yet described. |
+| value       | Exactly what `yantra <command> --json` prints, parsed.                          |
+| next_cursor | Cursor for the next page; null on the last page or for unpaged reads.           |
+
+Example:
+
+```json
+{
+  "schema": "<schema>",
+  "value": "<value>",
+  "next_cursor": "<next_cursor>"
 }
 ```
 
@@ -2883,6 +2935,40 @@ Example:
 
 ```json
 "<value>"
+```
+
+## RunsChangedNotification
+
+Runs appeared, changed or ended; re-read what is shown.
+
+| Field        | Description                                                                  |
+| ------------ | ---------------------------------------------------------------------------- |
+| run_ids      | Runs known to have changed; empty when the index changed without naming one. |
+| live_run_ids | Runs with a lease right now.                                                 |
+
+Example:
+
+```json
+{
+  "run_ids": "<run_ids>",
+  "live_run_ids": "<live_run_ids>"
+}
+```
+
+## RunsSubscribeResult
+
+Subscribed to run and preference changes.
+
+| Field        | Description                  |
+| ------------ | ---------------------------- |
+| live_run_ids | Runs with a lease right now. |
+
+Example:
+
+```json
+{
+  "live_run_ids": "<live_run_ids>"
+}
 ```
 
 ## ScalarValue

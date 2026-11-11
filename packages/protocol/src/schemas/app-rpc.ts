@@ -234,3 +234,31 @@ export const ReadResult = z
   .strict()
   .describe('The result of an in-process read.');
 export type ReadResult = z.infer<typeof ReadResult>;
+
+/** `runs.subscribe` result: the runs live right now. */
+export const RunsSubscribeResult = z
+  .object({
+    live_run_ids: z.array(z.string().min(1)).describe('Runs with a lease right now.'),
+  })
+  .strict()
+  .describe('Subscribed to run and preference changes.');
+export type RunsSubscribeResult = z.infer<typeof RunsSubscribeResult>;
+
+/** `runs.changed` notification (debounced 250 ms). */
+export const RunsChangedNotification = z
+  .object({
+    run_ids: z
+      .array(z.string().min(1))
+      .describe('Runs known to have changed; empty when the index changed without naming one.'),
+    live_run_ids: z.array(z.string().min(1)).describe('Runs with a lease right now.'),
+  })
+  .strict()
+  .describe('Runs appeared, changed or ended; re-read what is shown.');
+export type RunsChangedNotification = z.infer<typeof RunsChangedNotification>;
+
+/** `prefs.changed` notification: profile.yaml changed; re-read preferences. */
+export const PrefsChangedNotification = z
+  .object({})
+  .strict()
+  .describe('Preferences changed; re-read them.');
+export type PrefsChangedNotification = z.infer<typeof PrefsChangedNotification>;
