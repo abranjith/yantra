@@ -1,0 +1,467 @@
+{
+  "$ref": "#/definitions/InvocationRecord",
+  "definitions": {
+    "InvocationRecord": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "type": "number",
+          "const": 1,
+          "description": "Record format version."
+        },
+        "invocation_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{16,64}$",
+          "description": "Client-generated idempotency key; unique by file name."
+        },
+        "invocation": {
+          "type": "object",
+          "properties": {
+            "invocation_id": {
+              "type": "string",
+              "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
+              "description": "Client-generated ULID; the idempotency key for launching (D11)."
+            },
+            "path": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "minItems": 1,
+              "description": "Canonical command path, aliases resolved (e.g. [\"do\"] for \"discover\")."
+            },
+            "argv": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Tokens after the path, exactly as given, in order."
+            },
+            "cwd": {
+              "type": "string",
+              "description": "Absolute working directory the invocation was requested from."
+            }
+          },
+          "required": [
+            "invocation_id",
+            "path",
+            "argv",
+            "cwd"
+          ],
+          "additionalProperties": false,
+          "description": "What was requested (FEAT-062)."
+        },
+        "execution_class": {
+          "type": "string",
+          "enum": [
+            "run",
+            "mutate",
+            "exclusive"
+          ],
+          "description": "Execution class resolved from the registry for these options at submission."
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "queued",
+            "reserved",
+            "spawning",
+            "claimed",
+            "running",
+            "finished",
+            "never_started",
+            "start_unknown",
+            "needs_review",
+            "discarded"
+          ],
+          "description": "Launch-ownership state of one app invocation."
+        },
+        "queued_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Submission time; FIFO order is by this, then the ID."
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Time of the last state change."
+        },
+        "displayed_effective": {
+          "type": "object",
+          "properties": {
+            "settings": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "value": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/definitions/InvocationRecord/properties/displayed_effective/properties/settings/items/properties/value"
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": {
+                          "$ref": "#/definitions/InvocationRecord/properties/displayed_effective/properties/settings/items/properties/value"
+                        }
+                      }
+                    ],
+                    "description": "Any JSON value."
+                  },
+                  "source": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "const": "flag"
+                          }
+                        },
+                        "required": [
+                          "kind"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "const": "env"
+                          },
+                          "name": {
+                            "type": "string",
+                            "pattern": "^[A-Z][A-Z0-9_]*$"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "name"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "const": "preference"
+                          },
+                          "key": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "key"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "const": "config"
+                          },
+                          "key": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "key"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "const": "schedule"
+                          }
+                        },
+                        "required": [
+                          "kind"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "const": "workflow"
+                          }
+                        },
+                        "required": [
+                          "kind"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "const": "default"
+                          }
+                        },
+                        "required": [
+                          "kind"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ],
+                    "description": "The source of an effective non-secret setting; environment names only."
+                  }
+                },
+                "required": [
+                  "key",
+                  "value",
+                  "source"
+                ],
+                "additionalProperties": false,
+                "description": "An effective non-secret setting and its provenance."
+              },
+              "description": "Effective non-secret settings the composer showed, with their sources."
+            },
+            "content": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "workflow",
+                      "workflow_locators",
+                      "template",
+                      "params_file"
+                    ]
+                  },
+                  "path": {
+                    "type": "string",
+                    "description": "Absolute path read at invocation start."
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$",
+                    "description": "Streamed SHA-256 of the exact content."
+                  }
+                },
+                "required": [
+                  "kind",
+                  "path",
+                  "sha256"
+                ],
+                "additionalProperties": false,
+                "description": "A content identity at execution start."
+              },
+              "description": "Workflow and template content identities the composer showed."
+            }
+          },
+          "required": [
+            "settings",
+            "content"
+          ],
+          "additionalProperties": false,
+          "description": "What the composer showed at submission (D13): the baseline for queue drift review. Never holds a secret."
+        },
+        "run_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Run ID allocated at `reserved` (the existing run for `resume`)."
+        },
+        "worker": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "pid": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "description": "Process ID."
+                },
+                "start_token": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Creation identity (platform start time). `unknown` when the platform could not tell; a liveness check then answers `unknown`, never `dead`."
+                }
+              },
+              "required": [
+                "pid",
+                "start_token"
+              ],
+              "additionalProperties": false,
+              "description": "A process creation identity: a PID plus its start token."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Set only by the worker, through its claim."
+        },
+        "review": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "detected_at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "When drift review found the differences."
+                },
+                "differences": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "key": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Setting key, or `content:<path>` for a content identity."
+                      },
+                      "submitted": {
+                        "anyOf": [
+                          {
+                            "$ref": "#/definitions/InvocationRecord/properties/displayed_effective/properties/settings/items/properties/value"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "The value shown at submission."
+                      },
+                      "current": {
+                        "anyOf": [
+                          {
+                            "$ref": "#/definitions/InvocationRecord/properties/displayed_effective/properties/settings/items/properties/value"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "The value now; null when it no longer exists."
+                      },
+                      "pinnable": {
+                        "type": "boolean",
+                        "description": "True when the submitted value can be pinned as an explicit flag."
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "submitted",
+                      "current",
+                      "pinnable"
+                    ],
+                    "additionalProperties": false,
+                    "description": "One setting or content identity that changed while queued."
+                  },
+                  "minItems": 1
+                }
+              },
+              "required": [
+                "detected_at",
+                "differences"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Set on `needs_review`."
+        },
+        "duplicate_risk_acknowledged": {
+          "type": "boolean",
+          "default": false,
+          "description": "Must be true to start a `start_unknown` item again."
+        },
+        "result": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "exit_code": {
+                  "type": "integer",
+                  "description": "The command exit code."
+                },
+                "finished_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "reason": {
+                  "type": "string",
+                  "enum": [
+                    "owner_lost",
+                    "busy",
+                    "refused_claim"
+                  ],
+                  "description": "`owner_lost`: the worker died and was reconciled; `busy`: the run was owned elsewhere; `refused_claim`: the worker found the item withdrawn."
+                }
+              },
+              "required": [
+                "exit_code",
+                "finished_at"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Set on `finished`."
+        }
+      },
+      "required": [
+        "schema_version",
+        "invocation_id",
+        "invocation",
+        "execution_class",
+        "state",
+        "queued_at",
+        "updated_at",
+        "displayed_effective",
+        "run_id",
+        "worker",
+        "review",
+        "result"
+      ],
+      "additionalProperties": false,
+      "description": "One app-launched invocation and its launch-ownership state (D11)."
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

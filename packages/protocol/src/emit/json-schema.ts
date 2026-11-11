@@ -7,6 +7,7 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 import { CommandInvocation } from '../commands/invocation.js';
 import { CommandRegistry } from '../commands/schema.js';
 import { AgentProgressEvent } from '../schemas/agent-progress.js';
+import { HostLockRecord, InvocationRecord } from '../schemas/app-host.js';
 import { Brief } from '../schemas/brief.js';
 import { CommandResultMessageSchema } from '../schemas/command-result.js';
 import { ConfirmationDecision, ConfirmationRequest } from '../schemas/confirmation.js';
@@ -59,6 +60,8 @@ export const JSON_SCHEMA_ARTIFACTS: Record<string, { schema: z.ZodType<unknown>;
   'run-lease.json': { schema: RunLease, name: 'RunLease' },
   'run-channel-message.json': { schema: RunChannelMessage, name: 'RunChannelMessage' },
   'worker-launch.json': { schema: WorkerLaunch, name: 'WorkerLaunch' },
+  'host-lock.json': { schema: HostLockRecord, name: 'HostLockRecord' },
+  'invocation-record.json': { schema: InvocationRecord, name: 'InvocationRecord' },
 } as const;
 
 export type JsonSchemaArtifactName = keyof typeof JSON_SCHEMA_ARTIFACTS;

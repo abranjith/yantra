@@ -1067,7 +1067,7 @@ event}` to each window from its own `from_seq`, deduplicating by `seq`.
 
 ## 8. State Tracking
 
-- [ ] TASK-001: Host state paths, records and the single-instance host lock (M1)
+- [x] TASK-001: Host state paths, records and the single-instance host lock (M1)
 - [ ] TASK-002: Loopback HTTP server: request guard, security headers and static assets (M1)
 - [ ] TASK-003: Sessions: launch codes, `POST /session`, per-window capabilities and expiry (M1)
 - [ ] TASK-004: WebSocket JSON-RPC 2.0 endpoint with `auth`, limits and the build-ID handshake (M1)

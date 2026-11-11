@@ -57,14 +57,57 @@ export function socketsRoot(platform: NodeJS.Platform = process.platform): strin
   return join(tmpdir(), `yantra-${uid}`);
 }
 
-/** Where the app host writes detached-worker launch and result files. */
-export function workerLaunchRoot(): string {
-  return join(dataDir(), 'ui', 'launch');
+/** Root of everything the app host owns (FEAT-065): `<data-dir>/ui`, owner-only. */
+export function uiRoot(): string {
+  return join(dataDir(), 'ui');
 }
 
-/** The app host's single-instance lock (owned by FEAT-065; read here only). */
+/** Where the app host writes detached-worker launch and result files. */
+export function workerLaunchRoot(): string {
+  return join(uiRoot(), 'launch');
+}
+
+/** The app host's single-instance lock (`HostLockRecord`, FEAT-065). */
 export function uiHostLockPath(): string {
-  return join(dataDir(), 'ui', 'host.lock');
+  return join(uiRoot(), 'host.lock');
+}
+
+/** The lock every invocation-record mutation runs under (D11 slot invariant). */
+export function slotsLockPath(): string {
+  return join(uiRoot(), 'slots.lock');
+}
+
+/** Directory of app invocation records and their results. */
+export function invocationsRoot(): string {
+  return join(uiRoot(), 'invocations');
+}
+
+/** Callers pass only IDs matching `INVOCATION_ID_PATTERN`, so a path cannot escape. */
+function checkedInvocationId(invocationId: string): string {
+  if (!/^[A-Za-z0-9_-]{16,64}$/u.test(invocationId)) {
+    throw new Error(`Invalid invocation ID: ${JSON.stringify(invocationId.slice(0, 80))}`);
+  }
+  return invocationId;
+}
+
+/** `<data-dir>/ui/invocations/<invocation_id>.json` */
+export function invocationPath(invocationId: string): string {
+  return join(invocationsRoot(), `${checkedInvocationId(invocationId)}.json`);
+}
+
+/** `<data-dir>/ui/invocations/<invocation_id>.result.json`, written once by the worker. */
+export function invocationResultPath(invocationId: string): string {
+  return join(invocationsRoot(), `${checkedInvocationId(invocationId)}.result.json`);
+}
+
+/** The app host's own Pino log (rotated once to `host.log.1`). */
+export function hostLogPath(): string {
+  return join(uiRoot(), 'host.log');
+}
+
+/** The dedicated Chrome/Edge user-data directory of the app window (never an automation profile). */
+export function uiChromeProfilePath(): string {
+  return join(uiRoot(), 'chrome-profile');
 }
 
 /** Returns the path to the doctor diagnostic cache file. */

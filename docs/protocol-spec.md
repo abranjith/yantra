@@ -1181,6 +1181,46 @@ Example:
 }
 ```
 
+## DisplayedEffective
+
+What the composer showed at submission (D13): the baseline for queue drift review. Never holds a secret.
+
+| Field    | Description                                                            |
+| -------- | ---------------------------------------------------------------------- |
+| settings | Effective non-secret settings the composer showed, with their sources. |
+| content  | Workflow and template content identities the composer showed.          |
+
+Example:
+
+```json
+{
+  "settings": "<settings>",
+  "content": "<content>"
+}
+```
+
+## DriftDifference
+
+One setting or content identity that changed while queued.
+
+| Field     | Description                                                      |
+| --------- | ---------------------------------------------------------------- |
+| key       | Setting key, or `content:<path>` for a content identity.         |
+| submitted | The value shown at submission.                                   |
+| current   | The value now; null when it no longer exists.                    |
+| pinnable  | True when the submitted value can be pinned as an explicit flag. |
+
+Example:
+
+```json
+{
+  "key": "<key>",
+  "submitted": "<submitted>",
+  "current": "<current>",
+  "pinnable": "<pinnable>"
+}
+```
+
 ## ElementDescriptorSchema
 
 Sanitized structural fingerprint of a captured DOM element
@@ -1587,6 +1627,44 @@ Example:
 "captcha"
 ```
 
+## HostLockRecord
+
+The single-instance app host lock, one per data directory.
+
+| Field           | Description                                                                 |
+| --------------- | --------------------------------------------------------------------------- |
+| schema_version  | Record format version.                                                      |
+| state           | `starting` from acquisition until both listeners are bound, then `ready`.   |
+| pid             | Host process ID.                                                            |
+| start_token     | Host process creation token.                                                |
+| port            | Loopback HTTP port; set when `ready`.                                       |
+| control_socket  | Control socket path (POSIX) or named-pipe name (Windows); set when `ready`. |
+| control_token   | 256-bit base64url token a control client must send first.                   |
+| build_id        | ID of the embedded web build the host serves.                               |
+| yantra_version  | Version of the Yantra executable running the host.                          |
+| channel_version | App channel version (D17).                                                  |
+| started_at      | When the host acquired the lock.                                            |
+| env_captured_at | When the host captured the environment it gives workers (D13).              |
+
+Example:
+
+```json
+{
+  "schema_version": "<schema_version>",
+  "state": "<state>",
+  "pid": "<pid>",
+  "start_token": "<start_token>",
+  "port": "<port>",
+  "control_socket": "<control_socket>",
+  "control_token": "<control_token>",
+  "build_id": "<build_id>",
+  "yantra_version": "<yantra_version>",
+  "channel_version": "<channel_version>",
+  "started_at": "<started_at>",
+  "env_captured_at": "<env_captured_at>"
+}
+```
+
 ## InputKind
 
 How a generated form collects this value.
@@ -1627,6 +1705,88 @@ Example:
   "kind": "<kind>",
   "disabled": "<disabled>"
 }
+```
+
+## InvocationFinishReason
+
+`owner_lost`: the worker died and was reconciled; `busy`: the run was owned elsewhere; `refused_claim`: the worker found the item withdrawn.
+
+Example:
+
+```json
+"owner_lost"
+```
+
+## InvocationRecord
+
+One app-launched invocation and its launch-ownership state (D11).
+
+| Field                       | Description                                                                                              |
+| --------------------------- | -------------------------------------------------------------------------------------------------------- |
+| schema_version              | Record format version.                                                                                   |
+| invocation_id               | Client-generated idempotency key; unique by file name.                                                   |
+| invocation                  | What was requested (FEAT-062).                                                                           |
+| execution_class             | Execution class resolved from the registry for these options at submission.                              |
+| state                       | Launch-ownership state of one app invocation.                                                            |
+| queued_at                   | Submission time; FIFO order is by this, then the ID.                                                     |
+| updated_at                  | Time of the last state change.                                                                           |
+| displayed_effective         | What the composer showed at submission (D13): the baseline for queue drift review. Never holds a secret. |
+| run_id                      | Run ID allocated at `reserved` (the existing run for `resume`).                                          |
+| worker                      | Set only by the worker, through its claim.                                                               |
+| review                      | Set on `needs_review`.                                                                                   |
+| duplicate_risk_acknowledged | Must be true to start a `start_unknown` item again.                                                      |
+| result                      | Set on `finished`.                                                                                       |
+
+Example:
+
+```json
+{
+  "schema_version": "<schema_version>",
+  "invocation_id": "<invocation_id>",
+  "invocation": "<invocation>",
+  "execution_class": "<execution_class>",
+  "state": "<state>",
+  "queued_at": "<queued_at>",
+  "updated_at": "<updated_at>",
+  "displayed_effective": "<displayed_effective>",
+  "run_id": "<run_id>",
+  "worker": "<worker>",
+  "review": "<review>",
+  "duplicate_risk_acknowledged": "<duplicate_risk_acknowledged>",
+  "result": "<result>"
+}
+```
+
+## InvocationResult
+
+A detached worker's completion: the command's result or error, written once.
+
+| Field          | Description                                                     |
+| -------------- | --------------------------------------------------------------- |
+| schema_version |                                                                 |
+| invocation_id  |                                                                 |
+| run_id         |                                                                 |
+| outcome        | The final completion of a command executed on a worker surface. |
+
+Example:
+
+```json
+{
+  "schema_version": "<schema_version>",
+  "invocation_id": "<invocation_id>",
+  "run_id": "<run_id>",
+  "outcome": "<outcome>"
+}
+```
+
+## InvocationState
+
+Launch-ownership state of one app invocation.
+
+Example:
+
+```json
+"queued"
 ```
 
 ## JsonResultSpec
@@ -2955,6 +3115,30 @@ Example:
 }
 ```
 
+## UiOpenResult
+
+What `yantra ui` opened or printed.
+
+| Field         | Description                                                  |
+| ------------- | ------------------------------------------------------------ |
+| schemaVersion | Output format version.                                       |
+| url           | The app URL with its single-use launch code in the fragment. |
+| port          | Loopback HTTP port.                                          |
+| hostPid       | App host process ID.                                         |
+| reused        | True when an already-running host served the request.        |
+
+Example:
+
+```json
+{
+  "schemaVersion": "<schemaVersion>",
+  "url": "<url>",
+  "port": "<port>",
+  "hostPid": "<hostPid>",
+  "reused": "<reused>"
+}
+```
+
 ## UsageCall
 
 Single LLM usage call record.
@@ -3111,6 +3295,16 @@ Example:
   "state": "<state>",
   "timeout_ms": "<timeout_ms>"
 }
+```
+
+## WorkerExecutionClass
+
+`run` holds a slot, `exclusive` needs zero runs, `mutate` holds none.
+
+Example:
+
+```json
+"run"
 ```
 
 ## WorkerLaunch

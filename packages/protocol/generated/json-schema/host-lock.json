@@ -1,0 +1,105 @@
+{
+  "$ref": "#/definitions/HostLockRecord",
+  "definitions": {
+    "HostLockRecord": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "type": "number",
+          "const": 1,
+          "description": "Record format version."
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "starting",
+            "ready"
+          ],
+          "description": "`starting` from acquisition until both listeners are bound, then `ready`."
+        },
+        "pid": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "Host process ID."
+        },
+        "start_token": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Host process creation token."
+        },
+        "port": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Loopback HTTP port; set when `ready`."
+        },
+        "control_socket": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Control socket path (POSIX) or named-pipe name (Windows); set when `ready`."
+        },
+        "control_token": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{43}$",
+          "description": "256-bit base64url token a control client must send first."
+        },
+        "build_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "ID of the embedded web build the host serves."
+        },
+        "yantra_version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Version of the Yantra executable running the host."
+        },
+        "channel_version": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "App channel version (D17)."
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the host acquired the lock."
+        },
+        "env_captured_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the host captured the environment it gives workers (D13)."
+        }
+      },
+      "required": [
+        "schema_version",
+        "state",
+        "pid",
+        "start_token",
+        "port",
+        "control_socket",
+        "control_token",
+        "build_id",
+        "yantra_version",
+        "channel_version",
+        "started_at",
+        "env_captured_at"
+      ],
+      "additionalProperties": false,
+      "description": "The single-instance app host lock, one per data directory."
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}
