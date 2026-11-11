@@ -268,8 +268,8 @@ export class FileInvocationStore {
   }
 
   /** `claimed → running`, once the run's lease exists. */
-  public markRunning(invocationId: string): Promise<InvocationRecord> {
-    return this.transition(invocationId, 'running');
+  public markRunning(invocationId: string, runId?: string): Promise<InvocationRecord> {
+    return this.transition(invocationId, 'running', runId === undefined ? {} : { run_id: runId });
   }
 
   /** `claimed | running → finished`, with the exit code and an optional reason. */

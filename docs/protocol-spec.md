@@ -883,6 +883,24 @@ Example:
 }
 ```
 
+## CommandInvokeParams
+
+Launch a run-class or mutating command as a detached worker.
+
+| Field               | Description                                            |
+| ------------------- | ------------------------------------------------------ |
+| invocation          | What to run; its invocation_id is the idempotency key. |
+| displayed_effective | What the composer showed (the drift baseline).         |
+
+Example:
+
+```json
+{
+  "invocation": "<invocation>",
+  "displayed_effective": "<displayed_effective>"
+}
+```
+
 ## CommandRegistry
 
 The complete Yantra command surface.
@@ -1879,6 +1897,22 @@ Example:
 "owner_lost"
 ```
 
+## InvocationIdParams
+
+No description provided.
+
+| Field         | Description |
+| ------------- | ----------- |
+| invocation_id |             |
+
+Example:
+
+```json
+{
+  "invocation_id": "<invocation_id>"
+}
+```
+
 ## InvocationRecord
 
 One app-launched invocation and its launch-ownership state (D11).
@@ -1949,6 +1983,38 @@ Example:
 
 ```json
 "queued"
+```
+
+## InvocationSummary
+
+One app invocation, as the queue shows it.
+
+| Field           | Description                                                           |
+| --------------- | --------------------------------------------------------------------- |
+| invocation_id   |                                                                       |
+| state           | Launch-ownership state of one app invocation.                         |
+| execution_class | `run` holds a slot, `exclusive` needs zero runs, `mutate` holds none. |
+| path            | Command path, e.g. ["research"].                                      |
+| position        | 1-based place in the queue, while queued.                             |
+| run_id          |                                                                       |
+| queued_at       |                                                                       |
+| review          | Set on `needs_review`.                                                |
+| result          | Set on `finished`.                                                    |
+
+Example:
+
+```json
+{
+  "invocation_id": "<invocation_id>",
+  "state": "<state>",
+  "execution_class": "<execution_class>",
+  "path": "<path>",
+  "position": "<position>",
+  "run_id": "<run_id>",
+  "queued_at": "<queued_at>",
+  "review": "<review>",
+  "result": "<result>"
+}
 ```
 
 ## JsonResultSpec
@@ -2554,6 +2620,40 @@ Example:
 {
   "pid": "<pid>",
   "start_token": "<start_token>"
+}
+```
+
+## QueueListResult
+
+Every app invocation, first-in first-out.
+
+| Field | Description |
+| ----- | ----------- |
+| items |             |
+
+Example:
+
+```json
+{
+  "items": "<items>"
+}
+```
+
+## QueueStartParams
+
+No description provided.
+
+| Field                      | Description                                                            |
+| -------------------------- | ---------------------------------------------------------------------- |
+| invocation_id              |                                                                        |
+| acknowledge_duplicate_risk | Required for an item whose earlier start is unknown: it may run twice. |
+
+Example:
+
+```json
+{
+  "invocation_id": "<invocation_id>",
+  "acknowledge_duplicate_risk": "<acknowledge_duplicate_risk>"
 }
 ```
 

@@ -20,14 +20,18 @@ import { join } from 'node:path';
 import {
   FileHostLock,
   HostLockHeldError,
+  FileInvocationStore,
   dataDir,
   profilePath,
   runsRoot,
+  workerLaunchRoot,
   hostStartFailurePath,
   writeFileAtomic,
   type ProcessIdentity,
 } from '@yantra/core';
 import { APP_CHANNEL_VERSION, type HostLockRecord } from '@yantra/protocol';
+
+import { spawnDetachedWorker } from '../../worker/spawn.js';
 
 import { ArtifactUrls, registerArtifactUrls } from './artifact-urls.js';
 import { ChangeFeed, openDefaultSources, registerChangeFeed } from './change-feed.js';
@@ -37,6 +41,7 @@ import { AppHost, SILENT_HOST_LOGGER, type HostLogger, type HostRoute } from './
 import { registerReads } from './reads.js';
 import { RpcMethodRegistry, RpcServer } from './rpc-server.js';
 import { SessionStore, sessionRoute } from './sessions.js';
+import { Supervisor, type SupervisorDeps } from './supervisor.js';
 
 export interface HostRuntimeDeps {
   /** The embedded web build (`dist/web`). */
@@ -52,6 +57,8 @@ export interface HostRuntimeDeps {
   readonly now?: () => Date;
   /** Extra HTTP routes (artifact URLs, TASK-010). */
   readonly routes?: readonly HostRoute[];
+  /** Overrides for the supervisor (tests: a fake spawner, a stepped clock). */
+  readonly supervisor?: Partial<SupervisorDeps>;
   /** Registers feature RPC methods (reads, supervisor, …) before the server starts. */
   readonly registerMethods?: (methods: RpcMethodRegistry, host: RunningHostCore) => void;
 }
@@ -153,6 +160,27 @@ export async function startHostRuntime(deps: HostRuntimeDeps): Promise<RunningHo
     registerChangeFeed(methods, feed);
     const artifacts = new ArtifactUrls({ sessions, runsRoot: runsRoot(), logger });
     registerArtifactUrls(methods, artifacts);
+    const supervisor = new Supervisor({
+      store: new FileInvocationStore(),
+      launchDir: workerLaunchRoot(),
+      spawn: (launch) =>
+        spawnDetachedWorker({
+          launch,
+          launchDir: workerLaunchRoot(),
+          env: { ...(deps.env ?? {}) },
+        }),
+      notify: (method, params) => {
+        rpc.notify(method, params);
+      },
+      logger,
+      now,
+      ...(deps.supervisor ?? {}),
+    });
+    supervisor.register(methods);
+    supervisor.start();
+    cleanups.push(() => {
+      supervisor.stopLoop();
+    });
     deps.registerMethods?.(methods, core);
     const http = new AppHost({
       assetsRoot: deps.assetsRoot,

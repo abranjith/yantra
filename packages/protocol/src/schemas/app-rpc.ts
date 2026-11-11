@@ -1,5 +1,15 @@
 import { z } from 'zod';
 
+import { CommandInvocation } from '../commands/invocation.js';
+
+import {
+  DisplayedEffective,
+  INVOCATION_ID_PATTERN,
+  InvocationRecord,
+  InvocationState,
+  WorkerExecutionClass,
+} from './app-host.js';
+
 /**
  * The app ↔ host channel (FEAT-065 TASK-004): JSON-RPC 2.0 over a loopback
  * WebSocket at `/rpc`.
@@ -284,3 +294,64 @@ export const ArtifactUrlResult = z
   })
   .strict();
 export type ArtifactUrlResult = z.infer<typeof ArtifactUrlResult>;
+
+/** `command.invoke` params. */
+export const CommandInvokeParams = z
+  .object({
+    invocation: CommandInvocation.describe(
+      'What to run; its invocation_id is the idempotency key.',
+    ),
+    displayed_effective: DisplayedEffective.describe(
+      'What the composer showed (the drift baseline).',
+    ),
+  })
+  .strict()
+  .describe('Launch a run-class or mutating command as a detached worker.');
+export type CommandInvokeParams = z.infer<typeof CommandInvokeParams>;
+
+/** `command.invoke` result, and the summary every queue RPC returns. */
+export const InvocationSummary = z
+  .object({
+    invocation_id: z.string().min(1),
+    state: InvocationState,
+    execution_class: WorkerExecutionClass,
+    path: z.array(z.string().min(1)).describe('Command path, e.g. ["research"].'),
+    position: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe('1-based place in the queue, while queued.'),
+    run_id: z.string().min(1).nullable(),
+    queued_at: z.string().datetime({ offset: true }),
+    review: InvocationRecord.innerType().shape.review,
+    result: InvocationRecord.innerType().shape.result,
+  })
+  .strict()
+  .describe('One app invocation, as the queue shows it.');
+export type InvocationSummary = z.infer<typeof InvocationSummary>;
+
+/** Params naming one invocation. */
+export const InvocationIdParams = z
+  .object({ invocation_id: z.string().regex(INVOCATION_ID_PATTERN) })
+  .strict();
+export type InvocationIdParams = z.infer<typeof InvocationIdParams>;
+
+/** `queue.start` params. */
+export const QueueStartParams = z
+  .object({
+    invocation_id: z.string().regex(INVOCATION_ID_PATTERN),
+    acknowledge_duplicate_risk: z
+      .boolean()
+      .optional()
+      .describe('Required for an item whose earlier start is unknown: it may run twice.'),
+  })
+  .strict();
+export type QueueStartParams = z.infer<typeof QueueStartParams>;
+
+/** `queue.list` result. */
+export const QueueListResult = z
+  .object({ items: z.array(InvocationSummary) })
+  .strict()
+  .describe('Every app invocation, first-in first-out.');
+export type QueueListResult = z.infer<typeof QueueListResult>;

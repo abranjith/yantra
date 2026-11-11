@@ -88,6 +88,13 @@ later app feature (FEAT-066 to FEAT-071) builds on this host.
 > - **DEVIATION — record creation.** `create` gets uniqueness from `slots.lock` plus an existence
 >   check and publishes by rename, not by exclusive hard link (`wx`): on Windows a hard-linked file
 >   cannot be replaced by the next transition's rename for seconds (`EPERM`).
+> - **DEVIATION — run IDs.** Run IDs are minted inside each pipeline (`LocalRunStore`, ask and
+>   research), so threading a pre-allocated ID through every handler would touch every run command.
+>   Instead `reserve` sets `run_id` only for `resume` (the existing run). For other invocations the
+>   worker finds the run whose `lease.json` it owns (owner creation identity) and records it with
+>   `markRunning(id, run_id)`; `command.invoke` returns `run_id: null` until then.
+> - **DEVIATION — cancelling `spawning`.** The table has no `spawning → discarded`, so cancelling a
+>   spawning item moves it to `never_started`; the worker's claim is refused either way.
 > - **No-Host requests.** Node's HTTP parser answers a request without `Host` with 400 before any
 >   route runs; that is the refusal for that case (the guard's 421 covers every wrong `Host`).
 
@@ -1113,7 +1120,7 @@ event}` to each window from its own `from_seq`, deduplicating by `seq`.
 - [x] TASK-012: Build and embed `apps/web` into the CLI, with the build ID (M1)
 - [x] TASK-013: Localhost security suite (merge gate) and the no-third-party-request check (M1)
 - [x] TASK-014: Launch ownership core: invocation records, slot lock, reservation and worker claim (M2)
-- [ ] TASK-015: Supervisor: `command.invoke`, the queue, worker spawn, cancel and results (M2)
+- [x] TASK-015: Supervisor: `command.invoke`, the queue, worker spawn, cancel and results (M2)
 - [ ] TASK-016: Host-start recovery, run reattach and `run.subscribe` relay (M2)
 - [ ] TASK-017: Queue drift review (D13)
 - [ ] TASK-018: Attendance relay (D5) and idle exit (M2)
