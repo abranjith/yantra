@@ -1072,7 +1072,7 @@ event}` to each window from its own `from_seq`, deduplicating by `seq`.
 - [x] TASK-003: Sessions: launch codes, `POST /session`, per-window capabilities and expiry (M1)
 - [x] TASK-004: WebSocket JSON-RPC 2.0 endpoint with `auth`, limits and the build-ID handshake (M1)
 - [x] TASK-005: Host entry, control socket, host log and `yantra ui --print` / `--json` (M1)
-- [ ] TASK-006: Chrome `--app` window launcher and the no-Chromium path (M1)
+- [x] TASK-006: Chrome `--app` window launcher and the no-Chromium path (M1)
 - [ ] TASK-007: In-process reads (`read.<name>`) with cursor pagination (M1)
 - [ ] TASK-008: Change detection: `runs.subscribe` without reloads (M1)
 - [ ] TASK-009: Preferences `ui.theme` and `ui.surfaces` (M1)

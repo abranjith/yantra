@@ -9,7 +9,7 @@
     },
     {
       "path": "apps/cli/src/commands/ui.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
@@ -21,13 +21,13 @@
     },
     {
       "path": "apps/cli/src/ui-host.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
     {
       "path": "apps/cli/src/ui/host/control-socket.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
@@ -39,13 +39,13 @@
     },
     {
       "path": "apps/cli/src/ui/host/host-log.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
     {
       "path": "apps/cli/src/ui/host/host-runtime.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
@@ -81,13 +81,13 @@
     },
     {
       "path": "apps/cli/src/ui/window-launcher.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
     {
       "path": "apps/cli/tests/commands/ui.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
@@ -99,19 +99,19 @@
     },
     {
       "path": "apps/cli/tests/fixtures/cli-surface/errors/ui.excess-arguments.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
     {
       "path": "apps/cli/tests/fixtures/cli-surface/errors/ui.unknown-option.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
     {
       "path": "apps/cli/tests/fixtures/cli-surface/help/w160/help__ui.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
@@ -123,13 +123,13 @@
     },
     {
       "path": "apps/cli/tests/fixtures/cli-surface/help/w160/ui.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
     {
       "path": "apps/cli/tests/fixtures/cli-surface/help/w80/help__ui.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
@@ -141,7 +141,7 @@
     },
     {
       "path": "apps/cli/tests/fixtures/cli-surface/help/w80/ui.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
@@ -159,13 +159,13 @@
     },
     {
       "path": "apps/cli/tests/ui/host/control-socket.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
     {
       "path": "apps/cli/tests/ui/host/host-log.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
@@ -204,6 +204,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "apps/cli/tests/ui/window-launcher.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
     },
     {
       "path": "docs/protocol-spec.md",
@@ -260,6 +266,12 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/core/tests/browser/app-window-discovery.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
       "path": "packages/protocol/generated/json-schema/host-lock.json",
       "status": "A",
       "role": "implement",
@@ -273,7 +285,7 @@
     },
     {
       "path": "packages/protocol/src/commands/entries/app.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
