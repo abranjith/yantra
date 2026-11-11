@@ -3,43 +3,55 @@
   "files": [
     {
       "path": "apps/cli/src/ui/host/errors.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/src/ui/host/host.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/src/ui/host/request-guard.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
-      "path": "apps/cli/src/ui/host/static-assets.ts",
+      "path": "apps/cli/src/ui/host/sessions.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/cli/src/ui/host/static-assets.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/ui/host/request-guard.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
-      "path": "apps/cli/tests/ui/host/static-assets.spec.ts",
+      "path": "apps/cli/tests/ui/host/sessions.spec.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/static-assets.spec.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/ui/host/support.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
