@@ -38,6 +38,12 @@ import { spawnDetachedWorker } from '../../worker/spawn.js';
 import { ArtifactUrls, registerArtifactUrls } from './artifact-urls.js';
 import { ChangeFeed, openDefaultSources, registerChangeFeed } from './change-feed.js';
 import { ControlSocketServer } from './control-socket.js';
+import {
+  driftReview,
+  registerDriftReview,
+  settingsResolver,
+  type EffectiveResolver,
+} from './drift-review.js';
 import { HostStartError } from './errors.js';
 import { AppHost, SILENT_HOST_LOGGER, type HostLogger, type HostRoute } from './host.js';
 import { registerReads } from './reads.js';
@@ -61,6 +67,8 @@ export interface HostRuntimeDeps {
   readonly now?: () => Date;
   /** Extra HTTP routes (artifact URLs, TASK-010). */
   readonly routes?: readonly HostRoute[];
+  /** Re-resolves effective settings for drift review (tests). */
+  readonly resolveEffective?: EffectiveResolver;
   /** Liveness probe for recovery (tests). */
   readonly probe?: ProcessLivenessProbe;
   /** Overrides for the supervisor (tests: a fake spawner, a stepped clock). */
@@ -167,6 +175,7 @@ export async function startHostRuntime(deps: HostRuntimeDeps): Promise<RunningHo
     const artifacts = new ArtifactUrls({ sessions, runsRoot: runsRoot(), logger });
     registerArtifactUrls(methods, artifacts);
     const store = new FileInvocationStore();
+    const resolveEffective = deps.resolveEffective ?? settingsResolver(deps.env ?? {});
     const relay = new RunRelay({ runsRoot: runsRoot(), logger });
     relay.register(methods);
     cleanups.push(() => {
@@ -186,9 +195,15 @@ export async function startHostRuntime(deps: HostRuntimeDeps): Promise<RunningHo
       },
       logger,
       now,
+      drift: driftReview(resolveEffective),
       ...(deps.supervisor ?? {}),
     });
     supervisor.register(methods);
+    registerDriftReview(methods, {
+      store,
+      resolve: resolveEffective,
+      after: async (record) => await supervisor.reviewed(record),
+    });
     cleanups.push(() => {
       supervisor.stopLoop();
     });

@@ -62,6 +62,12 @@
       "task": "TASK-005"
     },
     {
+      "path": "apps/cli/src/ui/host/drift-review.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-017"
+    },
+    {
       "path": "apps/cli/src/ui/host/errors.ts",
       "status": "A",
       "role": "implement",
@@ -93,7 +99,7 @@
     },
     {
       "path": "apps/cli/src/ui/host/recovery.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-016"
     },
@@ -111,7 +117,7 @@
     },
     {
       "path": "apps/cli/src/ui/host/run-relay.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-016"
     },
@@ -248,6 +254,12 @@
       "task": "TASK-005"
     },
     {
+      "path": "apps/cli/tests/ui/host/drift-review.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-017"
+    },
+    {
       "path": "apps/cli/tests/ui/host/embed.spec.ts",
       "status": "A",
       "role": "implement",
@@ -267,7 +279,7 @@
     },
     {
       "path": "apps/cli/tests/ui/host/recovery.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-016"
     },
@@ -291,7 +303,7 @@
     },
     {
       "path": "apps/cli/tests/ui/host/run-relay.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-016"
     },

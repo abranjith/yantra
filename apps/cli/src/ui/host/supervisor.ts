@@ -221,6 +221,13 @@ export class Supervisor {
     return this.current(record);
   }
 
+  /** Announces a record changed by review, runs the queue, and returns its summary. */
+  public async reviewed(record: InvocationRecord): Promise<InvokeResult> {
+    this.announce(record);
+    await this.dequeue();
+    return this.current(record);
+  }
+
   /** Runs the dequeue loop once (concurrent calls coalesce). */
   public async dequeue(): Promise<void> {
     if (this.dequeuing !== null) {

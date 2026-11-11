@@ -311,6 +311,8 @@ export class FileInvocationStore {
     options: {
       readonly acknowledgeDuplicateRisk?: boolean;
       readonly argv?: readonly string[];
+      /** A new drift baseline (the user accepted the current values). */
+      readonly displayedEffective?: InvocationRecord['displayed_effective'];
     } = {},
   ): Promise<InvocationRecord> {
     return this.withLock(async () => {
@@ -326,6 +328,9 @@ export class FileInvocationStore {
         ...(options.argv === undefined
           ? {}
           : { invocation: { ...record.invocation, argv: [...options.argv] } }),
+        ...(options.displayedEffective === undefined
+          ? {}
+          : { displayed_effective: options.displayedEffective }),
       });
     });
   }
