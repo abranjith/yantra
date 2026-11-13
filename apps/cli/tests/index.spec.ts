@@ -55,7 +55,7 @@ describe('@no-llm cli smoke', () => {
     const program = buildProgram();
 
     expect(program.name()).toBe('yantra');
-    expect(program.commands.length).toBe(27);
+    expect(program.commands.length).toBe(28);
     expect(writeSpy).not.toHaveBeenCalled();
   });
 

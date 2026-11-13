@@ -103,7 +103,15 @@ function inProcessSpawn(overrides: { assetsRoot?: string; version?: string } = {
       (error: unknown) => {
         exited = true;
         probe.set(identity, 'dead');
-        if (error instanceof HostStartError) {
+        if (!(error instanceof HostStartError)) {
+          failures.set(identity.pid, {
+            pid: identity.pid,
+            code: 'start_failed',
+            message: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+            remediation: 'test diagnostic',
+            at: new Date().toISOString(),
+          });
+        } else {
           failures.set(identity.pid, {
             pid: identity.pid,
             code: error.code,
@@ -131,6 +139,8 @@ function deps(overrides: Partial<UiCommandDeps> = {}): UiCommandDeps {
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, Math.min(ms, 20))),
     now: Date.now,
     yantraVersion: '1.0.0',
+    // In-process hosts share the test's CPU; the 10 s product budget is too tight here.
+    readyTimeoutMs: 30_000,
     ...overrides,
   };
 }
@@ -159,6 +169,9 @@ afterEach(async () => {
   rmSync(home, { recursive: true, force: true });
   cleanupTempDirs();
 });
+
+// Real in-process hosts: generous under full-suite load.
+vi.setConfig({ testTimeout: 30_000 });
 
 const URL_PATTERN = /^http:\/\/127\.0\.0\.1:\d+\/#code=[A-Za-z0-9_-]{43}\n$/u;
 
@@ -238,7 +251,10 @@ describe('concurrency', () => {
     // Assert
     expect(a.exitCode).toBe(0);
     expect(b.exitCode).toBe(0);
-    expect(hosts).toHaveLength(1);
+    // The host reports ready (markReady) before its runtime promise settles.
+    await vi.waitFor(() => {
+      expect(hosts).toHaveLength(1);
+    });
     const ra = UiOpenResult.parse(JSON.parse(outA.text()));
     const rb = UiOpenResult.parse(JSON.parse(outB.text()));
     expect(ra.hostPid).toBe(rb.hostPid);

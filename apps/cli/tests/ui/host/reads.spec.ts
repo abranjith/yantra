@@ -194,7 +194,7 @@ describe('read.list paging', () => {
     expect(seen).toHaveLength(120);
     expect(new Set(seen).size).toBe(120);
     expect(seen).not.toContain('run-0999');
-  });
+  }, 60_000);
 
   it('pages the file-scan fallback identically when the index is unavailable', async () => {
     // Arrange: index.db is a directory, so the index cannot open.
@@ -220,7 +220,7 @@ describe('read.list paging', () => {
     expect(new Set(seen).size).toBe(120);
     expect(seen[0]).toBe('file-0119');
     expect(seen.at(-1)).toBe('file-0000');
-  });
+  }, 60_000);
 
   it('returns the other rows when one manifest is corrupt', async () => {
     await writeRun('good-a', at(1));

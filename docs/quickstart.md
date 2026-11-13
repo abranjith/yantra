@@ -183,5 +183,21 @@ node apps/cli/dist/bin.js open --print
 ```
 
 `open --print` resolves the latest run's Brief path without launching an
-application. For browser tasks, workflows, scheduling, all artifact choices,
-and the complete command surface, continue to the [usage guide](usage.md).
+application.
+
+## Open the app
+
+To use Yantra in its own window instead of the terminal, run:
+
+```console
+node apps/cli/dist/bin.js ui
+```
+
+This starts a local app host on `127.0.0.1` if one is not running and opens the
+window in Google Chrome or Microsoft Edge, otherwise in the browser Yantra uses
+for its runs. If none is found, the command prints the URL for you to open
+yourself and exits `3`; `ui --print` always just prints it. See
+[Open the Yantra app](usage.md#open-the-yantra-app).
+
+For browser tasks, workflows, scheduling, all artifact choices, and the
+complete command surface, continue to the [usage guide](usage.md).

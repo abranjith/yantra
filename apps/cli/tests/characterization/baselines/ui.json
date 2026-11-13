@@ -1,0 +1,6 @@
+{
+  "stdout": "Usage: yantra ui [options]\n\nOpen the Yantra app in a browser window\n\nOptions:\n  --print     print the app URL instead of opening a window (default: false)\n  --json      emit JSON describing the opened app (default: false)\n  -h, --help  display help for command\n",
+  "stderr": "",
+  "exitCode": 0,
+  "tree": {}
+}

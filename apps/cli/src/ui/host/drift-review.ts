@@ -33,9 +33,6 @@ import {
 } from '@yantra/protocol';
 import { z } from 'zod';
 
-import { createTerminalContext } from '../../adapters/terminal/terminal-adapter.js';
-import { executeCommand } from '../../execute.js';
-
 import { RpcError, type RpcMethodRegistry } from './rpc-server.js';
 
 /** What the current environment resolves an invocation to. */
@@ -77,6 +74,9 @@ export function settingsResolver(env: Readonly<NodeJS.ProcessEnv>): EffectiveRes
       content.set(item.path, await sha256(item.path));
     if (!parsed.isOk) return { settings: [], content };
     let settings: readonly ReceiptSetting[] = [];
+    // Loaded on first use: the command surface would delay the host becoming ready.
+    const { createTerminalContext } = await import('../../adapters/terminal/terminal-adapter.js');
+    const { executeCommand } = await import('../../execute.js');
     const context = createTerminalContext({
       env: { ...env },
       cwd: invocation.cwd,

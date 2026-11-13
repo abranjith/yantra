@@ -259,11 +259,18 @@ export async function startHostRuntime(deps: HostRuntimeDeps): Promise<RunningHo
     cleanups.push(() => control.close());
 
     const record = await lock.markReady({ port, control_socket: control.address });
+    // A failed recovery (a busy slot lock, a damaged record) must not keep the
+    // host from serving: it is logged, and the next start or cancel retries it.
     await recoverHost({
       store,
       probe: deps.probe ?? new NodeProcessLivenessProbe(),
       runsRoot: runsRoot(),
       logger,
+    }).catch((error: unknown) => {
+      logger.warn(
+        { reason: error instanceof Error ? error.name : 'unknown' },
+        'host recovery failed',
+      );
     });
     supervisor.start();
     void supervisor.dequeue();

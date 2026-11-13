@@ -170,6 +170,41 @@
       "task": "TASK-015"
     },
     {
+      "path": "apps/cli/tests/boundaries/handler-purity.spec.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "apps/cli/tests/characterization/baselines/init.anthropic.json",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "apps/cli/tests/characterization/baselines/init.defaults.json",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "apps/cli/tests/characterization/baselines/init.ollama.json",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "apps/cli/tests/characterization/baselines/profile.defaults.json",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "apps/cli/tests/characterization/baselines/ui.json",
+      "status": "U",
+      "role": "implement"
+    },
+    {
+      "path": "apps/cli/tests/characterization/registry-parity.spec.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
       "path": "apps/cli/tests/commands/prefs-ui.spec.ts",
       "status": "A",
       "role": "implement",
@@ -234,6 +269,11 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/index.spec.ts",
+      "status": "M",
+      "role": "implement"
     },
     {
       "path": "apps/cli/tests/registry/cli-surface.spec.ts",
@@ -357,19 +397,19 @@
     },
     {
       "path": "apps/cli/tests/ui/launch-ownership/fixtures/fixture-host.mjs",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-019"
     },
     {
       "path": "apps/cli/tests/ui/launch-ownership/fixtures/fixture-worker.mjs",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-019"
     },
     {
       "path": "apps/cli/tests/ui/launch-ownership/launch-ownership.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-019"
     },
@@ -402,6 +442,16 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-015"
+    },
+    {
+      "path": "apps/cli/vitest.config.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "apps/cli/vitest.process.config.ts",
+      "status": "U",
+      "role": "implement"
     },
     {
       "path": "apps/web/index.html",
@@ -578,14 +628,39 @@
       "task": "TASK-011"
     },
     {
+      "path": "docs/architecture.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/configuration.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/yantra-app.md",
+      "status": "U",
+      "role": "implement"
+    },
+    {
       "path": "docs/protocol-spec.md",
       "status": "M",
       "role": "implement",
       "task": "TASK-001"
     },
     {
+      "path": "docs/quickstart.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/usage.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
       "path": "e2e/app-host-m2.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-019"
     },
@@ -798,9 +873,15 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-011"
+    },
+    {
+      "path": "README.md",
+      "status": "M",
+      "role": "implement"
     }
   ],
   "excluded": [
+    ".spec-lite/feature-summary.md",
     ".spec-lite/features/FEAT-065-app_host_yantra_ui/changeset.json",
     ".spec-lite/features/FEAT-065-app_host_yantra_ui/spec.md",
     ".spec-lite/plan_ui.md"

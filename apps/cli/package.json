@@ -21,10 +21,11 @@
   ],
   "scripts": {
     "build": "tsc -b tsconfig.build.json && node scripts/embed-web.mjs",
-    "test": "vitest run",
+    "test": "vitest run && vitest run --config vitest.process.config.ts",
     "lint": "eslint src --max-warnings=0",
     "typecheck": "tsc --noEmit",
-    "clean": "rimraf dist .turbo --glob \"*.tsbuildinfo\""
+    "clean": "rimraf dist .turbo --glob \"*.tsbuildinfo\"",
+    "test:process": "vitest run --config vitest.process.config.ts"
   },
   "dependencies": {
     "@yantra/agent": "workspace:*",

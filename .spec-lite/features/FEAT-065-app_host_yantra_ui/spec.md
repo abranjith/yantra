@@ -95,6 +95,11 @@ later app feature (FEAT-066 to FEAT-071) builds on this host.
 >   `markRunning(id, run_id)`; `command.invoke` returns `run_id: null` until then.
 > - **DEVIATION — cancelling `spawning`.** The table has no `spawning → discarded`, so cancelling a
 >   spawning item moves it to `never_started`; the worker's claim is refused either way.
+> - **Running the process suites.** `tests/ui/security` and `tests/ui/launch-ownership` start real
+>   host and worker processes; under the parallel run they missed real readiness deadlines. They
+>   run one file at a time from `apps/cli/vitest.process.config.ts`, and `pnpm --filter @yantra/cli
+test` runs both configs. Their Verify commands therefore need
+>   `npx vitest run --config vitest.process.config.ts <path>`.
 > - **No-Host requests.** Node's HTTP parser answers a request without `Host` with 400 before any
 >   route runs; that is the refusal for that case (the guard's 421 covers every wrong `Host`).
 

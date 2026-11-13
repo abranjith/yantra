@@ -42,6 +42,8 @@ const rows: readonly (readonly string[])[] = [
   ['lint', 'missing.yaml'],
   ['browser', 'list'],
   ['daemon', 'start', '--foreground'],
+  // FEAT-065: an exemption (D15), so only the worker refusal is asserted.
+  ['ui', '--print'],
 ];
 const leaves = COMMAND_REGISTRY.commands.filter((entry) => entry.kind === 'leaf');
 const entryFor = (argv: readonly string[]) =>

@@ -34,11 +34,10 @@ import {
 import * as Protocol from '@yantra/protocol';
 import { z } from 'zod';
 
-import { runWorkerInvocation } from '../../adapters/worker/worker-adapter.js';
-import { buildListJson, type ListCursorKey } from '../../commands/list.js';
-import { listEnvelope } from '../../render/json.js';
-import { makeStderrLogger } from '../../runtime.js';
-import { UnattendedChannel } from '../../worker/entry.js';
+// The command surface is loaded on the first read, not at host start: it is
+// most of the CLI's module graph and would delay the host becoming ready.
+import type { runWorkerInvocation } from '../../adapters/worker/worker-adapter.js';
+import type { buildListJson, ListCursorKey } from '../../commands/list.js';
 
 import { RpcError, type RpcMethodRegistry } from './rpc-server.js';
 
@@ -239,7 +238,10 @@ async function runRead(
       'Use command.invoke for commands that change state.',
     );
   }
-  const outcome = await (deps.run ?? runWorkerInvocation)(
+  const run =
+    deps.run ?? (await import('../../adapters/worker/worker-adapter.js')).runWorkerInvocation;
+  const { UnattendedChannel } = await import('../../worker/entry.js');
+  const outcome = await run(
     { invocation_id: invocationId, path: [...spec.path], argv, cwd: deps.cwd },
     new UnattendedChannel(),
     deps.env,
@@ -275,7 +277,10 @@ async function runList(params: ReadParams, deps: ReadDeps): Promise<ReadResult> 
     throw new RpcError('invalid_params', 'workflow and status take string values.');
   }
   const before = params.cursor === undefined ? undefined : decodeCursor(params.cursor);
-  const listed = await (deps.buildList ?? buildListJson)(
+  const buildList = deps.buildList ?? (await import('../../commands/list.js')).buildListJson;
+  const { makeStderrLogger } = await import('../../runtime.js');
+  const { listEnvelope } = await import('../../render/json.js');
+  const listed = await buildList(
     {
       target,
       limit: clampLimit(params.limit),

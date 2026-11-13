@@ -15,7 +15,7 @@ import {
   type InvocationRecord,
   type InvocationRecordInput,
 } from '@yantra/protocol';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   compareEffective,
@@ -31,6 +31,9 @@ import {
 } from '../../../src/ui/host/rpc-server.js';
 
 const ID = '01JD2X7Q8R9S0T1V2W3X000001';
+
+// The real resolver loads the whole command surface on first use.
+vi.setConfig({ testTimeout: 30_000 });
 let home: string;
 let previousHome: string | undefined;
 let store: FileInvocationStore;

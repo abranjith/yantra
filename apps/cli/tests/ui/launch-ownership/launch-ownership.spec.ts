@@ -66,7 +66,8 @@ function startHost(fault = ''): Promise<Started> {
     child.stdout?.on('data', (chunk: Buffer) => {
       buffer += chunk.toString();
       for (const line of buffer.split('\n').slice(0, -1)) {
-        const parsed = JSON.parse(line) as { ready?: boolean; port?: number };
+        const parsed = JSON.parse(line) as { ready?: boolean; port?: number; worker?: number };
+        if (parsed.worker !== undefined) workers.push(parsed.worker);
         if (parsed.ready === true && parsed.port !== undefined)
           resolveReady({ child, port: parsed.port, exited });
       }
@@ -88,14 +89,30 @@ async function window(port: number): Promise<TestSocket> {
 }
 
 function invoke(socket: TestSocket, id: string, path: string[], argv: string[]) {
-  return socket.call(
-    'command.invoke',
-    {
+  const requestId = `invoke-${id}-${Math.random()}`;
+  socket.send({
+    jsonrpc: '2.0',
+    method: 'command.invoke',
+    params: {
       invocation: { invocation_id: id, path, argv, cwd: home },
       displayed_effective: { settings: [], content: [] },
     },
-    `invoke-${id}-${Math.random()}`,
-  );
+    id: requestId,
+  });
+  // Spawning goes through a trampoline; under full-suite load that is slow.
+  return socket.reply(requestId, 30_000);
+}
+
+/** Every worker this test's hosts started (from their `{"worker": pid}` lines). */
+const workers: number[] = [];
+
+function alive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function markersFor(id: string): string[] {
@@ -159,13 +176,17 @@ beforeEach(() => {
 afterEach(async () => {
   if (observer !== null) clearInterval(observer);
   for (const host of hosts) host.kill();
-  await new Promise((done) => setTimeout(done, 300));
+  // Detached workers outlive their host by design; let them finish before cleanup.
+  for (let i = 0; i < 100 && workers.some(alive); i++) {
+    await new Promise((done) => setTimeout(done, 100));
+  }
+  workers.length = 0;
   if (previousHome === undefined) delete process.env.YANTRA_HOME;
   else process.env.YANTRA_HOME = previousHome;
   resetPathCache();
   rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   cleanupTempDirs();
-});
+}, 30_000);
 
 describe('@no-llm launch ownership', () => {
   it('runs simultaneous submissions once each, never more than two at a time', async () => {
