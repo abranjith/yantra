@@ -38,3 +38,19 @@ export {
   type CitationRef,
   type SafeMarkdownProps,
 } from './SafeMarkdown.js';
+export { ACTION_NOT_RECORDED, ActionEvidence, type ActionEvidenceProps } from './ActionEvidence.js';
+export {
+  EvidencePane,
+  SourceEvidence,
+  type EvidenceBackReference,
+  type EvidencePaneProps,
+  type SourceEvidenceProps,
+} from './EvidencePane.js';
+export {
+  PROTECTED_MASK,
+  PROTECTED_REASON_TEXT,
+  ProtectedValue,
+  type ProtectedReason,
+  type ProtectedValueProps,
+  type ProtectedVerdict,
+} from './ProtectedValue.js';

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -127,13 +127,11 @@ function components(citations: CitationContext | undefined): Components {
 
 /** See the module comment. */
 export function SafeMarkdown({ children, citations, className }: SafeMarkdownProps): ReactNode {
+  // Stable per citation context: new component functions would remount every chip.
+  const mapped = useMemo(() => components(citations), [citations]);
   return (
     <div className={className ?? 'safe-markdown flex flex-col gap-3 text-ink'}>
-      <Markdown
-        skipHtml
-        remarkPlugins={[remarkGfm, remarkCitations]}
-        components={components(citations)}
-      >
+      <Markdown skipHtml remarkPlugins={[remarkGfm, remarkCitations]} components={mapped}>
         {children}
       </Markdown>
     </div>

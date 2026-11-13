@@ -151,14 +151,17 @@ interface Selection {
 interface EvidenceContextValue {
   readonly index: EvidenceIndex;
   readonly selected: Selection | null;
-  select(ref: CitationRef, origin: HTMLElement | null): void;
-  close(): void;
+  readonly select: (ref: CitationRef, origin: HTMLElement | null) => void;
+  readonly close: () => void;
   /** The capture file an action's capture link asked the gallery to show. */
   readonly selectedCapture: string | null;
-  showCapture(path: string): void;
+  readonly showCapture: (path: string) => void;
   readonly citations: CitationContext;
   /** Chips for a citation list and action list, in that order. */
-  chips(citations: readonly number[] | undefined, actions?: readonly string[]): ReactNode;
+  readonly chips: (
+    citations: readonly number[] | undefined,
+    actions?: readonly string[],
+  ) => ReactNode;
 }
 
 const EvidenceContext = createContext<EvidenceContextValue | null>(null);
@@ -187,7 +190,10 @@ export function EvidenceProvider({
     if (origin?.isConnected === true) origin.focus();
   }, []);
 
-  const value = useMemo<EvidenceContextValue>(() => {
+  // The chips and the citation context depend only on the document, never on
+  // the selection: a selection change must not remount the chips, or focus
+  // could not return to the one that opened the pane.
+  const stable = useMemo(() => {
     const chip = (ref: CitationRef): ReactNode => (
       <CitationChip
         key={evidenceKey(ref)}
@@ -203,29 +209,30 @@ export function EvidenceProvider({
       resolves: (ref) => (ref.kind === 'source' ? index.sources.has(ref.n) : index.actionTokens),
       render: chip,
     };
-    return {
-      index,
-      selected,
-      select,
-      close,
-      selectedCapture,
-      showCapture: (path: string) => {
-        setSelectedCapture(path);
-        document.querySelector(`[data-capture="${CSS.escape(path)}"]`)?.scrollIntoView?.({
-          block: 'nearest',
-        });
-      },
-      citations,
-      chips: (sourceNumbers, actionIds) => (
-        <>
-          {(sourceNumbers ?? [])
-            .filter((n) => index.sources.has(n))
-            .map((n) => chip({ kind: 'source', n }))}
-          {index.actionTokens ? (actionIds ?? []).map((id) => chip({ kind: 'action', id })) : null}
-        </>
-      ),
+    const chips = (
+      sourceNumbers: readonly number[] | undefined,
+      actionIds?: readonly string[],
+    ): ReactNode => (
+      <>
+        {(sourceNumbers ?? [])
+          .filter((n) => index.sources.has(n))
+          .map((n) => chip({ kind: 'source', n }))}
+        {index.actionTokens ? (actionIds ?? []).map((id) => chip({ kind: 'action', id })) : null}
+      </>
+    );
+    const showCapture = (path: string): void => {
+      setSelectedCapture(path);
+      document.querySelector(`[data-capture="${CSS.escape(path)}"]`)?.scrollIntoView?.({
+        block: 'nearest',
+      });
     };
-  }, [index, selected, select, close, selectedCapture]);
+    return { citations, chips, showCapture };
+  }, [index, select]);
+
+  const value = useMemo<EvidenceContextValue>(
+    () => ({ index, selected, select, close, selectedCapture, ...stable }),
+    [index, selected, select, close, selectedCapture, stable],
+  );
 
   return <EvidenceContext.Provider value={value}>{children}</EvidenceContext.Provider>;
 }

@@ -6,14 +6,17 @@
 
 import type { ReactNode } from 'react';
 
+import { ActionEvidence } from '../instruments/ActionEvidence.js';
 import { CaptureGallery, type CaptureItem } from '../instruments/CaptureGallery.js';
 import { CitationChip } from '../instruments/CitationChip.js';
 import { ConditionTable } from '../instruments/ConditionTable.js';
+import { EvidencePane, SourceEvidence } from '../instruments/EvidencePane.js';
 import {
   DISPLAYED_STATE_LABELS,
   OUTCOME_WORDS,
   OutcomeBadge,
 } from '../instruments/OutcomeBadge.js';
+import { ProtectedValue } from '../instruments/ProtectedValue.js';
 import { RequirementList } from '../instruments/RequirementList.js';
 import { SafeMarkdown, type CitationContext } from '../instruments/SafeMarkdown.js';
 
@@ -167,6 +170,55 @@ function CaptureSheet(): ReactNode {
   );
 }
 
+function EvidenceSheet(): ReactNode {
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <EvidencePane
+        heading="Source 2"
+        onClose={NOOP}
+        backReferences={[
+          { targetId: 'finding-1', label: 'Finding 1: The Trail X has the longest range' },
+        ]}
+      >
+        <SourceEvidence
+          source={{
+            n: 2,
+            url: 'https://source-2.example.com/page',
+            final_url: null,
+            host: 'source-2.example.com',
+            title: 'Range test',
+            excerpt: 'The Trail X reaches 120 km on one charge.',
+            fetched_at: '2026-07-01T10:00:00.000Z',
+            published_at: null,
+          }}
+        />
+      </EvidencePane>
+      <EvidencePane heading="Action A1" onClose={NOOP}>
+        <ActionEvidence
+          action={{
+            id: 'A1',
+            kind: 'fill',
+            label: 'Password',
+            label_origin: 'explicit',
+            ref: 'e12',
+            epoch: 3,
+            call_id: 'call-7',
+            host: 'shop.example',
+            verification: { withheld: { reason: 'password', verdict: 'unchecked' } },
+          }}
+        />
+      </EvidencePane>
+      <EvidencePane heading="Action A9" onClose={NOOP}>
+        <ActionEvidence action={null} />
+      </EvidencePane>
+      <div className="flex flex-col gap-2">
+        <ProtectedValue reason="password" verdict="exact" />
+        <ProtectedValue reason="stored_secret" />
+      </div>
+    </div>
+  );
+}
+
 /** The instrument entries, appended to the gallery. */
 export const INSTRUMENT_ENTRIES: readonly GalleryEntry[] = [
   {
@@ -196,5 +248,12 @@ export const INSTRUMENT_ENTRIES: readonly GalleryEntry[] = [
     primitive: null,
     render: () => <CaptureSheet />,
     interactive: false,
+  },
+  {
+    id: 'instrument-evidence',
+    title: 'EvidencePane, ActionEvidence and ProtectedValue',
+    primitive: null,
+    render: () => <EvidenceSheet />,
+    interactive: true,
   },
 ];

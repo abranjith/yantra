@@ -28,6 +28,7 @@ import {
   indexBrief,
   indexSources,
 } from '../features/run-result/EvidenceProvider.js';
+import { EvidenceSide } from '../features/run-result/EvidenceSide.js';
 import { SlotState } from '../features/run-result/SlotState.js';
 import { TemplatedDocument } from '../features/run-result/TemplatedDocument.js';
 import { RpcCallError } from '../host/rpc-client.js';
@@ -108,11 +109,18 @@ export function DocumentRegion({ view }: { readonly view: RunResultView }): Reac
   }
   return (
     <EvidenceProvider index={index}>
-      {document.kind === 'brief' ? (
-        <BriefDocument brief={document.slot.value} runId={view.run_id} />
-      ) : (
-        <TemplatedDocument report={document.slot.value} />
-      )}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="min-w-0">
+          {document.kind === 'brief' ? (
+            <BriefDocument brief={document.slot.value} runId={view.run_id} />
+          ) : (
+            <TemplatedDocument report={document.slot.value} />
+          )}
+        </div>
+        <div className="lg:sticky lg:top-4 lg:self-start">
+          <EvidenceSide />
+        </div>
+      </div>
     </EvidenceProvider>
   );
 }
