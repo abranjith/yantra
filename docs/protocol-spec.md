@@ -2895,6 +2895,64 @@ Example:
 "button"
 ```
 
+## RunArtifactExposure
+
+typed: only through a typed read (e.g. brief.json through read.run_result); view: through a bounded viewer; download: only as an attachment; denied: never served.
+
+Example:
+
+```json
+"typed"
+```
+
+## RunArtifactRegistry
+
+The public run-artifact allowlist, in match order.
+
+Example:
+
+```json
+"<value>"
+```
+
+## RunArtifactRegistryEntry
+
+One entry of the public run-artifact allowlist.
+
+| Field            | Description                                                                                                                                                        |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| id               | Stable entry name, e.g. `brief.json` or `screenshots`.                                                                                                             |
+| pattern          | Run-relative, forward-slash glob (`*` within a segment, `**` across segments).                                                                                     |
+| exposure         | typed: only through a typed read (e.g. brief.json through read.run_result); view: through a bounded viewer; download: only as an attachment; denied: never served. |
+| viewer           | The bounded viewer that opens the file; `none` when no viewer exists.                                                                                              |
+| media_type       | The only Content-Type the host may send for the entry.                                                                                                             |
+| inline_cap_bytes | Largest file a viewer may load whole; above it the item is too_large. Null: windowed, or never loaded inline.                                                      |
+| description      | What the file is, for generated docs and parity.                                                                                                                   |
+
+Example:
+
+```json
+{
+  "id": "<id>",
+  "pattern": "<pattern>",
+  "exposure": "<exposure>",
+  "viewer": "<viewer>",
+  "media_type": "<media_type>",
+  "inline_cap_bytes": "<inline_cap_bytes>",
+  "description": "<description>"
+}
+```
+
+## RunArtifactViewer
+
+The bounded viewer that opens the file; `none` when no viewer exists.
+
+Example:
+
+```json
+"brief"
+```
+
 ## RunChannelClientMessage
 
 A run-channel message from a client to the run owner.
@@ -3003,6 +3061,16 @@ Example:
   "extraction": "<extraction>",
   "capture": "<capture>"
 }
+```
+
+## RunId
+
+A run id, e.g. `20260511T091234Z-bank-statement-a7b3`; names `runs/<run_id>/`.
+
+Example:
+
+```json
+"<value>"
 ```
 
 ## RunLease

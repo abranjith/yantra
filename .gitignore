@@ -317,6 +317,8 @@ node_modules/
 coverage/
 dist/
 build/
+# The app build plugin is source, not output (FEAT-065).
+!apps/web/build/
 npm-debug.log*
 pnpm-debug.log*
 yarn-debug.log*

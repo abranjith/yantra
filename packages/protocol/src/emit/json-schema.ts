@@ -17,6 +17,7 @@ import { ExecutionReceiptSchema } from '../schemas/execution-receipt.js';
 import { ExtractionResultEnvelopeUnknown } from '../schemas/extraction.js';
 import { PlanSchema } from '../schemas/plan.js';
 import { LocatorChain, ValueRef } from '../schemas/refs.js';
+import { RunArtifactRegistry } from '../schemas/run-artifacts.js';
 import { RunChannelMessage, WorkerLaunch } from '../schemas/run-channel.js';
 import { RunEvent, RunEventRecord } from '../schemas/run-event.js';
 import { RunHealth } from '../schemas/run-health.js';
@@ -62,6 +63,7 @@ export const JSON_SCHEMA_ARTIFACTS: Record<string, { schema: z.ZodType<unknown>;
   'worker-launch.json': { schema: WorkerLaunch, name: 'WorkerLaunch' },
   'host-lock.json': { schema: HostLockRecord, name: 'HostLockRecord' },
   'invocation-record.json': { schema: InvocationRecord, name: 'InvocationRecord' },
+  'run-artifact-registry.json': { schema: RunArtifactRegistry, name: 'RunArtifactRegistry' },
 } as const;
 
 export type JsonSchemaArtifactName = keyof typeof JSON_SCHEMA_ARTIFACTS;

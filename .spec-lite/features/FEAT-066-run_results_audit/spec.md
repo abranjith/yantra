@@ -1030,7 +1030,7 @@ state}`.
 
 ## 8. State Tracking
 
-- [ ] TASK-001: Public-artifact allowlist and a gated artifact path end to end
+- [x] TASK-001: Public-artifact allowlist and a gated artifact path end to end
 - [ ] TASK-002: Ledger query with cursor pagination and filters (`read.list`), shared with `yantra list`
 - [ ] TASK-003: Ledger route with live updates and OutcomeBadge
 - [ ] TASK-004: Run-result read that fails per item (`read.run_result`)

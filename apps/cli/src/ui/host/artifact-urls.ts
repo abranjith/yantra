@@ -1,5 +1,6 @@
 /**
- * Signed artifact URLs `/a/<payload>.<mac>` (FEAT-065 TASK-010, plan §7).
+ * Signed artifact URLs `/a/<payload>.<mac>` (FEAT-065 TASK-010, plan §7),
+ * gated by the public-artifact allowlist (FEAT-066 TASK-001).
  *
  * `artifact.url {run_id, path}` signs a URL for one window:
  *
@@ -10,18 +11,38 @@
  *   restart invalidates every URL; rotating or expiring the window's
  *   capability does too.
  *
+ * Signing runs `resolvePublicArtifact` (core) first: the run id must be
+ * valid, the path must classify to a `view` or `download` entry of
+ * `RUN_ARTIFACT_REGISTRY`, and its `realpath` must stay inside the run
+ * directory. `typed` entries (`brief.json`, `document.json`) reach the app
+ * only through `read.run_result`.
+ *
  * `GET /a/<signed>` requires, in order: the exact Host (request guard), a
  * session cookie of window `w`, a constant-time MAC match, an unexpired `e`
- * and a live window. Then the path must pass the denylist (before any
- * filesystem read) and the public allowlist, and its `realpath` must stay
- * inside the run directory. Every refusal is the same 404, counted in the log.
+ * and a live window. Then it re-runs the gate, because the file may have
+ * changed since signing. The response carries the entry's registry media
+ * type and `nosniff`; `download` entries (every HTML file) are attachments;
+ * the body streams, so a file over its inline cap is never buffered. Every
+ * refusal is the same 404, counted in the log by reason code only.
  */
 
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { readFile, realpath, stat } from 'node:fs/promises';
-import { extname, isAbsolute, join, posix, relative } from 'node:path';
+import { createReadStream } from 'node:fs';
+import { posix } from 'node:path';
+import { pipeline } from 'node:stream/promises';
 
-import { ArtifactUrlParams, ArtifactUrlResult } from '@yantra/protocol';
+import {
+  ArtifactAccessError,
+  resolvePublicArtifact,
+  type ArtifactAccessCode,
+  type PublicArtifact,
+} from '@yantra/core';
+import {
+  ArtifactUrlParams,
+  ArtifactUrlResult,
+  RUN_ID_MAX_LENGTH,
+  type RunArtifactExposure,
+} from '@yantra/protocol';
 import { z } from 'zod';
 
 import { SILENT_HOST_LOGGER, type HostLogger, type HostRoute } from './host.js';
@@ -34,79 +55,45 @@ export const ARTIFACT_URL_TTL_MS = 5 * 60_000;
 /** URL prefix of signed artifacts. */
 export const ARTIFACT_PREFIX = '/a/';
 
-const RUN_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
+/** The exposures a signed URL may serve; `typed` files go through typed reads. */
+export const SIGNABLE_EXPOSURES: readonly RunArtifactExposure[] = ['view', 'download'];
 
-/** Which run files the app may fetch. FEAT-066 supplies the registry-backed policy. */
-export interface ArtifactPolicy {
-  /** True when `relativePath` (POSIX separators) is a public artifact. */
-  isPublic(relativePath: string): boolean;
+/** Why a request for an artifact was refused, as counted in the host log. */
+export type ArtifactRefusal = ArtifactAccessCode | 'method' | 'signature' | 'read';
+
+/** Resolves one public run file; injected in tests. */
+export type ArtifactResolver = (
+  runsRoot: string,
+  runId: string,
+  relPath: string,
+) => Promise<PublicArtifact>;
+
+/** The production resolver: the core gate, limited to {@link SIGNABLE_EXPOSURES}. */
+export const resolveSignableArtifact: ArtifactResolver = (runsRoot, runId, relPath) =>
+  resolvePublicArtifact(runsRoot, runId, relPath, { exposures: SIGNABLE_EXPOSURES });
+
+/** The RPC error a gate refusal becomes at signing time. */
+function signingError(error: ArtifactAccessError, path: string): RpcError {
+  switch (error.code) {
+    case 'invalid_run_id':
+      return new RpcError('invalid_params', 'The run ID is malformed.');
+    case 'not_found':
+      return new RpcError('not_found', `${path} does not exist in this run.`);
+    case 'too_large':
+      return new RpcError('too_large', `${path} is too large to open here.`);
+    case 'not_public':
+    case 'outside_run':
+      return new RpcError(
+        'not_allowed',
+        'That file is not an artifact the app can open.',
+        'Open the run directory from the terminal instead.',
+      );
+  }
 }
-
-/** Until FEAT-066: screenshots under `captures/` and `report.md`, nothing else. */
-export const DEFAULT_ARTIFACT_POLICY: ArtifactPolicy = {
-  isPublic: (path) =>
-    path === 'report.md' || /^captures\/(?:[^/]+\/)*[^/]+\.(?:png|jpe?g)$/iu.test(path),
-};
-
-const DENIED_NAMES: ReadonlySet<string> = new Set([
-  'lease.json',
-  'reconcile.lock',
-  'host.lock',
-  '.lock',
-  'decisions',
-  'invocations',
-  'profiles',
-  'chrome-profile',
-  'browser-profile',
-  'user-data',
-  'user-data-dir',
-]);
-
-/**
- * True when any segment is never served (§7): run leases and locks, decision
- * claims, temp files, sockets, the host lock, invocation records and browser
- * profiles. Checked before the allowlist, so a too-broad allowlist cannot
- * expose them.
- */
-export function isDenied(relativePath: string): boolean {
-  return relativePath.split('/').some((segment) => {
-    const lower = segment.toLowerCase();
-    return (
-      DENIED_NAMES.has(lower) ||
-      lower.endsWith('.tmp') ||
-      lower.endsWith('.sock') ||
-      lower.endsWith('.lock') ||
-      lower.endsWith('.mutex')
-    );
-  });
-}
-
-/** Normalizes a client path to a safe relative POSIX path, or null. */
-export function normalizeArtifactPath(path: string): string | null {
-  if (path.length === 0 || path.length > 512 || path.includes('\0') || path.includes('\\'))
-    return null;
-  if (path.startsWith('/') || isAbsolute(path) || /^[A-Za-z]:/u.test(path)) return null;
-  const segments = path.split('/');
-  if (segments.some((segment) => segment === '' || segment === '.' || segment === '..'))
-    return null;
-  return posix.join(...segments);
-}
-
-/** Content types served; anything not an image is an attachment. */
-export const ARTIFACT_CONTENT_TYPES: Readonly<Record<string, string>> = {
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.md': 'text/markdown; charset=utf-8',
-  '.html': 'text/html; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.txt': 'text/plain; charset=utf-8',
-  '.csv': 'text/csv; charset=utf-8',
-};
 
 const Payload = z
   .object({
-    r: z.string().regex(RUN_ID),
+    r: z.string().min(1).max(RUN_ID_MAX_LENGTH),
     p: z.string().min(1).max(512),
     w: z.string().min(1).max(64),
     e: z.number().int().positive(),
@@ -118,7 +105,8 @@ export interface ArtifactUrlDeps {
   readonly sessions: SessionStore;
   /** The runs directory (`runsRoot()`). */
   readonly runsRoot: string;
-  readonly policy?: ArtifactPolicy;
+  /** Defaults to {@link resolveSignableArtifact}. */
+  readonly resolve?: ArtifactResolver;
   readonly now?: () => number;
   /** The per-host-start key; defaults to 256 random bits. */
   readonly hostKey?: Buffer;
@@ -128,14 +116,15 @@ export interface ArtifactUrlDeps {
 /** Signs and serves artifact URLs; see the module comment. */
 export class ArtifactUrls {
   private readonly hostKey: Buffer;
-  private readonly policy: ArtifactPolicy;
+  private readonly resolver: ArtifactResolver;
   private readonly now: () => number;
   private readonly logger: HostLogger;
   private denials = 0;
+  private readonly reasons: Partial<Record<ArtifactRefusal, number>> = {};
 
   public constructor(private readonly deps: ArtifactUrlDeps) {
     this.hostKey = deps.hostKey ?? randomBytes(32);
-    this.policy = deps.policy ?? DEFAULT_ARTIFACT_POLICY;
+    this.resolver = deps.resolve ?? resolveSignableArtifact;
     this.now = deps.now ?? Date.now;
     this.logger = deps.logger ?? SILENT_HOST_LOGGER;
   }
@@ -145,11 +134,20 @@ export class ArtifactUrls {
     return this.denials;
   }
 
+  /** Refusals so far, by reason code. */
+  public get denialsByReason(): Readonly<Partial<Record<ArtifactRefusal, number>>> {
+    return { ...this.reasons };
+  }
+
   /**
-   * Signs `/a/…` for `windowId`, or throws `not_allowed` for a path the policy
-   * does not publish.
+   * Signs `/a/…` for `windowId` after the allowlist gate, or throws an
+   * {@link RpcError} saying why the file cannot be opened.
    */
-  public sign(windowId: string, runId: string, path: string): { url: string; expiresAt: number } {
+  public async sign(
+    windowId: string,
+    runId: string,
+    path: string,
+  ): Promise<{ url: string; expiresAt: number }> {
     const window = this.deps.sessions.liveWindow(windowId);
     if (window === null) {
       throw new RpcError(
@@ -158,20 +156,19 @@ export class ArtifactUrls {
         'Run `yantra ui` again.',
       );
     }
-    const relativePath = normalizeArtifactPath(path);
-    if (!RUN_ID.test(runId) || relativePath === null) {
-      throw new RpcError('invalid_params', 'The run ID or artifact path is malformed.');
-    }
-    if (isDenied(relativePath) || !this.policy.isPublic(relativePath)) {
-      throw new RpcError(
-        'not_allowed',
-        `${relativePath} is not an artifact the app can open.`,
-        'Open the run directory from the terminal instead.',
-      );
+    let artifact: PublicArtifact;
+    try {
+      artifact = await this.resolver(this.deps.runsRoot, runId, path);
+    } catch (error) {
+      if (error instanceof ArtifactAccessError) {
+        this.count(error.code);
+        throw signingError(error, path);
+      }
+      throw error;
     }
     const expiresAt = this.now() + ARTIFACT_URL_TTL_MS;
     const payload = Buffer.from(
-      JSON.stringify({ r: runId, p: relativePath, w: windowId, e: expiresAt }),
+      JSON.stringify({ r: runId, p: artifact.relPath, w: windowId, e: expiresAt }),
       'utf8',
     ).toString('base64url');
     const mac = this.mac(windowId, window.capabilityHash, payload).toString('base64url');
@@ -182,34 +179,51 @@ export class ArtifactUrls {
   public readonly route: HostRoute = async (req, res, { port }) => {
     const rawPath = (req.url ?? '').split('?', 1)[0] ?? '';
     if (!rawPath.startsWith(ARTIFACT_PREFIX)) return false;
-    const deny = (reason: string): true => {
-      this.denials += 1;
-      this.logger.warn({ reason, count: this.denials }, 'artifact refused');
+    const deny = (reason: ArtifactRefusal): true => {
+      this.count(reason);
       sendStatus(res, port, 404);
       return true;
     };
     if (req.method !== 'GET' && req.method !== 'HEAD') return deny('method');
     const verified = this.verify(rawPath.slice(ARTIFACT_PREFIX.length), readSessionCookie(req));
     if (verified === null) return deny('signature');
-    const { r: runId, p: relativePath } = verified;
-    if (isDenied(relativePath) || !this.policy.isPublic(relativePath)) return deny('policy');
-    const contentType = ARTIFACT_CONTENT_TYPES[extname(relativePath).toLowerCase()];
-    if (contentType === undefined) return deny('type');
-    const file = await this.resolve(runId, relativePath);
-    if (file === null) return deny('path');
-    const body = await readFile(file).catch(() => null);
-    if (body === null) return deny('read');
+    let artifact: PublicArtifact;
+    try {
+      // Again at serve time: the file may have been replaced since signing.
+      artifact = await this.resolver(this.deps.runsRoot, verified.r, verified.p);
+    } catch (error) {
+      return deny(error instanceof ArtifactAccessError ? error.code : 'read');
+    }
+    const stream = createReadStream(artifact.absPath);
+    const opened = await new Promise<boolean>((resolve) => {
+      stream.once('open', () => {
+        resolve(true);
+      });
+      stream.once('error', () => {
+        resolve(false);
+      });
+    });
+    if (!opened) return deny('read');
 
     applySecurityHeaders(res, port);
-    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Type', artifact.entry.media_type);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Cache-Control', 'no-store');
-    res.setHeader('Content-Length', String(body.length));
-    if (!contentType.startsWith('image/')) {
-      const name = posix.basename(relativePath).replace(/[^A-Za-z0-9._-]/gu, '_');
+    res.setHeader('Content-Length', String(artifact.bytes));
+    if (artifact.entry.exposure === 'download') {
+      const name = posix.basename(artifact.relPath).replace(/[^A-Za-z0-9._-]/gu, '_');
       res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
     }
     res.writeHead(200);
-    res.end(req.method === 'HEAD' ? undefined : body);
+    if (req.method === 'HEAD') {
+      stream.destroy();
+      res.end();
+      return true;
+    }
+    // Streamed: a file over its inline cap is never held in memory.
+    await pipeline(stream, res).catch(() => {
+      res.destroy();
+    });
     return true;
   };
 
@@ -245,18 +259,11 @@ export class ArtifactUrls {
       .digest();
   }
 
-  private async resolve(runId: string, relativePath: string): Promise<string | null> {
-    try {
-      const runDir = await realpath(join(this.deps.runsRoot, runId));
-      const real = await realpath(join(runDir, ...relativePath.split('/')));
-      const rel = relative(runDir, real);
-      if (rel.length === 0 || rel.startsWith('..') || isAbsolute(rel)) return null;
-      // Re-check the resolved name too: a symlink must not reach a denied file.
-      if (isDenied(rel.split(/[\\/]/u).join('/'))) return null;
-      return (await stat(real)).isFile() ? real : null;
-    } catch {
-      return null;
-    }
+  /** Counts a refusal; the log names the reason code only, never the path or URL. */
+  private count(reason: ArtifactRefusal): void {
+    this.denials += 1;
+    this.reasons[reason] = (this.reasons[reason] ?? 0) + 1;
+    this.logger.warn({ reason, count: this.denials }, 'artifact refused');
   }
 }
 
@@ -265,8 +272,8 @@ export function registerArtifactUrls(methods: RpcMethodRegistry, urls: ArtifactU
   methods.register('artifact.url', {
     params: ArtifactUrlParams,
     result: ArtifactUrlResult,
-    handler: ({ run_id: runId, path }, { windowId }) => {
-      const signed = urls.sign(windowId, runId, path);
+    handler: async ({ run_id: runId, path }, { windowId }) => {
+      const signed = await urls.sign(windowId, runId, path);
       return { url: signed.url, expires_at: new Date(signed.expiresAt).toISOString() };
     },
   });

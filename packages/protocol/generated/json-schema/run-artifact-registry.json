@@ -1,0 +1,90 @@
+{
+  "$ref": "#/definitions/RunArtifactRegistry",
+  "definitions": {
+    "RunArtifactRegistry": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Stable entry name, e.g. `brief.json` or `screenshots`."
+          },
+          "pattern": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Run-relative, forward-slash glob (`*` within a segment, `**` across segments)."
+          },
+          "exposure": {
+            "type": "string",
+            "enum": [
+              "typed",
+              "view",
+              "download",
+              "denied"
+            ],
+            "description": "typed: only through a typed read (e.g. brief.json through read.run_result); view: through a bounded viewer; download: only as an attachment; denied: never served."
+          },
+          "viewer": {
+            "type": "string",
+            "enum": [
+              "brief",
+              "document",
+              "markdown",
+              "json",
+              "jsonl",
+              "text",
+              "image",
+              "none"
+            ],
+            "description": "The bounded viewer that opens the file; `none` when no viewer exists."
+          },
+          "media_type": {
+            "type": "string",
+            "enum": [
+              "application/json; charset=utf-8",
+              "application/x-ndjson; charset=utf-8",
+              "text/markdown; charset=utf-8",
+              "text/html; charset=utf-8",
+              "text/plain; charset=utf-8",
+              "image/png",
+              "application/octet-stream"
+            ],
+            "description": "The only Content-Type the host may send for the entry."
+          },
+          "inline_cap_bytes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Largest file a viewer may load whole; above it the item is too_large. Null: windowed, or never loaded inline."
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What the file is, for generated docs and parity."
+          }
+        },
+        "required": [
+          "id",
+          "pattern",
+          "exposure",
+          "viewer",
+          "media_type",
+          "inline_cap_bytes",
+          "description"
+        ],
+        "additionalProperties": false,
+        "description": "One entry of the public run-artifact allowlist."
+      },
+      "description": "The public run-artifact allowlist, in match order."
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}
