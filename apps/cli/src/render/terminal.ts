@@ -26,6 +26,7 @@ import type { Brief, TaskEvent, TemplatedReport } from '@yantra/protocol';
 
 import { renderBriefTerminal } from './brief-terminal.js';
 import { stripControlCharacters } from './goal-echo.js';
+import { listOutcomeSegment } from './list-outcome.js';
 import type {
   AuditRenderReport,
   BriefArtifactPaths,
@@ -80,12 +81,7 @@ export class TerminalRenderer implements OutputRenderer {
         const duration = item.durationMs === null ? '—' : `${item.durationMs}ms`;
         // The outcome word sits beside the status when the run recorded one;
         // a run whose owner died reads `interrupted · <outcome>` (FEAT-064).
-        const status =
-          item.executionState === 'interrupted'
-            ? `interrupted · ${item.taskOutcome ?? item.status}`
-            : item.taskOutcome === undefined
-              ? item.status
-              : `${item.status} ${item.taskOutcome}`;
+        const status = listOutcomeSegment(item);
         lines.push(
           `${item.runId.padEnd(48)}  ${status.padEnd(10)}  ${duration.padStart(8)}  ` +
             `workflow=${item.workflowName}`,

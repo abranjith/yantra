@@ -1,7 +1,7 @@
 /**
  * The app's navigation entries (FEAT-065 TASK-011). A feature registers its
  * entry when it registers its route, so the top bar never shows a dead link.
- * FEAT-065 registers only Home.
+ * FEAT-065 registers Home; FEAT-066 the Ledger.
  */
 
 /** One navigation entry. */
@@ -32,3 +32,4 @@ export class NavRegistry {
 export const navRegistry = new NavRegistry();
 
 navRegistry.register({ path: '/', label: 'Home' });
+navRegistry.register({ path: '/runs', label: 'Ledger' });

@@ -43,14 +43,7 @@ export { Option, optionStyles, popoverStyles } from './primitives/Popover.js';
 export { TOOLTIP_CLOSE_DELAY_MS, TOOLTIP_DELAY_MS } from './primitives/Tooltip.js';
 export { PRIMITIVE_FAMILIES, type PrimitiveFamily } from './primitives/families.js';
 export { Icon, ICON_STROKE_WIDTH, type IconProps, type IconSize } from './icons/Icon.js';
-export {
-  Bindu,
-  BINDU_LABELS,
-  BINDU_STATES,
-  binduStyles,
-  type BinduProps,
-  type BinduState,
-} from './instruments/bindu.js';
+export * from './instruments/index.js';
 export { ICON_NAMES, ICON_REGISTRY, type IconName, type IconRecord } from './icons/registry.js';
 export {
   BLACK,

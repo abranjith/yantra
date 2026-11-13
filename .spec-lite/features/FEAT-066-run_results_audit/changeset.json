@@ -14,6 +14,18 @@
       "task": "TASK-002"
     },
     {
+      "path": "apps/cli/src/render/list-outcome.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/cli/src/render/terminal.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
       "path": "apps/cli/src/render/types.ts",
       "status": "M",
       "role": "implement",
@@ -39,7 +51,7 @@
     },
     {
       "path": "apps/cli/src/ui/host/ledger-reads.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
@@ -51,439 +63,439 @@
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/index.list-runs-limit-3.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/index.list-runs-limit-3.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/index.list-runs-limit-3.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/index.list-runs-status-completed.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/index.list-runs-status-completed.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/index.list-runs-status-completed.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/index.list-runs-status-failed-limit-1.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/index.list-runs-status-failed-limit-1.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/index.list-runs-status-failed-limit-1.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/index.list-runs-status-succeeded.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/index.list-runs-status-succeeded.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/index.list-runs-status-succeeded.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/index.list-runs-workflow-research.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/index.list-runs-workflow-research.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/index.list-runs-workflow-research.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/index.list-runs-workflow.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/index.list-runs-workflow.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/index.list-runs-workflow.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/index.list-workflows.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/index.list-workflows.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/index.list-workflows.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/index.list.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/index.list.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/index.list.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/no-index.list-runs-limit-3.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/no-index.list-runs-limit-3.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/no-index.list-runs-limit-3.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/no-index.list-runs-status-completed.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/no-index.list-runs-status-completed.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/no-index.list-runs-status-completed.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/no-index.list-runs-status-failed-limit-1.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/no-index.list-runs-status-failed-limit-1.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/no-index.list-runs-status-failed-limit-1.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/no-index.list-runs-status-succeeded.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/no-index.list-runs-status-succeeded.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/no-index.list-runs-status-succeeded.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/no-index.list-runs-workflow-research.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/no-index.list-runs-workflow-research.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/no-index.list-runs-workflow-research.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/no-index.list-runs-workflow.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/no-index.list-runs-workflow.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/no-index.list-runs-workflow.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/no-index.list-workflows.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/no-index.list-workflows.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/no-index.list-workflows.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/no-index.list.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/no-index.list.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/no-index.list.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/rebuilt-index.list-runs-limit-3.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/rebuilt-index.list-runs-limit-3.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/rebuilt-index.list-runs-limit-3.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/rebuilt-index.list-runs-status-completed.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/rebuilt-index.list-runs-status-completed.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/rebuilt-index.list-runs-status-completed.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/rebuilt-index.list-runs-status-failed-limit-1.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/rebuilt-index.list-runs-status-failed-limit-1.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/rebuilt-index.list-runs-status-failed-limit-1.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/rebuilt-index.list-runs-status-succeeded.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/rebuilt-index.list-runs-status-succeeded.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/rebuilt-index.list-runs-status-succeeded.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/rebuilt-index.list-runs-workflow-research.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/rebuilt-index.list-runs-workflow-research.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/rebuilt-index.list-runs-workflow-research.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/rebuilt-index.list-runs-workflow.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/rebuilt-index.list-runs-workflow.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/rebuilt-index.list-runs-workflow.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/rebuilt-index.list-workflows.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/rebuilt-index.list-workflows.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/rebuilt-index.list-workflows.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/rebuilt-index.list.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/rebuilt-index.list.stderr.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/rebuilt-index.list.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/cli/tests/commands/list-ledger.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
@@ -507,7 +519,7 @@
     },
     {
       "path": "apps/cli/tests/ui/host/run-reads.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
@@ -516,6 +528,132 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "apps/web/package.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/src/app/nav-registry.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/src/app/root-route.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/src/app/router.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/src/data/runs.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/src/features/format.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/src/host/app-rpc.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/src/main.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/src/routes/ledger.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/src/routes/runs.$runId.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/tests/app/shell.spec.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/tests/data/runs.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/tests/host/app-rpc.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/tests/routes/ledger.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/tests/setup.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/tests/support/axe.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/tests/support/css-escape.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/tests/support/fake-rpc.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/tests/support/intersection-observer.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/tests/support/layout.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/tests/support/match-media.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
     },
     {
       "path": "docs/protocol-spec.md",
@@ -567,13 +705,13 @@
     },
     {
       "path": "packages/core/src/run-view/ledger.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "packages/core/tests/index-db/history-page.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
@@ -585,13 +723,13 @@
     },
     {
       "path": "packages/core/tests/run-view/fixtures/build-run-dir.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "packages/core/tests/run-view/ledger.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
@@ -603,7 +741,7 @@
     },
     {
       "path": "packages/protocol/generated/json-schema/list-result.schema.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
@@ -633,7 +771,7 @@
     },
     {
       "path": "packages/protocol/src/schemas/cli-reads.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
@@ -645,7 +783,7 @@
     },
     {
       "path": "packages/protocol/tests/cli-reads.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
@@ -660,6 +798,48 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/ui/src/gallery/entries.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/src/gallery/instrument-entries.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/src/instruments/index.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/src/instruments/OutcomeBadge.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/tests/instruments/outcome-badge.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/tests/support/axe.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
     }
   ],
   "excluded": [
