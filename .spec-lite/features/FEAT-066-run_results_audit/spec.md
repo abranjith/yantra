@@ -1033,7 +1033,7 @@ state}`.
 - [x] TASK-001: Public-artifact allowlist and a gated artifact path end to end
 - [x] TASK-002: Ledger query with cursor pagination and filters (`read.list`), shared with `yantra list`
 - [x] TASK-003: Ledger route with live updates and OutcomeBadge
-- [ ] TASK-004: Run-result read that fails per item (`read.run_result`)
+- [x] TASK-004: Run-result read that fails per item (`read.run_result`)
 - [ ] TASK-005: Run-result route rendering Briefs and templated documents
 - [ ] TASK-006: Citation evidence in one click: EvidencePane, ActionEvidence and ProtectedValue
 - [ ] TASK-007: Complete results for runs without a document, plus `read.report`

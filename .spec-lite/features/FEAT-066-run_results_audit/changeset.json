@@ -15,7 +15,7 @@
     },
     {
       "path": "apps/cli/src/render/list-outcome.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -44,6 +44,12 @@
       "task": "TASK-002"
     },
     {
+      "path": "apps/cli/src/ui/host/host.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "apps/cli/src/ui/host/idle-exit.ts",
       "status": "M",
       "role": "implement",
@@ -60,6 +66,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "apps/cli/src/ui/host/run-reads.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/index.list-runs-limit-3.json",
@@ -543,7 +555,7 @@
     },
     {
       "path": "apps/web/src/app/root-route.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -555,19 +567,19 @@
     },
     {
       "path": "apps/web/src/data/runs.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "apps/web/src/features/format.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "apps/web/src/host/app-rpc.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -579,13 +591,13 @@
     },
     {
       "path": "apps/web/src/routes/ledger.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "apps/web/src/routes/runs.$runId.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -597,19 +609,19 @@
     },
     {
       "path": "apps/web/tests/data/runs.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "apps/web/tests/host/app-rpc.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "apps/web/tests/routes/ledger.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -621,37 +633,37 @@
     },
     {
       "path": "apps/web/tests/support/axe.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "apps/web/tests/support/css-escape.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "apps/web/tests/support/fake-rpc.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "apps/web/tests/support/intersection-observer.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "apps/web/tests/support/layout.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "apps/web/tests/support/match-media.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -692,6 +704,12 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/core/src/run-view/bounded-read.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "packages/core/src/run-view/errors.ts",
       "status": "A",
       "role": "implement",
@@ -704,10 +722,28 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/core/src/run-view/inventory.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "packages/core/src/run-view/ledger.ts",
       "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/src/run-view/run-result.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/run-view/terminal-reason.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
     },
     {
       "path": "packages/core/tests/index-db/history-page.spec.ts",
@@ -728,10 +764,28 @@
       "task": "TASK-002"
     },
     {
+      "path": "packages/core/tests/run-view/inventory.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "packages/core/tests/run-view/ledger.spec.ts",
       "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/core/tests/run-view/run-result.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/run-view/terminal-reason.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
     },
     {
       "path": "packages/core/tests/scheduler/fire-runner.spec.ts",
@@ -750,6 +804,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/protocol/generated/json-schema/run-result.schema.json",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
     },
     {
       "path": "packages/protocol/src/commands/entries/runs.ts",
@@ -782,6 +842,12 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/protocol/src/schemas/run-result.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "packages/protocol/tests/cli-reads.spec.ts",
       "status": "A",
       "role": "implement",
@@ -792,6 +858,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/protocol/tests/run-result.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
     },
     {
       "path": "packages/ui/package.json",
@@ -807,7 +879,7 @@
     },
     {
       "path": "packages/ui/src/gallery/instrument-entries.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -819,25 +891,25 @@
     },
     {
       "path": "packages/ui/src/instruments/index.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/ui/src/instruments/OutcomeBadge.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/ui/tests/instruments/outcome-badge.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/ui/tests/support/axe.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     }

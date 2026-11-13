@@ -22,6 +22,8 @@ export const LOOPBACK_ADDRESS = '127.0.0.1';
 
 /** Structured logger the host writes to (Pino-compatible). */
 export interface HostLogger {
+  /** Per-read detail (FEAT-066); Pino loggers have it, minimal doubles may not. */
+  debug?(fields: Record<string, unknown>, message: string): void;
   info(fields: Record<string, unknown>, message: string): void;
   warn(fields: Record<string, unknown>, message: string): void;
   error(fields: Record<string, unknown>, message: string): void;

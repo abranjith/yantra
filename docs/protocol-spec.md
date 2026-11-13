@@ -197,6 +197,34 @@ Example:
 }
 ```
 
+## ArtifactInventoryItem
+
+One public run file.
+
+| Field           | Description                                                                                                                                                        |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| path            | Run-relative path, forward slashes.                                                                                                                                |
+| entry_id        | The RUN_ARTIFACT_REGISTRY entry it matched.                                                                                                                        |
+| exposure        | typed: only through a typed read (e.g. brief.json through read.run_result); view: through a bounded viewer; download: only as an attachment; denied: never served. |
+| viewer          | The bounded viewer that opens the file; `none` when no viewer exists.                                                                                              |
+| bytes           |                                                                                                                                                                    |
+| modified_at     |                                                                                                                                                                    |
+| over_inline_cap | Larger than its viewer loads whole.                                                                                                                                |
+
+Example:
+
+```json
+{
+  "path": "<path>",
+  "entry_id": "<entry_id>",
+  "exposure": "<exposure>",
+  "viewer": "<viewer>",
+  "bytes": "<bytes>",
+  "modified_at": "<modified_at>",
+  "over_inline_cap": "<over_inline_cap>"
+}
+```
+
 ## ArtifactKind
 
 What kind of file the artifact is.
@@ -245,6 +273,16 @@ Example:
 
 ```json
 "viewport"
+```
+
+## ArtifactSlotState
+
+No description provided.
+
+Example:
+
+```json
+"ok"
 ```
 
 ## ArtifactUrlParams
@@ -593,6 +631,16 @@ Example:
   "exemptions": "<exemptions>",
   "exempt_overflow": "<exempt_overflow>"
 }
+```
+
+## BriefSlot
+
+One artifact: ok with its value, or missing, corrupt, unsupported, too large or denied.
+
+Example:
+
+```json
+"<value>"
 ```
 
 ## BriefSource
@@ -2657,6 +2705,16 @@ Example:
 }
 ```
 
+## OutputsSlot
+
+One artifact: ok with its value, or missing, corrupt, unsupported, too large or denied.
+
+Example:
+
+```json
+"<value>"
+```
+
 ## OwnedBrowserEvent
 
 An append-only record of a browser process the run spawned or proved exited. Readers fold the lines by identity and ignore a trailing partial line.
@@ -3243,6 +3301,16 @@ Example:
 }
 ```
 
+## RunHealthSlot
+
+One artifact: ok with its value, or missing, corrupt, unsupported, too large or denied.
+
+Example:
+
+```json
+"<value>"
+```
+
 ## RunId
 
 A run id, e.g. `20260511T091234Z-bank-statement-a7b3`; names `runs/<run_id>/`.
@@ -3371,6 +3439,74 @@ Example:
 
 ```json
 "<value>"
+```
+
+## RunResultParams
+
+No description provided.
+
+| Field  | Description                                                                    |
+| ------ | ------------------------------------------------------------------------------ |
+| run_id | A run id, e.g. `20260511T091234Z-bank-statement-a7b3`; names `runs/<run_id>/`. |
+
+Example:
+
+```json
+{
+  "run_id": "<run_id>"
+}
+```
+
+## RunResultView
+
+One run, read for the app’s Run result page.
+
+| Field               | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| run_id              | A run id, e.g. `20260511T091234Z-bank-statement-a7b3`; names `runs/<run_id>/`.                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| mode                |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| title               | Document title, else the intent or query, else the workflow name.                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| started_at          |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ended_at            |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| duration_ms         |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| status              | The manifest status as the CLI prints it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| task_outcome        | Whether the task was done: fulfilled (every declared requirement met), partial (a result was saved but a requirement is unmet or no contract was declared), handoff (the run needs the user), failed (nothing usable was saved), or aborted (the user interrupted).                                                                                                                                                                                                                                        |
+| termination_reason  | Why the run stopped: stalled (no progress after recovery), turn-timeout (thinking limit), the model finished, a budget or the repeated-failure breaker ended it, a handoff was raised, the user aborted, or the provider failed. wall-clock-soft means the model finished after the exploration wind-down began. owner_lost means the process that owned the run died before writing a terminal result, and a reconciler recorded the end (FEAT-064). Added in FEAT-063: readable by new executables only. |
+| execution_state     | Set only by the reconciler when the owning process died before writing a terminal result (plan D7). Separate from the outcome, which follows the evidence and is never `aborted`. Absent for every run that ended on its own.                                                                                                                                                                                                                                                                              |
+| live                | Present only while the run has not ended; unknown_owner when its owner cannot be verified.                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| document            | The Brief or templated document, or none.                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| outputs             | A workflow run’s outputs.json; null for other runs.                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| terminal            | Why the run ended; every text bounded to 500 characters.                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| run_health          | One artifact: ok with its value, or missing, corrupt, unsupported, too large or denied.                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| report              | report.md; its body is read lazily through read.report.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| artifacts           |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| artifacts_truncated |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| notices_source      | Where the Notices block comes from.                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+
+Example:
+
+```json
+{
+  "run_id": "<run_id>",
+  "mode": "<mode>",
+  "title": "<title>",
+  "started_at": "<started_at>",
+  "ended_at": "<ended_at>",
+  "duration_ms": "<duration_ms>",
+  "status": "<status>",
+  "task_outcome": "<task_outcome>",
+  "termination_reason": "<termination_reason>",
+  "execution_state": "<execution_state>",
+  "live": "<live>",
+  "document": "<document>",
+  "outputs": "<outputs>",
+  "terminal": "<terminal>",
+  "run_health": "<run_health>",
+  "report": "<report>",
+  "artifacts": "<artifacts>",
+  "artifacts_truncated": "<artifacts_truncated>",
+  "notices_source": "<notices_source>"
+}
 ```
 
 ## RunSocketAddress
@@ -3886,6 +4022,42 @@ Example:
   "sources": "<sources>",
   "metadata": "<metadata>",
   "notices": "<notices>"
+}
+```
+
+## TemplatedReportSlot
+
+One artifact: ok with its value, or missing, corrupt, unsupported, too large or denied.
+
+Example:
+
+```json
+"<value>"
+```
+
+## TerminalReason
+
+Why the run ended; every text bounded to 500 characters.
+
+| Field              | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| source             | Which reader answered: the run-event stream, manifest, events.jsonl or report.md.                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| failure_class      | The failure category, verbatim.                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| message            | What happened, ANSI-stripped and bounded.                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| blocker            | What blocked the run, for a handoff.                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| safest_next_action | The one next step the run recorded.                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| termination_reason | Why the run stopped: stalled (no progress after recovery), turn-timeout (thinking limit), the model finished, a budget or the repeated-failure breaker ended it, a handoff was raised, the user aborted, or the provider failed. wall-clock-soft means the model finished after the exploration wind-down began. owner_lost means the process that owned the run died before writing a terminal result, and a reconciler recorded the end (FEAT-064). Added in FEAT-063: readable by new executables only. |
+
+Example:
+
+```json
+{
+  "source": "<source>",
+  "failure_class": "<failure_class>",
+  "message": "<message>",
+  "blocker": "<blocker>",
+  "safest_next_action": "<safest_next_action>",
+  "termination_reason": "<termination_reason>"
 }
 ```
 

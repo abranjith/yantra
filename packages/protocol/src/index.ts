@@ -305,3 +305,4 @@ export * from './schemas/app-host.js';
 export * from './schemas/app-rpc.js';
 export * from './schemas/run-artifacts.js';
 export * from './schemas/cli-reads.js';
+export * from './schemas/run-result.js';

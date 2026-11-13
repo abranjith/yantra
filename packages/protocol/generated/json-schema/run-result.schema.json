@@ -1,0 +1,2783 @@
+{
+  "$ref": "#/definitions/RunResultView",
+  "definitions": {
+    "RunResultView": {
+      "type": "object",
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "maxLength": 96,
+          "pattern": "^[0-9]{8}T[0-9]{6}Z-[A-Za-z0-9-]+$",
+          "description": "A run id, e.g. `20260511T091234Z-bank-statement-a7b3`; names `runs/<run_id>/`."
+        },
+        "mode": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "ask",
+                "research",
+                "do",
+                "run"
+              ],
+              "description": "The command that started the run: ask, research, do, or run (a saved workflow)."
+            },
+            {
+              "type": "string",
+              "const": "unknown"
+            }
+          ]
+        },
+        "title": {
+          "type": "string",
+          "description": "Document title, else the intent or query, else the workflow name."
+        },
+        "started_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ended_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "type": "string",
+          "description": "The manifest status as the CLI prints it."
+        },
+        "task_outcome": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "fulfilled",
+                "partial",
+                "handoff",
+                "failed",
+                "aborted"
+              ],
+              "description": "Whether the task was done: fulfilled (every declared requirement met), partial (a result was saved but a requirement is unmet or no contract was declared), handoff (the run needs the user), failed (nothing usable was saved), or aborted (the user interrupted)."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Whether the task was done: fulfilled (every declared requirement met), partial (a result was saved but a requirement is unmet or no contract was declared), handoff (the run needs the user), failed (nothing usable was saved), or aborted (the user interrupted)."
+        },
+        "termination_reason": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "model_finished",
+                "wall-clock-soft",
+                "wall-clock-hard",
+                "provider-tokens",
+                "tool-budget",
+                "repeated-tool-failure",
+                "handoff",
+                "user_abort",
+                "provider_failed",
+                "stalled",
+                "turn-timeout",
+                "owner_lost"
+              ],
+              "description": "Why the run stopped: stalled (no progress after recovery), turn-timeout (thinking limit), the model finished, a budget or the repeated-failure breaker ended it, a handoff was raised, the user aborted, or the provider failed. wall-clock-soft means the model finished after the exploration wind-down began. owner_lost means the process that owned the run died before writing a terminal result, and a reconciler recorded the end (FEAT-064). Added in FEAT-063: readable by new executables only."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Why the run stopped: stalled (no progress after recovery), turn-timeout (thinking limit), the model finished, a budget or the repeated-failure breaker ended it, a handoff was raised, the user aborted, or the provider failed. wall-clock-soft means the model finished after the exploration wind-down began. owner_lost means the process that owned the run died before writing a terminal result, and a reconciler recorded the end (FEAT-064). Added in FEAT-063: readable by new executables only."
+        },
+        "execution_state": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "interrupted"
+              ],
+              "description": "Set only by the reconciler when the owning process died before writing a terminal result (plan D7). Separate from the outcome, which follows the evidence and is never `aborted`. Absent for every run that ended on its own."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Set only by the reconciler when the owning process died before writing a terminal result (plan D7). Separate from the outcome, which follows the evidence and is never `aborted`. Absent for every run that ended on its own."
+        },
+        "live": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "type": "string",
+                  "enum": [
+                    "running",
+                    "waiting_for_you",
+                    "unknown_owner"
+                  ]
+                }
+              },
+              "required": [
+                "state"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Present only while the run has not ended; unknown_owner when its owner cannot be verified."
+        },
+        "document": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "const": "brief"
+                },
+                "slot": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "state": {
+                          "type": "string",
+                          "const": "ok"
+                        },
+                        "value": {
+                          "type": "object",
+                          "properties": {
+                            "actions": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "pattern": "^A[1-9]\\d*$",
+                                    "description": "Run-wide action identifier, equal to A followed by the ledger sequence."
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "fill",
+                                      "click",
+                                      "submit_refused",
+                                      "capture"
+                                    ],
+                                    "description": "Verified action kind."
+                                  },
+                                  "label": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "maxLength": 120
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ],
+                                    "description": "Sanitized field or control label; null when no label is known."
+                                  },
+                                  "label_origin": {
+                                    "type": "string",
+                                    "enum": [
+                                      "explicit",
+                                      "structural",
+                                      "placeholder",
+                                      "title",
+                                      "none"
+                                    ],
+                                    "description": "Evidence from which the fill label was resolved."
+                                  },
+                                  "confidence": {
+                                    "type": "string",
+                                    "enum": [
+                                      "high",
+                                      "medium",
+                                      "low"
+                                    ],
+                                    "description": "Confidence of an inferred label."
+                                  },
+                                  "section": {
+                                    "type": "string",
+                                    "maxLength": 60,
+                                    "description": "Sanitized form section containing the field."
+                                  },
+                                  "ref": {
+                                    "type": "string",
+                                    "pattern": "^e[0-9]+$",
+                                    "description": "Page-scoped target reference."
+                                  },
+                                  "epoch": {
+                                    "anyOf": [
+                                      {
+                                        "type": "integer",
+                                        "minimum": 0
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ],
+                                    "description": "Committed document epoch when the action happened."
+                                  },
+                                  "call_id": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "minLength": 1
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ],
+                                    "description": "Provider tool-call identifier, or null for a direct execution."
+                                  },
+                                  "host": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ],
+                                    "description": "Page hostname at action time, or null when unknown."
+                                  },
+                                  "verification": {
+                                    "anyOf": [
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "resolution": {
+                                            "type": "string",
+                                            "enum": [
+                                              "exact",
+                                              "single_offered_match",
+                                              "selected_from_offered",
+                                              "typed_literal",
+                                              "reformatted"
+                                            ],
+                                            "description": "How the fill was verified."
+                                          }
+                                        },
+                                        "required": [
+                                          "resolution"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "withheld": {
+                                            "type": "object",
+                                            "properties": {
+                                              "reason": {
+                                                "type": "string",
+                                                "enum": [
+                                                  "password",
+                                                  "autocomplete",
+                                                  "secret_marker",
+                                                  "stored_secret"
+                                                ],
+                                                "description": "Why the readback was withheld, including an opaque stored-secret fill."
+                                              },
+                                              "verdict": {
+                                                "type": "string",
+                                                "enum": [
+                                                  "exact",
+                                                  "reformatted",
+                                                  "unchecked"
+                                                ],
+                                                "description": "Safe comparison verdict; never the protected value."
+                                              }
+                                            },
+                                            "required": [
+                                              "reason",
+                                              "verdict"
+                                            ],
+                                            "additionalProperties": false,
+                                            "description": "Protected readback verification."
+                                          }
+                                        },
+                                        "required": [
+                                          "withheld"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    ],
+                                    "description": "Fill verification without any committed value."
+                                  },
+                                  "signal": {
+                                    "type": "string",
+                                    "enum": [
+                                      "structural",
+                                      "name",
+                                      "nested-workflow"
+                                    ],
+                                    "description": "Signal that caused a submit refusal."
+                                  },
+                                  "artifacts": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "kind": {
+                                          "type": "string",
+                                          "enum": [
+                                            "screenshot"
+                                          ],
+                                          "description": "What kind of file the artifact is."
+                                        },
+                                        "path": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "description": "Run-relative path of the artifact file, using forward slashes."
+                                        },
+                                        "sha256": {
+                                          "type": "string",
+                                          "pattern": "^[a-f0-9]{64}$",
+                                          "description": "Lowercase hex SHA-256 of the file bytes."
+                                        },
+                                        "mime_type": {
+                                          "type": "string",
+                                          "const": "image/png",
+                                          "description": "Media type of the file."
+                                        },
+                                        "bytes": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "description": "File size in bytes."
+                                        },
+                                        "width": {
+                                          "type": "integer",
+                                          "exclusiveMinimum": 0,
+                                          "description": "Image width in pixels."
+                                        },
+                                        "height": {
+                                          "type": "integer",
+                                          "exclusiveMinimum": 0,
+                                          "description": "Image height in pixels."
+                                        },
+                                        "sent_to_model": {
+                                          "type": "boolean",
+                                          "description": "True only when the image was shown to the model provider (Vision Assist); false for a capture kept on this computer."
+                                        }
+                                      },
+                                      "required": [
+                                        "kind",
+                                        "path",
+                                        "sha256",
+                                        "mime_type",
+                                        "bytes",
+                                        "sent_to_model"
+                                      ],
+                                      "additionalProperties": false,
+                                      "description": "One file a tool call wrote to the run directory: metadata only, never image bytes or a data URI."
+                                    },
+                                    "minItems": 1,
+                                    "maxItems": 6,
+                                    "description": "Every saved file of a capture action."
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "kind",
+                                  "label",
+                                  "epoch",
+                                  "call_id",
+                                  "host"
+                                ],
+                                "additionalProperties": false,
+                                "description": "One cited, verified browser action: identities and verdicts only, never field values."
+                              },
+                              "maxItems": 40,
+                              "description": "Cited action evidence, in first-citation order; absent on older Briefs."
+                            },
+                            "brief_id": {
+                              "type": "string",
+                              "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
+                              "description": "Unique Brief document id (ULID)."
+                            },
+                            "task_id": {
+                              "type": "string",
+                              "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
+                              "description": "Originating task id (ULID)."
+                            },
+                            "schema_version": {
+                              "type": "string",
+                              "const": "0.2",
+                              "description": "Protocol schema version this document was written under."
+                            },
+                            "title": {
+                              "type": "string",
+                              "minLength": 1,
+                              "description": "One-line document title."
+                            },
+                            "overview": {
+                              "type": "string",
+                              "description": "Answer-first Markdown synthesis (1-3 paragraphs) with inline [n] citations."
+                            },
+                            "key_findings": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "actions": {
+                                    "type": "array",
+                                    "items": {
+                                      "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/value/properties/actions/items/properties/id"
+                                    },
+                                    "maxItems": 8,
+                                    "description": "Recorded action IDs backing this content."
+                                  },
+                                  "text": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "description": "Markdown text of the finding. Inline [n] markers are optional: the LLM path may emit them, while the deterministic path carries citations only in the structured citations[] array. The structured array is the single source of truth for rendering."
+                                  },
+                                  "citations": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "integer",
+                                      "minimum": 1,
+                                      "description": "A source number (sources[].n)."
+                                    },
+                                    "description": "Source numbers (sources[].n) backing this finding. At least one is required unless editorial is true."
+                                  },
+                                  "editorial": {
+                                    "type": "boolean",
+                                    "default": false,
+                                    "description": "True marks uncited synthesis commentary — the only legal uncited form."
+                                  },
+                                  "facet": {
+                                    "anyOf": [
+                                      {
+                                        "type": "object",
+                                        "additionalProperties": {
+                                          "type": [
+                                            "string",
+                                            "number",
+                                            "boolean",
+                                            "null"
+                                          ],
+                                          "description": "A scalar facet value."
+                                        }
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ],
+                                    "default": null,
+                                    "description": "Optional structured payload (for example { price: 328, in_stock: true }), or null."
+                                  },
+                                  "children": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "text": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "description": "Markdown text of a nested child finding."
+                                        },
+                                        "citations": {
+                                          "type": "array",
+                                          "items": {
+                                            "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/value/properties/key_findings/items/properties/citations/items"
+                                          },
+                                          "minItems": 1,
+                                          "description": "Source numbers (sources[].n) backing this child finding; at least one is required."
+                                        }
+                                      },
+                                      "required": [
+                                        "text",
+                                        "citations"
+                                      ],
+                                      "additionalProperties": false,
+                                      "description": "A one-level nested finding under a key finding."
+                                    },
+                                    "default": [],
+                                    "description": "Nested child findings that elaborate this parent; one level deep only."
+                                  }
+                                },
+                                "required": [
+                                  "text",
+                                  "citations"
+                                ],
+                                "additionalProperties": false,
+                                "description": "A scannable, citation-backed finding bullet."
+                              },
+                              "description": "Scannable findings; may be empty."
+                            },
+                            "sections": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "actions": {
+                                    "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/value/properties/key_findings/items/properties/actions",
+                                    "description": "Recorded action IDs backing this content."
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "alternatives"
+                                    ],
+                                    "description": "Labels off-contract alternatives; absent for ordinary sections."
+                                  },
+                                  "heading": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "description": "Section heading."
+                                  },
+                                  "body_md": {
+                                    "type": "string",
+                                    "description": "Markdown body prose; must not contain raw ANSI escapes."
+                                  },
+                                  "citations": {
+                                    "type": "array",
+                                    "items": {
+                                      "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/value/properties/key_findings/items/properties/citations/items"
+                                    },
+                                    "description": "Source numbers (sources[].n) cited by this section."
+                                  }
+                                },
+                                "required": [
+                                  "heading",
+                                  "body_md",
+                                  "citations"
+                                ],
+                                "additionalProperties": false,
+                                "description": "A deep-detail prose section of the Brief."
+                              },
+                              "description": "Deep-detail sections; empty at the overview synthesis budget."
+                            },
+                            "facets": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "comparison": {
+                                      "anyOf": [
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "columns": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "string"
+                                              },
+                                              "minItems": 1,
+                                              "description": "Column headers."
+                                            },
+                                            "row_actions": {
+                                              "type": "array",
+                                              "items": {
+                                                "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/value/properties/key_findings/items/properties/actions"
+                                              },
+                                              "description": "Recorded action IDs backing each row, in row order."
+                                            },
+                                            "rows": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "array",
+                                                "items": {
+                                                  "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/value/properties/key_findings/items/properties/facet/anyOf/0/additionalProperties"
+                                                },
+                                                "description": "One comparison row."
+                                              },
+                                              "description": "Comparison rows; every row length must equal columns.length."
+                                            },
+                                            "row_citations": {
+                                              "type": "array",
+                                              "items": {
+                                                "type": "array",
+                                                "items": {
+                                                  "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/value/properties/key_findings/items/properties/citations/items"
+                                                },
+                                                "description": "Source numbers (sources[].n) backing this content."
+                                              },
+                                              "description": "Sources backing each row, in row order; length must equal rows.length."
+                                            }
+                                          },
+                                          "required": [
+                                            "columns",
+                                            "rows"
+                                          ],
+                                          "additionalProperties": false
+                                        },
+                                        {
+                                          "type": "null"
+                                        }
+                                      ],
+                                      "description": "Tabular comparison data, or null when the query has no comparative shape."
+                                    }
+                                  },
+                                  "required": [
+                                    "comparison"
+                                  ],
+                                  "additionalProperties": false,
+                                  "description": "Structured/tabular facets of the Brief."
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "description": "Structured/tabular facets, or null when the query has no comparative shape."
+                            },
+                            "sources": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "cited": {
+                                    "type": "boolean",
+                                    "description": "True for evidence cited by the answer; false for consulted-only sources. All-or-none across sources."
+                                  },
+                                  "n": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "description": "Citation number; contiguous 1..N in array order."
+                                  },
+                                  "url": {
+                                    "type": "string",
+                                    "format": "uri",
+                                    "description": "URL as fetched."
+                                  },
+                                  "final_url": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "format": "uri"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ],
+                                    "default": null,
+                                    "description": "Post-redirect landing URL, or null when no redirect was observed."
+                                  },
+                                  "host": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "description": "Source host."
+                                  },
+                                  "title": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ],
+                                    "description": "Page title, or null when unavailable."
+                                  },
+                                  "excerpt": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ],
+                                    "default": null,
+                                    "description": "Short extracted snippet of the source content, or null when not captured."
+                                  },
+                                  "fetched_at": {
+                                    "type": "string",
+                                    "format": "date-time",
+                                    "description": "ISO-8601 UTC fetch timestamp."
+                                  },
+                                  "published_at": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "format": "date-time"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ],
+                                    "description": "ISO-8601 publication timestamp, or null when unknown."
+                                  }
+                                },
+                                "required": [
+                                  "n",
+                                  "url",
+                                  "host",
+                                  "title",
+                                  "fetched_at",
+                                  "published_at"
+                                ],
+                                "additionalProperties": false,
+                                "description": "A numbered, deduplicated source reference."
+                              },
+                              "description": "Numbered, deduplicated source references."
+                            },
+                            "constraints": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "name": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 60,
+                                    "description": "Condition name from the task contract."
+                                  },
+                                  "value": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 120,
+                                    "description": "Condition value."
+                                  },
+                                  "status": {
+                                    "type": "string",
+                                    "enum": [
+                                      "verified",
+                                      "unverified",
+                                      "violated"
+                                    ],
+                                    "description": "Whether the condition is confirmed, unknown, or not met."
+                                  },
+                                  "citations": {
+                                    "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/value/properties/facets/anyOf/0/properties/comparison/anyOf/0/properties/row_citations/items",
+                                    "default": [],
+                                    "description": "Evidence backing the status; verified requires at least one source."
+                                  }
+                                },
+                                "required": [
+                                  "name",
+                                  "value",
+                                  "status"
+                                ],
+                                "additionalProperties": false,
+                                "description": "A declared condition and its evidence-backed delivery status."
+                              },
+                              "maxItems": 24,
+                              "description": "Declared conditions and their delivery statuses; absent on older artifacts."
+                            },
+                            "requirements": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "pattern": "^(?:deliverable|fill|effects\\.submit|artifact:screenshot:(?:viewport|full_page|element)|filter:\\S(?:.{0,58}\\S)?)$",
+                                    "description": "Requirement id: deliverable, filter:<name>, fill, artifact:screenshot:<scope>, or effects.submit."
+                                  },
+                                  "label": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 120,
+                                    "description": "Plain-words name of the requirement."
+                                  },
+                                  "status": {
+                                    "type": "string",
+                                    "enum": [
+                                      "met",
+                                      "unmet",
+                                      "not_applicable"
+                                    ],
+                                    "description": "Whether evidence shows the requirement met, unmet, or not applicable."
+                                  },
+                                  "reason": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 200
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ],
+                                    "description": "What the evidence showed, or null when nothing needs saying."
+                                  },
+                                  "declared_in": {
+                                    "anyOf": [
+                                      {
+                                        "type": "integer",
+                                        "minimum": 1
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ],
+                                    "description": "The contract revision that declared the requirement, or null when not tracked."
+                                  },
+                                  "exemptions": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "label": {
+                                          "type": "string",
+                                          "minLength": 1,
+                                          "maxLength": 120,
+                                          "description": "Field label."
+                                        },
+                                        "reason": {
+                                          "type": "string",
+                                          "enum": [
+                                            "disabled",
+                                            "read_only",
+                                            "hidden",
+                                            "file_input",
+                                            "human_verification"
+                                          ],
+                                          "description": "Why the engine left a form control out of \"fill every eligible field\"."
+                                        }
+                                      },
+                                      "required": [
+                                        "label",
+                                        "reason"
+                                      ],
+                                      "additionalProperties": false,
+                                      "description": "A form control the engine left out of \"fill every eligible field\"."
+                                    },
+                                    "maxItems": 20,
+                                    "description": "Controls the engine judged exempt from the fill requirement."
+                                  },
+                                  "exempt_overflow": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "description": "How many more exempt controls exist beyond the listed ones."
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "label",
+                                  "status",
+                                  "reason",
+                                  "declared_in"
+                                ],
+                                "additionalProperties": false,
+                                "description": "One declared requirement of the task contract and its evidence-judged status."
+                              },
+                              "maxItems": 16,
+                              "description": "Each declared requirement of a do task and its evidence-judged status; absent on older artifacts and on ask and research Briefs."
+                            },
+                            "artifacts": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "screenshot",
+                                    "description": "The artifact kind."
+                                  },
+                                  "scope": {
+                                    "type": "string",
+                                    "enum": [
+                                      "viewport",
+                                      "full_page",
+                                      "element"
+                                    ],
+                                    "description": "What a screenshot covers: the visible viewport, the full page, or one element."
+                                  },
+                                  "path": {
+                                    "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/value/properties/actions/items/properties/artifacts/items/properties/path"
+                                  },
+                                  "sha256": {
+                                    "type": "string",
+                                    "pattern": "^[a-f0-9]{64}$",
+                                    "description": "Lowercase hex SHA-256 of the file bytes."
+                                  },
+                                  "bytes": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "description": "File size in bytes."
+                                  },
+                                  "width": {
+                                    "type": "integer",
+                                    "exclusiveMinimum": 0,
+                                    "description": "Image width in pixels."
+                                  },
+                                  "height": {
+                                    "type": "integer",
+                                    "exclusiveMinimum": 0,
+                                    "description": "Image height in pixels."
+                                  },
+                                  "part": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "description": "1-based position of this file in its capture set."
+                                  },
+                                  "parts": {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 6,
+                                    "description": "How many files the capture set holds."
+                                  },
+                                  "complete": {
+                                    "type": "boolean",
+                                    "description": "False when the set was clipped or truncated and does not show the whole target."
+                                  },
+                                  "labels": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "enum": [
+                                        "clipped_width",
+                                        "truncated",
+                                        "beyond_viewport"
+                                      ],
+                                      "description": "A label on a capture set: clipped_width, truncated, or beyond_viewport."
+                                    },
+                                    "maxItems": 3,
+                                    "description": "Labels on the capture set."
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "scope",
+                                  "path",
+                                  "sha256",
+                                  "bytes",
+                                  "width",
+                                  "height",
+                                  "part",
+                                  "parts",
+                                  "complete",
+                                  "labels"
+                                ],
+                                "additionalProperties": false,
+                                "description": "One saved capture file the run produced, linked relative to the run directory."
+                              },
+                              "maxItems": 12,
+                              "description": "Saved capture files of a do task, one entry per file in capture order; absent on older artifacts and on ask and research Briefs."
+                            },
+                            "metadata": {
+                              "type": "object",
+                              "properties": {
+                                "search_provider": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ],
+                                  "description": "Search provider that produced the source candidates, or null."
+                                },
+                                "synthesis": {
+                                  "type": "string",
+                                  "enum": [
+                                    "deterministic",
+                                    "llm"
+                                  ],
+                                  "description": "Synthesis strategy that produced the Brief."
+                                },
+                                "deterministic_fallback_used": {
+                                  "type": "boolean",
+                                  "description": "True when the LLM path failed and the deterministic synthesizer took over."
+                                },
+                                "coverage": {
+                                  "anyOf": [
+                                    {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 1
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "description": "Fraction of fetched sources represented in the Brief (0-1), or null."
+                                },
+                                "freshness": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ],
+                                  "description": "Human-readable freshness signal (for example \"today\"), or null."
+                                },
+                                "citation_verdict": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "claims_checked": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "description": "Claims inspected by the citation-faithfulness validator."
+                                        },
+                                        "flagged": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "description": "Claims flagged as unanchored."
+                                        },
+                                        "stripped": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "description": "Claims stripped as unanchored."
+                                        }
+                                      },
+                                      "required": [
+                                        "claims_checked",
+                                        "flagged",
+                                        "stripped"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null,
+                                  "description": "Citation-faithfulness verdict (filled post-synthesis), or null before validation."
+                                },
+                                "usage": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "input_tokens": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "description": "LLM input tokens consumed."
+                                        },
+                                        "output_tokens": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "description": "LLM output tokens produced."
+                                        },
+                                        "cost_usd": {
+                                          "type": "number",
+                                          "minimum": 0,
+                                          "description": "Estimated LLM cost in USD."
+                                        }
+                                      },
+                                      "required": [
+                                        "input_tokens",
+                                        "output_tokens",
+                                        "cost_usd"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "description": "LLM usage totals, or null on the deterministic path."
+                                },
+                                "evidence": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "candidate_claims": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "description": "Claim candidates considered before the eligibility gates."
+                                        },
+                                        "accepted_claims": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "description": "Claims that passed the eligibility gates and reached the Brief."
+                                        },
+                                        "excluded_sources": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "description": "Sources dropped by the query-relevance gate before assembly."
+                                        }
+                                      },
+                                      "required": [
+                                        "candidate_claims",
+                                        "accepted_claims",
+                                        "excluded_sources"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ],
+                                  "default": null,
+                                  "description": "Evidence-selection counts from the deterministic pipeline (candidate vs accepted claims, excluded sources), or null on the LLM path."
+                                },
+                                "run_id": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ],
+                                  "description": "Owning run id, or null outside a run context."
+                                }
+                              },
+                              "required": [
+                                "search_provider",
+                                "synthesis",
+                                "deterministic_fallback_used",
+                                "coverage",
+                                "freshness",
+                                "usage",
+                                "run_id"
+                              ],
+                              "additionalProperties": false,
+                              "description": "Provenance and quality signals."
+                            },
+                            "notices": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "source": {
+                                    "type": "string",
+                                    "description": "Host or subsystem the notice concerns."
+                                  },
+                                  "reason": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "description": "Human-readable reason for the notice."
+                                  },
+                                  "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                      "fetch_failed",
+                                      "extract_failed",
+                                      "blocked",
+                                      "source_excluded",
+                                      "uncited_claim_stripped",
+                                      "uncited_claim_flagged",
+                                      "budget_exhausted",
+                                      "limited_evidence",
+                                      "search_failed",
+                                      "contract_gap",
+                                      "other"
+                                    ],
+                                    "description": "Notice classification. `contract_gap` marks a part of the declared task contract not delivered, a condition not confirmed or not met, or rows shown as alternatives because they do not come from a required source. `source_excluded` marks a source dropped as irrelevant to the query before assembly; `limited_evidence` marks a Brief that fell short of the requested length because too few relevant findings survived the evidence gates; `search_failed` marks web searches that failed during the run, grouped by stable failure code (source `search:<provider>`); `budget_exhausted` marks a run budget (navigations, hosts) that Yantra itself imposed running out, never a site refusing access."
+                                  }
+                                },
+                                "required": [
+                                  "source",
+                                  "reason",
+                                  "kind"
+                                ],
+                                "additionalProperties": false,
+                                "description": "An honest per-source failure or validator flag."
+                              },
+                              "description": "Honest per-source failures and validator flags; may be empty."
+                            }
+                          },
+                          "required": [
+                            "brief_id",
+                            "task_id",
+                            "schema_version",
+                            "title",
+                            "overview",
+                            "key_findings",
+                            "sections",
+                            "facets",
+                            "sources",
+                            "metadata",
+                            "notices"
+                          ],
+                          "additionalProperties": false,
+                          "description": "The universal synthesized output document: answer-first overview, key findings, sections, facets, numbered sources, notices, and metadata. Every citation resolves to a declared source (no uncited claims)."
+                        },
+                        "path": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 512,
+                          "description": "Run-relative path, forward slashes."
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "value",
+                        "path"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "state": {
+                          "type": "string",
+                          "const": "missing"
+                        },
+                        "path": {
+                          "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/path"
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "path"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "state": {
+                          "type": "string",
+                          "const": "corrupt"
+                        },
+                        "path": {
+                          "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/path"
+                        },
+                        "detail": {
+                          "type": "string",
+                          "maxLength": 200,
+                          "description": "A bounded parse or validation summary; never file content."
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "path",
+                        "detail"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "state": {
+                          "type": "string",
+                          "const": "unsupported"
+                        },
+                        "path": {
+                          "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/path"
+                        },
+                        "found_version": {
+                          "type": "string",
+                          "maxLength": 64,
+                          "description": "The schema_version the file declares, e.g. `0.1`."
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "path",
+                        "found_version"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "state": {
+                          "type": "string",
+                          "const": "too_large"
+                        },
+                        "path": {
+                          "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/path"
+                        },
+                        "bytes": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "cap": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "path",
+                        "bytes",
+                        "cap"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "state": {
+                          "type": "string",
+                          "const": "denied"
+                        },
+                        "path": {
+                          "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/path"
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "path"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ],
+                  "description": "One artifact: ok with its value, or missing, corrupt, unsupported, too large or denied."
+                }
+              },
+              "required": [
+                "kind",
+                "slot"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "const": "templated_report"
+                },
+                "slot": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "state": {
+                          "type": "string",
+                          "const": "ok"
+                        },
+                        "value": {
+                          "type": "object",
+                          "properties": {
+                            "report_id": {
+                              "type": "string",
+                              "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
+                              "description": "Unique report document id (ULID)."
+                            },
+                            "task_id": {
+                              "type": "string",
+                              "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
+                              "description": "Originating task id (ULID)."
+                            },
+                            "schema_version": {
+                              "type": "string",
+                              "const": "0.2"
+                            },
+                            "template": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "source": {
+                                  "type": "string",
+                                  "enum": [
+                                    "saved",
+                                    "path"
+                                  ]
+                                },
+                                "path": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "hash": {
+                                  "type": "string",
+                                  "pattern": "^[a-f0-9]{64}$"
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "source",
+                                "path",
+                                "hash"
+                              ],
+                              "additionalProperties": false,
+                              "description": "Template identity and content hash recorded with a rendered report."
+                            },
+                            "title": {
+                              "type": "string",
+                              "minLength": 1,
+                              "description": "Display title used by history and HTML."
+                            },
+                            "slots": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "string"
+                                      }
+                                    }
+                                  }
+                                ]
+                              },
+                              "description": "Validated model-filled slot values."
+                            },
+                            "rendered_md": {
+                              "type": "string",
+                              "description": "Canonical Markdown rendered by the runtime."
+                            },
+                            "sources": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/value/properties/sources/items"
+                              },
+                              "description": "Engine-owned evidence ledger sources."
+                            },
+                            "metadata": {
+                              "type": "object",
+                              "properties": {
+                                "search_provider": {
+                                  "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/value/properties/metadata/properties/search_provider"
+                                },
+                                "synthesis": {
+                                  "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/value/properties/metadata/properties/synthesis"
+                                },
+                                "deterministic_fallback_used": {
+                                  "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/value/properties/metadata/properties/deterministic_fallback_used"
+                                },
+                                "coverage": {
+                                  "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/value/properties/metadata/properties/coverage"
+                                },
+                                "freshness": {
+                                  "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/value/properties/metadata/properties/freshness"
+                                },
+                                "citation_verdict": {
+                                  "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/value/properties/metadata/properties/citation_verdict"
+                                },
+                                "usage": {
+                                  "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/value/properties/metadata/properties/usage"
+                                },
+                                "evidence": {
+                                  "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/value/properties/metadata/properties/evidence"
+                                },
+                                "run_id": {
+                                  "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/value/properties/metadata/properties/run_id"
+                                }
+                              },
+                              "required": [
+                                "search_provider",
+                                "synthesis",
+                                "deterministic_fallback_used",
+                                "coverage",
+                                "freshness",
+                                "usage",
+                                "run_id"
+                              ],
+                              "additionalProperties": false,
+                              "description": "Reused Brief provenance and usage metadata."
+                            },
+                            "notices": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/value/properties/notices/items"
+                              },
+                              "description": "Reused Brief notices."
+                            }
+                          },
+                          "required": [
+                            "report_id",
+                            "task_id",
+                            "schema_version",
+                            "template",
+                            "title",
+                            "slots",
+                            "rendered_md",
+                            "sources",
+                            "metadata",
+                            "notices"
+                          ],
+                          "additionalProperties": false,
+                          "description": "A runtime-rendered report backed by a user-authored Markdown template."
+                        },
+                        "path": {
+                          "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/path"
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "value",
+                        "path"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "state": {
+                          "type": "string",
+                          "const": "missing"
+                        },
+                        "path": {
+                          "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/path"
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "path"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "state": {
+                          "type": "string",
+                          "const": "corrupt"
+                        },
+                        "path": {
+                          "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/path"
+                        },
+                        "detail": {
+                          "type": "string",
+                          "maxLength": 200,
+                          "description": "A bounded parse or validation summary; never file content."
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "path",
+                        "detail"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "state": {
+                          "type": "string",
+                          "const": "unsupported"
+                        },
+                        "path": {
+                          "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/path"
+                        },
+                        "found_version": {
+                          "type": "string",
+                          "maxLength": 64,
+                          "description": "The schema_version the file declares, e.g. `0.1`."
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "path",
+                        "found_version"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "state": {
+                          "type": "string",
+                          "const": "too_large"
+                        },
+                        "path": {
+                          "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/path"
+                        },
+                        "bytes": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "cap": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "path",
+                        "bytes",
+                        "cap"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "state": {
+                          "type": "string",
+                          "const": "denied"
+                        },
+                        "path": {
+                          "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/path"
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "path"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ],
+                  "description": "One artifact: ok with its value, or missing, corrupt, unsupported, too large or denied."
+                }
+              },
+              "required": [
+                "kind",
+                "slot"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "const": "none"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "additionalProperties": false
+            }
+          ],
+          "description": "The Brief or templated document, or none."
+        },
+        "outputs": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "type": "string",
+                      "const": "ok"
+                    },
+                    "value": {
+                      "type": "object",
+                      "additionalProperties": {}
+                    },
+                    "path": {
+                      "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/path"
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "value",
+                    "path"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "type": "string",
+                      "const": "missing"
+                    },
+                    "path": {
+                      "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/path"
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "path"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "type": "string",
+                      "const": "corrupt"
+                    },
+                    "path": {
+                      "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/path"
+                    },
+                    "detail": {
+                      "type": "string",
+                      "maxLength": 200,
+                      "description": "A bounded parse or validation summary; never file content."
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "path",
+                    "detail"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "type": "string",
+                      "const": "unsupported"
+                    },
+                    "path": {
+                      "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/path"
+                    },
+                    "found_version": {
+                      "type": "string",
+                      "maxLength": 64,
+                      "description": "The schema_version the file declares, e.g. `0.1`."
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "path",
+                    "found_version"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "type": "string",
+                      "const": "too_large"
+                    },
+                    "path": {
+                      "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/path"
+                    },
+                    "bytes": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "cap": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "path",
+                    "bytes",
+                    "cap"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "type": "string",
+                      "const": "denied"
+                    },
+                    "path": {
+                      "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/path"
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "path"
+                  ],
+                  "additionalProperties": false
+                }
+              ],
+              "description": "One artifact: ok with its value, or missing, corrupt, unsupported, too large or denied."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "A workflow run’s outputs.json; null for other runs."
+        },
+        "terminal": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "run_outcome",
+                    "manifest",
+                    "events",
+                    "report"
+                  ],
+                  "description": "Which reader answered: the run-event stream, manifest, events.jsonl or report.md."
+                },
+                "failure_class": {
+                  "type": "string",
+                  "maxLength": 500,
+                  "description": "The failure category, verbatim."
+                },
+                "message": {
+                  "$ref": "#/definitions/RunResultView/properties/terminal/anyOf/0/properties/failure_class",
+                  "description": "What happened, ANSI-stripped and bounded."
+                },
+                "blocker": {
+                  "$ref": "#/definitions/RunResultView/properties/terminal/anyOf/0/properties/failure_class",
+                  "description": "What blocked the run, for a handoff."
+                },
+                "safest_next_action": {
+                  "$ref": "#/definitions/RunResultView/properties/terminal/anyOf/0/properties/failure_class",
+                  "description": "The one next step the run recorded."
+                },
+                "termination_reason": {
+                  "$ref": "#/definitions/RunResultView/properties/termination_reason/anyOf/0",
+                  "description": "Why the run stopped: stalled (no progress after recovery), turn-timeout (thinking limit), the model finished, a budget or the repeated-failure breaker ended it, a handoff was raised, the user aborted, or the provider failed. wall-clock-soft means the model finished after the exploration wind-down began. owner_lost means the process that owned the run died before writing a terminal result, and a reconciler recorded the end (FEAT-064). Added in FEAT-063: readable by new executables only."
+                }
+              },
+              "required": [
+                "source"
+              ],
+              "additionalProperties": false,
+              "description": "Why the run ended; every text bounded to 500 characters."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Why the run ended; every text bounded to 500 characters."
+        },
+        "run_health": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "type": "string",
+                  "const": "ok"
+                },
+                "value": {
+                  "type": "object",
+                  "properties": {
+                    "schema_version": {
+                      "type": "number",
+                      "const": 1,
+                      "description": "Run-health schema version."
+                    },
+                    "run_id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Owning run id."
+                    },
+                    "searches": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Searches attempted (ok + failed)."
+                        },
+                        "ok": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Searches that returned results."
+                        },
+                        "failed_by_code": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "propertyNames": {
+                            "minLength": 1
+                          },
+                          "description": "Failed searches by stable failure code."
+                        },
+                        "providers": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "description": "Distinct search providers used, in first-use order."
+                        },
+                        "breaker_skipped": {
+                          "$ref": "#/definitions/RunResultView/properties/run_health/anyOf/0/properties/value/properties/searches/properties/failed_by_code/additionalProperties",
+                          "description": "Searches refused without a provider call because an earlier challenge opened the search breaker (FEAT-050)."
+                        },
+                        "peak_concurrency": {
+                          "$ref": "#/definitions/RunResultView/properties/run_health/anyOf/0/properties/value/properties/searches/properties/failed_by_code/additionalProperties",
+                          "description": "Most provider searches in flight at once (FEAT-050)."
+                        }
+                      },
+                      "required": [
+                        "total",
+                        "ok",
+                        "failed_by_code",
+                        "providers"
+                      ],
+                      "additionalProperties": false,
+                      "description": "Web searches by outcome."
+                    },
+                    "fetches": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Real network page fetches."
+                        },
+                        "by_mode": {
+                          "type": "object",
+                          "properties": {
+                            "http": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Pages served by the HTTP tier."
+                            },
+                            "browser": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Pages served by a browser render."
+                            }
+                          },
+                          "required": [
+                            "http",
+                            "browser"
+                          ],
+                          "additionalProperties": false,
+                          "description": "Network fetches by how they were served."
+                        },
+                        "repeat_fetches": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Network fetches of a normalized URL already fetched earlier in the run."
+                        },
+                        "failed_by_code": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "$ref": "#/definitions/RunResultView/properties/run_health/anyOf/0/properties/value/properties/searches/properties/failed_by_code/additionalProperties"
+                          },
+                          "propertyNames": {
+                            "minLength": 1
+                          },
+                          "description": "Failed `web_fetch` calls by stable error code."
+                        },
+                        "cache_hits": {
+                          "$ref": "#/definitions/RunResultView/properties/run_health/anyOf/0/properties/value/properties/searches/properties/failed_by_code/additionalProperties",
+                          "description": "Reads answered from the run document store with no network fetch (FEAT-050)."
+                        },
+                        "memo_hits": {
+                          "$ref": "#/definitions/RunResultView/properties/run_health/anyOf/0/properties/value/properties/searches/properties/failed_by_code/additionalProperties",
+                          "description": "Reads answered from the remembered terminal failure of an earlier read (FEAT-050)."
+                        },
+                        "challenges": {
+                          "type": "object",
+                          "properties": {
+                            "http": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Human-verification pages served to the HTTP tier."
+                            },
+                            "browser": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Human-verification pages served to the browser render."
+                            }
+                          },
+                          "required": [
+                            "http",
+                            "browser"
+                          ],
+                          "additionalProperties": false,
+                          "description": "Challenge pages seen, by tier (FEAT-050)."
+                        }
+                      },
+                      "required": [
+                        "total",
+                        "by_mode",
+                        "repeat_fetches",
+                        "failed_by_code"
+                      ],
+                      "additionalProperties": false,
+                      "description": "Network page fetches."
+                    },
+                    "source_failures": {
+                      "type": "object",
+                      "properties": {
+                        "fetch": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Per-site fetch failures."
+                        },
+                        "extract": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Per-site pages fetched but not readable."
+                        },
+                        "blocked": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Per-site ethics refusals (robots, blocklist, rate limit)."
+                        },
+                        "budget": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Page reads skipped by the run's own navigation/host budget (web_search sites and web_fetch calls)."
+                        },
+                        "policy": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Per-site reads refused by the run's own URL policy."
+                        }
+                      },
+                      "required": [
+                        "fetch",
+                        "extract",
+                        "blocked",
+                        "budget",
+                        "policy"
+                      ],
+                      "additionalProperties": false,
+                      "description": "Per-site read failures inside multi-source tools, by stage."
+                    },
+                    "browser": {
+                      "type": "object",
+                      "properties": {
+                        "launches": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Successful browser process launches."
+                        },
+                        "pool_launches": {
+                          "$ref": "#/definitions/RunResultView/properties/run_health/anyOf/0/properties/value/properties/searches/properties/failed_by_code/additionalProperties",
+                          "description": "Launches of the run's shared background page pool (FEAT-050)."
+                        },
+                        "contexts": {
+                          "$ref": "#/definitions/RunResultView/properties/run_health/anyOf/0/properties/value/properties/searches/properties/failed_by_code/additionalProperties",
+                          "description": "Isolated browser contexts the page pool opened, one per background page (FEAT-050)."
+                        }
+                      },
+                      "required": [
+                        "launches"
+                      ],
+                      "additionalProperties": false,
+                      "description": "Browser processes."
+                    },
+                    "budgets": {
+                      "type": "object",
+                      "properties": {
+                        "navigations_used": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Navigations consumed."
+                        },
+                        "navigations_limit": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Configured navigation ceiling."
+                        },
+                        "hosts_used": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Distinct hosts consumed."
+                        },
+                        "hosts_limit": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Configured distinct-host ceiling."
+                        },
+                        "exhausted": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "description": "Budget limits that refused at least one call, in first-hit order."
+                        }
+                      },
+                      "required": [
+                        "navigations_used",
+                        "navigations_limit",
+                        "hosts_used",
+                        "hosts_limit",
+                        "exhausted"
+                      ],
+                      "additionalProperties": false,
+                      "description": "Run budget consumption."
+                    },
+                    "tool_failures": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Tool calls that ended in error or timeout."
+                        },
+                        "by_code": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "$ref": "#/definitions/RunResultView/properties/run_health/anyOf/0/properties/value/properties/searches/properties/failed_by_code/additionalProperties"
+                          },
+                          "propertyNames": {
+                            "minLength": 1
+                          },
+                          "description": "Failed tool calls by stable error code."
+                        }
+                      },
+                      "required": [
+                        "total",
+                        "by_code"
+                      ],
+                      "additionalProperties": false,
+                      "description": "Tool failures across every tool."
+                    },
+                    "progress": {
+                      "type": "object",
+                      "properties": {
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "enforce",
+                            "observe"
+                          ],
+                          "description": "Whether stall and thinking limits are enforced."
+                        },
+                        "progress_error": {
+                          "type": "boolean",
+                          "description": "Progress tracking failed open to observe mode."
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "fill",
+                                  "artifact",
+                                  "effects",
+                                  "deliverable"
+                                ],
+                                "description": "Contract requirement kind."
+                              },
+                              "state": {
+                                "type": "string",
+                                "enum": [
+                                  "pending",
+                                  "advancing",
+                                  "met"
+                                ],
+                                "description": "Live evidence state."
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "state"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "maxItems": 6,
+                          "description": "Live contract items without labels or identities."
+                        },
+                        "fill": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "done": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "description": "Verified eligible fields."
+                                },
+                                "total": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "description": "Eligible fields in the census."
+                                }
+                              },
+                              "required": [
+                                "done",
+                                "total"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Fill coverage, or null without inventory."
+                        },
+                        "signals": {
+                          "type": "object",
+                          "properties": {
+                            "new_document": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "New document checkpoints."
+                            },
+                            "new_page": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "New canonical page checkpoints."
+                            },
+                            "action_verified": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Verified action checkpoints."
+                            },
+                            "artifact_saved": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Saved artifact checkpoints."
+                            },
+                            "item_advanced": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Advancing contract item checkpoints."
+                            }
+                          },
+                          "required": [
+                            "new_document",
+                            "new_page",
+                            "action_verified",
+                            "artifact_saved",
+                            "item_advanced"
+                          ],
+                          "additionalProperties": false,
+                          "description": "Progress signals observed."
+                        },
+                        "counted_calls": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Counted tool boundaries."
+                        },
+                        "no_progress_calls": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Consecutive calls without progress."
+                        },
+                        "longest_no_progress_ms": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Longest observed no-progress window."
+                        },
+                        "recovery": {
+                          "type": "object",
+                          "properties": {
+                            "rungs": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "steer",
+                                  "freeze",
+                                  "stop"
+                                ]
+                              },
+                              "maxItems": 3,
+                              "description": "Fired ladder prefix."
+                            },
+                            "triggers": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "stalled",
+                                  "turn-timeout"
+                                ]
+                              },
+                              "maxItems": 3,
+                              "description": "Triggers for fired rungs."
+                            },
+                            "refused_after_freeze": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Calls refused after exploration closed."
+                            },
+                            "steer_idle": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Steers held for the next prompt."
+                            }
+                          },
+                          "required": [
+                            "rungs",
+                            "triggers",
+                            "refused_after_freeze",
+                            "steer_idle"
+                          ],
+                          "additionalProperties": false,
+                          "description": "Bounded recovery history."
+                        },
+                        "turns": {
+                          "type": "object",
+                          "properties": {
+                            "count": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Provider turns."
+                            },
+                            "with_timing": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Turns reporting timing."
+                            },
+                            "thinking_ms_total": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Total thinking time."
+                            },
+                            "thinking_ms_max": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Longest thinking phase."
+                            },
+                            "provider_ms_total": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Total provider time."
+                            },
+                            "reasoning_tokens": {
+                              "anyOf": [
+                                {
+                                  "$ref": "#/definitions/RunResultView/properties/run_health/anyOf/0/properties/value/properties/searches/properties/failed_by_code/additionalProperties"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ],
+                              "description": "Reported reasoning tokens or null."
+                            },
+                            "turn_limit_aborts": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Thinking phases aborted at the limit."
+                            }
+                          },
+                          "required": [
+                            "count",
+                            "with_timing",
+                            "thinking_ms_total",
+                            "thinking_ms_max",
+                            "provider_ms_total",
+                            "reasoning_tokens",
+                            "turn_limit_aborts"
+                          ],
+                          "additionalProperties": false,
+                          "description": "Provider-only turn telemetry."
+                        }
+                      },
+                      "required": [
+                        "mode",
+                        "items",
+                        "fill",
+                        "signals",
+                        "counted_calls",
+                        "no_progress_calls",
+                        "longest_no_progress_ms",
+                        "recovery",
+                        "turns"
+                      ],
+                      "additionalProperties": false,
+                      "description": "Semantic progress, recovery and turn telemetry; absent on older runs."
+                    },
+                    "notices": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Runtime-derived notices attached to the published document; 0 when nothing was published."
+                    },
+                    "extraction": {
+                      "type": "object",
+                      "properties": {
+                        "pages_by_shape": {
+                          "type": "object",
+                          "properties": {
+                            "article": {
+                              "$ref": "#/definitions/RunResultView/properties/run_health/anyOf/0/properties/value/properties/searches/properties/failed_by_code/additionalProperties"
+                            },
+                            "collection": {
+                              "$ref": "#/definitions/RunResultView/properties/run_health/anyOf/0/properties/value/properties/searches/properties/failed_by_code/additionalProperties"
+                            },
+                            "table": {
+                              "$ref": "#/definitions/RunResultView/properties/run_health/anyOf/0/properties/value/properties/searches/properties/failed_by_code/additionalProperties"
+                            },
+                            "detail": {
+                              "$ref": "#/definitions/RunResultView/properties/run_health/anyOf/0/properties/value/properties/searches/properties/failed_by_code/additionalProperties"
+                            },
+                            "index": {
+                              "$ref": "#/definitions/RunResultView/properties/run_health/anyOf/0/properties/value/properties/searches/properties/failed_by_code/additionalProperties"
+                            }
+                          },
+                          "additionalProperties": false,
+                          "description": "Shape-aware page reads returned to the model, by page shape."
+                        },
+                        "records_shown": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Collection records shown to the model."
+                        },
+                        "links_offered": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Links offered to the model (byte-identical after sanitizing)."
+                        },
+                        "links_withheld": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Links withheld because the model-visible transform would have altered them."
+                        },
+                        "discovered_follows": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Successful web_fetch and browser_navigate calls to a URL a read page offered."
+                        }
+                      },
+                      "required": [
+                        "pages_by_shape",
+                        "records_shown",
+                        "links_offered",
+                        "links_withheld",
+                        "discovered_follows"
+                      ],
+                      "additionalProperties": false,
+                      "description": "Shape-aware extraction (FEAT-051): pages by shape, records, and links."
+                    },
+                    "capture": {
+                      "type": "object",
+                      "properties": {
+                        "vision_assist": {
+                          "type": "object",
+                          "properties": {
+                            "available": {
+                              "type": "boolean",
+                              "description": "Whether the capability is registered for this run."
+                            },
+                            "reasons": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "grant_missing",
+                                  "model_no_image_input",
+                                  "no_browser_tools",
+                                  "suppressed_by_flag",
+                                  "zero_llm"
+                                ],
+                                "description": "A condition that keeps Vision Assist off."
+                              },
+                              "description": "Every condition that keeps it off; empty exactly when available."
+                            }
+                          },
+                          "required": [
+                            "available",
+                            "reasons"
+                          ],
+                          "additionalProperties": false,
+                          "description": "Whether Vision Assist (screenshots sent to the model) is available, and why not."
+                        },
+                        "deliverable": {
+                          "type": "object",
+                          "properties": {
+                            "available": {
+                              "type": "boolean",
+                              "description": "Whether the capability is registered for this run."
+                            },
+                            "reasons": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "suppressed_by_flag",
+                                  "no_browser",
+                                  "no_interaction_tools"
+                                ],
+                                "description": "A condition that keeps deliverable capture off."
+                              },
+                              "description": "Every condition that keeps it off; empty exactly when available."
+                            }
+                          },
+                          "required": [
+                            "available",
+                            "reasons"
+                          ],
+                          "additionalProperties": false,
+                          "description": "Whether deliverable capture (screenshots kept on this computer) is available, and why not."
+                        },
+                        "deliverable_calls": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Successful browser_capture calls."
+                        },
+                        "deliverable_files": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "PNG files browser_capture wrote."
+                        },
+                        "deliverable_bytes": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Bytes browser_capture wrote."
+                        }
+                      },
+                      "required": [
+                        "vision_assist",
+                        "deliverable",
+                        "deliverable_calls",
+                        "deliverable_files",
+                        "deliverable_bytes"
+                      ],
+                      "additionalProperties": false,
+                      "description": "Both capture capabilities with reason codes, and what deliverable capture wrote (FEAT-058)."
+                    }
+                  },
+                  "required": [
+                    "schema_version",
+                    "run_id",
+                    "searches",
+                    "fetches",
+                    "source_failures",
+                    "browser",
+                    "budgets",
+                    "tool_failures",
+                    "notices"
+                  ],
+                  "additionalProperties": false,
+                  "description": "An agentic run's own health summary (run-health.json): searches, fetches, source failures, browser launches, budgets, tool failures, and runtime notices. Counts and closed codes only."
+                },
+                "path": {
+                  "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/path"
+                }
+              },
+              "required": [
+                "state",
+                "value",
+                "path"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "type": "string",
+                  "const": "missing"
+                },
+                "path": {
+                  "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/path"
+                }
+              },
+              "required": [
+                "state",
+                "path"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "type": "string",
+                  "const": "corrupt"
+                },
+                "path": {
+                  "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/path"
+                },
+                "detail": {
+                  "type": "string",
+                  "maxLength": 200,
+                  "description": "A bounded parse or validation summary; never file content."
+                }
+              },
+              "required": [
+                "state",
+                "path",
+                "detail"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "type": "string",
+                  "const": "unsupported"
+                },
+                "path": {
+                  "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/path"
+                },
+                "found_version": {
+                  "type": "string",
+                  "maxLength": 64,
+                  "description": "The schema_version the file declares, e.g. `0.1`."
+                }
+              },
+              "required": [
+                "state",
+                "path",
+                "found_version"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "type": "string",
+                  "const": "too_large"
+                },
+                "path": {
+                  "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/path"
+                },
+                "bytes": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cap": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                }
+              },
+              "required": [
+                "state",
+                "path",
+                "bytes",
+                "cap"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "type": "string",
+                  "const": "denied"
+                },
+                "path": {
+                  "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/path"
+                }
+              },
+              "required": [
+                "state",
+                "path"
+              ],
+              "additionalProperties": false
+            }
+          ],
+          "description": "One artifact: ok with its value, or missing, corrupt, unsupported, too large or denied."
+        },
+        "report": {
+          "type": "object",
+          "properties": {
+            "exists": {
+              "type": "boolean"
+            },
+            "bytes": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "exists",
+            "bytes"
+          ],
+          "additionalProperties": false,
+          "description": "report.md; its body is read lazily through read.report."
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "$ref": "#/definitions/RunResultView/properties/document/anyOf/0/properties/slot/anyOf/0/properties/path"
+              },
+              "entry_id": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The RUN_ARTIFACT_REGISTRY entry it matched."
+              },
+              "exposure": {
+                "type": "string",
+                "enum": [
+                  "typed",
+                  "view",
+                  "download",
+                  "denied"
+                ],
+                "description": "typed: only through a typed read (e.g. brief.json through read.run_result); view: through a bounded viewer; download: only as an attachment; denied: never served."
+              },
+              "viewer": {
+                "type": "string",
+                "enum": [
+                  "brief",
+                  "document",
+                  "markdown",
+                  "json",
+                  "jsonl",
+                  "text",
+                  "image",
+                  "none"
+                ],
+                "description": "The bounded viewer that opens the file; `none` when no viewer exists."
+              },
+              "bytes": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "modified_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "over_inline_cap": {
+                "type": "boolean",
+                "description": "Larger than its viewer loads whole."
+              }
+            },
+            "required": [
+              "path",
+              "entry_id",
+              "exposure",
+              "viewer",
+              "bytes",
+              "modified_at",
+              "over_inline_cap"
+            ],
+            "additionalProperties": false,
+            "description": "One public run file."
+          },
+          "maxItems": 2000
+        },
+        "artifacts_truncated": {
+          "type": "boolean"
+        },
+        "notices_source": {
+          "type": "string",
+          "enum": [
+            "brief",
+            "document",
+            "run_health",
+            "none"
+          ],
+          "description": "Where the Notices block comes from."
+        }
+      },
+      "required": [
+        "run_id",
+        "mode",
+        "title",
+        "started_at",
+        "ended_at",
+        "duration_ms",
+        "status",
+        "task_outcome",
+        "termination_reason",
+        "execution_state",
+        "live",
+        "document",
+        "outputs",
+        "terminal",
+        "run_health",
+        "report",
+        "artifacts",
+        "artifacts_truncated",
+        "notices_source"
+      ],
+      "additionalProperties": false,
+      "description": "One run, read for the app’s Run result page."
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

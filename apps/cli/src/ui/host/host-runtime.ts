@@ -52,6 +52,7 @@ import { hostActiveRuns } from './ledger-reads.js';
 import { registerReads } from './reads.js';
 import { recoverHost } from './recovery.js';
 import { RpcMethodRegistry, RpcServer } from './rpc-server.js';
+import { registerRunReads } from './run-reads.js';
 import { RunRelay } from './run-relay.js';
 import { SessionStore, sessionRoute } from './sessions.js';
 import { Supervisor, type SupervisorDeps } from './supervisor.js';
@@ -178,6 +179,7 @@ export async function startHostRuntime(deps: HostRuntimeDeps): Promise<RunningHo
         leasedRunIds: () => feed.liveRunIds(),
       }),
     });
+    registerRunReads(methods, { logger });
     const feed = new ChangeFeed({
       openSources: () => openDefaultSources({ runsRoot: runsRoot(), profilePath: profilePath() }),
       runsRoot: runsRoot(),

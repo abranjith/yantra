@@ -1,17 +1,23 @@
 // @no-llm
 /**
- * The app's run reads (FEAT-066): `read.list` Ledger pages (TASK-002).
+ * The app's run reads (FEAT-066): `read.list` Ledger pages (TASK-002) and
+ * `read.run_result` (TASK-004).
  */
 
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { resetPathCache, runsRoot, type HistoryEntry } from '@yantra/core';
+import { ArtifactAccessError, resetPathCache, runsRoot, type HistoryEntry } from '@yantra/core';
 import { RunLedgerPage, type InvocationRecord, type RunLedgerQuery } from '@yantra/protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  askBriefRun,
+  buildRunDir,
+} from '../../../../../packages/core/tests/run-view/fixtures/build-run-dir.js';
 import { openHistory } from '../../../src/history.js';
+import type { HostLogger } from '../../../src/ui/host/host.js';
 import {
   MAX_LEDGER_PAGE_BYTES,
   displayedStateOf,
@@ -26,6 +32,11 @@ import {
   RpcMethodRegistry,
   type RpcCallContext,
 } from '../../../src/ui/host/rpc-server.js';
+import {
+  registerRunReads,
+  runReadError,
+  type RunReadDeps,
+} from '../../../src/ui/host/run-reads.js';
 
 let home: string;
 
@@ -310,5 +321,99 @@ describe('the host’s active runs', () => {
       leasedRunIds: () => ['d'],
     });
     expect(await active()).toEqual([{ runId: 'd', displayedState: 'running' }]);
+  });
+});
+
+describe('read.run_result', () => {
+  const CALL = { windowId: 'w', connection: {} } as unknown as RpcCallContext;
+
+  function capturingLogger() {
+    const lines: { level: string; fields: Record<string, unknown> }[] = [];
+    const logger: HostLogger = {
+      debug: (fields) => lines.push({ level: 'debug', fields }),
+      info: (fields) => lines.push({ level: 'info', fields }),
+      warn: (fields) => lines.push({ level: 'warn', fields }),
+      error: (fields) => lines.push({ level: 'error', fields }),
+    };
+    return { logger, lines };
+  }
+
+  function method(deps: RunReadDeps) {
+    const methods = new RpcMethodRegistry();
+    registerRunReads(methods, {
+      reconcile: () => Promise.resolve(),
+      live: () => Promise.resolve(null),
+      ...deps,
+    });
+    return methods.get('read.run_result')!;
+  }
+
+  it('returns a protocol-valid view of a Brief run', async () => {
+    const spec = askBriefRun(1);
+    await buildRunDir(runsRoot(), spec);
+    const read = method({});
+
+    const view = (await read.handler(
+      read.params.parse({ run_id: spec.runId }),
+      CALL,
+    )) as RunResultView;
+
+    expect(read.result.safeParse(view).success).toBe(true);
+    expect(view.document.kind).toBe('brief');
+    expect(view.artifacts.map((item) => item.path)).not.toContain('lease.json');
+  });
+
+  it('maps a missing run to not_found', async () => {
+    const read = method({});
+    const error = await Promise.resolve(
+      read.handler(read.params.parse({ run_id: runId(99) }), CALL),
+    ).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(RpcError);
+    expect((error as RpcError).data.code).toBe('not_found');
+  });
+
+  it.each(['../x', 'agent-smoke-1', ''])('refuses the run id %j as invalid params', (id) => {
+    expect(method({}).params.safeParse({ run_id: id }).success).toBe(false);
+  });
+
+  it('logs slot states at debug and a corrupt file at warn once per host lifetime, without content', async () => {
+    // Arrange: a corrupt Brief with recognizable text in it.
+    const spec = askBriefRun(2);
+    await buildRunDir(runsRoot(), {
+      ...spec,
+      files: { ...spec.files, 'brief.json': '{"overview": "SECRET-OVERVIEW", ' },
+    });
+    const { logger, lines } = capturingLogger();
+    const read = method({ logger });
+
+    // Act: read twice.
+    for (let i = 0; i < 2; i++) await read.handler(read.params.parse({ run_id: spec.runId }), CALL);
+
+    // Assert
+    const warns = lines.filter((line) => line.level === 'warn');
+    expect(warns).toEqual([
+      {
+        level: 'warn',
+        fields: { runId: spec.runId, entry_id: 'brief.json', state: 'corrupt' },
+      },
+    ]);
+    const debug = lines.find((line) => line.level === 'debug');
+    expect(debug?.fields).toMatchObject({
+      runId: spec.runId,
+      read: 'run_result',
+      slots: { document: 'corrupt', outputs: 'none', run_health: 'ok' },
+    });
+    expect(JSON.stringify(lines)).not.toContain('SECRET-OVERVIEW');
+  });
+
+  it('turns typed core errors into RPC errors', () => {
+    expect((runReadError(new ArtifactAccessError('outside_run'), 'r') as RpcError).data.code).toBe(
+      'not_allowed',
+    );
+    expect((runReadError(new ArtifactAccessError('too_large'), 'r') as RpcError).data.code).toBe(
+      'too_large',
+    );
+    const other = new Error('boom');
+    expect(runReadError(other, 'r')).toBe(other);
   });
 });
