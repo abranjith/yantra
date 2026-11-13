@@ -37,14 +37,22 @@ A screenshot the user asks for as a deliverable is a different capability: `brow
 a clean PNG under the run directory and returns only its path and size, so its pixels never reach
 a model provider and it needs no stored grant.
 
-The workspace also contains `@yantra/ui` (Drshya), a browser-only design-system library for a
-future local web app. No shipped command renders it yet, and the web app that will consume it
-(`apps/web`) does not exist, so it sits outside the runtime context below; its only consumers today
-are its own gallery and the end-to-end harness.
+`yantra ui` (FEAT-065) adds a second, optional way in: a local app window. The command starts or
+reuses one **app host** per data directory, a detached Node process that serves the embedded web
+app (`apps/web`, built on the `@yantra/ui` Drshya design system) on `127.0.0.1` only, and opens it
+in a Chrome or Edge `--app` window. The host is still not an application server in the hosted
+sense: it listens on loopback, admits only the window that `yantra ui` handed a single-use launch
+code, and never executes a task. It answers reads in-process and starts every run-class or
+mutating command as a detached CLI worker process that runs the same command handler as the
+terminal.
 
 ```mermaid
 flowchart LR
   User[User or local script] --> CLI[yantra CLI]
+  User --> Window[App window<br/>Chrome or Edge --app]
+  CLI -->|yantra ui: start or reuse, launch code| Host[App host<br/>127.0.0.1 only]
+  Window -->|HTTP and WebSocket JSON-RPC| Host
+  Host -->|detached CLI workers| Runtime
   CLI --> Runtime[Yantra runtime]
   Runtime --> Chrome[Managed or external Chrome via CDP pipe]
   Runtime -->|Explicit consented install only| CfT[Chrome for Testing Stable distribution]
@@ -61,25 +69,33 @@ flowchart LR
 The production code is a strict TypeScript, ESM-only pnpm workspace. Rather than showing every
 workspace import, the component view below shows the dependency layers: arrows point toward the
 lower-level dependency. TypeScript project references build protocol first, then core, agent, and
-CLI. The browser-only design system, `packages/ui`, is a separate branch of the graph: it may take
-protocol types and nothing else from the workspace, and no engine package or the CLI imports it.
+CLI. The browser code is a separate branch of the graph. The design system, `packages/ui`, may
+take protocol types and nothing else from the workspace. The web app, `apps/web`, imports Drshya
+and protocol types (`import type` only today) and nothing else; no engine package imports either. The CLI does not import the web app
+either: it embeds the app's built files (`dist/web`) at build time, and its development dependency
+on `@yantra/web` exists only so Turbo builds the app first.
 
 ```mermaid
 flowchart TD
-  CLI[apps/cli<br/>commands, option resolution, rendering]
+  CLI[apps/cli<br/>commands, option resolution, rendering,<br/>app host and workers]
   Agent[packages/agent<br/>live agent orchestration]
   Core[packages/core<br/>browser, deterministic engines,<br/>policy, persistence]
   Protocol[packages/protocol<br/>Zod contracts and validation]
+  Web[apps/web<br/>Yantra app, browser-only]
   UI[packages/ui<br/>Drshya design system,<br/>browser-only]
 
   CLI --> Agent --> Core --> Protocol
+  Web --> UI
+  Web -->|import type| Protocol
   UI -.->|import type only, permitted| Protocol
+  CLI -.->|embeds built files as dist/web| Web
 ```
 
 The CLI is the composition root, so it also imports core and protocol for deterministic commands
 and shared validation; those direct imports are intentionally omitted from the diagram. They still
-point downward. The dashed edge is a permitted direction rather than a current import: no
-`packages/ui` source imports protocol yet, and its manifest does not declare it.
+point downward. The dashed edge from Drshya is a permitted direction rather than a current import:
+no `packages/ui` source imports protocol yet, and its manifest does not declare it. The dashed edge
+from the CLI is a build-time copy, not an import.
 `@yantra/test-helpers` provides fixtures, while workspace and end-to-end tests verify the
 production packages without participating in their runtime dependency graph.
 
@@ -198,6 +214,20 @@ the kinds that force a sync. `parseRunEventLine` classifies one line as an `even
 is never persisted. The same feature adds `owner_lost` to `TerminationReason` and `user_app` to
 `ConfirmationDecidedBy` for FEAT-064 and FEAT-068.
 
+The app host's contracts (FEAT-065) are two schema modules. `src/schemas/app-host.ts` holds what
+the host persists or exchanges with other local processes: `HostLockRecord` and `InvocationRecord`
+(both emitted as JSON Schema, `host-lock.json` and `invocation-record.json`), the closed
+`InvocationState` enum, `DisplayedEffective` (what the app's composer showed at submission; a value
+for a `secret-input` option is rejected by the schema), `DriftDifference`,
+`InvocationFinishReason` (`owner_lost`, `busy`, `refused_claim`), `InvocationResult` (which is
+FEAT-064's `WorkerResult`, envelope capped at `MAX_INVOCATION_ENVELOPE_BYTES`, 1 MiB),
+`UiOpenResult` (the `yantra ui --json` document) and the control-socket messages.
+`APP_CHANNEL_VERSION` is 1. `src/schemas/app-rpc.ts` holds the window channel: the JSON-RPC 2.0
+envelope, the app error codes beside the standard ones (`unauthorized`, `busy`, `not_allowed`,
+`not_found`, `too_large`, `needs_confirmation`, each error's `data` carrying a code, message and
+optional remediation), the `auth` first message, the close code `APP_RPC_CLOSE_UNAUTHORIZED`
+(4401), `MAX_APP_RPC_MESSAGE_BYTES` (1 MiB), and the params and result schema of every method.
+
 ### `packages/core`
 
 `@yantra/core` contains provider-independent domain and infrastructure services:
@@ -218,6 +248,9 @@ is never persisted. The same feature adds `owner_lost` to `TerminationReason` an
 - filesystem stores for workflows, run artifacts, profiles, report templates, and ask cache;
 - the run-event stream and its single-writer `run-events.jsonl` log (`src/run-events/`), and the
   run channel's frame codec (`src/run-channel/`);
+- the app host's durable coordination (`src/app-host/`): the single-instance `host.lock`, the
+  invocation store with its closed transition table and slot lock, and host-start invocation
+  recovery, described under [App host and `yantra ui`](#app-host-and-yantra-ui);
 - the local SQLite index for history, preferences, persistent rate limits, schedules, and domain
   ranks; and
 - the local scheduler daemon, notification adapters, audit writers, and diagnostics.
@@ -1378,7 +1411,7 @@ flowchart LR
   Buffer -->|committed first on open| Log[RunEventLog<br/>single writer]
   Stream -->|once open: append, then deliver| Log
   Log --> File[run-events.jsonl]
-  Stream -->|committed deliveries with seq| Committed[Committed subscribers<br/>onEvent, tests, future app relays]
+  Stream -->|committed deliveries with seq| Committed[Committed subscribers<br/>onEvent, tests, the run socket]
   Stream -->|every delivery, including pre-open and degraded| Owner[includeUncommitted subscriber<br/>the owning process's one renderer]
 ```
 
@@ -2705,7 +2738,8 @@ is user-visible, which is why the registry records each command's `registration`
 
 The terminal surface is pinned by characterization goldens under
 `apps/cli/tests/fixtures/cli-surface/`, captured once from the pre-registry tree by
-`apps/cli/scripts/capture-cli-surface.ts` and never regenerated by later work:
+`apps/cli/scripts/capture-cli-surface.ts` and recaptured only on purpose (FEAT-065 did so once, to
+add the root help line and help files of `ui`):
 
 - `help/w80/` and `help/w160/`: `--help` for the root, every group and every leaf, plus
   `yantra help <top-level>`, at fixed widths with colors off;
@@ -2719,7 +2753,7 @@ capture module (`tests/registry/surface.ts`) and compares bytes, printing a unif
 first difference. The capture replaces leaf actions with a stub, so an error case that parses
 cleanly is recorded as `action-invoked` instead of running a command. The goldens are LF-only and
 listed in `.prettierignore`. `tests/registry/walk-tree.ts` enumerates the tree through commander's
-public API only: 59 command paths, 7 groups and 52 leaves.
+public API only: 60 command paths, 7 groups and 53 leaves.
 
 The registry data lives in `packages/protocol/src/commands/`: `groups.ts` holds the six named
 option groups (`agent-model`, `agent-budget`, `agent-turn`, `no-llm`, `screenshots`,
@@ -2780,12 +2814,13 @@ commands are `adapter` class, meaning an app-side adapter replaces the generated
 `config edit` (`config-edit-yaml`, a raw-YAML editor with validation instead of `$EDITOR`) and
 `init` (`init-onboarding`, executing as `mutate` over the shared init service). `config data-dir`
 is an `exemption` under plan decision D15: relocation moves the directory holding the host's own
-lock, queue and sockets, so the app shows the steps instead of running it. `prefs` is the
+lock, queue and sockets, so the app shows the steps instead of running it. `ui` (FEAT-065, last in
+root-help order) is the other `exemption`: it is the command that opens the app. `prefs` is the
 option-dependent case: `read` by default, `mutate` when the action is `set` or `approve` or when
 `--forget` is present. Removals (`config unset`, `secret rm`, `model rm`, `sites remove`), `--force`,
 `--reset`, `--forget` and `config data-dir --no-move` carry `danger: confirm`.
 
-Every family is now generated: the registry holds all 59 command paths (7 groups, 52 leaves) and
+Every family is now generated: the registry holds all 60 command paths (7 groups, 53 leaves) and
 `UNMIGRATED_COMMANDS` is empty. The legacy path in `buildCommandTree` remains for a family that
 ever has to be built by hand again; such a family needs a dated allowlist entry with a reason, and
 the list may only shrink. `tests/registry/completeness.spec.ts` asserts both directions (every
@@ -3014,6 +3049,249 @@ sequenceDiagram
   uncaught failure becomes an `error` result with exit 2. If handles remain 5 s after the result is
   written, the entry hard-exits.
 
+#### App host and `yantra ui`
+
+The app host (FEAT-065, plan D1–D6) is a **supervisor, never an executor**. It is one detached Node
+process per data directory, built to `dist/ui-host.js` (not a `bin` entry), whose composition root
+is `startHostRuntime` in `src/ui/host/host-runtime.ts`. It serves the embedded web build, answers
+reads in-process, and starts each run-class or mutating command exactly once as a detached CLI
+worker (`dist/worker.js`, above). Task logic never runs in the host or in web code: a worker runs
+the same registry handler and argv the terminal would, so a run started from the app is owned,
+recorded and recoverable exactly like a terminal run (lease, run socket, `run-events.jsonl`). Any of
+the three processes (host, worker, window) can die without losing run data.
+
+```mermaid
+flowchart LR
+  UiCmd["yantra ui"] -->|probe host.lock, spawn host detached| HostProc
+  UiCmd -->|control socket: hello with token, launch_code.issue| HostProc
+  UiCmd -->|open app window, launch code in URL fragment| Window
+  Window["App window, apps/web"] -->|"POST /session, GET assets and /a/ URLs"| HostProc
+  Window -->|"/rpc WebSocket, JSON-RPC 2.0"| HostProc
+  subgraph HostProc["App host, dist/ui-host.js, 127.0.0.1 only"]
+    Guard[Request guard] --> Routes[Static assets, sessions,<br/>signed artifact URLs]
+    Rpc[RpcServer] --> Reads[In-process reads<br/>worker adapter with --json]
+    Rpc --> Feed[Change feed]
+    Rpc --> Sup[Supervisor]
+    Rpc --> Relay[Run relay and attendance]
+  end
+  Sup -->|records under slots.lock| Store[ui/invocations]
+  Sup -->|spawnDetachedWorker| Worker["Detached CLI worker, dist/worker.js"]
+  Worker -->|claim, markRunning, finish| Store
+  Worker -->|lease.json, run socket, run-events.jsonl| RunDir[runs/run-id]
+  Relay -->|RunChannelClient| RunDir
+```
+
+**`yantra ui [--print] [--json]`** (`src/commands/ui.ts`) probes `host.lock`. A live, `ready` host
+is reused. Otherwise it spawns `node dist/ui-host.js` detached, shell-free, with no stdio, the CLI's
+environment and the data directory as working directory, and polls for `ready` for up to 10 s. It
+then connects to the host's control socket, presents the lock's `control_token`, asks for a
+single-use launch code and builds `http://127.0.0.1:<port>/#code=<code>`. `--print` prints that URL;
+otherwise `openAppWindow` (`src/ui/window-launcher.ts`) starts the first of system Google Chrome
+(never Chrome for Testing), Microsoft Edge, then the resolved Yantra browser, detached and unref'd,
+with `--app=<url>`, its own `--user-data-dir` under `<data-dir>/ui/chrome-profile`,
+`--no-first-run` and `--no-default-browser-check`, and never a remote-debugging or automation flag.
+`--json` emits `UiOpenResult {schemaVersion, url, port, hostPid, reused}` in either mode. Exit 3
+covers an unverifiable or unreadable lock (`unknown` is never reclaimed), a host that exits before
+`ready` (the cause comes from `host-start-failure.json` when that host recorded one, else the
+message names `host.log`), a host not ready in 10 s, an unreachable control socket, and no
+Chromium browser, in which case the URL is still printed. A reused host of another Yantra version
+gets a one-line stderr notice.
+
+**Host start and stop.** `startHostRuntime` reads the build ID from the embedded build's
+`build-id.json` (`assets_missing` otherwise), then, undoing every completed step if a later one
+fails:
+
+1. acquires `host.lock` as `starting` (with a fresh 256-bit control token and `env_captured_at`,
+   the age of the environment workers inherit, D13);
+2. composes the session store, RPC method registry, in-process reads, change feed, artifact URLs,
+   run relay, attendance, supervisor and drift review, and binds HTTP on `127.0.0.1` port 0
+   (`bind_failed` otherwise);
+3. binds the token-authenticated control socket;
+4. publishes the lock as `ready` with the port and socket address;
+5. runs host-start recovery, then starts the supervisor's dequeue loop and the idle check.
+
+A host that cannot start logs the reason, writes `host-start-failure.json` (`{pid, code, message,
+remediation, at}`, owner-only) for `yantra ui`, and exits 3. SIGINT, SIGTERM, SIGBREAK and idle exit
+call `stop()`, which closes listeners and sockets and releases the lock only while it still carries
+this process's identity. Workers are never signalled (D6).
+
+**Single instance.** `FileHostLock` (`packages/core/src/app-host/host-lock.ts`) stores a JSON
+`HostLockRecord`, never a bare PID: state, `pid` and `start_token`, port, control socket address,
+control token, build ID, Yantra and channel versions, `started_at` and `env_captured_at`. Every
+read-modify-write runs inside a short `proper-lockfile` mutex on `host.lock.mutex`, so two racing
+`yantra ui` invocations end with one acquirer, and records are published atomically. The holder's
+liveness is a creation-identity check: a dead or reused-PID holder is replaced, an `unknown` or
+unreadable one is refused. `yantra config data-dir` reads the same file and refuses while its
+holder is not verifiably dead (D15).
+
+**HTTP boundary** (`request-guard.ts`, `host.ts`, `static-assets.ts`, plan D18). The host binds
+`127.0.0.1` only, never `0.0.0.0`, `::` or `localhost`. Before any route runs, `Host` must be
+exactly `127.0.0.1:<port>` (421, which refuses DNS-rebinding pages), and every method other than
+GET and HEAD needs `Origin` exactly `http://127.0.0.1:<port>` (403). Bodies are capped at 1 MiB
+(413). Every response, errors included, carries a strict CSP (`default-src 'self'`, `connect-src
+'self' ws://127.0.0.1:<port>`, `frame-ancestors 'none'`, `object-src 'none'`, …) plus `nosniff`,
+`no-referrer`, `X-Frame-Options: DENY` and same-origin opener and resource policies; no CORS header
+is ever sent. Static serving gives `index.html` `no-store` and content-hashed `assets/` files
+`immutable`, sends `index.html` for unknown extensionless app routes, rejects `..`, backslashes,
+NUL and encoded dots before building a path, `realpath`-checks every file into the asset root, and
+serves only an extension allowlist. Refusals are counted and logged by reason and Origin host only.
+
+**Sessions** (`sessions.ts`). A window proves itself in three steps, and only SHA-256 digests of
+codes, cookies and capabilities are kept, in host memory:
+
+1. A launch code (256 bits, single use, 60 s) reaches the window in the URL fragment;
+   `take-launch-code.ts` removes it from the URL before any other module runs.
+2. `POST /session {code}` (exact Origin) exchanges it for a `window_capability`, held in page
+   memory only, and an `HttpOnly; SameSite=Strict` `yantra_session` cookie. Cookies ignore ports
+   and every app window shares one Chrome profile, so one cookie identifies the profile and may
+   carry several windows, while each window keeps its own capability: one window's cookie with
+   another's capability is refused. Any failed exchange gets the same `session_refused` body.
+3. Every RPC socket presents the cookie and then the capability.
+
+A capability expires 5 minutes after its window's last socket closes and 12 hours after creation
+regardless. While connected, the page fetches a resume code (single use, 60 s, issued only over an
+authenticated socket) every 45 s into that tab's `sessionStorage`, so a reload exchanges it through
+the same `POST /session` path for a new capability of the same window, revoking the old one.
+
+**RPC** (`rpc-server.ts`). `GET /rpc` upgrades only with the exact Host and Origin and a live session
+cookie (otherwise a raw 403 and the socket is destroyed). The first message must be `auth
+{window_capability}` matching the cookie's window within 5 s, or the socket closes with 4401 and no
+reply. Messages over 1 MiB and binary frames close the socket. Every request is validated against
+its method's Zod params schema from `@yantra/protocol`, and every result against its result schema.
+The server pings every 15 s, terminates a socket that misses two pongs, and closes an expired
+window's sockets with 4401. A new socket receives `host.build`, and `host.hello` returns the build
+ID, channel and Yantra versions and server time; the page reloads itself when the build IDs differ,
+waiting until no request is in flight and no text field is focused, and navigates to
+`/#code=<code>` with a window-bound code from `session.launch_code` (D17). The registered methods
+are:
+
+| Family                                                                           | Served by          | Behavior                                                                                                                                                                                                                                                                                                                                                                                                       |
+| -------------------------------------------------------------------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `host.hello`, `session.resume_code`, `session.launch_code`                       | `rpc-server.ts`    | Handshake and window-bound codes.                                                                                                                                                                                                                                                                                                                                                                              |
+| `read.<path>`                                                                    | `reads.ts`         | Every `read`-class registry path maps to `read.<path joined by '.'>` or sits on the dated `UNMAPPED_READS` list owned by FEAT-070. A reader runs the command's own handler in-process through the FEAT-072 worker adapter with `--json` appended and returns the captured document; `read.list` pages through `buildListJson` with a keyset cursor on the history index.                                       |
+| `runs.subscribe`, `runs.unsubscribe`                                             | `change-feed.ts`   | `runs.changed {run_ids, live_run_ids}` and `prefs.changed`, debounced 250 ms, from a 2 s lease scan of `runs/*`, the history index's `PRAGMA data_version` change token, and `fs.watch` hints that only trigger an immediate scan. The feed runs only while subscribed; a watcher error degrades to polling.                                                                                                   |
+| `artifact.url`                                                                   | `artifact-urls.ts` | Signs `/a/<payload>.<mac>` for one window for 5 minutes: HMAC-SHA256 over window ID, capability digest and payload with a per-start in-memory key. `GET /a/…` checks cookie, MAC, expiry and live window, then a denylist before any filesystem read, the allowlist (`captures/**` PNG and JPEG, `report.md`) and a `realpath` inside the run directory. Every refusal is one 404; non-images are attachments. |
+| `command.invoke`, `command.cancel`, `queue.list`, `queue.start`, `queue.discard` | `supervisor.ts`    | Launch ownership, below. Notifications `invocation.changed` and `invocation.result` go to every connected window.                                                                                                                                                                                                                                                                                              |
+| `queue.resolve_review`                                                           | `drift-review.ts`  | Starts a `needs_review` item with the current values, pins the submitted values as explicit flags (only when every difference is a pinnable flag and no content changed), or discards it.                                                                                                                                                                                                                      |
+| `run.subscribe`, `run.unsubscribe`                                               | `run-relay.ts`     | Live run events, below.                                                                                                                                                                                                                                                                                                                                                                                        |
+| `interventions.subscribe`, `attendance.heartbeat`                                | `attendance.ts`    | Attendance, below, and `intervention.event` for attached runs' `intervention_raised` and `intervention_resolved`.                                                                                                                                                                                                                                                                                              |
+
+**Launch ownership** (`supervisor.ts`, `packages/core/src/app-host/invocation-store.ts`, plan D4,
+D11). `command.invoke {invocation, displayed_effective}` re-parses the invocation through the
+registry and refuses `read`, `in-process-secure`, `adapter` and `exemption` classes with the
+surface to use instead. It then creates one `queued` record per client-generated invocation ID:
+the existence check and publication both happen under `slots.lock`, so a repeated submission
+returns the current record and never spawns. (Publication is by rename rather than an exclusive
+hard link, because on Windows a hard-linked file cannot be replaced by the next transition's rename
+for seconds.) Every mutation runs under `slots.lock`, waiting at most 2 s before
+`SlotLockBusyError`, and checks the closed transition table; any other move throws
+`InvalidInvocationTransition`:
+
+```mermaid
+stateDiagram-v2
+  [*] --> queued
+  queued --> reserved: FIFO head, slot free, no drift
+  queued --> needs_review: drift review found differences
+  queued --> discarded
+  needs_review --> queued
+  needs_review --> discarded
+  reserved --> spawning
+  reserved --> claimed: worker claim
+  reserved --> never_started
+  reserved --> discarded
+  spawning --> claimed: worker claim
+  spawning --> never_started: recovery or cancel
+  spawning --> start_unknown: spawn failed
+  claimed --> running: run lease found
+  claimed --> finished
+  running --> finished
+  never_started --> queued
+  never_started --> discarded
+  start_unknown --> queued: duplicate risk acknowledged
+  start_unknown --> discarded
+  finished --> [*]
+  discarded --> [*]
+```
+
+- **Slot invariant.** Under the lock, at most two `run`-class records are `reserved`, `spawning`,
+  `claimed` or `running`. An `exclusive` record is admitted only when no run holds a slot, and
+  while it is active no run is admitted. `mutate` holds no slot. Slot-holding items are admitted
+  strictly first-in, first-out (`queued_at`, then invocation ID). CLI-launched runs are not
+  throttled.
+- **Dequeue loop.** It runs on submit, after a review or cancel, and every 2 s, and concurrent
+  triggers coalesce. For each `queued` item in order it runs drift review, then `reserve`, then
+  `markSpawning` and `spawnDetachedWorker` with the host's captured environment and `result_path`
+  set to `invocationResultPath(id)`. A spawn that throws moves the item to `start_unknown`, because
+  the trampoline may or may not have started the worker. Host start never spawns anything itself.
+- **Drift review** (D13). Before a queued item reserves a slot, its effective settings are resolved
+  again, read-only, through the command's own registry binding with a handler that only drafts the
+  execution receipt, and workflow and template content is re-hashed. Only what the composer
+  showed (`displayed_effective`) is compared; any difference moves the item to `needs_review`,
+  environment values identified by name only.
+- **Worker claim** (`src/ui/worker-claim.ts`, wired as the FEAT-064 worker's `WorkerStartGate` in
+  `src/worker.ts`). Before any side effect, a worker whose launch has an invocation record claims
+  it (`reserved | spawning → claimed`, recording its creation identity; only the worker ever
+  writes `worker`). A claim on a `never_started` or `discarded` item throws `ClaimRefusedError`,
+  and the worker exits 0 having done nothing. A launch with no record is a plain FEAT-064 launch.
+- **Run discovery by lease ownership.** Run IDs are minted inside each pipeline, so the host does
+  not pre-allocate one except for `resume`, whose `run_id` is the existing run. The claimed worker
+  polls `runs/*/lease.json` every 250 ms for the lease whose owner is its own creation identity
+  (claimed no earlier than 1 s before the claim) and records it with `markRunning(id, run_id)`;
+  `command.invoke` reports `run_id: null` until then. After the command, the worker's result sink
+  has written `<id>.result.json`, and `finish` records the exit code. The supervisor announces each
+  result once as `invocation.result`.
+- **Cancel.** An item that has not started (`queued`, `needs_review`, `never_started`,
+  `start_unknown`, `reserved`) is discarded; a `spawning` one moves to `never_started`, so the
+  worker's claim is refused. A started one with a run is stopped through FEAT-064 `stopRun`
+  (cancel over the run socket, 10 s grace, identity-verified termination, reconciliation); one with
+  no run is given the grace and then terminated by identity. A record still `claimed` or `running`
+  whose worker is dead is finished with exit 130 and `owner_lost`.
+- **Starting again.** `queue.start` requeues only `never_started` or `start_unknown` items, and a
+  `start_unknown` one only with `acknowledge_duplicate_risk: true` (otherwise `needs_confirmation`),
+  which the record keeps. The guarantee is deduplicated launching, not exactly-once website effects
+  after an arbitrary worker crash.
+
+**Host-start recovery** (`recovery.ts`, `packages/core/src/app-host/invocation-recovery.ts`) runs
+after `markReady` and before the dequeue loop, with the scan under `slots.lock`, so a late worker's
+claim and recovery cannot both win:
+
+- `reserved` or `spawning` with no claim becomes `never_started`, and a worker that starts late
+  finds its claim refused;
+- `claimed` or `running` with a live, identity-verified worker is left alone, and the relay
+  reattaches to its run when a window subscribes;
+- a dead worker (reused PID included), or a started record with no worker, has its run reconciled
+  by FEAT-064 `reconcileRun` (trigger `host`) and is finished with exit 2 and `owner_lost`;
+- an `unknown` worker is reported `unverifiable` and left unchanged, because an unverifiable owner
+  is never treated as dead and the table has no `claimed → start_unknown`.
+
+Recovery logs the counts and the number of runs still holding a lease to `host.log`.
+
+**Run relay and attendance** (`run-relay.ts`, `attendance.ts`, D5, D17). The first
+`run.subscribe {run_id, from_seq}` attaches one FEAT-064 `RunChannelClient` (client kind `host`,
+token from the run's lease) and the last unsubscribe detaches it. Each window has its own
+`from_seq` and receives `run.event {run_id, seq, event}` strictly in order: it is caught up from
+`run-events.jsonl` and then fed live events, and anything at or below what it already has is
+dropped, so no window sees a gap or a duplicate. A run with no live owner is served from the file.
+An owner speaking an incompatible channel version yields `run.channel {state: 'live_unavailable'}`
+and is never aborted; an owner silent for 30 s yields `not_responding` (logged once), then
+`recovered`. A window attends only while it has a live authenticated socket, has called
+`interventions.subscribe`, and sent `attendance.heartbeat` within 30 s; zero windows means a count
+of 0 whatever the queue holds. The host sends `attendance {count}` over the run socket to each
+attached worker when the count changes, when a worker attaches, and every 10 s; what a worker does
+with it belongs to FEAT-068.
+
+**Idle exit and logging.** With no window connected and no invocation `queued`, `reserved` or
+`spawning`, a 10-minute timer runs (checked every 5 s) and a connection or new invocation cancels
+it; `claimed` and `running` workers neither block the exit nor are touched. `host.log`
+(`host-log.ts`) is an owner-only Pino log, rotated once at start to `host.log.1` when over 10 MiB.
+It never records a launch or resume code, cookie, capability, token, signed URL or secret: Pino
+`redact` paths cover the known field names and a recursive key scrub catches them at any depth.
+
+The merge gates are the localhost security suite (`apps/cli/tests/ui/security/`, a real host
+process plus stepped-clock expiry, with canary scans of the log), the launch-ownership evidence
+suite (`apps/cli/tests/ui/launch-ownership/`, real host and worker processes killed at four points,
+and concurrent resumes), and `e2e/app-host.spec.ts` and `e2e/app-host-m2.spec.ts` in real Chrome.
+
 #### Execution receipts and shared-resource locks
 
 Task commands (`ask`, `research`, `do`), workflow replay (`run`), scheduled fires, and live
@@ -3113,7 +3391,7 @@ excludes the directory.
 
 ### `packages/ui` (Drshya)
 
-`@yantra/ui` is Drshya, the design system that the future web app's screens are to be built from.
+`@yantra/ui` is Drshya, the design system that the web app's screens are built from.
 It is a React 19 library compiled with the DOM lib and no Node types, and it runs no process of its
 own. Its public surface is four package exports: the root module (tokens, color math, appearance
 contract, CSP helper, icon registry, primitives, and field building blocks), `./drshya.css` (the
@@ -3123,7 +3401,7 @@ entry stylesheet an app imports once), `./gallery` (the gallery component and it
 **Import boundary.** Drshya is browser code. It may import `@yantra/protocol` with `import type`
 only and never imports `@yantra/core`, `@yantra/agent`, `@yantra/cli`, the provider SDK
 (`@earendil-works/*`), or a Node built-in. `eslint.config.js` enforces this for
-`packages/ui/src/**` and, in advance of the app, `apps/web/src/**`: `import/no-nodejs-modules`
+`packages/ui/src/**` and `apps/web/src/**`: `import/no-nodejs-modules`
 plus `@typescript-eslint/no-restricted-imports` with the shared `UI_IMPORT_RESTRICTIONS` patterns.
 `packages/ui/tests/boundary-rules.spec.ts` lints deliberately violating files under
 `src/_lint-fixtures/` (excluded from the build) to prove each rule fires, including on `apps/web`
@@ -3148,7 +3426,7 @@ flowchart LR
   Gate -->|any failure| Error[TokenContractError<br/>lists every failure]
   Gate -->|pass| Generated[src/styles/theme.generated.css]
   Generated --> Entry[src/styles/drshya.css]
-  Entry --> Consumers[Primitives, gallery,<br/>future apps/web]
+  Entry --> Consumers[Primitives, gallery,<br/>apps/web]
   Generated -.->|byte compare, CRLF normalized| Drift[generated-drift.spec.ts]
 ```
 
@@ -3195,6 +3473,36 @@ exactly one entry. The same component is mounted by a standalone Vite page (`gal
 `pnpm --filter @yantra/ui gallery` in development and built to `packages/ui/dist/gallery-site/`
 (separate from `dist/gallery/`, where `tsc` emits the module). Its state comes from the query
 string: `?entry=<id>&theme=light|dark|system&surfaces=glass|solid`.
+
+### `apps/web` (the Yantra app)
+
+`@yantra/web` (FEAT-065) is the app the host serves: Vite, React 19, TanStack Router and TanStack
+Query on Drshya, compiled as browser code under the same lint boundary as Drshya (no Node built-in,
+core, agent or CLI import; protocol by type only). It has no process of its own: its build output is
+embedded into the CLI as `dist/web`, and it talks only to the host that served it.
+
+- **Boot.** `main.tsx` first imports `boot/take-launch-code.ts`, which removes the launch code from
+  the URL fragment before any other module runs, then calls `prepareStrictCsp(document)` before
+  any React Aria component mounts. `app/bootstrap.ts` opens the session (`host/session.ts`: launch
+  code, or a stored resume code after a reload), connects `host/rpc-client.ts` with the capability
+  held in module memory, starts the 45 s resume-code rotation and the stale-asset watcher, and
+  applies preferences.
+- **Preferences.** `prefs/apply-preferences.ts` reads `read.profile` (`yantra profile --json`,
+  effective values with defaults and provenance, because `prefs list` returns only stored rows)
+  and applies `ui.theme` (`system`, `light`, `dark`; default `system`) and `ui.surfaces` (`glass`,
+  `solid`; default `glass`) through Drshya's appearance attributes, re-reading on `prefs.changed`.
+  The two keys are ordinary `profile.yaml` preferences owned by `yantra prefs`.
+- **Shell.** `app/shell/` has the top bar with the Bindu (Drshya's status instrument,
+  `src/instruments/bindu.tsx`: `idle`, `live` or `attention`, named in its accessible label rather
+  than by color alone; FEAT-065 renders `idle`), navigation from an append-only
+  registry (`app/nav-registry.ts`; a feature registers its entry with its route, and FEAT-065
+  registers only Home), a polite connection banner, and the "Session ended" view shown when no
+  session can be opened.
+- **Build ID.** The `yantra-build-id` Vite plugin (`build/yantra-build-id.ts`) computes the build ID
+  as the SHA-256 of the sorted, content-hashed file names under `assets/`, writes
+  `dist/build-id.json` and injects `<meta name="yantra-build-id">` into `index.html`. The Vite
+  build sets `assetsInlineLimit: 0` and disables the module-preload polyfill, because the CSP
+  blocks `data:` URIs and inline scripts.
 
 ### Test-only workspaces
 
@@ -3450,7 +3758,7 @@ sequenceDiagram
   alt no valid evidence
     Compat->>Launch: isolated headless synthetic session
     Launch-->>Compat: capability results
-    Compat->>Cache: record the result; only a pass is evidence
+    Compat->>Cache: record the result, only a pass is evidence
   end
   Compat-->>Provider: passed or typed failure
   Provider->>Provider: create profile, then re-stat the executable
@@ -3682,7 +3990,7 @@ sequenceDiagram
   Pi-->>Model: provider tool result
   Pi->>Recorder: normalized tool-finished event
   Recorder->>Run: metadata-only tool-calls.jsonl entry
-  Note over Pi,Run: Raw provider session and PNG contain pixels; stable audit/report logs do not
+  Note over Pi,Run: Raw provider session and PNG contain pixels, stable audit/report logs do not
 ```
 
 ### Local deliverable screenshot capture
@@ -3824,6 +4132,49 @@ sequenceDiagram
 `resume` uses the same sequence on the original run directory. `RunEventLog.open` recovers the tail
 and continues `seq`. The orchestrator emits `task_resumed`, which starts a new execution segment in
 the same file, and that segment ends in its own `run_outcome`.
+
+### App launch and a supervised invocation
+
+`yantra ui` hands the window a single-use launch code; the window trades it for a per-window
+capability and opens its RPC socket. A command submitted from the app becomes an invocation
+record, waits for a slot, and runs in a detached worker that claims the record before doing
+anything, after which the host relays the run's events from the worker's run socket.
+
+```mermaid
+sequenceDiagram
+  participant U as yantra ui
+  participant H as App host
+  participant W as App window
+  participant S as Invocation store
+  participant K as Detached worker
+  participant R as Run directory
+
+  U->>H: probe host.lock, spawn detached if absent, wait for ready
+  U->>H: control socket hello with control_token, launch_code.issue
+  H-->>U: single-use code, 60 s
+  U->>W: open app window at 127.0.0.1 with the code in the fragment
+  W->>H: POST /session with the code, exact Origin
+  H-->>W: window_capability and HttpOnly SameSite=Strict cookie
+  W->>H: GET /rpc upgrade with cookie, then auth with the capability
+  W->>H: command.invoke with invocation and displayed_effective
+  H->>S: create queued record once per invocation ID, under slots.lock
+  H->>H: dequeue loop: drift review, then reserve under the slot invariant
+  H->>S: markSpawning
+  H->>K: spawnDetachedWorker with the launch file, result_path in ui/invocations
+  K->>S: claim with its process identity, before any side effect
+  K->>R: claim lease.json, serve the run socket, write run-events.jsonl
+  K->>S: markRunning with the run whose lease it owns
+  W->>H: run.subscribe with run_id and from_seq
+  H->>R: RunChannelClient: replay from the file, then follow live
+  H-->>W: run.event in seq order, no gap or duplicate
+  K->>S: result file once, then finish with the exit code
+  H-->>W: invocation.changed and invocation.result
+```
+
+If the host dies at any point after the spawn, the worker keeps running. The next host recovers
+the records under `slots.lock` before it dequeues anything: an unclaimed start becomes
+`never_started`, a live worker is reattached through its run socket when a window subscribes, and
+a dead worker's run is reconciled to `owner_lost`.
 
 ## Data Model
 
@@ -4000,6 +4351,26 @@ A resolved `StableBuild`, the installed-versus-available comparison, and the ava
 per-invocation memory, which is what makes `yantra browser update --dry-run` leave the data root,
 the cache root, and `config.yaml` byte-identical.
 
+The app host adds no table and no migration; its durable state is files under `<data-dir>/ui/`,
+every path built in `packages/core/src/browser/paths.ts` (`uiRoot()` and its siblings), written
+atomically and owner-only. `host.lock` is the one `HostLockRecord` per data directory, guarded by
+`host.lock.mutex`. `slots.lock` is the lock every invocation mutation runs under.
+`invocations/<invocation_id>.json` is one `InvocationRecord` per app submission, unique by its
+client-generated ID (`^[A-Za-z0-9_-]{16,64}$`, checked before any path is built): the requested
+`CommandInvocation` with its absolute `cwd`, the execution class resolved at submission, the state,
+`queued_at` and `updated_at`, the `displayed_effective` baseline (non-secret settings with their
+sources, and workflow and template SHA-256 identities), the nullable `run_id`, `worker` identity
+(written only by the worker's claim), `review` differences, `duplicate_risk_acknowledged`, and the
+`result` (`exit_code`, `finished_at`, optional reason). Its `<invocation_id>.result.json` is
+FEAT-064's `WorkerResult`, written once by the worker. `launch/` holds the owner-only worker launch
+files, `host.log` (and `host.log.1`) the host's log, `host-start-failure.json` the last start
+failure, and `chrome-profile/` the app window's own browser profile. Relationships are by value: an
+invocation names at most one run directory through `run_id`, whose `lease.json` stays the arbiter
+of ownership, and has at most one result file. Launch codes, resume codes, window sessions and the
+artifact-URL signing key exist only in host memory and die with the host. `profile.yaml` gains the
+`ui.theme` and `ui.surfaces` preferences, and the history index gains a keyset cursor
+(`HistoryListFilter.before`) and a change token (`PRAGMA data_version`) with no schema change.
+
 ```mermaid
 flowchart TD
   Config[config.yaml installation state] --> Runtime[Runtime configuration]
@@ -4038,6 +4409,10 @@ flowchart TD
   Rank[index.db domain_ranks] --> Runtime
   Cache[cache/ask] --> Deterministic[Deterministic ask pipeline]
   Deterministic --> RunDir
+  HostLock[ui/host.lock] --> AppHost[App host]
+  AppHost --> Invocations[ui/invocations records and results]
+  Invocations -->|run_id| RunDir
+  AppHost --> Launch[ui/launch worker launch files]
 ```
 
 | Store                          | Verified contents and role                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
@@ -4049,6 +4424,7 @@ flowchart TD
 | Data `index.db`                | SQLite schema version 4: `history` (with the nullable `task_outcome` column), `preferences`, `rate_limits`, `schedules`, `domain_ranks`, and `meta`. History rows reference run IDs logically and can be rebuilt from run directories; the schema declares no foreign keys between these tables.                                                                                                                                                                                                                                                                                                         |
 | Data `pi/`                     | Pi session staging, the default pinned auth store, and deterministic `models.json` derived from `config.yaml`. The explicit `agent.pi_auth_path` opt-in changes auth only; no ambient Pi settings, skills, prompts, or model file are loaded.                                                                                                                                                                                                                                                                                                                                                            |
 | Data `browsers/`               | Managed browser tree: `ready.json` (the one selectable installation), `operation.json` (an exclusive owner/path claim, never a phase log), `coordination/` (mutex and shared use reservations), and one upstream cache in each `installation-<id>` child. Only the child the pointer names is selectable; every other child is an orphan collected by explicit install/update.                                                                                                                                                                                                                           |
+| Data `ui/`                     | App host state: `host.lock` (single-instance record, creation identity, port, control socket and token, build ID, versions), `slots.lock`, `invocations/` (one record per app submission plus its worker-written result), `launch/` (worker launch files), `host.log`, `host-start-failure.json`, and the app window's `chrome-profile/`. Owner-only; sessions, codes and signing keys are never written.                                                                                                                                                                                                |
 | Cache `ask/`                   | TTL- and size-bounded deterministic Brief cache keyed by normalized query, search provider, and UTC day.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | Cache `browser-compatibility/` | One JSON evidence document per executable identity and probe profile, keyed by canonical path, version, stat fingerprint, host, driver version, probe revision, and capability-table hash. Regenerable by a local probe; only successful results are evidence.                                                                                                                                                                                                                                                                                                                                           |
 | Browser profiles               | Ephemeral profiles in the OS temporary directory by default; workflow-scoped persistent profiles under the data directory when explicitly selected. Compatibility probes use their own ephemeral profile, removed on success and failure alike.                                                                                                                                                                                                                                                                                                                                                          |
@@ -4085,7 +4461,7 @@ platform supports them, and ephemeral browser profiles are cleaned up on close o
   deterministic execution independent of model availability.
 - **The design system is browser code with a lint-enforced boundary.** `@yantra/ui` may take
   protocol types and nothing else from the workspace, and the same import and styling rules
-  already cover `apps/web/src`, so the boundary exists before the app does. The cost is that UI
+  cover `apps/web/src` and were in place before the app existed. The cost is that UI
   code cannot reuse engine helpers; any shared value logic has to live in protocol.
 - **Design tokens are TypeScript data and the CSS is generated behind a gate.** Contrast, gamut,
   and glass-floor checks compute from exactly the values the CSS ships, and Tailwind's default
@@ -4428,6 +4804,34 @@ update` is the only surface that contacts a version server, and only when a huma
   the exit code it actually returns, so the logged exit code always matches the process exit code.
   A resume continues the same file, and `task_resumed` begins a new segment, so "exactly one
   outcome" holds per execution rather than per file.
+- **The app host supervises and never executes** (plan D1–D3, D6). The daemon is hard zero-LLM,
+  so the app gets its own host rather than serving from it. Reads run in-process through the same
+  handler and `--json` path as the terminal; everything else runs in a detached CLI worker with
+  the same handler and argv. App and terminal therefore cannot diverge in behavior, and a host
+  crash, window close or idle exit never ends a run. The costs are a process start per command,
+  a host that must rediscover runs from leases rather than hold them in memory, and an environment
+  frozen at host start, whose age the lock records.
+- **Launch ownership is a durable record the worker claims** (D4, D11). A submission is a file
+  created once per client-generated ID, every transition is checked against a closed table under
+  one slot lock, and the worker's first act is to claim the record with its creation identity.
+  Recovery and a late worker therefore race for the same lock and exactly one wins, and a repeated
+  submission never launches twice. Run IDs stay minted by the pipelines, so the worker reports its
+  run by lease ownership instead of the host allocating one, which keeps every run command
+  unchanged at the cost of `run_id: null` until the lease exists. An item whose start cannot be
+  proven becomes `start_unknown`, which restarts only with an acknowledged duplicate risk: the
+  guarantee is deduplicated launching, not exactly-once effects on a website.
+- **Loopback is not a trust boundary** (D18). Any page in any browser on the machine can reach a
+  `127.0.0.1` port, and cookies are not isolated by port, so the host requires the exact `Host` and
+  `Origin`, a single-use launch code that only the terminal can obtain (through a token-gated
+  control socket), and a per-window capability held in page memory beside the cookie. Artifact
+  URLs are window-bound HMACs with a per-start key, and the log redacts every credential-like value.
+  The cost is that a window cannot simply be bookmarked or reopened: a reload resumes only through a
+  rotating code in that tab's `sessionStorage`, and a lost session sends the user back to
+  `yantra ui`. Code already running as the same OS user is out of scope.
+- **The app ships inside the CLI build, identified by its content** (D17). `apps/web` is built
+  first and copied into `apps/cli/dist/web`, so one package carries a host and the exact assets it
+  serves. The build ID is a hash of the content-hashed asset names, and a page whose build differs
+  from its host's reloads itself when idle instead of talking to a host it was not built for.
 - **Fail-closed unattended automation.** Scheduled execution reuses the interactive workflow
   engine but swaps in a park-and-notify confirmation gateway, so the daemon cannot self-authorize
   protected side effects. It also carries no browser-install offer gateway; JSON, non-TTY, daemon,
@@ -4452,7 +4856,27 @@ gallery's Vite build to `dist/gallery-site/`. The `e2e` workspace depends on `@y
 builds it before the gallery harness runs. Drshya adds no runtime process; it is a library and a
 static gallery page.
 
-At runtime there are three process shapes:
+The app is built before the CLI that embeds it. `@yantra/cli` lists `@yantra/web` as a development
+dependency, so Turbo's `^build` builds `apps/web` first: `vite build` writes content-hashed files
+under `apps/web/dist/assets/`, `index.html` with the `yantra-build-id` meta tag, and
+`build-id.json`. The CLI's `build` script then runs `tsc -b tsconfig.build.json` (emitting
+`dist/bin.js`, `dist/worker.js` and `dist/ui-host.js`) followed by `scripts/embed-web.mjs`, which
+fails with the reason when `index.html` or a non-empty `build_id` is missing, clears
+`apps/cli/dist/web`, and copies the app build into it. At runtime the host serves
+`dist/web` relative to `dist/ui-host.js` and refuses to start without its `build-id.json`;
+`YANTRA_UI_ASSETS_DIR` overrides the directory for tests only.
+
+```mermaid
+flowchart LR
+  Protocol[packages/protocol build] --> Core[packages/core build] --> Agent[packages/agent build]
+  Protocol --> Web[apps/web: vite build<br/>assets, index.html, build-id.json]
+  UI[packages/ui build] --> Web
+  Agent --> Tsc[apps/cli: tsc -b<br/>bin, worker, ui-host]
+  Web --> Embed[apps/cli: embed-web.mjs<br/>copy into dist/web]
+  Tsc --> Embed
+```
+
+At runtime there are these process shapes:
 
 - a short-lived `yantra` CLI process that constructs dependencies for one command, optionally
   launches run-scoped Chrome child processes and a provider session, writes local artifacts, then
@@ -4467,9 +4891,19 @@ At runtime there are three process shapes:
   extraction under an exclusive mutation lease, and during `yantra browser update` it answers the
   Stable-availability question and exits without a cache directory, a lease, or a byte written. The
   CLI parent owns IPC validation, deadlines, cancellation, process-tree termination, verification,
-  and ready-pointer publication; and
+  and ready-pointer publication;
 - an optional long-running scheduler daemon guarded by a single-instance lock, polling every 60
-  seconds by default and spawning the same in-process workflow execution path for due schedules.
+  seconds by default and spawning the same in-process workflow execution path for due schedules;
+- an optional app host (`dist/ui-host.js`), at most one per data directory under `host.lock`,
+  started detached by `yantra ui` with the CLI's environment and the data directory as working
+  directory. It listens on `127.0.0.1` (an ephemeral port) and on a local control socket, logs only
+  to `<data-dir>/ui/host.log`, and exits after 10 idle minutes or on SIGINT, SIGTERM or SIGBREAK;
+- detached CLI workers (`dist/worker.js`), one per app-launched run-class or mutating command,
+  started shell-free through the FEAT-064 trampoline so they outlive the host and a process-tree
+  kill of it. Each owns its run's lease and run socket and writes its result once; and
+- the app window, a Chrome or Edge (or Yantra browser) process started detached with `--app` and
+  its own profile under `<data-dir>/ui/chrome-profile`. It is the user's window, not an automation
+  session: no remote-debugging or automation flag, and Yantra does not supervise it.
 
 GitHub Actions runs lint, type-check, build, and tests on Ubuntu, macOS, and Windows for
 `LLM_PROVIDER=anthropic` and `LLM_PROVIDER=none`, with an additional Ubuntu/Ollama cell. Separate

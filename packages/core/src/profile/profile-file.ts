@@ -41,6 +41,10 @@ const searchProviderSchema = z.enum(['auto', 'google', 'duckduckgo', 'brave', 't
 const detailSchema = z.enum(['overview', 'standard', 'full']);
 const lengthSchema = z.enum(['short', 'medium', 'long']);
 const unitsSchema = z.enum(['metric', 'imperial']);
+/** The app theme: follow the OS, or force light or dark (FEAT-065). */
+const uiThemeSchema = z.enum(['system', 'light', 'dark']);
+/** The app's surfaces: translucent glass, or solid for readability (FEAT-065). */
+const uiSurfacesSchema = z.enum(['glass', 'solid']);
 const nullableAgentStringSchema = z.string().trim().min(1).nullable();
 const agentDurationSchema = z
   .string()
@@ -110,6 +114,13 @@ export const profileSchema = z
         research_browse: z.boolean().default(true),
       })
       .default({}),
+    // The Yantra app's look (FEAT-065). There is deliberately no density key.
+    ui: z
+      .object({
+        theme: uiThemeSchema.default('system'),
+        surfaces: uiSurfacesSchema.default('glass'),
+      })
+      .default({}),
   })
   .strict();
 
@@ -144,6 +155,8 @@ export const KNOWN_PREFERENCE_KEYS = [
   'agent.tool_retries',
   'agent.confirm_timeout',
   'agent.research_browse',
+  'ui.theme',
+  'ui.surfaces',
 ] as const;
 
 export type PreferenceKey = (typeof KNOWN_PREFERENCE_KEYS)[number];
@@ -247,6 +260,8 @@ export function flattenProfile(profile: ProfileFile): ReadonlyMap<PreferenceKey,
     ['agent.tool_retries', profile.agent.tool_retries],
     ['agent.confirm_timeout', profile.agent.confirm_timeout],
     ['agent.research_browse', profile.agent.research_browse],
+    ['ui.theme', profile.ui.theme],
+    ['ui.surfaces', profile.ui.surfaces],
   ]);
 }
 
@@ -273,6 +288,8 @@ const KEY_VALUE_SCHEMAS: Record<PreferenceKey, z.ZodTypeAny> = {
   'agent.tool_retries': z.number().int().nonnegative(),
   'agent.confirm_timeout': agentDurationSchema,
   'agent.research_browse': z.boolean(),
+  'ui.theme': uiThemeSchema,
+  'ui.surfaces': uiSurfacesSchema,
 };
 
 /**

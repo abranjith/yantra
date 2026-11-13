@@ -372,7 +372,10 @@ writing into the data directory:
   live (run `<id>`, pid `<pid>`); wait for it to finish or stop it, then retry".
   A run whose owner has died does not block.
 - **The Yantra app.** While the app host is running, relocate in three steps:
-  close the app, run `yantra config data-dir <path>`, then run `yantra ui`. A
+  close the app, run `yantra config data-dir <path>`, then run `yantra ui`.
+  Closing the app's windows does not stop the host at once. It exits by itself
+  10 minutes after its last window disconnects, once nothing is waiting to
+  start (see [The Yantra App](yantra-app.md)). A
   host lock left by an app that is no longer running does not block, and an
   unreadable one is reported as a warning and ignored.
 

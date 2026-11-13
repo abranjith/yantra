@@ -901,6 +901,87 @@ Library mutations affect `<data-dir>/templates/`. Template runs require a model;
 combining `--template` with `--no-llm` or `LLM_PROVIDER=none` exits with a
 validation error. See [Report Templates](features/report-templates.md).
 
+## Open the Yantra app
+
+`yantra ui` opens Yantra in its own app window. The window is served by a local
+app host that listens only on `127.0.0.1`:
+
+```console
+yantra ui
+yantra ui --print
+yantra ui --json
+yantra ui --print --json
+```
+
+The command reuses a running, ready host for the current data directory, or
+starts one in the background and waits up to 10 seconds for it. It then asks
+the host for a single-use launch code, valid for 60 seconds, and builds the URL
+`http://127.0.0.1:<port>/#code=<code>`. On success it prints
+`Opened the Yantra app in <browser>.` and exits without waiting for the window.
+
+`--print` prints the URL and opens nothing; open it yourself in a browser on the
+same computer within 60 seconds. Each run issues a new code. `--json` writes one
+`UiOpenResult` document to stdout, with or without `--print`; without `--print`
+the window still opens:
+
+```json
+{
+  "schemaVersion": 1,
+  "url": "http://127.0.0.1:61361/#code=<code>",
+  "port": 61361,
+  "hostPid": 5232,
+  "reused": false
+}
+```
+
+`port` is the host's loopback HTTP port, `hostPid` is the app host process ID,
+and `reused` is `true` when an already-running host served the request.
+
+The window opens in the first browser found: a system Google Chrome (stable,
+beta, dev, or canary; never Chrome for Testing), then Microsoft Edge at its
+standard install location, then the browser Yantra resolves for its own runs.
+It gets its own profile at `<data-dir>/ui/chrome-profile` and no automation or
+remote-debugging flag. If no browser is found, the URL (or the `--json`
+document) is still printed to stdout, and stderr says:
+
+```text
+No Chrome, Edge or Yantra browser was found to open the app. Run `yantra browser install`, or open the URL above in Chrome or Edge.
+```
+
+If the running host is from a different Yantra version than the CLI, it is
+still reused, and stderr notes
+``The running app is Yantra <old>; close the app and run `yantra ui` to use <new>.``
+The note is omitted under `--json`.
+
+Two preferences set the window's appearance:
+
+```console
+yantra prefs set ui.theme dark
+yantra prefs set ui.surfaces solid
+```
+
+| Preference    | Values                    | Default  |
+| ------------- | ------------------------- | -------- |
+| `ui.theme`    | `system`, `light`, `dark` | `system` |
+| `ui.surfaces` | `glass`, `solid`          | `glass`  |
+
+An invalid value exits `1` and lists the valid values;
+`yantra config set ui.theme …` redirects to `yantra prefs set`. An open window
+picks up a `prefs set` change the next time it connects, so reload it to apply
+the change at once; edits to `profile.yaml` apply live.
+
+### `ui` exit codes
+
+| Exit | Meaning                                                                                                                                                                                              |
+| ---: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|  `0` | The window opened, or the URL was printed                                                                                                                                                            |
+|  `1` | Invalid usage, such as an unknown option or an extra argument                                                                                                                                        |
+|  `3` | No browser was found (the URL is still printed), the host lock cannot be verified or read, the host did not become ready within 10 seconds or could not start, or its control socket was unreachable |
+
+Every exit-`3` message ends with one next step. See
+[The Yantra App](features/yantra-app.md) for connection states, the queue,
+host files, sessions, and security.
+
 ## Profiles, preferences, history, and sites
 
 Inspect the effective merged profile and manage SQLite-backed overrides:
@@ -914,6 +995,7 @@ yantra prefs set locale.city "Naperville, IL"
 yantra prefs set context.location false
 yantra prefs set context.screenshots true
 yantra prefs set context.screenshots false
+yantra prefs set ui.theme dark
 yantra prefs --forget defaults.detail
 ```
 
@@ -1264,7 +1346,7 @@ moves the tree and writes `paths.data_dir` only after the move succeeds;
 cross-volume moves use copy-then-delete. `--dry-run` changes nothing,
 `--no-move` records content you moved yourself, and `--force` permits merging
 into a non-empty target. Relocation is refused while a daemon or run holds the
-lock. It does not move cache data. `YANTRA_DATA_DIR` still outranks the persisted
+lock, or while the Yantra app host is running. It does not move cache data. `YANTRA_DATA_DIR` still outranks the persisted
 setting, so update or remove that environment variable after relocation.
 
 ### Register and select models
@@ -1513,6 +1595,7 @@ feature references are [Ask](features/ask.md), [Research](features/research.md),
 [Profiles and History](features/profiles-and-history.md),
 [Local Site Ranking](features/site-ranking.md),
 [Scheduling](features/scheduling.md),
-[Diagnostics and Audit](features/diagnostics-and-audit.md), and
+[Diagnostics and Audit](features/diagnostics-and-audit.md),
 [Recovery as Declarative Data](features/recovery-as-declarative-data.md),
-[Safety and Privacy](features/safety-and-privacy.md).
+[Safety and Privacy](features/safety-and-privacy.md), and
+[The Yantra App](features/yantra-app.md).

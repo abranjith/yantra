@@ -32,6 +32,7 @@ import { secretHandlers } from '../commands/secret.js';
 import { showHandler } from '../commands/show.js';
 import { sitesHandlers } from '../commands/sites.js';
 import { templateHandlers } from '../commands/template.js';
+import { uiHandlers } from '../commands/ui.js';
 import { usageHandler } from '../commands/usage.js';
 import type { CommandContext } from '../context/command-context.js';
 import type { CliRunOptions } from '../program.js';
@@ -75,5 +76,6 @@ export function buildHandlers(
     ...openHandlers(undefined, context),
     ...templateHandlers(options.templateRuntime, context),
     ...browserHandlers(options.browserRuntime, context),
+    ...uiHandlers(context),
   } satisfies Record<LeafCommandId, HandlerBinding>;
 }

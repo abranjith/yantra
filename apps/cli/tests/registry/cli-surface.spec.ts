@@ -154,11 +154,11 @@ describe('@no-llm surface comparison harness', () => {
 describe('@no-llm command tree walker', () => {
   const nodes = listCommands(buildProgram());
 
-  it('finds 59 command paths: 7 groups and 52 leaves', () => {
+  it('finds 60 command paths: 7 groups and 53 leaves', () => {
     const commands = nodes.filter((node) => node.kind !== 'root');
-    expect(commands).toHaveLength(59);
+    expect(commands).toHaveLength(60);
     expect(commands.filter((node) => node.kind === 'group')).toHaveLength(7);
-    expect(commands.filter((node) => node.kind === 'leaf')).toHaveLength(52);
+    expect(commands.filter((node) => node.kind === 'leaf')).toHaveLength(53);
   });
 
   it('yields the root first and then registration order, depth first', () => {

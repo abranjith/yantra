@@ -25,6 +25,7 @@ export * from './locks/index.js';
 export * from './run-events/index.js';
 export * from './run-channel/index.js';
 export * from './run-ownership/index.js';
+export * from './app-host/index.js';
 export * from './fs/atomic-write.js';
 export * from './retention/index.js';
 

@@ -14,6 +14,7 @@ This repository is a private, unpublished `0.0.1` pnpm workspace. There is no ve
 - `@yantra/core` provides the provider-independent browser, workflow, research, policy, persistence, scheduling, and diagnostics engines.
 - `@yantra/agent` composes core services for governed model-driven execution and confines provider-SDK integration to its adapter seam.
 - `@yantra/ui` is Drshya, the design system for the Yantra app: OKLCH tokens on Tailwind v4, a semantic icon registry, and accessible React Aria primitives (browser code; protocol types only).
+- `@yantra/web` is the Yantra app: a React client of the local app host, built on Drshya and embedded into the CLI build (browser code; protocol types only).
 - `@yantra/test-helpers` supplies shared fixtures and no-LLM/provider test-tag plumbing.
 - `@yantra/cli` is the executable composition root for commands, configuration, output rendering, and exit-code mapping.
 
@@ -71,6 +72,7 @@ See the [Quickstart](docs/quickstart.md) for source setup and browser prerequisi
 - Schedule saved workflows through a local daemon. Scheduled runs are always zero-LLM and pause rather than auto-confirm protected actions.
 - Shape model-backed output with local report templates, and inspect local profiles, history, usage, run reports, and audit trails.
 - Manage configuration, models, credentials, browser selection, and explicitly consented browser installation from the command line, and reopen any finished run's artifacts with `open`.
+- Open Yantra in its own app window with `ui`. A local app host on `127.0.0.1` serves the window and runs app-started commands as ordinary background Yantra processes; `ui --print` prints the single-use URL instead. This release's window has a Home page only. Set its appearance with the `ui.theme` and `ui.surfaces` preferences; see [Open the Yantra app](docs/usage.md#open-the-yantra-app).
 
 Ordinary agentic Briefs can include cited findings, sections, and comparison tables with row citations. In `do`, these can also cite browser actions; an **Actions** section shows the cited fills, clicks, refused submits, and captures. When a task contract is declared, **Conditions** shows each filter as verified, unverified, or not met, and results citing only hosts outside the required sources appear under **Alternatives**. **Sources** lists cited pages; **Also consulted** lists pages read without a citation. Yantra flags values its evidence check cannot anchor; see [Reading an attributed Brief](docs/usage.md#read-an-attributed-brief).
 
@@ -85,7 +87,7 @@ Yantra honors robots policy, blocklists, rate limits, CAPTCHAs, and bot walls; i
 ### Guides
 
 - [Architecture](docs/architecture.md) — components, data flows, persistence, and design decisions.
-- [Quickstart](docs/quickstart.md) — source installation and the first deterministic task.
+- [Quickstart](docs/quickstart.md) — source installation, the first deterministic task, and opening the app.
 - [Usage](docs/usage.md) — complete CLI, configuration, artifacts, and exit-code guide.
 
 ### Features
@@ -109,7 +111,8 @@ Yantra honors robots policy, blocklists, rate limits, CAPTCHAs, and bot walls; i
 - [Puppeteer 25.10 API Migration](docs/features/puppeteer-api-migration.md) — preserved browser behavior, explicit resource ownership, and migration-test coverage.
 - [Widget Gauntlet and Interaction Message Catalog](docs/features/widget-gauntlet-harness.md) — generic widget regression fixtures, operation accounting, real-browser tool testing, and catalog contracts.
 - [Task-Fidelity Harness](docs/features/task-fidelity-harness.md) — whole-run outcome scoring against generic fixture sites, a CI-gating scripted tier, the never-gating `pnpm eval:tasks` agentic scorecard, and offline `pnpm eval:benchmark` comparisons.
-- [Drshya Design System](docs/features/drshya-design-system.md) — the `@yantra/ui` package for the coming app: OKLCH tokens with build-time contrast checks, the semantic icon registry, 16 accessible primitive families, and the real-Chrome gallery harness.
+- [The Yantra App](docs/features/yantra-app.md) — `yantra ui`, the loopback-only app host, browser choice, sessions, the persisted two-slot queue with drift review, crash recovery, attendance, and the `ui.theme`/`ui.surfaces` preferences.
+- [Drshya Design System](docs/features/drshya-design-system.md) — the `@yantra/ui` package for the Yantra app: OKLCH tokens with build-time contrast checks, the semantic icon registry, 16 accessible primitive families, and the real-Chrome gallery harness.
 - [Command Registry](docs/features/command-registry.md) — every CLI command as declarative data in `@yantra/protocol/commands`, the generated commander tree with byte-identical `--help`, `parseInvocation`, and shell-aware `formatInvocation` for copyable commands.
 - [Safety and Privacy](docs/features/safety-and-privacy.md) — masking, consent, secrets, policy, and audit boundaries.
 

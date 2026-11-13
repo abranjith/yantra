@@ -301,3 +301,5 @@ export { CommandResultMessageSchema, type CommandResultMessage } from './schemas
 export * from './schemas/execution-receipt.js';
 export * from './schemas/run-lease.js';
 export * from './schemas/run-channel.js';
+export * from './schemas/app-host.js';
+export * from './schemas/app-rpc.js';

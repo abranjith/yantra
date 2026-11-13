@@ -131,6 +131,46 @@ Example:
 }
 ```
 
+## AppRpcAuth
+
+First message on every socket; must match the cookie’s window.
+
+| Field   | Description |
+| ------- | ----------- |
+| jsonrpc |             |
+| method  |             |
+| params  |             |
+
+Example:
+
+```json
+{
+  "jsonrpc": "<jsonrpc>",
+  "method": "<method>",
+  "params": "<params>"
+}
+```
+
+## AppRpcErrorData
+
+Detail of a JSON-RPC error.
+
+| Field       | Description                                            |
+| ----------- | ------------------------------------------------------ |
+| code        | Stable machine-readable reason, e.g. `invalid_params`. |
+| message     | What actually happened.                                |
+| remediation | One next step, when there is one.                      |
+
+Example:
+
+```json
+{
+  "code": "<code>",
+  "message": "<message>",
+  "remediation": "<remediation>"
+}
+```
+
 ## ArgumentSpec
 
 One positional argument.
@@ -205,6 +245,42 @@ Example:
 
 ```json
 "viewport"
+```
+
+## ArtifactUrlParams
+
+Ask for a signed, window-bound URL to one public run artifact.
+
+| Field  | Description                                       |
+| ------ | ------------------------------------------------- |
+| run_id | The run the artifact belongs to.                  |
+| path   | Path inside the run directory, with / separators. |
+
+Example:
+
+```json
+{
+  "run_id": "<run_id>",
+  "path": "<path>"
+}
+```
+
+## ArtifactUrlResult
+
+No description provided.
+
+| Field      | Description                                                    |
+| ---------- | -------------------------------------------------------------- |
+| url        | Same-origin URL, valid for 5 minutes and only for this window. |
+| expires_at |                                                                |
+
+Example:
+
+```json
+{
+  "url": "<url>",
+  "expires_at": "<expires_at>"
+}
 ```
 
 ## AssertCondition
@@ -807,6 +883,24 @@ Example:
 }
 ```
 
+## CommandInvokeParams
+
+Launch a run-class or mutating command as a detached worker.
+
+| Field               | Description                                            |
+| ------------------- | ------------------------------------------------------ |
+| invocation          | What to run; its invocation_id is the idempotency key. |
+| displayed_effective | What the composer showed (the drift baseline).         |
+
+Example:
+
+```json
+{
+  "invocation": "<invocation>",
+  "displayed_effective": "<displayed_effective>"
+}
+```
+
 ## CommandRegistry
 
 The complete Yantra command surface.
@@ -961,6 +1055,26 @@ Example:
   "id": "<id>",
   "declared_in": "<declared_in>"
 }
+```
+
+## ControlClientMessage
+
+A control-socket message from a client to the app host.
+
+Example:
+
+```json
+"<value>"
+```
+
+## ControlServerMessage
+
+A control-socket message from the app host to a client.
+
+Example:
+
+```json
+"<value>"
 ```
 
 ## DangerSpec
@@ -1181,6 +1295,46 @@ Example:
 }
 ```
 
+## DisplayedEffective
+
+What the composer showed at submission (D13): the baseline for queue drift review. Never holds a secret.
+
+| Field    | Description                                                            |
+| -------- | ---------------------------------------------------------------------- |
+| settings | Effective non-secret settings the composer showed, with their sources. |
+| content  | Workflow and template content identities the composer showed.          |
+
+Example:
+
+```json
+{
+  "settings": "<settings>",
+  "content": "<content>"
+}
+```
+
+## DriftDifference
+
+One setting or content identity that changed while queued.
+
+| Field     | Description                                                      |
+| --------- | ---------------------------------------------------------------- |
+| key       | Setting key, or `content:<path>` for a content identity.         |
+| submitted | The value shown at submission.                                   |
+| current   | The value now; null when it no longer exists.                    |
+| pinnable  | True when the submitted value can be pinned as an explicit flag. |
+
+Example:
+
+```json
+{
+  "key": "<key>",
+  "submitted": "<submitted>",
+  "current": "<current>",
+  "pinnable": "<pinnable>"
+}
+```
+
 ## ElementDescriptorSchema
 
 Sanitized structural fingerprint of a captured DOM element
@@ -1209,6 +1363,16 @@ Example:
   "in_iframe": "<in_iframe>",
   "xpath_for_debug": "<xpath_for_debug>"
 }
+```
+
+## EmptyParams
+
+No parameters.
+
+Example:
+
+```json
+{}
 ```
 
 ## ExecutionClass
@@ -1587,6 +1751,100 @@ Example:
 "captcha"
 ```
 
+## HostBuildNotification
+
+The build the host serves, repeated on every connect.
+
+| Field    | Description |
+| -------- | ----------- |
+| build_id |             |
+
+Example:
+
+```json
+{
+  "build_id": "<build_id>"
+}
+```
+
+## HostHelloParams
+
+No description provided.
+
+| Field           | Description                                            |
+| --------------- | ------------------------------------------------------ |
+| build_id        | The build ID in the page’s `yantra-build-id` meta tag. |
+| channel_version | The app channel version the page speaks.               |
+
+Example:
+
+```json
+{
+  "build_id": "<build_id>",
+  "channel_version": "<channel_version>"
+}
+```
+
+## HostHelloResult
+
+No description provided.
+
+| Field           | Description                                                     |
+| --------------- | --------------------------------------------------------------- |
+| build_id        | The build the host serves; a mismatch means stale assets (D17). |
+| channel_version |                                                                 |
+| yantra_version  |                                                                 |
+| server_time     | The host clock, for the app’s relative times.                   |
+
+Example:
+
+```json
+{
+  "build_id": "<build_id>",
+  "channel_version": "<channel_version>",
+  "yantra_version": "<yantra_version>",
+  "server_time": "<server_time>"
+}
+```
+
+## HostLockRecord
+
+The single-instance app host lock, one per data directory.
+
+| Field           | Description                                                                 |
+| --------------- | --------------------------------------------------------------------------- |
+| schema_version  | Record format version.                                                      |
+| state           | `starting` from acquisition until both listeners are bound, then `ready`.   |
+| pid             | Host process ID.                                                            |
+| start_token     | Host process creation token.                                                |
+| port            | Loopback HTTP port; set when `ready`.                                       |
+| control_socket  | Control socket path (POSIX) or named-pipe name (Windows); set when `ready`. |
+| control_token   | 256-bit base64url token a control client must send first.                   |
+| build_id        | ID of the embedded web build the host serves.                               |
+| yantra_version  | Version of the Yantra executable running the host.                          |
+| channel_version | App channel version (D17).                                                  |
+| started_at      | When the host acquired the lock.                                            |
+| env_captured_at | When the host captured the environment it gives workers (D13).              |
+
+Example:
+
+```json
+{
+  "schema_version": "<schema_version>",
+  "state": "<state>",
+  "pid": "<pid>",
+  "start_token": "<start_token>",
+  "port": "<port>",
+  "control_socket": "<control_socket>",
+  "control_token": "<control_token>",
+  "build_id": "<build_id>",
+  "yantra_version": "<yantra_version>",
+  "channel_version": "<channel_version>",
+  "started_at": "<started_at>",
+  "env_captured_at": "<env_captured_at>"
+}
+```
+
 ## InputKind
 
 How a generated form collects this value.
@@ -1629,6 +1887,136 @@ Example:
 }
 ```
 
+## InvocationFinishReason
+
+`owner_lost`: the worker died and was reconciled; `busy`: the run was owned elsewhere; `refused_claim`: the worker found the item withdrawn.
+
+Example:
+
+```json
+"owner_lost"
+```
+
+## InvocationIdParams
+
+No description provided.
+
+| Field         | Description |
+| ------------- | ----------- |
+| invocation_id |             |
+
+Example:
+
+```json
+{
+  "invocation_id": "<invocation_id>"
+}
+```
+
+## InvocationRecord
+
+One app-launched invocation and its launch-ownership state (D11).
+
+| Field                       | Description                                                                                              |
+| --------------------------- | -------------------------------------------------------------------------------------------------------- |
+| schema_version              | Record format version.                                                                                   |
+| invocation_id               | Client-generated idempotency key; unique by file name.                                                   |
+| invocation                  | What was requested (FEAT-062).                                                                           |
+| execution_class             | Execution class resolved from the registry for these options at submission.                              |
+| state                       | Launch-ownership state of one app invocation.                                                            |
+| queued_at                   | Submission time; FIFO order is by this, then the ID.                                                     |
+| updated_at                  | Time of the last state change.                                                                           |
+| displayed_effective         | What the composer showed at submission (D13): the baseline for queue drift review. Never holds a secret. |
+| run_id                      | Run ID allocated at `reserved` (the existing run for `resume`).                                          |
+| worker                      | Set only by the worker, through its claim.                                                               |
+| review                      | Set on `needs_review`.                                                                                   |
+| duplicate_risk_acknowledged | Must be true to start a `start_unknown` item again.                                                      |
+| result                      | Set on `finished`.                                                                                       |
+
+Example:
+
+```json
+{
+  "schema_version": "<schema_version>",
+  "invocation_id": "<invocation_id>",
+  "invocation": "<invocation>",
+  "execution_class": "<execution_class>",
+  "state": "<state>",
+  "queued_at": "<queued_at>",
+  "updated_at": "<updated_at>",
+  "displayed_effective": "<displayed_effective>",
+  "run_id": "<run_id>",
+  "worker": "<worker>",
+  "review": "<review>",
+  "duplicate_risk_acknowledged": "<duplicate_risk_acknowledged>",
+  "result": "<result>"
+}
+```
+
+## InvocationResult
+
+A detached worker's completion: the command's result or error, written once.
+
+| Field          | Description                                                     |
+| -------------- | --------------------------------------------------------------- |
+| schema_version |                                                                 |
+| invocation_id  |                                                                 |
+| run_id         |                                                                 |
+| outcome        | The final completion of a command executed on a worker surface. |
+
+Example:
+
+```json
+{
+  "schema_version": "<schema_version>",
+  "invocation_id": "<invocation_id>",
+  "run_id": "<run_id>",
+  "outcome": "<outcome>"
+}
+```
+
+## InvocationState
+
+Launch-ownership state of one app invocation.
+
+Example:
+
+```json
+"queued"
+```
+
+## InvocationSummary
+
+One app invocation, as the queue shows it.
+
+| Field           | Description                                                           |
+| --------------- | --------------------------------------------------------------------- |
+| invocation_id   |                                                                       |
+| state           | Launch-ownership state of one app invocation.                         |
+| execution_class | `run` holds a slot, `exclusive` needs zero runs, `mutate` holds none. |
+| path            | Command path, e.g. ["research"].                                      |
+| position        | 1-based place in the queue, while queued.                             |
+| run_id          |                                                                       |
+| queued_at       |                                                                       |
+| review          | Set on `needs_review`.                                                |
+| result          | Set on `finished`.                                                    |
+
+Example:
+
+```json
+{
+  "invocation_id": "<invocation_id>",
+  "state": "<state>",
+  "execution_class": "<execution_class>",
+  "path": "<path>",
+  "position": "<position>",
+  "run_id": "<run_id>",
+  "queued_at": "<queued_at>",
+  "review": "<review>",
+  "result": "<result>"
+}
+```
+
 ## JsonResultSpec
 
 What the command emits under --json.
@@ -1647,6 +2035,88 @@ Example:
   "shape": "<shape>",
   "schema": "<schema>"
 }
+```
+
+## JsonRpcErrorObject
+
+No description provided.
+
+| Field   | Description                                                   |
+| ------- | ------------------------------------------------------------- |
+| code    | A JSON-RPC standard code or an app code from AppRpcErrorCode. |
+| message |                                                               |
+| data    | Detail of a JSON-RPC error.                                   |
+
+Example:
+
+```json
+{
+  "code": "<code>",
+  "message": "<message>",
+  "data": "<data>"
+}
+```
+
+## JsonRpcId
+
+Request ID; echoed unchanged in the response.
+
+Example:
+
+```json
+"<value>"
+```
+
+## JsonRpcNotification
+
+A host → app notification (no `id`).
+
+| Field   | Description |
+| ------- | ----------- |
+| jsonrpc |             |
+| method  |             |
+| params  |             |
+
+Example:
+
+```json
+{
+  "jsonrpc": "<jsonrpc>",
+  "method": "<method>",
+  "params": "<params>"
+}
+```
+
+## JsonRpcRequest
+
+A JSON-RPC 2.0 request or notification.
+
+| Field   | Description                                                             |
+| ------- | ----------------------------------------------------------------------- |
+| jsonrpc |                                                                         |
+| method  | Method name, e.g. `host.hello` or `read.list`.                          |
+| params  | By-name (object) parameters; by-position arrays are refused per method. |
+| id      | Absent for a notification, which gets no response.                      |
+
+Example:
+
+```json
+{
+  "jsonrpc": "<jsonrpc>",
+  "method": "<method>",
+  "params": "<params>",
+  "id": "<id>"
+}
+```
+
+## JsonRpcResponse
+
+A JSON-RPC 2.0 response.
+
+Example:
+
+```json
+"<value>"
 ```
 
 ## JsonValue
@@ -2125,6 +2595,16 @@ Example:
 "<value>"
 ```
 
+## PrefsChangedNotification
+
+Preferences changed; re-read them.
+
+Example:
+
+```json
+{}
+```
+
 ## ProcessIdentityRecord
 
 A process creation identity: a PID plus its start token.
@@ -2140,6 +2620,40 @@ Example:
 {
   "pid": "<pid>",
   "start_token": "<start_token>"
+}
+```
+
+## QueueListResult
+
+Every app invocation, first-in first-out.
+
+| Field | Description |
+| ----- | ----------- |
+| items |             |
+
+Example:
+
+```json
+{
+  "items": "<items>"
+}
+```
+
+## QueueStartParams
+
+No description provided.
+
+| Field                      | Description                                                            |
+| -------------------------- | ---------------------------------------------------------------------- |
+| invocation_id              |                                                                        |
+| acknowledge_duplicate_risk | Required for an item whose earlier start is unknown: it may run twice. |
+
+Example:
+
+```json
+{
+  "invocation_id": "<invocation_id>",
+  "acknowledge_duplicate_risk": "<acknowledge_duplicate_risk>"
 }
 ```
 
@@ -2160,6 +2674,48 @@ Example:
   "candidate": "<candidate>",
   "score": "<score>",
   "rank_reason": "<rank_reason>"
+}
+```
+
+## ReadParams
+
+Arguments of an in-process read.
+
+| Field   | Description                                                                             |
+| ------- | --------------------------------------------------------------------------------------- |
+| args    | Positional arguments, exactly as on the command line.                                   |
+| options | Options by long name without dashes (e.g. `{"status":"failed"}`); `true` sets a switch. |
+| cursor  | Opaque cursor from a previous page’s `next_cursor` (paged reads only).                  |
+| limit   | Page size (paged reads only); default 50, clamped to 200.                               |
+
+Example:
+
+```json
+{
+  "args": "<args>",
+  "options": "<options>",
+  "cursor": "<cursor>",
+  "limit": "<limit>"
+}
+```
+
+## ReadResult
+
+The result of an in-process read.
+
+| Field       | Description                                                                     |
+| ----------- | ------------------------------------------------------------------------------- |
+| schema      | The registry `--json` schema name, or null when the shape is not yet described. |
+| value       | Exactly what `yantra <command> --json` prints, parsed.                          |
+| next_cursor | Cursor for the next page; null on the last page or for unpaged reads.           |
+
+Example:
+
+```json
+{
+  "schema": "<schema>",
+  "value": "<value>",
+  "next_cursor": "<next_cursor>"
 }
 ```
 
@@ -2517,6 +3073,90 @@ Example:
 "<value>"
 ```
 
+## RunSubscribeParams
+
+No description provided.
+
+| Field    | Description                                             |
+| -------- | ------------------------------------------------------- |
+| run_id   | The run to follow.                                      |
+| from_seq | First event seq wanted; earlier ones are already shown. |
+
+Example:
+
+```json
+{
+  "run_id": "<run_id>",
+  "from_seq": "<from_seq>"
+}
+```
+
+## RunSubscribeResult
+
+No description provided.
+
+| Field   | Description                                                                                                                       |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| channel | `live`: replay then live; `replay_only`: the run has no live owner; `live_unavailable`: the owner speaks another channel version. |
+
+Example:
+
+```json
+{
+  "channel": "<channel>"
+}
+```
+
+## RunUnsubscribeParams
+
+No description provided.
+
+| Field  | Description |
+| ------ | ----------- |
+| run_id |             |
+
+Example:
+
+```json
+{
+  "run_id": "<run_id>"
+}
+```
+
+## RunsChangedNotification
+
+Runs appeared, changed or ended; re-read what is shown.
+
+| Field        | Description                                                                  |
+| ------------ | ---------------------------------------------------------------------------- |
+| run_ids      | Runs known to have changed; empty when the index changed without naming one. |
+| live_run_ids | Runs with a lease right now.                                                 |
+
+Example:
+
+```json
+{
+  "run_ids": "<run_ids>",
+  "live_run_ids": "<live_run_ids>"
+}
+```
+
+## RunsSubscribeResult
+
+Subscribed to run and preference changes.
+
+| Field        | Description                  |
+| ------------ | ---------------------------- |
+| live_run_ids | Runs with a lease right now. |
+
+Example:
+
+```json
+{
+  "live_run_ids": "<live_run_ids>"
+}
+```
+
 ## ScalarValue
 
 Scalar value for task params.
@@ -2599,6 +3239,46 @@ Example:
 
 ```json
 "public"
+```
+
+## SessionCodeResult
+
+No description provided.
+
+| Field      | Description                                                  |
+| ---------- | ------------------------------------------------------------ |
+| code       | Single-use code, valid for 60 seconds, bound to this window. |
+| expires_at |                                                              |
+
+Example:
+
+```json
+{
+  "code": "<code>",
+  "expires_at": "<expires_at>"
+}
+```
+
+## SessionGrantResponse
+
+A window session; the capability is kept in memory only.
+
+| Field             | Description |
+| ----------------- | ----------- |
+| window_id         |             |
+| window_capability |             |
+| build_id          |             |
+| absolute_expiry   |             |
+
+Example:
+
+```json
+{
+  "window_id": "<window_id>",
+  "window_capability": "<window_capability>",
+  "build_id": "<build_id>",
+  "absolute_expiry": "<absolute_expiry>"
+}
 ```
 
 ## SettingSourceSchema
@@ -2955,6 +3635,30 @@ Example:
 }
 ```
 
+## UiOpenResult
+
+What `yantra ui` opened or printed.
+
+| Field         | Description                                                  |
+| ------------- | ------------------------------------------------------------ |
+| schemaVersion | Output format version.                                       |
+| url           | The app URL with its single-use launch code in the fragment. |
+| port          | Loopback HTTP port.                                          |
+| hostPid       | App host process ID.                                         |
+| reused        | True when an already-running host served the request.        |
+
+Example:
+
+```json
+{
+  "schemaVersion": "<schemaVersion>",
+  "url": "<url>",
+  "port": "<port>",
+  "hostPid": "<hostPid>",
+  "reused": "<reused>"
+}
+```
+
 ## UsageCall
 
 Single LLM usage call record.
@@ -3111,6 +3815,16 @@ Example:
   "state": "<state>",
   "timeout_ms": "<timeout_ms>"
 }
+```
+
+## WorkerExecutionClass
+
+`run` holds a slot, `exclusive` needs zero runs, `mutate` holds none.
+
+Example:
+
+```json
+"run"
 ```
 
 ## WorkerLaunch

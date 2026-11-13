@@ -34,7 +34,7 @@ describe('@no-llm command registry completeness', () => {
 
   it('gives every leaf an execution class', () => {
     const leaves = COMMAND_REGISTRY.commands.filter((entry) => entry.kind === 'leaf');
-    expect(leaves).toHaveLength(52);
+    expect(leaves).toHaveLength(53);
     for (const leaf of leaves) expect(leaf.execution.default).toEqual(expect.any(String));
   });
 

@@ -1,0 +1,8 @@
+Usage: yantra ui [options]
+
+Open the Yantra app in a browser window
+
+Options:
+  --print     print the app URL instead of opening a window (default: false)
+  --json      emit JSON describing the opened app (default: false)
+  -h, --help  display help for command

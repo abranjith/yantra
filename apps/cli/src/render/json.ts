@@ -23,6 +23,15 @@ import type {
 
 export const CLI_JSON_SCHEMA_VERSION = SCHEMA_VERSION;
 
+/** The `list --json` document; `read.list` returns the same value (FEAT-065). */
+export function listEnvelope(items: readonly ListItem[]): {
+  readonly schemaVersion: typeof CLI_JSON_SCHEMA_VERSION;
+  readonly kind: 'list';
+  readonly items: readonly ListItem[];
+} {
+  return { schemaVersion: CLI_JSON_SCHEMA_VERSION, kind: 'list', items };
+}
+
 export class JSONRenderer implements OutputRenderer {
   constructor(private readonly sink?: (value: unknown) => void) {}
   private write(opts: ConnectorRenderOpts, value: string): void {
@@ -31,10 +40,7 @@ export class JSONRenderer implements OutputRenderer {
   }
 
   renderList(items: readonly ListItem[], opts: ConnectorRenderOpts): void {
-    this.write(
-      opts,
-      `${JSON.stringify({ schemaVersion: CLI_JSON_SCHEMA_VERSION, kind: 'list', items })}\n`,
-    );
+    this.write(opts, `${JSON.stringify(listEnvelope(items))}\n`);
   }
 
   renderShow(item: ShowItem, opts: ConnectorRenderOpts): void {

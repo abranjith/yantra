@@ -59,6 +59,50 @@ later app feature (FEAT-066 to FEAT-071) builds on this host.
 > - After recovery, the normal dequeue loop resumes, and every queued item still passes drift review
 >   (TASK-017) and the slot reservation (TASK-014) before a worker spawns.
 
+> **Implementation notes (2026-11-11).** The resume-code DEVIATION above was confirmed by the user.
+> Where the code base differed from what this spec assumed:
+>
+> - **DEVIATION — `ui` registry entry.** FEAT-062 did not add a `ui` entry. TASK-005 adds it
+>   (`entries/app.ts`, class `exemption`, decision D15) last in root-help order; the help goldens
+>   were recaptured on purpose (one new root line plus the `ui` help files).
+> - **DEVIATION — one cookie per browser profile.** Cookies ignore ports, and every app window
+>   shares one Chrome profile, so a per-window cookie would let a second window log out the first.
+>   `yantra_session` (exact attributes as specified) identifies the profile and may carry several
+>   windows; each window keeps its own capability, so window A's cookie with window B's capability
+>   is still refused.
+> - **DEVIATION — worker launch.** FEAT-064's worker takes `--launch <launch file>` (user text
+>   never reaches argv) and offers a `WorkerStartGate` for the claim, not `--invocation-id`.
+>   TASK-015 uses that seam; the launch's `result_path` is `invocationResultPath(id)`, so
+>   `InvocationResult` is FEAT-064's `WorkerResult`.
+> - **DEVIATION — `prefs set` value metadata.** The registry has no per-key value metadata for
+>   `prefs set`, so TASK-009 cannot add enum entries there. Validation lives in core
+>   (`KEY_VALUE_SCHEMAS`); generated forms need the metadata (TODO, FEAT-070).
+> - **DEVIATION — `read.profile`.** `prefs list` returns only stored rows, so a theme set by hand in
+>   `profile.yaml` (or left at its default) never appears in `read.prefs.list`. `read.profile`
+>   (`yantra profile --json`: effective values, defaults and provenance) is mapped as an M1 reader,
+>   and the app applies preferences from it (TASK-011).
+> - **DEVIATION — recovery of an `unknown` owner.** A `claimed | running` record whose worker the
+>   probe calls `unknown` is reported `unverifiable` and left unchanged, not moved to
+>   `start_unknown`: the closed transition table has no `claimed → start_unknown`, and an
+>   unverifiable owner is never treated as dead (memory → Architecture).
+> - **DEVIATION — record creation.** `create` gets uniqueness from `slots.lock` plus an existence
+>   check and publishes by rename, not by exclusive hard link (`wx`): on Windows a hard-linked file
+>   cannot be replaced by the next transition's rename for seconds (`EPERM`).
+> - **DEVIATION — run IDs.** Run IDs are minted inside each pipeline (`LocalRunStore`, ask and
+>   research), so threading a pre-allocated ID through every handler would touch every run command.
+>   Instead `reserve` sets `run_id` only for `resume` (the existing run). For other invocations the
+>   worker finds the run whose `lease.json` it owns (owner creation identity) and records it with
+>   `markRunning(id, run_id)`; `command.invoke` returns `run_id: null` until then.
+> - **DEVIATION — cancelling `spawning`.** The table has no `spawning → discarded`, so cancelling a
+>   spawning item moves it to `never_started`; the worker's claim is refused either way.
+> - **Running the process suites.** `tests/ui/security` and `tests/ui/launch-ownership` start real
+>   host and worker processes; under the parallel run they missed real readiness deadlines. They
+>   run one file at a time from `apps/cli/vitest.process.config.ts`, and `pnpm --filter @yantra/cli
+test` runs both configs. Their Verify commands therefore need
+>   `npx vitest run --config vitest.process.config.ts <path>`.
+> - **No-Host requests.** Node's HTTP parser answers a request without `Host` with 400 before any
+>   route runs; that is the refusal for that case (the guard's 421 covers every wrong `Host`).
+
 ## 2. Data Model (Granular)
 
 > No `.spec-lite/data_model.md` exists. These are file-backed records, not tables. Every persisted
@@ -1067,24 +1111,24 @@ event}` to each window from its own `from_seq`, deduplicating by `seq`.
 
 ## 8. State Tracking
 
-- [ ] TASK-001: Host state paths, records and the single-instance host lock (M1)
-- [ ] TASK-002: Loopback HTTP server: request guard, security headers and static assets (M1)
-- [ ] TASK-003: Sessions: launch codes, `POST /session`, per-window capabilities and expiry (M1)
-- [ ] TASK-004: WebSocket JSON-RPC 2.0 endpoint with `auth`, limits and the build-ID handshake (M1)
-- [ ] TASK-005: Host entry, control socket, host log and `yantra ui --print` / `--json` (M1)
-- [ ] TASK-006: Chrome `--app` window launcher and the no-Chromium path (M1)
-- [ ] TASK-007: In-process reads (`read.<name>`) with cursor pagination (M1)
-- [ ] TASK-008: Change detection: `runs.subscribe` without reloads (M1)
-- [ ] TASK-009: Preferences `ui.theme` and `ui.surfaces` (M1)
-- [ ] TASK-010: Signed artifact URLs `/a/<signed>` with a public allowlist (M1)
-- [ ] TASK-011: `apps/web` skeleton: boot, session, RPC client, shell, Bindu and preferences (M1)
-- [ ] TASK-012: Build and embed `apps/web` into the CLI, with the build ID (M1)
-- [ ] TASK-013: Localhost security suite (merge gate) and the no-third-party-request check (M1)
-- [ ] TASK-014: Launch ownership core: invocation records, slot lock, reservation and worker claim (M2)
-- [ ] TASK-015: Supervisor: `command.invoke`, the queue, worker spawn, cancel and results (M2)
-- [ ] TASK-016: Host-start recovery, run reattach and `run.subscribe` relay (M2)
-- [ ] TASK-017: Queue drift review (D13)
-- [ ] TASK-018: Attendance relay (D5) and idle exit (M2)
-- [ ] TASK-019: Launch-ownership evidence (§10 B1) and the M2 end-to-end run
+- [x] TASK-001: Host state paths, records and the single-instance host lock (M1)
+- [x] TASK-002: Loopback HTTP server: request guard, security headers and static assets (M1)
+- [x] TASK-003: Sessions: launch codes, `POST /session`, per-window capabilities and expiry (M1)
+- [x] TASK-004: WebSocket JSON-RPC 2.0 endpoint with `auth`, limits and the build-ID handshake (M1)
+- [x] TASK-005: Host entry, control socket, host log and `yantra ui --print` / `--json` (M1)
+- [x] TASK-006: Chrome `--app` window launcher and the no-Chromium path (M1)
+- [x] TASK-007: In-process reads (`read.<name>`) with cursor pagination (M1)
+- [x] TASK-008: Change detection: `runs.subscribe` without reloads (M1)
+- [x] TASK-009: Preferences `ui.theme` and `ui.surfaces` (M1)
+- [x] TASK-010: Signed artifact URLs `/a/<signed>` with a public allowlist (M1)
+- [x] TASK-011: `apps/web` skeleton: boot, session, RPC client, shell, Bindu and preferences (M1)
+- [x] TASK-012: Build and embed `apps/web` into the CLI, with the build ID (M1)
+- [x] TASK-013: Localhost security suite (merge gate) and the no-third-party-request check (M1)
+- [x] TASK-014: Launch ownership core: invocation records, slot lock, reservation and worker claim (M2)
+- [x] TASK-015: Supervisor: `command.invoke`, the queue, worker spawn, cancel and results (M2)
+- [x] TASK-016: Host-start recovery, run reattach and `run.subscribe` relay (M2)
+- [x] TASK-017: Queue drift review (D13)
+- [x] TASK-018: Attendance relay (D5) and idle exit (M2)
+- [x] TASK-019: Launch-ownership evidence (§10 B1) and the M2 end-to-end run
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

@@ -38,12 +38,14 @@ describe('@no-llm handler purity boundary', () => {
     const helpers = results.filter((result) => {
       const path = result.filePath.replaceAll('\\', '/');
       // Process entry points own the process: the terminal adapter, the bin,
-      // and the detached worker and its trampoline (FEAT-064).
+      // the detached worker and its trampoline (FEAT-064), and the detached app
+      // host (FEAT-065).
       return (
         !path.includes('/adapters/terminal/') &&
         !path.endsWith('/bin.ts') &&
         !path.endsWith('/src/worker.ts') &&
-        !path.endsWith('/worker/trampoline.ts')
+        !path.endsWith('/worker/trampoline.ts') &&
+        !path.endsWith('/src/ui-host.ts')
       );
     });
     const leaks = await Promise.all(

@@ -56,6 +56,12 @@ export interface HistoryListFilter {
   readonly since?: string;
   /** Max rows (default 50, most-recent first). */
   readonly limit?: number;
+  /**
+   * Keyset cursor: only rows strictly after this one in
+   * `started_at DESC, run_id DESC` order (FEAT-065 TASK-007). Rows inserted
+   * newer than the cursor never shift later pages.
+   */
+  readonly before?: { readonly startedAt: string; readonly runId: string };
 }
 
 /** Filter for {@link HistoryStore.usageRollup}. */
@@ -95,6 +101,12 @@ export interface HistoryStore {
   recordFromRunDir(runId: string): Promise<Result<boolean, IndexDbError>>;
   /** Lists tasks most-recent first, optionally filtered by type/since. */
   list(filter?: HistoryListFilter): Promise<Result<readonly HistoryEntry[], IndexDbError>>;
+  /**
+   * A value that changes whenever another connection commits to the index
+   * (`PRAGMA data_version`), so a long-lived reader can poll for change
+   * cheaply (FEAT-065 TASK-008).
+   */
+  changeToken(): Result<number, IndexDbError>;
   /** Rolls up task count + cost grouped by (day, provider). */
   usageRollup(filter?: UsageRollupFilter): Promise<Result<readonly UsageRollupRow[], IndexDbError>>;
   /** Reconstructs the whole table from the run tree. Returns rows written. */
@@ -193,6 +205,10 @@ export class SqliteHistoryStore implements HistoryStore {
         clauses.push('started_at >= ?');
         params.push(filter.since);
       }
+      if (filter.before !== undefined) {
+        clauses.push('(started_at < ? OR (started_at = ? AND run_id < ?))');
+        params.push(filter.before.startedAt, filter.before.startedAt, filter.before.runId);
+      }
       const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
       const limit = filter.limit ?? DEFAULT_LIST_LIMIT;
 
@@ -202,7 +218,7 @@ export class SqliteHistoryStore implements HistoryStore {
                   started_at, finished_at, duration_ms, cost_usd, provider, task_outcome
              FROM history
              ${where}
-             ORDER BY started_at DESC
+             ORDER BY started_at DESC, run_id DESC
              LIMIT ?`,
         )
         .all(...params, limit) as unknown as HistoryRow[];
@@ -211,6 +227,20 @@ export class SqliteHistoryStore implements HistoryStore {
     } catch (error) {
       return Promise.resolve(
         err(new IndexDbError('failed to list history', { op: 'history.list', cause: error })),
+      );
+    }
+  }
+
+  public changeToken(): Result<number, IndexDbError> {
+    try {
+      const row = this.db.prepare('PRAGMA data_version').get() as { data_version: number };
+      return ok(row.data_version);
+    } catch (error) {
+      return err(
+        new IndexDbError('failed to read the index change token', {
+          op: 'history.changeToken',
+          cause: error,
+        }),
       );
     }
   }

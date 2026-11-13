@@ -1,0 +1,897 @@
+{
+  "vcs": "git",
+  "files": [
+    {
+      "path": "apps/cli/package.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "apps/cli/scripts/embed-web.mjs",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "apps/cli/src/commands/list.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "apps/cli/src/commands/ui.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/src/registry/handlers.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/src/render/json.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "apps/cli/src/ui-host.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/src/ui/host/artifact-urls.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/cli/src/ui/host/attendance.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-018"
+    },
+    {
+      "path": "apps/cli/src/ui/host/change-feed.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/cli/src/ui/host/control-socket.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/src/ui/host/drift-review.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-017"
+    },
+    {
+      "path": "apps/cli/src/ui/host/errors.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/cli/src/ui/host/host-log.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/src/ui/host/host-runtime.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/src/ui/host/host.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/cli/src/ui/host/idle-exit.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-018"
+    },
+    {
+      "path": "apps/cli/src/ui/host/reads.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "apps/cli/src/ui/host/recovery.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-016"
+    },
+    {
+      "path": "apps/cli/src/ui/host/request-guard.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/cli/src/ui/host/rpc-server.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "apps/cli/src/ui/host/run-relay.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-016"
+    },
+    {
+      "path": "apps/cli/src/ui/host/sessions.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/cli/src/ui/host/static-assets.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/cli/src/ui/host/supervisor.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-015"
+    },
+    {
+      "path": "apps/cli/src/ui/window-launcher.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/src/ui/worker-claim.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-015"
+    },
+    {
+      "path": "apps/cli/src/worker.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-015"
+    },
+    {
+      "path": "apps/cli/tests/boundaries/handler-purity.spec.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "apps/cli/tests/characterization/baselines/init.anthropic.json",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "apps/cli/tests/characterization/baselines/init.defaults.json",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "apps/cli/tests/characterization/baselines/init.ollama.json",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "apps/cli/tests/characterization/baselines/profile.defaults.json",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "apps/cli/tests/characterization/baselines/ui.json",
+      "status": "U",
+      "role": "implement"
+    },
+    {
+      "path": "apps/cli/tests/characterization/registry-parity.spec.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "apps/cli/tests/commands/prefs-ui.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "apps/cli/tests/commands/ui.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/fixtures/cli-surface/errors/root.unknown-command.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/fixtures/cli-surface/errors/ui.excess-arguments.json",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/fixtures/cli-surface/errors/ui.unknown-option.json",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/fixtures/cli-surface/help/w160/help__ui.txt",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/fixtures/cli-surface/help/w160/root.txt",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/fixtures/cli-surface/help/w160/ui.txt",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/fixtures/cli-surface/help/w80/help__ui.txt",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/fixtures/cli-surface/help/w80/root.txt",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/fixtures/cli-surface/help/w80/ui.txt",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/index.spec.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "apps/cli/tests/registry/cli-surface.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/registry/completeness.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/artifact-urls.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/attendance.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-018"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/change-feed.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/control-socket.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/drift-review.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-017"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/embed.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/host-log.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/idle-exit.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-018"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/reads.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/recovery.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-016"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/request-guard.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/rpc-server.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/rpc-support.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/run-relay.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-016"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/sessions.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/static-assets.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/supervisor.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-015"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/support.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/cli/tests/ui/launch-ownership/fixtures/fixture-host.mjs",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-019"
+    },
+    {
+      "path": "apps/cli/tests/ui/launch-ownership/fixtures/fixture-worker.mjs",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-019"
+    },
+    {
+      "path": "apps/cli/tests/ui/launch-ownership/launch-ownership.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-019"
+    },
+    {
+      "path": "apps/cli/tests/ui/security/expiry.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "apps/cli/tests/ui/security/real-host.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "apps/cli/tests/ui/security/support.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "apps/cli/tests/ui/window-launcher.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/tests/ui/worker-claim.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-015"
+    },
+    {
+      "path": "apps/cli/vitest.config.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "apps/cli/vitest.process.config.ts",
+      "status": "U",
+      "role": "implement"
+    },
+    {
+      "path": "apps/web/index.html",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/package.json",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/src/app/bootstrap.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/src/app/nav-registry.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/src/app/router.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/src/app/shell/AppShell.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/src/app/shell/ConnectionBanner.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/src/app/shell/SessionEnded.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/src/app/shell/TopBar.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/src/boot/take-launch-code.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/src/host/connection-store.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/src/host/rpc-client.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/src/host/session.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/src/host/stale-assets.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/src/main.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/src/prefs/apply-preferences.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/src/styles.css",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/tests/app/shell.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/tests/build-id.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "apps/web/tests/host/rpc-client.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/tests/host/session.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/tests/host/stale-assets.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/tests/lint.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/tests/prefs/apply-preferences.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/tests/setup.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/tests/support/fake-socket.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/tsconfig.json",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/vite.config.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/vitest.config.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "docs/architecture.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/configuration.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/yantra-app.md",
+      "status": "U",
+      "role": "implement"
+    },
+    {
+      "path": "docs/protocol-spec.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "docs/quickstart.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/usage.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "e2e/app-host-m2.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-019"
+    },
+    {
+      "path": "e2e/app-host.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "e2e/package.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-019"
+    },
+    {
+      "path": "eslint.config.js",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/app-host/errors.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/app-host/host-lock.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/app-host/index.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/app-host/invocation-recovery.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-014"
+    },
+    {
+      "path": "packages/core/src/app-host/invocation-store.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-014"
+    },
+    {
+      "path": "packages/core/src/browser/chrome-discovery.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/browser/paths.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/index-db/history-store.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/core/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/profile/profile-file.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/core/tests/app-host/fixtures/reserve-child.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-014"
+    },
+    {
+      "path": "packages/core/tests/app-host/host-lock.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/app-host/invocation-recovery.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-014"
+    },
+    {
+      "path": "packages/core/tests/app-host/invocation-store.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-014"
+    },
+    {
+      "path": "packages/core/tests/browser/app-window-discovery.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/tests/index-db/history-store-cursor.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/core/tests/profile/ui-preferences.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/core/tests/scheduler/fire-runner.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/protocol/generated/json-schema/host-lock.json",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/protocol/generated/json-schema/invocation-record.json",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/protocol/src/commands/entries/app.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/protocol/src/commands/registry.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/protocol/src/emit/json-schema.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/protocol/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/protocol/src/schemas/app-host.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/protocol/src/schemas/app-rpc.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/app-host.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/protocol/tests/app-rpc.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/tests/commands/registry.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/ui/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "packages/ui/src/instruments/bindu.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "packages/ui/tests/instruments/bindu.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "README.md",
+      "status": "M",
+      "role": "implement"
+    }
+  ],
+  "excluded": [
+    ".spec-lite/feature-summary.md",
+    ".spec-lite/features/FEAT-065-app_host_yantra_ui/changeset.json",
+    ".spec-lite/features/FEAT-065-app_host_yantra_ui/spec.md",
+    ".spec-lite/plan_ui.md"
+  ],
+  "baseline": {
+    "sha": "c463882ef71d58250d801185786ffe7ea8685487",
+    "capturedAt": "2026-11-11T16:19:38.349Z",
+    "dirtyAtBaseline": [],
+    "dirtyBlobHashes": {},
+    "workflow": "ft/feat-065-app-host-yantra-ui@c463882ef71d58250d801185786ffe7ea8685487"
+  },
+  "featureId": "FEAT-065"
+}
