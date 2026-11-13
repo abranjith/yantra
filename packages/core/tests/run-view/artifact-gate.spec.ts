@@ -151,6 +151,16 @@ describe('resolvePublicArtifact', () => {
     );
   });
 
+  it('is outside_run when the run directory itself is a link elsewhere', async () => {
+    const outside = join(home, 'elsewhere');
+    await mkdir(outside);
+    await writeFile(join(outside, 'report.md'), 'SECRET');
+    await rm(runDir, { recursive: true, force: true });
+    await symlink(outside, runDir, 'junction');
+
+    await expectCode(resolvePublicArtifact(runsRoot(), RUN_ID, 'report.md'), 'outside_run');
+  });
+
   it('refuses a link inside the run that lands on another entry', async () => {
     await mkdir(join(runDir, 'decisions'));
     await writeFile(join(runDir, 'decisions', 'x.jsonl'), '{}\n');

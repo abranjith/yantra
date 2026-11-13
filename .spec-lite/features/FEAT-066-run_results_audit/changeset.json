@@ -603,9 +603,27 @@
     },
     {
       "path": "apps/web/src/features/run-result/EvidenceSide.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
+    },
+    {
+      "path": "apps/web/src/features/run-result/live-state.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "apps/web/src/features/run-result/NoDocumentResult.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "apps/web/src/features/run-result/run-health-lines.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "apps/web/src/features/run-result/SlotState.tsx",
@@ -618,6 +636,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/features/viewers/JsonViewer.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "apps/web/src/features/viewers/ShowInFolder.tsx",
@@ -675,9 +699,15 @@
     },
     {
       "path": "apps/web/tests/features/run-result/evidence.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
+    },
+    {
+      "path": "apps/web/tests/features/run-result/no-document.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "apps/web/tests/host/app-rpc.spec.tsx",
@@ -854,6 +884,12 @@
       "task": "TASK-002"
     },
     {
+      "path": "packages/core/tests/run-view/run-health-parity.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
       "path": "packages/core/tests/run-view/run-result.spec.ts",
       "status": "A",
       "role": "implement",
@@ -969,7 +1005,7 @@
     },
     {
       "path": "packages/ui/src/instruments/ActionEvidence.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
@@ -992,8 +1028,14 @@
       "task": "TASK-005"
     },
     {
-      "path": "packages/ui/src/instruments/EvidencePane.tsx",
+      "path": "packages/ui/src/instruments/EventInspector.tsx",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/ui/src/instruments/EvidencePane.tsx",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
@@ -1011,7 +1053,7 @@
     },
     {
       "path": "packages/ui/src/instruments/ProtectedValue.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
@@ -1041,7 +1083,7 @@
     },
     {
       "path": "packages/ui/tests/instruments/evidence.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },

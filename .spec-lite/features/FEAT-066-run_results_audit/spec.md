@@ -1036,7 +1036,7 @@ state}`.
 - [x] TASK-004: Run-result read that fails per item (`read.run_result`)
 - [x] TASK-005: Run-result route rendering Briefs and templated documents
 - [x] TASK-006: Citation evidence in one click: EvidencePane, ActionEvidence and ProtectedValue
-- [ ] TASK-007: Complete results for runs without a document, plus `read.report`
+- [x] TASK-007: Complete results for runs without a document, plus `read.report`
 - [ ] TASK-008: Bounded and windowed artifact viewers with "Show in folder" and EventInspector
 - [ ] TASK-009: Audit page from the audit builder (`read.audit`)
 - [ ] TASK-010: Run-results evidence suite: resilience, scale, security and parity (M1 end to end)

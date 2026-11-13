@@ -7,8 +7,8 @@
  * 1. validates the run id (before any filesystem call);
  * 2. classifies the path against `RUN_ARTIFACT_REGISTRY` and refuses denied
  *    paths (`not_public`);
- * 3. `realpath`s the run directory and the target;
- * 4. requires the target to stay inside the run directory (`outside_run`),
+ * 3. `realpath`s the runs root and the target;
+ * 4. requires the target to stay inside `realpath(runsRoot)/runId` (`outside_run`),
  *    which defeats symlinks and Windows junctions, and requires the resolved
  *    name to classify to the same entry, so a link cannot reach a denied file;
  * 5. requires a regular file (`not_found` otherwise);
@@ -87,10 +87,13 @@ export async function resolvePublicArtifact(
   }
   const fs = options.fs ?? NODE_ARTIFACT_GATE_FS;
 
+  // Containment is judged against realpath(runsRoot)/runId, not the run
+  // directory's own realpath: a run directory that is itself a link to
+  // somewhere else must not carry its files into the allowlist.
   let runDir: string;
   let target: string;
   try {
-    runDir = await fs.realpath(join(runsRoot, runId));
+    runDir = join(await fs.realpath(runsRoot), runId);
   } catch {
     throw new ArtifactAccessError('not_found', entry.id);
   }

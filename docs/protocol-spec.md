@@ -3101,6 +3101,30 @@ Example:
 }
 ```
 
+## ReportResult
+
+The `yantra report --json` document.
+
+| Field         | Description                             |
+| ------------- | --------------------------------------- |
+| schemaVersion |                                         |
+| kind          |                                         |
+| markdown      | The run report, verbatim.               |
+| truncated     | Only the head of report.md is included. |
+| bytes         | The full size of report.md.             |
+
+Example:
+
+```json
+{
+  "schemaVersion": "<schemaVersion>",
+  "kind": "<kind>",
+  "markdown": "<markdown>",
+  "truncated": "<truncated>",
+  "bytes": "<bytes>"
+}
+```
+
 ## ReportTemplateReference
 
 Template identity and content hash recorded with a rendered report.

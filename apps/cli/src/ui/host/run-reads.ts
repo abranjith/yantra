@@ -14,12 +14,21 @@ import {
   ArtifactAccessError,
   RunNotFoundError,
   leaseLiveState,
+  readHead,
   readRunResult,
   reconcileRun,
+  resolvePublicArtifact,
   runsRoot,
   type LiveState,
+  type PublicArtifact,
 } from '@yantra/core';
-import { RunResultParams, RunResultView } from '@yantra/protocol';
+import {
+  CLI_READ_SCHEMA_VERSION,
+  REPORT_READ_CAP_BYTES,
+  ReportResult,
+  RunResultParams,
+  RunResultView,
+} from '@yantra/protocol';
 
 import { SILENT_HOST_LOGGER, type HostLogger } from './host.js';
 import { RpcError, type RpcMethodRegistry } from './rpc-server.js';
@@ -122,6 +131,41 @@ export async function readRunResultForApp(
   return view;
 }
 
+/** The CLI's own words for a run without a report (`yantra report`). */
+export function reportMissingError(runId: string): RpcError {
+  return new RpcError(
+    'not_found',
+    `report.md not found for run ${runId} (the run may still be in progress).`,
+  );
+}
+
+/**
+ * `read.report {run_id}`: `yantra report --json`, read through the public
+ * artifact gate. Over {@link REPORT_READ_CAP_BYTES} it returns the head of the
+ * file cut at a line boundary, with `truncated` and the full `bytes`.
+ */
+export async function readReportForApp(runId: string, deps: RunReadDeps): Promise<ReportResult> {
+  let artifact: PublicArtifact;
+  try {
+    artifact = await resolvePublicArtifact(deps.runsDir ?? runsRoot(), runId, 'report.md', {
+      exposures: ['view'],
+    });
+  } catch (error) {
+    if (error instanceof ArtifactAccessError && error.code === 'not_found') {
+      throw reportMissingError(runId);
+    }
+    throw runReadError(error, runId);
+  }
+  const head = await readHead(artifact.absPath, REPORT_READ_CAP_BYTES);
+  if (head === null) throw reportMissingError(runId);
+  const base = {
+    schemaVersion: CLI_READ_SCHEMA_VERSION,
+    kind: 'report' as const,
+    markdown: head.text,
+  };
+  return head.truncated ? { ...base, truncated: true, bytes: head.bytes } : base;
+}
+
 /** Registers the per-run reads. */
 export function registerRunReads(methods: RpcMethodRegistry, deps: RunReadDeps = {}): void {
   const corrupt = new CorruptSlotLog(deps.logger ?? SILENT_HOST_LOGGER);
@@ -129,6 +173,11 @@ export function registerRunReads(methods: RpcMethodRegistry, deps: RunReadDeps =
     params: RunResultParams,
     result: RunResultView,
     handler: ({ run_id: runId }) => readRunResultForApp(runId, deps, corrupt),
+  });
+  methods.register('read.report', {
+    params: RunResultParams,
+    result: ReportResult,
+    handler: ({ run_id: runId }) => readReportForApp(runId, deps),
   });
 }
 

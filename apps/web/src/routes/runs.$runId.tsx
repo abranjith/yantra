@@ -13,7 +13,7 @@
  */
 
 import { createRoute, Link as RouterLink } from '@tanstack/react-router';
-import type { ArtifactInventoryItem, LedgerDisplayedState, RunResultView } from '@yantra/protocol';
+import type { ArtifactInventoryItem, RunResultView } from '@yantra/protocol';
 import { Button, OutcomeBadge, Tab, TabList, TabPanel, Tabs } from '@yantra/ui';
 import { useMemo, useState, type ReactNode } from 'react';
 
@@ -29,20 +29,14 @@ import {
   indexSources,
 } from '../features/run-result/EvidenceProvider.js';
 import { EvidenceSide } from '../features/run-result/EvidenceSide.js';
+import { liveDisplayedState } from '../features/run-result/live-state.js';
+import { NoDocumentResult } from '../features/run-result/NoDocumentResult.js';
 import { SlotState } from '../features/run-result/SlotState.js';
 import { TemplatedDocument } from '../features/run-result/TemplatedDocument.js';
 import { RpcCallError } from '../host/rpc-client.js';
 
 /** The tabs of the Run result page. */
 export type RunTab = 'result' | 'audit' | 'files';
-
-const LIVE_STATE: Readonly<
-  Record<NonNullable<RunResultView['live']>['state'], LedgerDisplayedState>
-> = {
-  running: 'running',
-  waiting_for_you: 'waiting_for_you',
-  unknown_owner: 'unknown_owner',
-};
 
 function RunHeader({ view }: { readonly view: RunResultView }): ReactNode {
   return (
@@ -53,7 +47,7 @@ function RunHeader({ view }: { readonly view: RunResultView }): ReactNode {
           status={view.status}
           taskOutcome={view.task_outcome ?? undefined}
           executionState={view.execution_state ?? undefined}
-          displayedState={view.live === null ? undefined : LIVE_STATE[view.live.state]}
+          displayedState={liveDisplayedState(view)}
         />
         <dl className="flex flex-wrap gap-x-4 gap-y-1">
           {(
@@ -95,7 +89,7 @@ export function DocumentRegion({ view }: { readonly view: RunResultView }): Reac
   }, [document]);
 
   if (document.kind === 'none') {
-    return <p className="text-ink-2">This run saved no Brief or document.</p>;
+    return <NoDocumentResult view={view} files={<FilesRegion view={view} />} />;
   }
   if (document.slot.state !== 'ok') {
     return (

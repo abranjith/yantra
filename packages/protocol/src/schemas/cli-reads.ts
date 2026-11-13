@@ -193,3 +193,23 @@ export const LedgerCursor = z
   .strict()
   .describe('A position in `started_at DESC, run_id DESC` order.');
 export type LedgerCursor = z.infer<typeof LedgerCursor>;
+
+/** The most of `report.md` one `read.report` returns. */
+export const REPORT_READ_CAP_BYTES = 512 * 1024;
+
+/**
+ * `yantra report --json`. The app's `read.report` adds `truncated` and
+ * `bytes` only when `report.md` exceeds {@link REPORT_READ_CAP_BYTES}; it then
+ * returns the head of the file, cut at a line boundary.
+ */
+export const ReportResult = z
+  .object({
+    schemaVersion: z.literal(CLI_READ_SCHEMA_VERSION),
+    kind: z.literal('report'),
+    markdown: z.string().describe('The run report, verbatim.'),
+    truncated: z.literal(true).optional().describe('Only the head of report.md is included.'),
+    bytes: z.number().int().nonnegative().optional().describe('The full size of report.md.'),
+  })
+  .strict()
+  .describe('The `yantra report --json` document.');
+export type ReportResult = z.infer<typeof ReportResult>;

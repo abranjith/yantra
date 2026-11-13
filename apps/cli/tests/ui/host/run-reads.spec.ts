@@ -4,7 +4,7 @@
  * `read.run_result` (TASK-004).
  */
 
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -15,6 +15,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   askBriefRun,
   buildRunDir,
+  legacyReportRun,
+  startupFailureRun,
 } from '../../../../../packages/core/tests/run-view/fixtures/build-run-dir.js';
 import { openHistory } from '../../../src/history.js';
 import type { HostLogger } from '../../../src/ui/host/host.js';
@@ -415,5 +417,81 @@ describe('read.run_result', () => {
     );
     const other = new Error('boom');
     expect(runReadError(other, 'r')).toBe(other);
+  });
+});
+
+describe('read.report', () => {
+  const CALL = { windowId: 'w', connection: {} } as unknown as RpcCallContext;
+
+  function report() {
+    const methods = new RpcMethodRegistry();
+    registerRunReads(methods);
+    return methods.get('read.report')!;
+  }
+
+  async function call(runIdValue: string) {
+    const method = report();
+    return method.handler(method.params.parse({ run_id: runIdValue }), CALL);
+  }
+
+  it('returns the whole report under the cap, with no truncation fields', async () => {
+    const spec = legacyReportRun(3);
+    await buildRunDir(runsRoot(), spec);
+
+    const value = await call(spec.runId);
+
+    expect(value).toEqual({
+      schemaVersion: '0.2',
+      kind: 'report',
+      markdown: '# Report\n\nLegacy run.\n',
+    });
+  });
+
+  it('truncates a 700 KiB report at a line boundary within 512 KiB and says so', async () => {
+    const spec = legacyReportRun(4);
+    const line = `${'x'.repeat(99)}\n`;
+    const body = line.repeat(Math.ceil((700 * 1024) / line.length));
+    await buildRunDir(runsRoot(), { ...spec, files: { 'report.md': body } });
+
+    const value = (await call(spec.runId)) as {
+      markdown: string;
+      truncated?: boolean;
+      bytes?: number;
+    };
+
+    expect(value.truncated).toBe(true);
+    expect(value.bytes).toBe(Buffer.byteLength(body));
+    expect(Buffer.byteLength(value.markdown)).toBeLessThanOrEqual(512 * 1024);
+    expect(value.markdown.endsWith('\n')).toBe(true);
+    expect(report().result.safeParse(value).success).toBe(true);
+  });
+
+  it('says report.md is missing in the CLI’s words', async () => {
+    const spec = startupFailureRun(5);
+    await buildRunDir(runsRoot(), { ...spec, files: {} });
+
+    const error = await Promise.resolve(call(spec.runId)).catch((caught: unknown) => caught);
+
+    expect((error as RpcError).data).toMatchObject({
+      code: 'not_found',
+      message: `report.md not found for run ${spec.runId} (the run may still be in progress).`,
+    });
+  });
+
+  it('refuses a report.md that links outside the run', async () => {
+    const spec = legacyReportRun(6);
+    const dir = await buildRunDir(runsRoot(), { ...spec, files: {} });
+    const outside = join(home, 'outside');
+    await mkdir(outside);
+    await writeFile(join(outside, 'report.md'), 'SECRET');
+    // A directory link is what Windows allows without privileges; the report is
+    // reached through it when the run directory itself is the link target.
+    await rm(dir, { recursive: true, force: true });
+    await symlink(outside, dir, 'junction');
+
+    const error = await Promise.resolve(call(spec.runId)).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(RpcError);
+    expect(JSON.stringify((error as RpcError).data)).not.toContain('SECRET');
   });
 });

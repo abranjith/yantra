@@ -123,7 +123,7 @@ export const report = leaf({
     exit.ok(),
     exit.validation(`${PARSE_ERRORS}, an unknown run, a missing report.md, or --open with --json`),
   ],
-  json: { flag: '--json', shape: 'envelope', schema: null },
+  json: { flag: '--json', shape: 'envelope', schema: 'ReportResult' },
 });
 
 export const open = leaf({

@@ -29,6 +29,7 @@ import {
   RpcMethodRegistry,
   type RpcCallContext,
 } from '../../../src/ui/host/rpc-server.js';
+import { registerRunReads } from '../../../src/ui/host/run-reads.js';
 
 vi.mock('@yantra/core', async (importActual) => ({
   ...(await importActual<typeof CoreModule>()),
@@ -44,6 +45,9 @@ vi.mock('@yantra/core', async (importActual) => ({
 
 const WORKFLOW =
   'version: 1\nname: fixture\ndescription: Read fixture\nsecurity_class: public\nparams: {}\nsecrets: []\ncookies: none\nsteps:\n  - id: s1\n    verb: navigate\n    url: https://fixture.example\n    scope: null\noutputs: []\n';
+
+/** A run id in the `formatRunId` grammar, as typed run reads require (FEAT-066). */
+const FIXED_RUN = '20261107T000000Z-fixture-0000abcd';
 
 let home: string;
 let methods: RpcMethodRegistry;
@@ -127,8 +131,8 @@ describe('parity with yantra <cmd> --json', () => {
   beforeEach(async () => {
     await mkdir(workflowsRoot(), { recursive: true });
     await writeFile(join(workflowsRoot(), 'fixture.yaml'), WORKFLOW);
-    await writeRun('run-fixed', '2026-11-07T00:00:00.000Z');
-    await writeFile(join(runsRoot(), 'run-fixed', 'report.md'), '# Fixture report\n');
+    await writeRun(FIXED_RUN, '2026-11-07T00:00:00.000Z');
+    await writeFile(join(runsRoot(), FIXED_RUN, 'report.md'), '# Fixture report\n');
   });
 
   it('read.list runs pages the same items as yantra list runs --json', async () => {
@@ -153,9 +157,8 @@ describe('parity with yantra <cmd> --json', () => {
       { args: ['fixture'], options: { workflow: true } },
       ['show', 'fixture', '--workflow'],
     ],
-    ['read.show', { args: ['run-fixed'], options: { run: true } }, ['show', 'run-fixed', '--run']],
-    ['read.audit', { args: ['run-fixed'] }, ['audit', 'run-fixed']],
-    ['read.report', { args: ['run-fixed'] }, ['report', 'run-fixed']],
+    ['read.show', { args: [FIXED_RUN], options: { run: true } }, ['show', FIXED_RUN, '--run']],
+    ['read.audit', { args: [FIXED_RUN] }, ['audit', FIXED_RUN]],
     ['read.prefs.list', {}, ['prefs', 'list']],
     ['read.prefs.get', { args: ['defaults.detail'] }, ['prefs', 'get', 'defaults.detail']],
     ['read.daemon.status', {}, ['daemon', 'status']],
@@ -167,6 +170,20 @@ describe('parity with yantra <cmd> --json', () => {
     // Assert
     expect(result.value).toEqual(cli);
     expect(result.schema).toBeNull();
+  });
+});
+
+describe('read.report', () => {
+  it('equals yantra report --json for a report under the cap', async () => {
+    await writeRun(FIXED_RUN, '2026-11-07T00:00:00.000Z');
+    await writeFile(join(runsRoot(), FIXED_RUN, 'report.md'), '# Fixture report\n');
+    registerRunReads(methods);
+    const method = methods.get('read.report')!;
+
+    const value = await method.handler(method.params.parse({ run_id: FIXED_RUN }), CALL);
+
+    expect(value).toEqual(await cliJson(['report', FIXED_RUN]));
+    expect(method.result.safeParse(value).success).toBe(true);
   });
 });
 

@@ -51,6 +51,8 @@ export interface ReaderSpec {
   readonly fixedArgs?: readonly string[];
   /** Pages with a cursor: `read.list`, registered by `ledger-reads.ts`. */
   readonly paged?: boolean;
+  /** Registered by `run-reads.ts` with typed params (FEAT-066), not the generic reader. */
+  readonly runRead?: boolean;
 }
 
 /** The M1 readers. */
@@ -58,7 +60,7 @@ export const READERS: readonly ReaderSpec[] = [
   { method: 'read.list', path: ['list'], paged: true },
   { method: 'read.show', path: ['show'] },
   { method: 'read.audit', path: ['audit'] },
-  { method: 'read.report', path: ['report'] },
+  { method: 'read.report', path: ['report'], runRead: true },
   { method: 'read.prefs.list', path: ['prefs'], fixedArgs: ['list'] },
   { method: 'read.prefs.get', path: ['prefs'], fixedArgs: ['get'] },
   // The effective profile with defaults and provenance: what the app applies (TASK-011).
@@ -251,6 +253,7 @@ export function registerReads(methods: RpcMethodRegistry, deps: ReadDeps): void 
       registerLedgerRead(methods, ledgerDeps(deps));
       continue;
     }
+    if (spec.runRead === true) continue;
     methods.register(spec.method, {
       params: ReadParams,
       result: ReadResult,

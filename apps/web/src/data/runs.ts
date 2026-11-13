@@ -25,6 +25,7 @@ import type {
   LedgerOutcomeFilter,
   ArtifactUrlResult,
   ListRunItem,
+  ReportResult,
   RunLedgerPage,
   RunResultView,
 } from '@yantra/protocol';
@@ -241,6 +242,16 @@ export function useArtifactUrl(runId: string, path: string, enabled = true) {
     queryFn: () => rpc.request<ArtifactUrlResult>('artifact.url', { run_id: runId, path }),
     staleTime: ARTIFACT_URL_REUSE_MS,
     gcTime: ARTIFACT_URL_REUSE_MS,
+    enabled,
+  });
+}
+
+/** `report.md` through `read.report`; fetched only when the run has one. */
+export function useReport(runId: string, enabled: boolean) {
+  const rpc = useRpc();
+  return useQuery({
+    queryKey: ['report', runId],
+    queryFn: () => rpc.request<ReportResult>('read.report', { run_id: runId }),
     enabled,
   });
 }

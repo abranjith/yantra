@@ -54,3 +54,9 @@ export {
   type ProtectedValueProps,
   type ProtectedVerdict,
 } from './ProtectedValue.js';
+export {
+  EventInspector,
+  treeEntries,
+  type EventInspectorProps,
+  type JsonTreeOptions,
+} from './EventInspector.js';
