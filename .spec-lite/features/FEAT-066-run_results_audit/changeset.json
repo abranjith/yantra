@@ -578,10 +578,58 @@
       "task": "TASK-003"
     },
     {
+      "path": "apps/web/src/features/run-result/artifact-links.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/features/run-result/BriefDocument.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/features/run-result/CliTwin.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/features/run-result/EvidenceProvider.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/features/run-result/SlotState.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/features/run-result/TemplatedDocument.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/features/viewers/ShowInFolder.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
       "path": "apps/web/src/host/app-rpc.tsx",
       "status": "A",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/src/host/browser-nav.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "apps/web/src/main.tsx",
@@ -594,6 +642,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/src/routes/runs.$runId.artifacts.$.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "apps/web/src/routes/runs.$runId.tsx",
@@ -626,6 +680,12 @@
       "task": "TASK-003"
     },
     {
+      "path": "apps/web/tests/routes/run-result.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
       "path": "apps/web/tests/setup.ts",
       "status": "M",
       "role": "implement",
@@ -636,6 +696,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/tests/support/briefs.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "apps/web/tests/support/css-escape.ts",
@@ -890,6 +956,24 @@
       "task": "TASK-003"
     },
     {
+      "path": "packages/ui/src/instruments/CaptureGallery.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/ui/src/instruments/CitationChip.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/ui/src/instruments/ConditionTable.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
       "path": "packages/ui/src/instruments/index.ts",
       "status": "A",
       "role": "implement",
@@ -902,10 +986,52 @@
       "task": "TASK-003"
     },
     {
+      "path": "packages/ui/src/instruments/RequirementList.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/ui/src/instruments/SafeMarkdown.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/ui/tests/instruments/capture-gallery.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/ui/tests/instruments/citation-chip.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
       "path": "packages/ui/tests/instruments/outcome-badge.spec.tsx",
       "status": "A",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/tests/instruments/requirements-conditions.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/ui/tests/instruments/safe-markdown.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/ui/tests/setup.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "packages/ui/tests/support/axe.ts",

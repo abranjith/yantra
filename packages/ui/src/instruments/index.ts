@@ -19,3 +19,22 @@ export {
   outcomeText,
   type OutcomeBadgeProps,
 } from './OutcomeBadge.js';
+export { CitationChip, citationLabel, type CitationChipProps } from './CitationChip.js';
+export {
+  CAPTURE_IMAGE_CAP_BYTES,
+  CaptureGallery,
+  groupCaptureSets,
+  type CaptureGalleryProps,
+  type CaptureItem,
+} from './CaptureGallery.js';
+export { ConditionTable, type ConditionTableProps } from './ConditionTable.js';
+export { RequirementList, StatusWord, type RequirementListProps } from './RequirementList.js';
+export {
+  SafeMarkdown,
+  isSafeExternalHref,
+  parseCitationRef,
+  remarkCitations,
+  type CitationContext,
+  type CitationRef,
+  type SafeMarkdownProps,
+} from './SafeMarkdown.js';

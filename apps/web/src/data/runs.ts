@@ -14,6 +14,7 @@
 
 import {
   useInfiniteQuery,
+  useQuery,
   useQueryClient,
   type InfiniteData,
   type QueryClient,
@@ -22,8 +23,10 @@ import type {
   LedgerActiveRun,
   LedgerMode,
   LedgerOutcomeFilter,
+  ArtifactUrlResult,
   ListRunItem,
   RunLedgerPage,
+  RunResultView,
 } from '@yantra/protocol';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -216,4 +219,28 @@ export function useRunsChangeInvalidation(): string {
   }, [rpc, onChanged]);
 
   return announcement;
+}
+
+/** One run for the Run result page (`read.run_result`). */
+export function useRunResult(runId: string) {
+  const rpc = useRpc();
+  return useQuery({
+    queryKey: ['run', runId],
+    queryFn: () => rpc.request<RunResultView>('read.run_result', { run_id: runId }),
+  });
+}
+
+/** How long a signed URL is reused; the host signs for five minutes. */
+export const ARTIFACT_URL_REUSE_MS = 4 * 60_000;
+
+/** A signed, window-bound URL for one public artifact (`artifact.url`). */
+export function useArtifactUrl(runId: string, path: string, enabled = true) {
+  const rpc = useRpc();
+  return useQuery({
+    queryKey: ['artifact-url', runId, path],
+    queryFn: () => rpc.request<ArtifactUrlResult>('artifact.url', { run_id: runId, path }),
+    staleTime: ARTIFACT_URL_REUSE_MS,
+    gcTime: ARTIFACT_URL_REUSE_MS,
+    enabled,
+  });
 }

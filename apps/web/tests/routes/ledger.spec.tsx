@@ -142,8 +142,8 @@ describe('the Ledger', () => {
       mode: ['ask'],
       text: 'bank',
     });
-    expect(screen.getByRole('checkbox', { name: 'failed' }).checked).toBe(true);
-    expect(screen.getByRole('searchbox', { name: 'Search' }).value).toBe('bank');
+    expect(screen.getByRole('checkbox', { name: 'failed' })).toHaveProperty('checked', true);
+    expect(screen.getByRole('searchbox', { name: 'Search' })).toHaveProperty('value', 'bank');
     expect(screen.getByText('No runs match these filters.')).toBeTruthy();
   });
 
