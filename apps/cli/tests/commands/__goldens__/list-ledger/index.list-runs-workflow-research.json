@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "0.2",
+  "kind": "list",
+  "items": [
+    {
+      "kind": "run",
+      "runId": "20261101T000050Z-research-0000abcd",
+      "workflowName": "research",
+      "status": "completed",
+      "startedAt": "2026-11-01T00:00:50.000Z",
+      "durationMs": 2000,
+      "taskOutcome": "partial"
+    }
+  ]
+}

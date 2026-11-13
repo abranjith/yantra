@@ -9,7 +9,7 @@
  * {@link JSONRenderer}) live in adjacent modules.
  */
 
-import type { Brief, TaskEvent, TemplatedReport } from '@yantra/protocol';
+import type { Brief, ListRunItem, TaskEvent, TemplatedReport } from '@yantra/protocol';
 
 /**
  * Terminal progressive-disclosure level. Declared here (not in
@@ -54,18 +54,8 @@ export type ListItem =
       readonly securityClass: string;
       readonly modifiedAt: string;
     }
-  | {
-      readonly kind: 'run';
-      readonly runId: string;
-      readonly workflowName: string;
-      readonly status: string;
-      readonly startedAt: string;
-      readonly durationMs: number | null;
-      /** The task-outcome word (FEAT-054); present only on runs that recorded one. */
-      readonly taskOutcome?: string;
-      /** `interrupted` when the run's owner died and a reconciler ended it (FEAT-064). */
-      readonly executionState?: 'interrupted';
-    };
+  /** A run: the protocol `ListRunItem` (FEAT-066), the app's Ledger row too. */
+  | ListRunItem;
 
 /** A payload accepted by `OutputRenderer.renderShow`. */
 export type ShowItem =

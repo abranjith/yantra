@@ -2227,6 +2227,176 @@ Example:
 }
 ```
 
+## LedgerActiveRun
+
+A run in progress: never paginated, returned on the first page only.
+
+| Field          | Description                                                                                                                                                                                                                     |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| kind           |                                                                                                                                                                                                                                 |
+| runId          | The run directory name.                                                                                                                                                                                                         |
+| workflowName   | The workflow name, or the query or goal the run was started with.                                                                                                                                                               |
+| status         | The history status or the manifest status, exactly as the CLI prints it.                                                                                                                                                        |
+| startedAt      | ISO-8601 start time.                                                                                                                                                                                                            |
+| durationMs     | Wall-clock duration, or null while unknown.                                                                                                                                                                                     |
+| taskOutcome    | Present only on runs that recorded one.                                                                                                                                                                                         |
+| executionState | `interrupted` when the run’s owner died and a reconciler ended it (FEAT-064).                                                                                                                                                   |
+| taskType       | Additive (FEAT-066): the command that ran.                                                                                                                                                                                      |
+| costUsd        | Additive (FEAT-066): metered cost in USD, or null when not metered.                                                                                                                                                             |
+| hasDocument    | Additive (FEAT-066): the run saved a Brief or a templated document.                                                                                                                                                             |
+| displayedState | queued, starting, running, waiting_for_you, needs_review (settings drift), start_outcome_unknown, worker_not_responding (no heartbeat for 30 s), or unknown_owner (the manifest says running but its owner cannot be verified). |
+
+Example:
+
+```json
+{
+  "kind": "<kind>",
+  "runId": "<runId>",
+  "workflowName": "<workflowName>",
+  "status": "<status>",
+  "startedAt": "<startedAt>",
+  "durationMs": "<durationMs>",
+  "taskOutcome": "<taskOutcome>",
+  "executionState": "<executionState>",
+  "taskType": "<taskType>",
+  "costUsd": "<costUsd>",
+  "hasDocument": "<hasDocument>",
+  "displayedState": "<displayedState>"
+}
+```
+
+## LedgerCursor
+
+A position in `started_at DESC, run_id DESC` order.
+
+| Field      | Description |
+| ---------- | ----------- |
+| v          |             |
+| started_at |             |
+| run_id     |             |
+| source     |             |
+
+Example:
+
+```json
+{
+  "v": "<v>",
+  "started_at": "<started_at>",
+  "run_id": "<run_id>",
+  "source": "<source>"
+}
+```
+
+## LedgerDisplayedState
+
+queued, starting, running, waiting_for_you, needs_review (settings drift), start_outcome_unknown, worker_not_responding (no heartbeat for 30 s), or unknown_owner (the manifest says running but its owner cannot be verified).
+
+Example:
+
+```json
+"queued"
+```
+
+## LedgerMode
+
+The command that started the run: ask, research, do, or run (a saved workflow).
+
+Example:
+
+```json
+"ask"
+```
+
+## LedgerOutcomeFilter
+
+No description provided.
+
+Example:
+
+```json
+"<value>"
+```
+
+## ListResult
+
+The `yantra list --json` document.
+
+| Field         | Description |
+| ------------- | ----------- |
+| schemaVersion |             |
+| kind          |             |
+| items         |             |
+
+Example:
+
+```json
+{
+  "schemaVersion": "<schemaVersion>",
+  "kind": "<kind>",
+  "items": "<items>"
+}
+```
+
+## ListRunItem
+
+One run in `yantra list --json`.
+
+| Field          | Description                                                                   |
+| -------------- | ----------------------------------------------------------------------------- |
+| kind           |                                                                               |
+| runId          | The run directory name.                                                       |
+| workflowName   | The workflow name, or the query or goal the run was started with.             |
+| status         | The history status or the manifest status, exactly as the CLI prints it.      |
+| startedAt      | ISO-8601 start time.                                                          |
+| durationMs     | Wall-clock duration, or null while unknown.                                   |
+| taskOutcome    | Present only on runs that recorded one.                                       |
+| executionState | `interrupted` when the run’s owner died and a reconciler ended it (FEAT-064). |
+| taskType       | Additive (FEAT-066): the command that ran.                                    |
+| costUsd        | Additive (FEAT-066): metered cost in USD, or null when not metered.           |
+| hasDocument    | Additive (FEAT-066): the run saved a Brief or a templated document.           |
+
+Example:
+
+```json
+{
+  "kind": "<kind>",
+  "runId": "<runId>",
+  "workflowName": "<workflowName>",
+  "status": "<status>",
+  "startedAt": "<startedAt>",
+  "durationMs": "<durationMs>",
+  "taskOutcome": "<taskOutcome>",
+  "executionState": "<executionState>",
+  "taskType": "<taskType>",
+  "costUsd": "<costUsd>",
+  "hasDocument": "<hasDocument>"
+}
+```
+
+## ListWorkflowItem
+
+One saved workflow in `yantra list workflows --json`.
+
+| Field         | Description |
+| ------------- | ----------- |
+| kind          |             |
+| name          |             |
+| stepCount     |             |
+| securityClass |             |
+| modifiedAt    |             |
+
+Example:
+
+```json
+{
+  "kind": "<kind>",
+  "name": "<name>",
+  "stepCount": "<stepCount>",
+  "securityClass": "<securityClass>",
+  "modifiedAt": "<modifiedAt>"
+}
+```
+
 ## LiteralValue
 
 Literal scalar value.
@@ -2677,6 +2847,16 @@ Example:
 }
 ```
 
+## ReadListParams
+
+No description provided.
+
+Example:
+
+```json
+"<value>"
+```
+
 ## ReadParams
 
 Arguments of an in-process read.
@@ -3119,6 +3299,68 @@ Example:
 
 ```json
 "terminal"
+```
+
+## RunLedgerPage
+
+One Ledger page.
+
+| Field          | Description                                                                  |
+| -------------- | ---------------------------------------------------------------------------- |
+| schemaVersion  |                                                                              |
+| kind           |                                                                              |
+| items          |                                                                              |
+| next_cursor    | Cursor for the next page; null on the last page.                             |
+| source         | `files` when the history index was unavailable and runs were read from disk. |
+| scan_truncated | File fallback only: the scan stopped at its directory cap.                   |
+| active         | Runs in progress (first page only).                                          |
+
+Example:
+
+```json
+{
+  "schemaVersion": "<schemaVersion>",
+  "kind": "<kind>",
+  "items": "<items>",
+  "next_cursor": "<next_cursor>",
+  "source": "<source>",
+  "scan_truncated": "<scan_truncated>",
+  "active": "<active>"
+}
+```
+
+## RunLedgerQuery
+
+One Ledger page request.
+
+| Field    | Description                                                  |
+| -------- | ------------------------------------------------------------ |
+| target   |                                                              |
+| cursor   | Opaque cursor from a previous page’s `next_cursor`.          |
+| limit    | Page size, 1–200 (default 50).                               |
+| outcome  | Only these outcomes; `unknown` matches runs without one.     |
+| mode     | Only these commands.                                         |
+| since    | Only runs started at or after this instant.                  |
+| until    | Only runs started before this instant.                       |
+| text     | Case-insensitive substring of the intent text or the run id. |
+| workflow | `yantra list --workflow`: exact name.                        |
+| status   | `yantra list --status`: exact status word.                   |
+
+Example:
+
+```json
+{
+  "target": "<target>",
+  "cursor": "<cursor>",
+  "limit": "<limit>",
+  "outcome": "<outcome>",
+  "mode": "<mode>",
+  "since": "<since>",
+  "until": "<until>",
+  "text": "<text>",
+  "workflow": "<workflow>",
+  "status": "<status>"
+}
 ```
 
 ## RunRelativePath
@@ -3978,6 +4220,22 @@ Example:
   "outputs_unredacted": "<outputs_unredacted>",
   "_unrecorded_frames": "<_unrecorded_frames>",
   "_locators": "<_locators>"
+}
+```
+
+## WorkflowListQuery
+
+List saved workflows.
+
+| Field  | Description |
+| ------ | ----------- |
+| target |             |
+
+Example:
+
+```json
+{
+  "target": "<target>"
 }
 ```
 

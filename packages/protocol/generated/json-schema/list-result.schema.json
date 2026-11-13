@@ -1,0 +1,151 @@
+{
+  "$ref": "#/definitions/ListResult",
+  "definitions": {
+    "ListResult": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "const": "0.2"
+        },
+        "kind": {
+          "type": "string",
+          "const": "list"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "run"
+                  },
+                  "runId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "The run directory name."
+                  },
+                  "workflowName": {
+                    "type": "string",
+                    "description": "The workflow name, or the query or goal the run was started with."
+                  },
+                  "status": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "The history status or the manifest status, exactly as the CLI prints it."
+                  },
+                  "startedAt": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "ISO-8601 start time."
+                  },
+                  "durationMs": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "description": "Wall-clock duration, or null while unknown."
+                  },
+                  "taskOutcome": {
+                    "type": "string",
+                    "enum": [
+                      "fulfilled",
+                      "partial",
+                      "handoff",
+                      "failed",
+                      "aborted"
+                    ],
+                    "description": "Present only on runs that recorded one."
+                  },
+                  "executionState": {
+                    "type": "string",
+                    "enum": [
+                      "interrupted"
+                    ],
+                    "description": "`interrupted` when the run’s owner died and a reconciler ended it (FEAT-064)."
+                  },
+                  "taskType": {
+                    "type": "string",
+                    "enum": [
+                      "ask",
+                      "research",
+                      "do",
+                      "run"
+                    ],
+                    "description": "Additive (FEAT-066): the command that ran."
+                  },
+                  "costUsd": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "description": "Additive (FEAT-066): metered cost in USD, or null when not metered."
+                  },
+                  "hasDocument": {
+                    "type": "boolean",
+                    "description": "Additive (FEAT-066): the run saved a Brief or a templated document."
+                  }
+                },
+                "required": [
+                  "kind",
+                  "runId",
+                  "workflowName",
+                  "status",
+                  "startedAt",
+                  "durationMs"
+                ],
+                "additionalProperties": false,
+                "description": "One run in `yantra list --json`."
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "workflow"
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "stepCount": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "securityClass": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "modifiedAt": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "kind",
+                  "name",
+                  "stepCount",
+                  "securityClass",
+                  "modifiedAt"
+                ],
+                "additionalProperties": false,
+                "description": "One saved workflow in `yantra list workflows --json`."
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "kind",
+        "items"
+      ],
+      "additionalProperties": false,
+      "description": "The `yantra list --json` document."
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

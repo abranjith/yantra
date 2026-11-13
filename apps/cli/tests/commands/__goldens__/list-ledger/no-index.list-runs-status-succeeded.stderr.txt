@@ -1,0 +1,1 @@
+note: history index unavailable — showing runs from files only (run `yantra doctor` to rebuild the index)

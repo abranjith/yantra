@@ -11,21 +11,19 @@ import { Writable } from 'node:stream';
 
 import type * as CoreModule from '@yantra/core';
 import { dataDir, resetPathCache, runsRoot, workflowsRoot, type HistoryEntry } from '@yantra/core';
-import { ReadParams, type ReadResult } from '@yantra/protocol';
+import {
+  ReadListParams,
+  ReadParams,
+  type ListResult,
+  type ReadResult,
+  type RunLedgerPage,
+} from '@yantra/protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createTerminalContext } from '../../../src/adapters/terminal/terminal-adapter.js';
 import { executeCommand } from '../../../src/execute.js';
 import { openHistory } from '../../../src/history.js';
-import {
-  READERS,
-  UNMAPPED_READS,
-  clampLimit,
-  decodeCursor,
-  encodeCursor,
-  readPaths,
-  registerReads,
-} from '../../../src/ui/host/reads.js';
+import { READERS, UNMAPPED_READS, readPaths, registerReads } from '../../../src/ui/host/reads.js';
 import {
   RpcError,
   RpcMethodRegistry,
@@ -78,6 +76,13 @@ function at(index: number): string {
   return new Date(Date.UTC(2026, 10, 1, 0, 0, index)).toISOString();
 }
 
+/** `read.list` with a target of runs: one Ledger page. */
+async function ledger(params: unknown = {}): Promise<RunLedgerPage> {
+  const registered = methods.get('read.list');
+  if (registered === undefined) throw new Error('no read.list');
+  return (await registered.handler(ReadListParams.parse(params), CALL)) as RunLedgerPage;
+}
+
 async function read(method: string, params: unknown = {}): Promise<ReadResult> {
   const registered = methods.get(method);
   if (registered === undefined) throw new Error(`no ${method}`);
@@ -126,9 +131,23 @@ describe('parity with yantra <cmd> --json', () => {
     await writeFile(join(runsRoot(), 'run-fixed', 'report.md'), '# Fixture report\n');
   });
 
+  it('read.list runs pages the same items as yantra list runs --json', async () => {
+    const page = await ledger({ limit: 20 });
+    const cli = (await cliJson(['list', 'runs', '--limit', '20'])) as ListResult;
+    expect(page.items).toEqual(cli.items);
+    expect({ schemaVersion: page.schemaVersion, kind: page.kind }).toEqual({
+      schemaVersion: cli.schemaVersion,
+      kind: cli.kind,
+    });
+  });
+
+  it('read.list workflows equals the CLI document', async () => {
+    const registered = methods.get('read.list')!;
+    const value = await registered.handler(ReadListParams.parse({ target: 'workflows' }), CALL);
+    expect(value).toEqual(await cliJson(['list', 'workflows']));
+  });
+
   it.each([
-    ['read.list', { args: ['runs'], limit: 20 }, ['list', 'runs']],
-    ['read.list', { args: ['workflows'], limit: 20 }, ['list', 'workflows']],
     [
       'read.show',
       { args: ['fixture'], options: { workflow: true } },
@@ -176,13 +195,8 @@ describe('read.list paging', () => {
     let cursor: string | undefined;
     let pages = 0;
     for (;;) {
-      const page = await read('read.list', {
-        args: ['runs'],
-        limit: 50,
-        ...(cursor ? { cursor } : {}),
-      });
-      const items = (page.value as { items: { runId: string }[] }).items;
-      seen.push(...items.map((item) => item.runId));
+      const page = await ledger({ limit: 50, ...(cursor ? { cursor } : {}) });
+      seen.push(...page.items.map((item) => item.runId));
       pages += 1;
       if (pages === 1) await history.store.record(entry(999)); // newest; must not appear later
       if (page.next_cursor === null) break;
@@ -197,20 +211,22 @@ describe('read.list paging', () => {
   }, 60_000);
 
   it('pages the file-scan fallback identically when the index is unavailable', async () => {
-    // Arrange: index.db is a directory, so the index cannot open.
-    await mkdir(join(dataDir(), 'index.db'), { recursive: true });
+    // Arrange: the index cannot open (a broken index.db is rebuilt instead, so stub it).
+    methods = new RpcMethodRegistry();
+    registerReads(methods, {
+      env: { YANTRA_HOME: home, LLM_PROVIDER: 'none' },
+      cwd: dataDir(),
+      openHistory: () => Promise.resolve(null),
+    });
     for (let i = 0; i < 120; i++) await writeRun(`file-${String(i).padStart(4, '0')}`, at(i));
 
     // Act
     const seen: string[] = [];
     let cursor: string | undefined;
     for (;;) {
-      const page = await read('read.list', {
-        args: ['runs'],
-        limit: 50,
-        ...(cursor ? { cursor } : {}),
-      });
-      seen.push(...(page.value as { items: { runId: string }[] }).items.map((item) => item.runId));
+      const page = await ledger({ limit: 50, ...(cursor ? { cursor } : {}) });
+      expect(page.source).toBe('files');
+      seen.push(...page.items.map((item) => item.runId));
       if (page.next_cursor === null) break;
       cursor = page.next_cursor;
     }
@@ -227,8 +243,8 @@ describe('read.list paging', () => {
     await writeRun('good-b', at(2));
     await mkdir(join(runsRoot(), 'broken'), { recursive: true });
     await writeFile(join(runsRoot(), 'broken', 'manifest.json'), '{ not json');
-    const page = await read('read.list', { args: ['runs'] });
-    const ids = (page.value as { items: { runId: string }[] }).items.map((item) => item.runId);
+    const page = await ledger();
+    const ids = page.items.map((item) => item.runId);
     expect(ids).toEqual(['good-b', 'good-a']);
   });
 
@@ -240,28 +256,25 @@ describe('read.list paging', () => {
       Buffer.from('{"v":1,"s":"yesterday","r":"run-1"}').toString('base64url'),
     ],
   ])('refuses %s with invalid_params', async (_label, cursor) => {
-    const error = await read('read.list', { cursor }).catch((caught: unknown) => caught);
+    const error = await ledger({ cursor }).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(RpcError);
     expect((error as RpcError).code).toBe(-32602);
     expect((error as RpcError).data.remediation).toBe('Start again without a cursor.');
   });
 
-  it('clamps limit 1000 to 200 and defaults to 50', () => {
-    expect(clampLimit(1000)).toBe(200);
-    expect(clampLimit(undefined)).toBe(50);
-    expect(clampLimit(7)).toBe(7);
+  it.each([
+    ['limit 1000', { limit: 1000 }],
+    ['limit 0', { limit: 0 }],
+    ['the FEAT-065 args form', { args: ['runs'] }],
+    ['an option bag', { options: { limit: '5' } }],
+    ['an unknown target', { target: 'schedules' }],
+    ['a text filter over 200 characters', { text: 'x'.repeat(201) }],
+  ])('refuses %s as invalid params', (_label, params) => {
+    expect(methods.get('read.list')!.params.safeParse(params).success).toBe(false);
   });
 
-  it('round-trips a cursor', () => {
-    const key = { startedAt: at(5), runId: 'run-5' };
-    expect(decodeCursor(encodeCursor(key))).toEqual(key);
-  });
-
-  it('refuses --limit as an option (page with limit instead)', async () => {
-    const error = await read('read.list', { options: { limit: '5' } }).catch(
-      (caught: unknown) => caught,
-    );
-    expect((error as RpcError).code).toBe(-32602);
+  it('defaults the page size to 50', () => {
+    expect(methods.get('read.list')!.params.parse({})).toEqual({ target: 'runs', limit: 50 });
   });
 });
 

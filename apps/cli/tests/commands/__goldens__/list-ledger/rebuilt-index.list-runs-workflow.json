@@ -1,0 +1,49 @@
+{
+  "schemaVersion": "0.2",
+  "kind": "list",
+  "items": [
+    {
+      "kind": "run",
+      "runId": "tie-b",
+      "workflowName": "fixture",
+      "status": "succeeded",
+      "startedAt": "2026-11-01T00:01:00.000Z",
+      "durationMs": 2000
+    },
+    {
+      "kind": "run",
+      "runId": "tie-a",
+      "workflowName": "fixture",
+      "status": "succeeded",
+      "startedAt": "2026-11-01T00:01:00.000Z",
+      "durationMs": 2000
+    },
+    {
+      "kind": "run",
+      "runId": "20261101T000040Z-fixture-0000abcd",
+      "workflowName": "fixture",
+      "status": "failed",
+      "startedAt": "2026-11-01T00:00:40.000Z",
+      "durationMs": 2000,
+      "taskOutcome": "failed",
+      "executionState": "interrupted"
+    },
+    {
+      "kind": "run",
+      "runId": "20261101T000020Z-fixture-0000abcd",
+      "workflowName": "fixture",
+      "status": "failed",
+      "startedAt": "2026-11-01T00:00:20.000Z",
+      "durationMs": 2000,
+      "taskOutcome": "failed"
+    },
+    {
+      "kind": "run",
+      "runId": "20261101T000010Z-fixture-0000abcd",
+      "workflowName": "fixture",
+      "status": "succeeded",
+      "startedAt": "2026-11-01T00:00:10.000Z",
+      "durationMs": 2000
+    }
+  ]
+}

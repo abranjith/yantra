@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "0.2",
+  "kind": "list",
+  "items": [
+    {
+      "kind": "run",
+      "runId": "20261101T000040Z-fixture-0000abcd",
+      "workflowName": "fixture",
+      "status": "failed",
+      "startedAt": "2026-11-01T00:00:40.000Z",
+      "durationMs": 2000,
+      "taskOutcome": "failed",
+      "executionState": "interrupted"
+    }
+  ]
+}

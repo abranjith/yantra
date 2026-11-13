@@ -1,0 +1,5 @@
+tie-b                                             completed          —  workflow=fixture
+tie-a                                             completed     2000ms  workflow=fixture
+20261101T000040Z-fixture-0000abcd                 interrupted · failed    2000ms  workflow=fixture
+20261101T000020Z-fixture-0000abcd                 failed failed    2000ms  workflow=fixture
+20261101T000010Z-fixture-0000abcd                 completed     2000ms  workflow=fixture

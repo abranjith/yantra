@@ -37,7 +37,7 @@ export const list = leaf({
     exit.ok(),
     exit.validation(`${PARSE_ERRORS}, an unknown target, or a listing failure`),
   ],
-  json: { flag: '--json', shape: 'envelope', schema: null },
+  json: { flag: '--json', shape: 'envelope', schema: 'ListResult' },
 });
 
 export const show = leaf({

@@ -1,0 +1,11 @@
+20261101T000130Z-ask-0000abcd                     succeeded fulfilled    1000ms  workflow=question 90
+20261101T000125Z-research-0000abcd                succeeded partial    1000ms  workflow=deep question
+tie-b                                             completed          —  workflow=fixture
+tie-a                                             completed     2000ms  workflow=fixture
+20261101T000050Z-research-0000abcd                completed partial    2000ms  workflow=research
+20261101T000040Z-fixture-0000abcd                 interrupted · failed    2000ms  workflow=fixture
+20261101T000030Z-other-0000abcd                   paused handoff    2000ms  workflow=other
+20261101T000020Z-fixture-0000abcd                 failed failed    2000ms  workflow=fixture
+20261101T000015Z-ask-0000abcd                     failed        1000ms  workflow=question 15
+20261101T000010Z-fixture-0000abcd                 succeeded fulfilled    1000ms  workflow=fixture
+legacy-run                                        completed     2000ms  workflow=legacy

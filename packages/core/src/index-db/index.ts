@@ -25,8 +25,12 @@ export { IndexDbError, type HistoryStatus, type TaskType } from './types.js';
 export {
   SqliteHistoryStore,
   deriveHistoryEntry,
+  escapeLikePattern,
   type HistoryEntry,
   type HistoryListFilter,
+  type HistoryOutcomeFilter,
+  type HistoryPage,
+  type HistoryPageQuery,
   type HistoryStore,
   type SqliteHistoryStoreDeps,
   type UsageRollupFilter,

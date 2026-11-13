@@ -1,0 +1,5 @@
+tie-b                                             completed          —  workflow=fixture
+tie-a                                             completed     2000ms  workflow=fixture
+20261101T000050Z-research-0000abcd                completed partial    2000ms  workflow=research
+20261101T000010Z-fixture-0000abcd                 completed     2000ms  workflow=fixture
+legacy-run                                        completed     2000ms  workflow=legacy
