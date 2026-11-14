@@ -44,7 +44,9 @@ in a Chrome or Edge `--app` window. The host is still not an application server 
 sense: it listens on loopback, admits only the window that `yantra ui` handed a single-use launch
 code, and never executes a task. It answers reads in-process and starts every run-class or
 mutating command as a detached CLI worker process that runs the same command handler as the
-terminal.
+terminal. Since FEAT-066 the app also shows every recorded run, terminal and daemon runs included:
+the Ledger, run results with their evidence, the audit, and bounded viewers over the run's public
+files.
 
 ```mermaid
 flowchart LR
@@ -87,15 +89,15 @@ flowchart TD
   CLI --> Agent --> Core --> Protocol
   Web --> UI
   Web -->|import type| Protocol
-  UI -.->|import type only, permitted| Protocol
+  UI -->|import type| Protocol
   CLI -.->|embeds built files as dist/web| Web
 ```
 
 The CLI is the composition root, so it also imports core and protocol for deterministic commands
 and shared validation; those direct imports are intentionally omitted from the diagram. They still
-point downward. The dashed edge from Drshya is a permitted direction rather than a current import:
-no `packages/ui` source imports protocol yet, and its manifest does not declare it. The dashed edge
-from the CLI is a build-time copy, not an import.
+point downward. Drshya's protocol edge is type-only: since FEAT-066 its instruments take Brief,
+outcome and Ledger types from `@yantra/protocol`, which its manifest now declares, and lint forbids
+a value import. The dashed edge from the CLI is a build-time copy, not an import.
 `@yantra/test-helpers` provides fixtures, while workspace and end-to-end tests verify the
 production packages without participating in their runtime dependency graph.
 
@@ -228,6 +230,35 @@ envelope, the app error codes beside the standard ones (`unauthorized`, `busy`, 
 optional remediation), the `auth` first message, the close code `APP_RPC_CLOSE_UNAUTHORIZED`
 (4401), `MAX_APP_RPC_MESSAGE_BYTES` (1 MiB), and the params and result schema of every method.
 
+The run-results contracts (FEAT-066) are three more schema modules, none emitted as JSON Schema.
+`src/schemas/run-artifacts.ts` is the only way the app names a run file. `RunId` is the
+`formatRunId` grammar (`^[0-9]{8}T[0-9]{6}Z-[A-Za-z0-9-]+$`, at most 96 characters), so a
+separator, `..` or drive letter fails validation before any filesystem call.
+`RUN_ARTIFACT_REGISTRY` is the public allowlist in match order. Each entry has a run-relative glob,
+an exposure (`typed`, reachable only through a typed read; `view`; `download`, attachment only; or
+`denied`), a viewer, the only media type the host may send, and an inline cap. Explicit denials come
+first: `lease.json`, locks, mutexes, `decisions/**`, temp files, sockets and browser-profile
+directories. The allowed entries follow: `brief.json` and `document.json` as `typed`, the HTML
+renderings as `download`, and the Markdown, JSON and JSONL artifacts, `screenshots/*.png` (which
+must also match the capture grammar) and `captures/` text and images as `view`.
+`classifyRunArtifact(relPath)` normalizes the path, refusing absolute, drive, UNC or backslash
+paths, NUL, `.`/`..` and percent-encoded dots or separators. It then returns the first matching
+entry, or `DENIED_RUN_ARTIFACT` when nothing matches. `src/schemas/cli-reads.ts` holds the `--json`
+documents of the read commands the app renders, so the app and the terminal share one shape:
+`ListRunItem` (gaining the optional `taskType`, `costUsd` and `hasDocument`) and `ListResult`;
+`RunLedgerQuery` (cursor, limit 1–200 with default 50, outcome, mode, since/until and text filters)
+and `RunLedgerPage` (items, `next_cursor`, `source` `index` or `files`, and the `active` runs with a
+`LedgerDisplayedState`); `ReportResult`, whose optional `truncated` and `bytes` mark a head cut at
+`REPORT_READ_CAP_BYTES` (512 KiB); and `AuditReport`, `AuditResult` (the report in the CLI envelope)
+and `AuditPage` (the report with 500-row windows of tool calls and captures).
+`src/schemas/run-result.ts` holds `RunResultView` and its parts. `artifactSlot(value)` is a
+discriminated union of `ok`, `missing`, `corrupt` (a bounded detail, never content), `unsupported`
+(the `schema_version` found), `too_large` and `denied`, so each artifact fails alone. The other
+parts are `TerminalReason` (which source answered, each text bounded to 500 characters),
+`ArtifactInventoryItem`, `RUN_RESULT_MAX_BYTES` (768 KiB, under the 1 MiB message limit), and
+`JsonlWindowRequest`/`JsonlWindow` (at most 200 lines, 16 KiB per line, 512 KiB per window, and a
+`partial_tail` flag).
+
 ### `packages/core`
 
 `@yantra/core` contains provider-independent domain and infrastructure services:
@@ -251,6 +282,9 @@ optional remediation), the `auth` first message, the close code `APP_RPC_CLOSE_U
 - the app host's durable coordination (`src/app-host/`): the single-instance `host.lock`, the
   invocation store with its closed transition table and slot lock, and host-start invocation
   recovery, described under [App host and `yantra ui`](#app-host-and-yantra-ui);
+- the run views the app and `yantra list` read (`src/run-view/`): the public-artifact gate, the
+  Ledger query, the per-item run-result reader, bounded readers and JSONL windows, described under
+  [Run views](#run-views);
 - the local SQLite index for history, preferences, persistent rate limits, schedules, and domain
   ranks; and
 - the local scheduler daemon, notification adapters, audit writers, and diagnostics.
@@ -1627,6 +1661,77 @@ runDir))`; a `subscribe` that arrives earlier waits for it. On `subscribe {from_
 | Host killed or its process tree ended          | Detached workers started through the trampoline have a dead parent and their own session, so they keep running. A host inside a Windows `KILL_ON_JOB_CLOSE` Job without `SILENT_BREAKAWAY_OK` still takes them with it.                                                                                                                                                                           |
 
 The acceptance suite `e2e/run-ownership.spec.ts` exercises each row with real processes.
+
+#### Run views
+
+`src/run-view/` (FEAT-066) holds the read side of the app's run pages. It is Node code the app
+host calls in-process; nothing in it writes to a run directory, except the injected FEAT-064
+reconciliation that runs first.
+
+- **Public-artifact gate** (`artifact-gate.ts`). `resolvePublicArtifact(runsRoot, runId, path)` is
+  the only way the host reaches a file inside a run. It validates
+  the run ID before touching the filesystem and classifies the path, refusing a denied entry or an
+  exposure the caller does not serve (`not_public`). It then `realpath`s the runs root and the
+  target, and requires the target to stay inside `realpath(runsRoot)/<runId>` (`outside_run`).
+  Containment is checked against that path rather than the run directory's own `realpath`, so a
+  run directory that is itself a link cannot carry its files into the allowlist. The resolved name
+  must classify to the same entry, so a symlink or junction cannot reach a denied file or borrow
+  another entry's media type. Last, it requires a regular file (`not_found`), optionally within the
+  inline cap (`too_large`), and returns `{absPath, relPath, entry, bytes, mtime}`. Failures are
+  `ArtifactAccessError` with that code.
+- **Ledger query** (`ledger.ts`). `queryRunLedger(query, deps)` is the one function behind both
+  `yantra list` and the app's `read.list`. It runs the injected reconciliation first (a failure
+  never fails the list). Then it takes `limit + 1` rows from the history index through
+  `HistoryStore.page` (keyset `before`, outcome, mode, since/until, text, workflow and status
+  filters, always parameterized), and merges them with a scan of run directories. Run IDs dedupe
+  the merge, with the index row winning, and the result sorts by `startedAt DESC, runId DESC`.
+  Because a `formatRunId` name starts with its start second, the scan stops once no older directory
+  can enter the page, allowing `START_SLACK_MS` (5 minutes) for a slow start. It reads manifests
+  only for candidates, in chunks of 50, and reads at most `FILE_SCAN_CAP` (2,000) directories per
+  call, reporting `scanTruncated`. A corrupt manifest skips only its own row. An unavailable index
+  degrades to the scan alone (`source: 'files'`). Each item is enriched with `executionState`,
+  `taskType`, `costUsd` and `hasDocument`. `activeMode: 'inline'` (the CLI) keeps unfinished runs
+  in `items`. `'split'` (the app) moves them to `active` on the first page only, merging the host's
+  own view of live runs with the newest `ACTIVE_SCAN_CAP` (200) manifests. A manifest that says
+  `running` with no owner the host knows reads `unknown_owner`, never `running` or dead.
+  `encodeLedgerCursor`/`decodeLedgerCursor` turn a key into an opaque, versioned base64url cursor
+  and back, and a cursor that does not decode is `LedgerCursorError`.
+- **Run result** (`run-result.ts`). `readRunResult(runId, deps)` validates the ID (a missing
+  directory is `RunNotFoundError`), reconciles, and normalizes either manifest shape (pipeline or
+  workflow `RunManifest`; a corrupt one still yields a view with mode `unknown`). It then fills each
+  slot independently: the document (`brief.json`, else `document.json`, a different
+  `schema_version` being `unsupported`), `outputs.json` for workflow runs (`OUTPUTS_CAP_BYTES`,
+  256 KiB), `run-health.json`, the size of `report.md`, the public inventory, the terminal reason,
+  and the live flag. `leaseLiveState` answers `running` only for an owner verified alive and
+  `unknown_owner` for an absent lease on a running manifest, a corrupt lease, or a dead or
+  unverifiable owner. `enforceViewSize` keeps the serialized view within `RUN_RESULT_MAX_BYTES` by
+  degrading the document, then the outputs, to `too_large`; nothing is cut mid-JSON.
+- **Supporting readers.** `listRunArtifacts` (`inventory.ts`) walks the run directory and its
+  direct subdirectories, classifies each file, omits denied ones entirely, and skips any symlinked
+  or junctioned entry. `readTerminalReason` (`terminal-reason.ts`) answers from the first source
+  that recorded why the run ended: the last `run_outcome` in `run-events.jsonl`, the manifest's
+  termination fields, the last `task_failed` or `human_handoff_requested` in `events.jsonl`, then
+  `report.md`. Each source is read as a 256 KiB tail, ANSI-stripped and bounded. `readCapped`,
+  `readHead` and `readTail` (`bounded-read.ts`) never read a file they have not sized first.
+- **JSONL windows** (`jsonl-window.ts`). `SparseLineIndex` records the byte offset of every
+  1,024th line, built lazily only as far as a request needs, per real path in an LRU of 16 files. A
+  file that only grew extends its index, and a file that shrank or changed without growing is
+  indexed afresh. `readJsonlWindow` seeks to the nearest checkpoint, cuts each line at 16 KiB,
+  stops before the window would pass 512 KiB, and never returns an unterminated last line
+  (`partial_tail`).
+
+```mermaid
+flowchart LR
+  ListCmd[yantra list] --> Ledger[queryRunLedger]
+  ReadList[host read.list] --> Ledger
+  Ledger --> Index[(index.db history page)]
+  Ledger --> Scan[runs directory scan]
+  RunRead[host read.run_result] --> Result[readRunResult]
+  Result --> Slots[document, outputs, run health,<br/>inventory, terminal reason, live flag]
+  Reads["host read.report, read.artifact_window,<br/>artifact.url and GET /a/"] --> Gate[resolvePublicArtifact]
+  Gate --> Registry[RUN_ARTIFACT_REGISTRY]
+  Slots --> Registry
+```
 
 ### `packages/agent`
 
@@ -3069,7 +3174,7 @@ flowchart LR
   Window -->|"/rpc WebSocket, JSON-RPC 2.0"| HostProc
   subgraph HostProc["App host, dist/ui-host.js, 127.0.0.1 only"]
     Guard[Request guard] --> Routes[Static assets, sessions,<br/>signed artifact URLs]
-    Rpc[RpcServer] --> Reads[In-process reads<br/>worker adapter with --json]
+    Rpc[RpcServer] --> Reads[In-process reads<br/>worker adapter with --json,<br/>core run views]
     Rpc --> Feed[Change feed]
     Rpc --> Sup[Supervisor]
     Rpc --> Relay[Run relay and attendance]
@@ -3132,7 +3237,8 @@ GET and HEAD needs `Origin` exactly `http://127.0.0.1:<port>` (403). Bodies are 
 'self' ws://127.0.0.1:<port>`, `frame-ancestors 'none'`, `object-src 'none'`, …) plus `nosniff`,
 `no-referrer`, `X-Frame-Options: DENY` and same-origin opener and resource policies; no CORS header
 is ever sent. Static serving gives `index.html` `no-store` and content-hashed `assets/` files
-`immutable`, sends `index.html` for unknown extensionless app routes, rejects `..`, backslashes,
+`immutable`, sends `index.html` for unknown extensionless app routes and for every path under
+`/runs/` (the artifact viewer's routes end in a run file's name, FEAT-066), rejects `..`, backslashes,
 NUL and encoded dots before building a path, `realpath`-checks every file into the asset root, and
 serves only an extension allowlist. Refusals are counted and logged by reason and Origin host only.
 
@@ -3165,16 +3271,18 @@ waiting until no request is in flight and no text field is focused, and navigate
 `/#code=<code>` with a window-bound code from `session.launch_code` (D17). The registered methods
 are:
 
-| Family                                                                           | Served by          | Behavior                                                                                                                                                                                                                                                                                                                                                                                                       |
-| -------------------------------------------------------------------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `host.hello`, `session.resume_code`, `session.launch_code`                       | `rpc-server.ts`    | Handshake and window-bound codes.                                                                                                                                                                                                                                                                                                                                                                              |
-| `read.<path>`                                                                    | `reads.ts`         | Every `read`-class registry path maps to `read.<path joined by '.'>` or sits on the dated `UNMAPPED_READS` list owned by FEAT-070. A reader runs the command's own handler in-process through the FEAT-072 worker adapter with `--json` appended and returns the captured document; `read.list` pages through `buildListJson` with a keyset cursor on the history index.                                       |
-| `runs.subscribe`, `runs.unsubscribe`                                             | `change-feed.ts`   | `runs.changed {run_ids, live_run_ids}` and `prefs.changed`, debounced 250 ms, from a 2 s lease scan of `runs/*`, the history index's `PRAGMA data_version` change token, and `fs.watch` hints that only trigger an immediate scan. The feed runs only while subscribed; a watcher error degrades to polling.                                                                                                   |
-| `artifact.url`                                                                   | `artifact-urls.ts` | Signs `/a/<payload>.<mac>` for one window for 5 minutes: HMAC-SHA256 over window ID, capability digest and payload with a per-start in-memory key. `GET /a/…` checks cookie, MAC, expiry and live window, then a denylist before any filesystem read, the allowlist (`captures/**` PNG and JPEG, `report.md`) and a `realpath` inside the run directory. Every refusal is one 404; non-images are attachments. |
-| `command.invoke`, `command.cancel`, `queue.list`, `queue.start`, `queue.discard` | `supervisor.ts`    | Launch ownership, below. Notifications `invocation.changed` and `invocation.result` go to every connected window.                                                                                                                                                                                                                                                                                              |
-| `queue.resolve_review`                                                           | `drift-review.ts`  | Starts a `needs_review` item with the current values, pins the submitted values as explicit flags (only when every difference is a pinnable flag and no content changed), or discards it.                                                                                                                                                                                                                      |
-| `run.subscribe`, `run.unsubscribe`                                               | `run-relay.ts`     | Live run events, below.                                                                                                                                                                                                                                                                                                                                                                                        |
-| `interventions.subscribe`, `attendance.heartbeat`                                | `attendance.ts`    | Attendance, below, and `intervention.event` for attached runs' `intervention_raised` and `intervention_resolved`.                                                                                                                                                                                                                                                                                              |
+| Family                                                                           | Served by          | Behavior                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| -------------------------------------------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `host.hello`, `session.resume_code`, `session.launch_code`                       | `rpc-server.ts`    | Handshake and window-bound codes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `read.<path>`                                                                    | `reads.ts`         | Every `read`-class registry path maps to `read.<path joined by '.'>` or sits on the dated `UNMAPPED_READS` list owned by FEAT-070. A reader runs the command's own handler in-process through the FEAT-072 worker adapter with `--json` appended and returns the captured document. `read.list`, `read.audit` and `read.report` are registered with typed params instead (below).                                                                                                                                                                                                                                                                     |
+| `read.list`                                                                      | `ledger-reads.ts`  | Target `runs` takes a `RunLedgerQuery` and returns a `RunLedgerPage` from core `queryRunLedger` (split mode) after the same FEAT-064 reconciliation `yantra list` runs; target `workflows` returns the `list workflows --json` document. The active region merges the host's invocations that name a run (mapped to displayed states) and the change feed's leased runs. A page over 768 KiB is shortened and its cursor continues from the last row that fits; a cursor the host did not issue is `invalid_params`.                                                                                                                                  |
+| `read.run_result`, `read.report`, `read.audit`, `read.artifact_window`           | `run-reads.ts`     | Per-run reads through core run views (FEAT-066). `read.run_result` is `readRunResult` with `reconcileRun` and the lease probe, logging run IDs, slot states and codes only, a corrupt slot once per run and file. `read.report` reads `report.md` through the gate, at most its first 512 KiB cut at a line. `read.audit` runs the `yantra audit` builder over an LRU of 8 audits keyed by input sizes and times, with 500-row cursor windows of tool calls and captures. `read.artifact_window` serves `jsonl` entries only, through one shared `SparseLineIndex`. Gate failures map to `not_found`, `too_large`, `not_allowed` or `invalid_params`. |
+| `runs.subscribe`, `runs.unsubscribe`                                             | `change-feed.ts`   | `runs.changed {run_ids, live_run_ids}` and `prefs.changed`, debounced 250 ms, from a 2 s lease scan of `runs/*`, the history index's `PRAGMA data_version` change token, and `fs.watch` hints that only trigger an immediate scan. The feed runs only while subscribed; a watcher error degrades to polling.                                                                                                                                                                                                                                                                                                                                          |
+| `artifact.url`                                                                   | `artifact-urls.ts` | Signs `/a/<payload>.<mac>` for one window for 5 minutes: HMAC-SHA256 over window ID, capability digest and payload with a per-start in-memory key. Signing first runs `resolvePublicArtifact` for a `view` or `download` entry (`typed` files reach the app only through `read.run_result`). `GET /a/…` checks cookie, MAC, expiry and live window, then runs the gate again, because the file may have changed. The response streams with the entry's registry media type and `nosniff`, and `download` entries (every HTML file) are attachments. Every refusal is one 404, logged by reason code only.                                             |
+| `command.invoke`, `command.cancel`, `queue.list`, `queue.start`, `queue.discard` | `supervisor.ts`    | Launch ownership, below. Notifications `invocation.changed` and `invocation.result` go to every connected window.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `queue.resolve_review`                                                           | `drift-review.ts`  | Starts a `needs_review` item with the current values, pins the submitted values as explicit flags (only when every difference is a pinnable flag and no content changed), or discards it.                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `run.subscribe`, `run.unsubscribe`                                               | `run-relay.ts`     | Live run events, below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `interventions.subscribe`, `attendance.heartbeat`                                | `attendance.ts`    | Attendance, below, and `intervention.event` for attached runs' `intervention_raised` and `intervention_resolved`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 **Launch ownership** (`supervisor.ts`, `packages/core/src/app-host/invocation-store.ts`, plan D4,
 D11). `command.invoke {invocation, displayed_effective}` re-parses the invocation through the
@@ -3291,6 +3399,11 @@ The merge gates are the localhost security suite (`apps/cli/tests/ui/security/`,
 process plus stepped-clock expiry, with canary scans of the log), the launch-ownership evidence
 suite (`apps/cli/tests/ui/launch-ownership/`, real host and worker processes killed at four points,
 and concurrent resumes), and `e2e/app-host.spec.ts` and `e2e/app-host-m2.spec.ts` in real Chrome.
+FEAT-066 adds `e2e/app-run-results.spec.ts`: the built host and real Chrome over a sandboxed home
+seeded through `@yantra/test-helpers/run-dirs` with every golden Brief, runs without a document,
+legacy and corrupt artifacts, a large run, and files that must never be served. It covers the
+Ledger, every citation chip, Audit, `tool-calls.jsonl` to its end, refused artifact paths, CLI
+parity of every outcome word, and axe in both appearances.
 
 #### Execution receipts and shared-resource locks
 
@@ -3394,7 +3507,7 @@ excludes the directory.
 `@yantra/ui` is Drshya, the design system that the web app's screens are built from.
 It is a React 19 library compiled with the DOM lib and no Node types, and it runs no process of its
 own. Its public surface is four package exports: the root module (tokens, color math, appearance
-contract, CSP helper, icon registry, primitives, and field building blocks), `./drshya.css` (the
+contract, CSP helper, icon registry, primitives, field building blocks, and instruments), `./drshya.css` (the
 entry stylesheet an app imports once), `./gallery` (the gallery component and its entry list), and
 `./gallery.css` (the gallery's backdrop fixtures).
 
@@ -3459,6 +3572,26 @@ the app (`createToastQueue()`) rather than a module singleton, and `Table` throw
 `lucide-react`; it wraps Lucide icons and six custom path-data glyphs with Lucide's own
 `createLucideIcon`, so every icon shares one SVG contract.
 
+**Instruments.** `src/instruments/` holds product components built from the primitives and
+protocol types. FEAT-065 added the Bindu, and FEAT-066 adds the run-results set. Each takes data
+through props and fetches nothing itself.
+
+- `OutcomeBadge` prints the CLI's exact words: `${status} ${taskOutcome}`, as `yantra list` does,
+  with `interrupted` as a separate chip and a `LedgerDisplayedState` label for active runs.
+- `SafeMarkdown` renders untrusted Markdown with `react-markdown` and `remark-gfm`. Raw HTML is
+  skipped, links render only for absolute `http(s)` URLs as Drshya `Link`s, and images render as
+  their alt text, so page-derived Markdown cannot trigger a request. Its `remarkCitations` plugin
+  turns `[n]` and `[A<n>]` into `CitationChip`s only when they resolve in the current citation
+  context.
+- `CitationChip` is a button that selects its evidence. `EvidencePane` is a named `<aside>`, never
+  a modal, that moves focus to its heading and returns it to the chip on Escape. It shows a
+  `SourceEvidence` quote, or "Quote not recorded", or an `ActionEvidence`.
+- `ProtectedValue` has no value or length input, so its DOM is identical for every withheld value.
+- `RequirementList` and `ConditionTable` show the protocol status words verbatim with an icon.
+- `CaptureGallery` groups capture sets and loads images only through a `renderImage` callback the
+  page supplies.
+- `EventInspector` is a bounded JSON tree for an event the app cannot summarize.
+
 **Strict CSP.** The target app policy is `default-src 'self'` with no nonce. React Aria's `usePress`
 injects an inline `<style id="react-aria-pressable-style">`, which that policy blocks, so Drshya
 ships the same `touch-action` rule in `drshya.css` and `prepareStrictCsp(document)` places a marker
@@ -3495,9 +3628,26 @@ embedded into the CLI as `dist/web`, and it talks only to the host that served i
 - **Shell.** `app/shell/` has the top bar with the Bindu (Drshya's status instrument,
   `src/instruments/bindu.tsx`: `idle`, `live` or `attention`, named in its accessible label rather
   than by color alone; FEAT-065 renders `idle`), navigation from an append-only
-  registry (`app/nav-registry.ts`; a feature registers its entry with its route, and FEAT-065
-  registers only Home), a polite connection banner, and the "Session ended" view shown when no
-  session can be opened.
+  registry (`app/nav-registry.ts`; a feature registers its entry with its route: FEAT-065 Home,
+  FEAT-066 the Ledger at `/runs`), a polite connection banner, and the "Session ended" view shown
+  when no session can be opened.
+- **Data** (FEAT-066). `main.tsx` provides a `DeferredRpc` (`host/app-rpc.tsx`) through
+  `RpcProvider` before the session opens. Each request waits until the socket is connected, and
+  subscriptions are replayed after every reconnect, so a page can mount and query at once. React
+  Query retries only a dropped socket, never a host error. `data/runs.ts` holds the hooks over the
+  run reads, keyed `['ledger', filters]` (infinite), `['run', runId]`, `['audit', runId, window]`,
+  `['report', runId]` and `['jsonl', runId, path, fromLine]`, plus `artifact.url` for signed
+  files. A `runs.changed` hint refetches only the Ledger's first page and merges it into the loaded
+  pages by run ID, so rows pushed across a page boundary are never skipped.
+- **Routes** (`src/routes/`, FEAT-066). `/runs` is the Ledger: an Active region above a
+  virtualized, cursor-paged History table, with outcome, mode, date and text filters in the URL
+  search params. `/runs/$runId` is the run result, the `open` command's in-app view, with Result,
+  Audit and Files tabs. Each slot renders its own state, and only an unknown run is a route error.
+  `/runs/$runId/audit` opens the same page on Audit. `/runs/$runId/artifacts/$` is the bounded
+  viewer, dispatched by the file's registry viewer: windowed and virtualized JSONL, JSON, Markdown
+  and text loaded whole only within their inline cap ("Show in folder" otherwise), and images
+  through signed URLs. Feature components live under `src/features/` (`run-result/`, `audit/`,
+  `viewers/`).
 - **Build ID.** The `yantra-build-id` Vite plugin (`build/yantra-build-id.ts`) computes the build ID
   as the SHA-256 of the sorted, content-hashed file names under `assets/`, writes
   `dist/build-id.json` and injects `<meta name="yantra-build-id">` into `index.html`. The Vite
@@ -3506,7 +3656,9 @@ embedded into the CLI as `dist/web`, and it talks only to the host that served i
 
 ### Test-only workspaces
 
-`@yantra/test-helpers` supplies shared fixtures and no-LLM/provider tag plumbing. `e2e/` depends on
+`@yantra/test-helpers` supplies shared fixtures and no-LLM/provider tag plumbing; its Vitest-free
+`./run-dirs` subpath (FEAT-066) seeds the same run directories for the core run-view, CLI and e2e
+suites. `e2e/` depends on
 the production workspaces to exercise CLI flows, deterministic research, scheduling, real-Chrome
 browser actions, agent orchestration, workflow promotion/replay, golden Briefs, task fidelity, and
 compatibility boundaries. Vitest remains the common test runner across every workspace. Managed-browser
@@ -4176,6 +4328,42 @@ the records under `slots.lock` before it dequeues anything: an unclaimed start b
 `never_started`, a live worker is reattached through its run socket when a window subscribes, and
 a dead worker's run is reconciled to `owner_lost`.
 
+### Run results in the app
+
+The Ledger and the run pages only read. Every read runs in the host process over core run views,
+and every file the window receives passes the public-artifact gate twice: once when its URL is
+signed and again when it is served.
+
+```mermaid
+sequenceDiagram
+  participant W as App window
+  participant H as App host
+  participant V as Core run views
+  participant I as index.db
+  participant R as runs/run-id
+
+  W->>H: read.list with filters and cursor
+  H->>V: queryRunLedger in split mode
+  V->>R: reconcile dead owners first
+  V->>I: keyset page with filters
+  V->>R: bounded directory scan, manifests for candidates
+  V-->>H: items, next key, active runs
+  H-->>W: RunLedgerPage, at most 768 KiB
+  H-->>W: runs.changed hint, then refetch first page and merge
+  W->>H: read.run_result with run_id
+  H->>V: readRunResult
+  V->>R: manifest, then each slot read and capped on its own
+  H-->>W: RunResultView, at most 768 KiB
+  W->>H: artifact.url with run_id and path
+  H->>V: resolvePublicArtifact for view or download
+  H-->>W: window-bound signed URL, 5 minutes
+  W->>H: GET /a/signed
+  H->>V: resolvePublicArtifact again
+  H-->>W: stream with registry media type and nosniff
+  W->>H: read.artifact_window or read.audit with a cursor
+  H-->>W: one bounded window
+```
+
 ## Data Model
 
 Yantra has no remote database and no single relational domain model. Durable state is split by
@@ -4371,6 +4559,16 @@ artifact-URL signing key exist only in host memory and die with the host. `profi
 `ui.theme` and `ui.surfaces` preferences, and the history index gains a keyset cursor
 (`HistoryListFilter.before`) and a change token (`PRAGMA data_version`) with no schema change.
 
+Run results (FEAT-066) add no run artifact and no table. History index schema v5 adds only
+`idx_history_started_run` on `history(started_at DESC, run_id DESC)`, so a Ledger page continues
+strictly after its cursor without a sort; it is additive and created `IF NOT EXISTS`.
+`HistoryStore.page` reads it with the Ledger filters, `unknown` matching a null `task_outcome`.
+The Ledger cursor is not stored anywhere: it is versioned base64url JSON (`v`, `started_at`,
+`run_id`, `source`) handed to the window. What a run directory exposes is a classification, not data:
+`RUN_ARTIFACT_REGISTRY` assigns every run-relative path one entry, and anything it does not name is
+never listed or served. The run-result view, Ledger pages, audit windows and JSONL windows are
+computed per request. The host's audit LRU and JSONL line index live only in host memory.
+
 ```mermaid
 flowchart TD
   Config[config.yaml installation state] --> Runtime[Runtime configuration]
@@ -4413,22 +4611,24 @@ flowchart TD
   AppHost --> Invocations[ui/invocations records and results]
   Invocations -->|run_id| RunDir
   AppHost --> Launch[ui/launch worker launch files]
+  History -->|Ledger keyset page| AppHost
+  RunDir -->|public-artifact allowlist only| AppHost
 ```
 
-| Store                          | Verified contents and role                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Home `~/.yantra/`              | Fixed installation root (or `YANTRA_HOME`): strict `config.yaml`, human-editable `profile.yaml`, user `blocklist.yaml`, and sanitizer host overrides. Configuration holds references, never resolved secret values.                                                                                                                                                                                                                                                                                                                                                                                      |
-| Data `workflows/`              | Canonical saved workflow YAML plus optional locator sidecars; preserved as user-owned input.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| Data `templates/`              | Saved Markdown report templates.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| Data `runs/<run-id>/`          | Canonical observability record: manifest, events, the ordered `run-events.jsonl` log, audit/report files, outputs, checkpoints, private `screenshots/*.png`, fetched sources, Brief/document artifacts, traces, and agent session metadata as applicable, plus the agentic operator log `runtime.jsonl` and the counts-only `run-health.json` where they exist. `tool-calls.jsonl` references screenshots by metadata only and is sanitized leaf by leaf, so every record re-parses; the raw provider session can contain image data; neither `runtime.jsonl` nor `run-health.json` is ever model input. |
-| Data `index.db`                | SQLite schema version 4: `history` (with the nullable `task_outcome` column), `preferences`, `rate_limits`, `schedules`, `domain_ranks`, and `meta`. History rows reference run IDs logically and can be rebuilt from run directories; the schema declares no foreign keys between these tables.                                                                                                                                                                                                                                                                                                         |
-| Data `pi/`                     | Pi session staging, the default pinned auth store, and deterministic `models.json` derived from `config.yaml`. The explicit `agent.pi_auth_path` opt-in changes auth only; no ambient Pi settings, skills, prompts, or model file are loaded.                                                                                                                                                                                                                                                                                                                                                            |
-| Data `browsers/`               | Managed browser tree: `ready.json` (the one selectable installation), `operation.json` (an exclusive owner/path claim, never a phase log), `coordination/` (mutex and shared use reservations), and one upstream cache in each `installation-<id>` child. Only the child the pointer names is selectable; every other child is an orphan collected by explicit install/update.                                                                                                                                                                                                                           |
-| Data `ui/`                     | App host state: `host.lock` (single-instance record, creation identity, port, control socket and token, build ID, versions), `slots.lock`, `invocations/` (one record per app submission plus its worker-written result), `launch/` (worker launch files), `host.log`, `host-start-failure.json`, and the app window's `chrome-profile/`. Owner-only; sessions, codes and signing keys are never written.                                                                                                                                                                                                |
-| Cache `ask/`                   | TTL- and size-bounded deterministic Brief cache keyed by normalized query, search provider, and UTC day.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| Cache `browser-compatibility/` | One JSON evidence document per executable identity and probe profile, keyed by canonical path, version, stat fingerprint, host, driver version, probe revision, and capability-table hash. Regenerable by a local probe; only successful results are evidence.                                                                                                                                                                                                                                                                                                                                           |
-| Browser profiles               | Ephemeral profiles in the OS temporary directory by default; workflow-scoped persistent profiles under the data directory when explicitly selected. Compatibility probes use their own ephemeral profile, removed on success and failure alike.                                                                                                                                                                                                                                                                                                                                                          |
-| OS keychain                    | Search/model credentials and workflow secret values. Artifacts persist opaque references and audit metadata, not resolved values.                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Store                          | Verified contents and role                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Home `~/.yantra/`              | Fixed installation root (or `YANTRA_HOME`): strict `config.yaml`, human-editable `profile.yaml`, user `blocklist.yaml`, and sanitizer host overrides. Configuration holds references, never resolved secret values.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Data `workflows/`              | Canonical saved workflow YAML plus optional locator sidecars; preserved as user-owned input.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Data `templates/`              | Saved Markdown report templates.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Data `runs/<run-id>/`          | Canonical observability record: manifest, events, the ordered `run-events.jsonl` log, audit/report files, outputs, checkpoints, private `screenshots/*.png`, fetched sources, Brief/document artifacts, traces, and agent session metadata as applicable, plus the agentic operator log `runtime.jsonl` and the counts-only `run-health.json` where they exist. `tool-calls.jsonl` references screenshots by metadata only and is sanitized leaf by leaf, so every record re-parses; the raw provider session can contain image data; neither `runtime.jsonl` nor `run-health.json` is ever model input. The app lists and serves only files `RUN_ARTIFACT_REGISTRY` allows; leases, locks, decision claims, temp files, sockets and browser profiles never leave the host. |
+| Data `index.db`                | SQLite schema version 5: `history` (with the nullable `task_outcome` column and the `(started_at DESC, run_id DESC)` Ledger index), `preferences`, `rate_limits`, `schedules`, `domain_ranks`, and `meta`. History rows reference run IDs logically and can be rebuilt from run directories; the schema declares no foreign keys between these tables.                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Data `pi/`                     | Pi session staging, the default pinned auth store, and deterministic `models.json` derived from `config.yaml`. The explicit `agent.pi_auth_path` opt-in changes auth only; no ambient Pi settings, skills, prompts, or model file are loaded.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Data `browsers/`               | Managed browser tree: `ready.json` (the one selectable installation), `operation.json` (an exclusive owner/path claim, never a phase log), `coordination/` (mutex and shared use reservations), and one upstream cache in each `installation-<id>` child. Only the child the pointer names is selectable; every other child is an orphan collected by explicit install/update.                                                                                                                                                                                                                                                                                                                                                                                              |
+| Data `ui/`                     | App host state: `host.lock` (single-instance record, creation identity, port, control socket and token, build ID, versions), `slots.lock`, `invocations/` (one record per app submission plus its worker-written result), `launch/` (worker launch files), `host.log`, `host-start-failure.json`, and the app window's `chrome-profile/`. Owner-only; sessions, codes and signing keys are never written.                                                                                                                                                                                                                                                                                                                                                                   |
+| Cache `ask/`                   | TTL- and size-bounded deterministic Brief cache keyed by normalized query, search provider, and UTC day.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Cache `browser-compatibility/` | One JSON evidence document per executable identity and probe profile, keyed by canonical path, version, stat fingerprint, host, driver version, probe revision, and capability-table hash. Regenerable by a local probe; only successful results are evidence.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Browser profiles               | Ephemeral profiles in the OS temporary directory by default; workflow-scoped persistent profiles under the data directory when explicitly selected. Compatibility probes use their own ephemeral profile, removed on success and failure alike.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| OS keychain                    | Search/model credentials and workflow secret values. Artifacts persist opaque references and audit metadata, not resolved values.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 The default data and cache roots are `<home>/data` and `<home>/cache`. `YANTRA_DATA_DIR` and
 `YANTRA_CACHE_DIR` take precedence over `config.yaml`'s respective absolute path, and all three
@@ -4806,7 +5006,8 @@ update` is the only surface that contacts a version server, and only when a huma
   outcome" holds per execution rather than per file.
 - **The app host supervises and never executes** (plan D1–D3, D6). The daemon is hard zero-LLM,
   so the app gets its own host rather than serving from it. Reads run in-process through the same
-  handler and `--json` path as the terminal; everything else runs in a detached CLI worker with
+  handler and `--json` path as the terminal or, for runs, the same functions the terminal commands
+  call (`queryRunLedger` for `list`, the audit builder for `audit`); everything else runs in a detached CLI worker with
   the same handler and argv. App and terminal therefore cannot diverge in behavior, and a host
   crash, window close or idle exit never ends a run. The costs are a process start per command,
   a host that must rediscover runs from leases rather than hold them in memory, and an environment
@@ -4832,6 +5033,25 @@ update` is the only surface that contacts a version server, and only when a huma
   first and copied into `apps/cli/dist/web`, so one package carries a host and the exact assets it
   serves. The build ID is a hash of the content-hashed asset names, and a page whose build differs
   from its host's reloads itself when idle instead of talking to a host it was not built for.
+- **The app reaches run files only through a default-deny allowlist** (FEAT-066). A run directory
+  also holds leases, locks, decision claims, sockets and browser profiles, so the app never browses
+  it. `RUN_ARTIFACT_REGISTRY` names what is public and how (typed, view, download), denies
+  explicitly first, and denies anything unmatched. One core gate applies it after `realpath`
+  containment in `realpath(runsRoot)/<run-id>`. The gate runs both when a URL is signed and when it
+  is served, and the inventory never lists a denied file. HTML is download-only, and Markdown is
+  rendered with raw HTML skipped and images as alt text. The cost is that a new artifact type is
+  invisible to the app until it is added to the registry.
+- **One query behind `yantra list` and the Ledger** (FEAT-066). Putting the run query in core
+  `queryRunLedger` lets the terminal and the app share the index-plus-files merge, the index-wins
+  dedupe and the outcome words, so they cannot drift. The keyset index and a time-bounded directory
+  scan keep paging cheap without a second source of truth. The cost is that the file fallback stays
+  bounded (2,000 directories per call) and reports when it stops early.
+- **A run page fails per artifact, never as a whole** (FEAT-066). Every artifact is an
+  `ArtifactSlot` with its own `missing`, `corrupt`, `unsupported` or `too_large` state, so a bad
+  `brief.json` still leaves the outcome, terminal reason, run health and files readable. Every read
+  is sized before it is read, and a result over 768 KiB degrades a slot rather than being cut.
+  Unbounded files (JSONL, audits) are paged through cursors and windows instead of growing the
+  message.
 - **Fail-closed unattended automation.** Scheduled execution reuses the interactive workflow
   engine but swaps in a park-and-notify confirmation gateway, so the daemon cannot self-authorize
   protected side effects. It also carries no browser-install offer gateway; JSON, non-TTY, daemon,

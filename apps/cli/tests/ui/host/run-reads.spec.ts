@@ -10,15 +10,16 @@ import { join } from 'node:path';
 
 import { ArtifactAccessError, resetPathCache, runsRoot, type HistoryEntry } from '@yantra/core';
 import { RunLedgerPage, type InvocationRecord, type RunLedgerQuery } from '@yantra/protocol';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
 import {
   askBriefRun,
   buildRunDir,
   legacyReportRun,
   startupFailureRun,
   workflowOutputsRun,
-} from '../../../../../packages/core/tests/run-view/fixtures/build-run-dir.js';
+} from '@yantra/test-helpers/run-dirs';
+import { writeLargeRun } from '@yantra/test-helpers/run-dirs';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { openHistory } from '../../../src/history.js';
 import type { HostLogger } from '../../../src/ui/host/host.js';
 import {
@@ -42,7 +43,6 @@ import {
   runReadError,
   type RunReadDeps,
 } from '../../../src/ui/host/run-reads.js';
-import { writeLargeRun } from '../../commands/support/audit-fixtures.js';
 
 let home: string;
 

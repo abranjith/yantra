@@ -134,6 +134,23 @@ Revisions: 1
 
 `Required fields`, `Filters`, and `Required sources` read `none` when empty; `Ranking: <field> <asc|desc>`, `Limit: <n>`, and `Notes: <text>` appear only when set. A `contract.json` that cannot be read or does not validate against the protocol `TaskContractRecord` schema renders the single line `Task Contract: contract.json present but invalid` and never fails the report. A run without the file renders no section. `- contract.json` is listed under `## Audit Trail` whenever the file is present, readable or not.
 
+### Audit in the app
+
+The Yantra app's **Audit** (the Audit tab of a run's Run result page, also reachable at `/runs/<run-id>/audit`) tells the same story as `yantra audit <run-id>`. It is built by the same audit builder, which the app reaches through the host's `read.audit` read, so the narrative, counts, and status words match the terminal. In order, it shows:
+
+- **The trust narrative**, including the schedule-fire narration for a scheduled run.
+- **Startup failure**: the typed terminal error's code and message, when the run has one.
+- **Provenance**: adapter, SDK version, provider, model, thinking, auth source, and prompt version, plus the session log path. The session log is a link that opens its viewer when the run publishes it in its file list; otherwise the path is shown as plain text. A run with no agent session says so.
+- **Usage**: turns, input and output tokens, and cost, with unreported values shown as not recorded. A run without provider usage shows its model-call count instead.
+- **Secret lookups**: each key name and, when recorded, its step. The value is never shown: every lookup displays the same fixed protected mask, labelled as a stored secret.
+- **Scope mix**: the step count and the step starts by security scope (`public`, `read-only-data`, `authenticated`).
+- **Tool calls**: sequence number, tool, status, duration, confirmation, and whether the call finished. Status and confirmation decision words are shown verbatim as the builder records them; a call with a confirmation ID but no decision reads `pending`. Rows load 500 at a time as you scroll, so a run of any size stays within message limits.
+- **Captures**: every screenshot file, each marked "sent to model" (a Vision Assist image) or "kept on this computer" (a `browser_capture` deliverable), loaded 500 at a time. When an image the model saw is in the run, the warning `Raw provider session log <session file> contains the image data itself.` appears above them.
+
+For a run without a `manifest.json`, `read.audit` reports not found; an audit that cannot be built returns a generic error with no file detail. The host keeps the eight most recently built audits and rebuilds one when its input files change.
+
+`yantra audit` output is unchanged, in the terminal and with `--json`. `audit --json` now has a published schema: the protocol `AuditResult` (the report inside the CLI envelope), with the report itself emitted as `audit-report.schema.json` alongside the other protocol schemas. See [The Yantra app](yantra-app.md#audits-a-run) for the page itself.
+
 ## How to Use It
 
 Check the local environment, then bypass the one-hour cache after changing Chrome, permissions, credentials, or model settings:
@@ -177,6 +194,8 @@ yantra report <run-id>
 yantra report <run-id> --json
 yantra report <run-id> --open
 ```
+
+In the Yantra app, open a run and choose the **Audit** tab, or go to `/runs/<run-id>/audit`.
 
 Review local task volume and recorded cost:
 
@@ -335,6 +354,19 @@ Browser lifecycle lines name the executable by basename plus a SHA-256 of its no
 A `tool_failure` line never carries the failure's message, a URL or URL path, tool parameters, or page text. Its `cause` is always a closed token matching `^[A-Za-z0-9_.:-]{1,80}$`: a per-tool cause such as `anomaly-challenge`, `rate-limited`, or `key-missing` for a search provider failure, or a middleware cause such as `schema-validation`, `budget:<limit>`, `evidence-frozen`, `action-phase-closed`, `per-tool-timeout`, or `unexpected:<ErrorClass>`. When a failure carries no typed cause, or its cause is not a token, the cause is derived from the stable code (`FETCH_TIMEOUT` becomes `fetch-timeout`), so every line has one. The runtime-log safety rule that bans a `cause` key admits it only in this shape, and never containing `//`, so a serialized `Error.cause` or prose under `cause` is still rejected.
 
 That every failure reaches this line with a real cause is enforced in source, not by convention. A boundary test (`packages/agent/tests/boundaries/no-swallowed-errors.spec.ts`) scans the tool adapters under `packages/agent/src/adapters/pi/tools/` and the middleware, and fails on any bare `catch {` block or `.catch(() => undefined)` / `.catch(() => {})` unless the block maps the error to a stable `errorCode`, logs it, or rethrows it, or the site carries an inline `// swallow-ok: <reason>` comment with a non-empty reason.
+
+#### Run files the app can open
+
+The Yantra app reaches a run file only when the public allowlist, `RUN_ARTIFACT_REGISTRY` in `packages/protocol/src/schemas/run-artifacts.ts`, names it. Matching is first match wins, denials come first, and anything the allowlist does not name is never served or listed.
+
+| Exposure                      | Files                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Viewable in a viewer          | `brief.md`, `document.md`, `report.md`; `outputs.json`, `manifest.json`, `usage.json`, `run-health.json`, `contract.json`, `trace.json`, `schedule.json`, `execution-receipt.json`; `events.jsonl`, `run-events.jsonl`, `runtime.jsonl`, `tool-calls.jsonl`, `confirmations.jsonl`, `secrets.jsonl`, `interventions.jsonl`, `agent.jsonl`, `agent/*.jsonl`; `screenshots/*.png` (capture file names only), `captures/cap-*.txt`, and `captures/*.png` |
+| Typed, through the Result tab | `brief.json` and `document.json`                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Download only                 | `brief.html` and `document.html`; HTML is never rendered in the app                                                                                                                                                                                                                                                                                                                                                                                   |
+| Never served                  | `lease.json`, `reconcile.lock`, `.lock`, any `*.lock` or `*.mutex`, `decisions/**`, `*.tmp`, `*.sock` sockets, browser-profile directories (`chrome-profile`, `browser-profile`, `user-data`, `user-data-dir`), and every unlisted file                                                                                                                                                                                                               |
+
+Unsafe paths (absolute, drive, backslash, `.` or `..`, or a percent-encoded dot, slash, or backslash) are always denied. See [The Yantra app](yantra-app.md) for the viewers and signed URLs, and [Safety and Privacy](safety-and-privacy.md#audit-records-and-sensitive-local-artifacts) for what each artifact contains.
 
 #### Execution receipts
 

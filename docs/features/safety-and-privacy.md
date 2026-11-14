@@ -251,6 +251,28 @@ The run lease is the one secret a run directory holds. `lease.json` is created o
 
 `yantra audit <run-id>` is read-only. It renders the structured manifest, tool-call, confirmation, secret-reference, event, and usage projections; it does not parse the raw provider session. An incomplete start record is shown as incomplete rather than treated as success.
 
+### Run files in the Yantra app
+
+The [Yantra app](yantra-app.md) reads run directories through its local host, and the host serves a run file only when the public allowlist names it. That allowlist is `RUN_ARTIFACT_REGISTRY` in `packages/protocol/src/schemas/run-artifacts.ts`. Its explicit denials are checked first, the first match wins, and a file it does not name is denied by default. A denied file is never served and never appears in a run's file list. The full table of allowed files is under [Run files the app can open](diagnostics-and-audit.md#run-files-the-app-can-open).
+
+- **Never served:** `lease.json` and its run token, `reconcile.lock`, `.lock`, any `*.lock` or `*.mutex` file, `decisions/**`, `*.tmp` staging files, `*.sock` sockets, browser-profile directories (`chrome-profile`, `browser-profile`, `user-data`, `user-data-dir`), and any file the allowlist does not name.
+- **Typed reads only:** `brief.json` and `document.json` reach the app only through the Run result read, never through a file URL.
+- **Download only:** `brief.html` and `document.html` are sent as attachments (`Content-Disposition: attachment`) and are never rendered inside the app.
+
+Before any file is opened, the host runs these checks in order:
+
+1. The run ID must match the run-ID grammar. This is checked before any filesystem call.
+2. The path must be a normalized relative path. An empty, absolute, drive-letter, backslash, NUL, `.`, `..`, or percent-encoded dot, slash, or backslash path is denied.
+3. The path's `realpath` must stay inside `realpath(runs root)/<run-id>`. A symbolic link or junction that leads out of the run is refused, and so is a run directory that is itself a link to somewhere else.
+4. The resolved file must classify to the same allowlist entry as the requested path, so a link cannot reach a denied file or a file of another type.
+5. The target must be a regular file.
+
+A file URL is signed for one app window and stops working after 5 minutes, when that window's session ends, or when the host restarts, because its signing key is held only in memory. The host runs the checks when it signs a URL and again when it serves it, because the file may have changed in between. Each response carries the allowlist's fixed media type, `X-Content-Type-Options: nosniff`, and `Cache-Control: no-store`. Every refusal is the same 404, and the host log records only a reason code, never the path or URL. Window sessions and the host's other boundaries are described under [Privacy and security](yantra-app.md#privacy-and-security).
+
+Markdown rendered in the app, such as Brief prose, page excerpts, and `report.md`, never runs page markup or loads remote content. Raw HTML is skipped. Only absolute `http:` and `https:` links become links, which open in a new tab with `rel="noopener noreferrer"`. Any other link is shown as plain text. Images are never loaded: an image is shown as its alt text, so page-derived Markdown cannot make a third-party request.
+
+A protected value is shown as a fixed mask (`••••••••`), with the reason it is withheld (`password`, `autocomplete`, `secret_marker`, or `stored_secret`) and, for a fill, its safe readback verdict. The component takes only that reason and verdict. It has no value or length input, so its output is identical for every underlying value. The Brief's action evidence it reads holds no committed field value either, so the app never receives the value or its length. The app's Audit shows each secret lookup as its key name and, when recorded, its step, followed by the same mask. See [Audit in the app](diagnostics-and-audit.md#audit-in-the-app).
+
 ## How to Use It
 
 ### Protect one-off input
@@ -398,6 +420,7 @@ The focused verification for this document passed 249 tests across 19 files, plu
 - Engine-enforced no-submit recognizes native submit controls with a form owner and names in the protected-action lexicon. A control that submits only through page script, such as a `div` with `role="button"` and an unrelated name, is not recognized as submit-class.
 - Non-interactive live agent confirmations fail closed rather than creating a generally resumable pending prompt. `yantra confirm` operates only on a request that was actually parked, and recording a grant is separate from resuming or polling the run.
 - The run directory and raw provider session are sensitive local data. Restrictive permissions are best-effort on Windows. `yantra audit` intentionally avoids the raw session, but anyone with filesystem access can open it. Treat debug/process logs as sensitive too; model-visible error genericization is not a guarantee about every local diagnostic sink.
+- The Yantra app's file allowlist includes the raw provider session (`agent/*.jsonl`), so anyone using the app on this computer can open it in a viewer. The allowlist keeps leases, locks, and browser profiles out of reach. It does not make the raw session less sensitive.
 - A saved capture is never sent to the model, but it is still raw, unmasked pixels of whatever the page showed, written to the run directory. Treat `screenshots/` with the same care as the rest of the run directory. The secret latch covers stored website secrets only. A value typed from a goal marker is not latched, so a capture taken after such a fill can show it if the page displays it.
 - Ephemeral browser-profile cleanup runs on normal teardown paths, but no application can guarantee cleanup after abrupt machine loss or external process termination. Persistent authenticated agent profiles are not supported.
 - `script_run` executes trusted registered first-party code in a Node worker. The worker supplies resource containment, not an OS security sandbox for untrusted code.

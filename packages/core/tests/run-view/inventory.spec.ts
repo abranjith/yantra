@@ -8,11 +8,10 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { buildRunDir } from '@yantra/test-helpers/run-dirs';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { listRunArtifacts } from '../../src/run-view/inventory.js';
-
-import { buildRunDir } from './fixtures/build-run-dir.js';
 
 let root: string;
 

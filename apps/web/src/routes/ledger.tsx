@@ -347,7 +347,8 @@ export function LedgerView({
             rows={ledger.rows}
             getRowKey={(run) => run.runId}
             height="32rem"
-            loadState={ledger.isPending ? 'loading' : loadState}
+            // The first page shows the empty state's "Loading runs…", not a load-more row.
+            loadState={ledger.isPending ? 'exhausted' : loadState}
             onLoadMore={() => {
               // A second call while a page is in flight joins it, never refetches.
               if (ledger.hasNextPage) void ledger.fetchNextPage({ cancelRefetch: false });

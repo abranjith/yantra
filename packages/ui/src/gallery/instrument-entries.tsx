@@ -194,7 +194,7 @@ function EvidenceSheet(): ReactNode {
           }}
         />
       </EvidencePane>
-      <EvidencePane heading="Action A1" onClose={NOOP}>
+      <EvidencePane heading="Action A1" label="Evidence: action A1" onClose={NOOP}>
         <ActionEvidence
           action={{
             id: 'A1',
@@ -209,7 +209,7 @@ function EvidenceSheet(): ReactNode {
           }}
         />
       </EvidencePane>
-      <EvidencePane heading="Action A9" onClose={NOOP}>
+      <EvidencePane heading="Action A9" label="Evidence: action A9" onClose={NOOP}>
         <ActionEvidence action={null} />
       </EvidencePane>
       <div className="flex flex-col gap-2">

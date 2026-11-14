@@ -39,15 +39,19 @@ describe('index.html', () => {
     expect(response.headers['cache-control']).toBe('no-store');
   });
 
-  it.each(['/runs', '/runs/20261111T100000Z-research-0000abcd', '/settings/theme'])(
-    'falls back to index.html for the app route %s',
-    async (path) => {
-      const response = await rawRequest(port, { path });
-      expect(response.status).toBe(200);
-      expect(response.body.toString()).toBe(INDEX_HTML);
-      expect(response.headers['cache-control']).toBe('no-store');
-    },
-  );
+  it.each([
+    '/runs',
+    '/runs/20261111T100000Z-research-0000abcd',
+    '/runs/20261111T100000Z-research-0000abcd/audit',
+    '/runs/20261111T100000Z-research-0000abcd/artifacts/tool-calls.jsonl',
+    '/runs/20261111T100000Z-research-0000abcd/artifacts/agent/session-1.jsonl',
+    '/settings/theme',
+  ])('falls back to index.html for the app route %s', async (path) => {
+    const response = await rawRequest(port, { path });
+    expect(response.status).toBe(200);
+    expect(response.body.toString()).toBe(INDEX_HTML);
+    expect(response.headers['cache-control']).toBe('no-store');
+  });
 
   it('keeps query strings and fragments off the file lookup', async () => {
     const response = await rawRequest(port, { path: '/?code=x' });

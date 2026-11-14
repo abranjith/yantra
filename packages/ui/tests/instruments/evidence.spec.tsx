@@ -236,6 +236,22 @@ describe('EvidencePane', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
+  it('takes a distinct landmark name when several panes share a page', () => {
+    render(
+      <>
+        <EvidencePane heading="Action A1" label="Evidence: action A1" onClose={vi.fn()}>
+          <p>one</p>
+        </EvidencePane>
+        <EvidencePane heading="Action A9" label="Evidence: action A9" onClose={vi.fn()}>
+          <p>two</p>
+        </EvidencePane>
+      </>,
+    );
+    expect(screen.getByRole('complementary', { name: 'Evidence: action A1' })).toBeTruthy();
+    expect(screen.getByRole('complementary', { name: 'Evidence: action A9' })).toBeTruthy();
+    expect(screen.queryByRole('complementary', { name: 'Evidence' })).toBeNull();
+  });
+
   it('moves focus to its heading when it opens', () => {
     pane();
     expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Source 2' }));

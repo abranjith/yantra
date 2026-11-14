@@ -1,8 +1,6 @@
 /**
- * Run-directory fixture builders for the run-view suites (FEAT-066) and the
- * app end-to-end suite. Vitest-free on purpose: `tsx` scripts and e2e specs
- * import this module directly (memory -> Testing: `@yantra/test-helpers`
- * loads Vitest at import time).
+ * Run-directory builders for the run-view suites (FEAT-066) and the app
+ * end-to-end suite (`@yantra/test-helpers/run-dirs`, Vitest-free).
  */
 
 import { mkdir, writeFile } from 'node:fs/promises';

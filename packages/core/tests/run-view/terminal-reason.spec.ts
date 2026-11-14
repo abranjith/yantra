@@ -8,6 +8,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { buildRunDir, jsonl } from '@yantra/test-helpers/run-dirs';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
@@ -16,8 +17,6 @@ import {
   readTerminalReason,
   type TerminalManifestFields,
 } from '../../src/run-view/terminal-reason.js';
-
-import { buildRunDir, jsonl } from './fixtures/build-run-dir.js';
 
 let runsDir: string;
 

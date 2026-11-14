@@ -10,6 +10,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { err } from '@yantra/protocol';
+import {
+  agenticManifest,
+  buildRunDir,
+  fixtureInstant,
+  fixtureRunId,
+  workflowManifest,
+} from '@yantra/test-helpers/run-dirs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SqliteHistoryStore, type HistoryEntry } from '../../src/index-db/history-store.js';
@@ -29,14 +36,6 @@ import {
   type LedgerResult,
   type RunLedgerDeps,
 } from '../../src/run-view/ledger.js';
-
-import {
-  agenticManifest,
-  buildRunDir,
-  fixtureInstant,
-  fixtureRunId,
-  workflowManifest,
-} from './fixtures/build-run-dir.js';
 
 let runsDir: string;
 let db: DatabaseSync;

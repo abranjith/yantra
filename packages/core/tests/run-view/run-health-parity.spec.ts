@@ -10,13 +10,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { RunHealth } from '@yantra/protocol';
+import { fixtureRunHealth } from '@yantra/test-helpers/run-dirs';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // The app's port (browser code may not import core).
 import { runHealthLines } from '../../../../apps/web/src/features/run-result/run-health-lines.js';
 import { MarkdownReportBuilder } from '../../src/audit/report-builder.js';
-
-import { fixtureRunHealth } from './fixtures/build-run-dir.js';
 
 let runDir: string;
 

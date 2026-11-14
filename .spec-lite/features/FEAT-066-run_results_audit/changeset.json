@@ -8,6 +8,12 @@
       "task": "TASK-001"
     },
     {
+      "path": ".prettierignore",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
       "path": "apps/cli/src/commands/audit-builder.ts",
       "status": "M",
       "role": "implement",
@@ -80,38 +86,44 @@
       "task": "TASK-004"
     },
     {
+      "path": "apps/cli/src/ui/host/static-assets.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
       "path": "apps/cli/tests/commands/__goldens__/audit/rich-agent.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/audit/rich-agent.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/audit/scheduled-workflow.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/audit/scheduled-workflow.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/audit/startup-failure.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/audit/startup-failure.txt",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
@@ -555,7 +567,7 @@
     },
     {
       "path": "apps/cli/tests/commands/audit-golden.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
@@ -567,7 +579,7 @@
     },
     {
       "path": "apps/cli/tests/commands/support/audit-fixtures.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
@@ -594,6 +606,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/static-assets.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
     },
     {
       "path": "apps/web/build/yantra-build-id.ts",
@@ -633,7 +651,7 @@
     },
     {
       "path": "apps/web/src/features/audit/AuditView.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
@@ -771,7 +789,7 @@
     },
     {
       "path": "apps/web/src/routes/runs.$runId.audit.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
@@ -795,7 +813,7 @@
     },
     {
       "path": "apps/web/tests/features/audit/audit.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
@@ -884,10 +902,46 @@
       "task": "TASK-003"
     },
     {
+      "path": "docs/architecture.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "docs/features/diagnostics-and-audit.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "docs/features/safety-and-privacy.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "docs/features/yantra-app.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
       "path": "docs/protocol-spec.md",
       "status": "M",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "docs/usage.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "e2e/app-run-results.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
     },
     {
       "path": "packages/core/src/index-db/history-store.ts",
@@ -1029,7 +1083,7 @@
     },
     {
       "path": "packages/protocol/generated/json-schema/audit-report.schema.json",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
@@ -1104,6 +1158,30 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "packages/test-helpers/package.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "packages/test-helpers/src/run-dirs/audit-runs.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "packages/test-helpers/src/run-dirs/build-run-dir.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "packages/test-helpers/src/run-dirs/index.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
     },
     {
       "path": "packages/ui/package.json",
@@ -1248,9 +1326,16 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "README.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
     }
   ],
   "excluded": [
+    ".spec-lite/feature-summary.md",
     ".spec-lite/features/FEAT-066-run_results_audit/changeset.json",
     ".spec-lite/features/FEAT-066-run_results_audit/spec.md",
     ".spec-lite/plan_ui.md"

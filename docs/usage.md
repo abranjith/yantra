@@ -978,9 +978,10 @@ the change at once; edits to `profile.yaml` apply live.
 |  `1` | Invalid usage, such as an unknown option or an extra argument                                                                                                                                        |
 |  `3` | No browser was found (the URL is still printed), the host lock cannot be verified or read, the host did not become ready within 10 seconds or could not start, or its control socket was unreachable |
 
-Every exit-`3` message ends with one next step. See
-[The Yantra App](features/yantra-app.md) for connection states, the queue,
-host files, sessions, and security.
+Every exit-`3` message ends with one next step. In the app you can also browse
+past runs, open a run's result, its Audit, and its run files. See
+[The Yantra App](features/yantra-app.md) for those views, connection states,
+the queue, host files, sessions, and security.
 
 ## Profiles, preferences, history, and sites
 
@@ -1028,6 +1029,12 @@ yantra usage --type ask --since 7d
 `list runs` shows a run's outcome word beside its status, such as
 `failed partial`, when the run recorded one; `--json` carries it as
 `taskOutcome`. Runs recorded before outcome words existed show the status alone.
+
+Each run item in `list --json` also carries `costUsd` (metered cost in USD, or
+`null` when the run was not metered) and `hasDocument` (`true` when the run
+saved a Brief or a templated document), plus `taskType` (`ask`, `research`,
+`do`, or `run` for a saved workflow) when it is known. The fields are additive;
+the human-readable `list` output is unchanged.
 
 Before listing, `list` ends every run whose process died without finishing it
 (a crash, a closed terminal, a killed process), so such a run shows
@@ -1238,6 +1245,12 @@ support `--format terminal|md|html|json`, `--detail
 overview|standard|full`, and `--length short|medium|long`; `--json` is shorthand
 for JSON format. `--debug` writes diagnostics to stderr on commands that expose
 it.
+
+JSON Schemas for two inspection documents are generated in
+`packages/protocol/generated/json-schema/`: `list-result.schema.json` describes
+the whole `list --json` document, and `audit-report.schema.json` describes the
+`audit --json` report fields (the document adds only `schemaVersion` and
+`kind: "audit"`).
 
 ### Concurrent writes and worker execution
 

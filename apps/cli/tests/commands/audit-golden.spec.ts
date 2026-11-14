@@ -12,17 +12,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Writable } from 'node:stream';
 
+import {
+  writeRichAgentRun,
+  writeScheduledWorkflowRun,
+  writeStartupFailureRun,
+} from '@yantra/test-helpers/run-dirs';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { buildAuditReport } from '../../src/commands/audit-builder.js';
 import { JSONRenderer } from '../../src/render/json.js';
 import { TerminalRenderer } from '../../src/render/terminal.js';
-
-import {
-  writeRichAgentRun,
-  writeScheduledWorkflowRun,
-  writeStartupFailureRun,
-} from './support/audit-fixtures.js';
 
 const GOLDENS = join(import.meta.dirname, '__goldens__', 'audit');
 const CAPTURE = process.env.YANTRA_CAPTURE_AUDIT_GOLDENS === '1';

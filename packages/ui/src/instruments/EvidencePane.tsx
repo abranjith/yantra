@@ -26,6 +26,11 @@ export interface EvidenceBackReference {
 
 export interface EvidencePaneProps {
   readonly heading: string;
+  /**
+   * The landmark's accessible name; "Evidence" by default. Only a page that
+   * shows several panes at once (the gallery) needs distinct names.
+   */
+  readonly label?: string;
   readonly onClose: () => void;
   readonly backReferences?: readonly EvidenceBackReference[];
   readonly onBackReference?: (targetId: string) => void;
@@ -36,6 +41,7 @@ export interface EvidencePaneProps {
 /** The pane frame; see the module comment. */
 export function EvidencePane({
   heading,
+  label = 'Evidence',
   onClose,
   backReferences = [],
   onBackReference,
@@ -49,7 +55,7 @@ export function EvidencePane({
 
   return (
     <aside
-      aria-label="Evidence"
+      aria-label={label}
       data-part="evidence-pane"
       className={cn(
         'flex flex-col gap-3 rounded-control border border-rule bg-surface p-4',

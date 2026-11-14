@@ -9,6 +9,21 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { RUN_RESULT_MAX_BYTES, RunResultView } from '@yantra/protocol';
+import {
+  agenticManifest,
+  askBriefRun,
+  buildRunDir,
+  fixtureBrief,
+  fixtureInstant,
+  fixtureRunHealth,
+  fixtureRunId,
+  interruptedLegacyRun,
+  legacyReportRun,
+  startupFailureRun,
+  templatedRun,
+  workflowOutputsRun,
+  type RunDirSpec,
+} from '@yantra/test-helpers/run-dirs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -26,22 +41,6 @@ import {
   readRunResult,
   type RunResultDeps,
 } from '../../src/run-view/run-result.js';
-
-import {
-  agenticManifest,
-  askBriefRun,
-  buildRunDir,
-  fixtureBrief,
-  fixtureInstant,
-  fixtureRunHealth,
-  fixtureRunId,
-  interruptedLegacyRun,
-  legacyReportRun,
-  startupFailureRun,
-  templatedRun,
-  workflowOutputsRun,
-  type RunDirSpec,
-} from './fixtures/build-run-dir.js';
 
 let runsDir: string;
 

@@ -4,18 +4,17 @@ import { join } from 'node:path';
 import { Writable } from 'node:stream';
 
 import { AuditReport } from '@yantra/protocol';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-
-import { buildAuditReport, createAuditCache } from '../../src/commands/audit-builder.js';
-import { TerminalRenderer } from '../../src/render/terminal.js';
-
 import {
   toolCall,
   writeLargeRun,
   writeRichAgentRun,
   writeScheduledWorkflowRun,
   writeStartupFailureRun,
-} from './support/audit-fixtures.js';
+} from '@yantra/test-helpers/run-dirs';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import { buildAuditReport, createAuditCache } from '../../src/commands/audit-builder.js';
+import { TerminalRenderer } from '../../src/render/terminal.js';
 
 async function makeRunDir(): Promise<string> {
   return mkdtemp(join(tmpdir(), 'yantra-audit-builder-'));
