@@ -1,6 +1,9 @@
 /**
  * The Mission screen's host reads (FEAT-067).
  *
+ * `read.mission_context`: the user's home (a new run's default working
+ * directory, D13) and the host platform.
+ *
  * `read.effective_options {path, argv, cwd}`: every option the composed
  * command would use, with its effective value and its source, resolved
  * read-only through FEAT-072's settings resolver (the same path drift review
@@ -18,8 +21,12 @@
  * code, never argv, values or goals (plan §11).
  */
 
+import { homedir } from 'node:os';
+
 import {
   COMMAND_REGISTRY,
+  EmptyParams,
+  MissionContext,
   EffectiveOptions,
   EffectiveOptionsParams,
   conditionHolds,
@@ -39,6 +46,9 @@ export interface MissionReadDeps {
   /** Resolves an invocation's effective settings (production: `effectiveSettingsResolver`). */
   readonly resolve: InvocationSettingsResolver;
   readonly logger?: HostLogger;
+  /** The user's home directory (tests inject one). */
+  readonly home?: () => string;
+  readonly platform?: string;
 }
 
 /** `read.effective_options`; see the module comment. */
@@ -84,6 +94,15 @@ export async function effectiveOptions(
 /** Registers the Mission reads. */
 export function registerMissionReads(methods: RpcMethodRegistry, deps: MissionReadDeps): void {
   const logger = deps.logger ?? SILENT_HOST_LOGGER;
+  // A new run's working directory is the user's home, not where the host started (D13).
+  methods.register('read.mission_context', {
+    params: EmptyParams,
+    result: MissionContext,
+    handler: () => ({
+      home: (deps.home ?? homedir)(),
+      platform: deps.platform ?? process.platform,
+    }),
+  });
   methods.register('read.effective_options', {
     params: EffectiveOptionsParams,
     result: EffectiveOptions,

@@ -2811,6 +2811,24 @@ Example:
 }
 ```
 
+## MissionContext
+
+The host computer’s defaults for composing a run.
+
+| Field    | Description                                                                                |
+| -------- | ------------------------------------------------------------------------------------------ |
+| home     | The user’s home directory: the default working directory of a new run (D13).               |
+| platform | The host platform (`win32`, `darwin`, `linux`), for the default shell of a copied command. |
+
+Example:
+
+```json
+{
+  "home": "<home>",
+  "platform": "<platform>"
+}
+```
+
 ## NameMatch
 
 Accessible-name matcher for intent locators.

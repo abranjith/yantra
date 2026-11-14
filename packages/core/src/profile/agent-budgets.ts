@@ -14,38 +14,14 @@
  * time slips in through the environment and is reported healthy by doctor.
  */
 
-/**
- * A positive duration: bare milliseconds, or an integer with a `ms`/`s`/`m`/`h`
- * unit. Fractional, negative, zero, blank, and unknown-unit values are invalid.
- */
-export const AGENT_DURATION_PATTERN = /^[1-9]\d*(?:ms|s|m|h)?$/u;
+import { parseAgentDurationMs } from '@yantra/protocol';
 
-/** Human-facing description of {@link AGENT_DURATION_PATTERN}, for error text. */
-export const AGENT_DURATION_HINT = 'a positive duration such as 15m, 900s, or 900000';
-
-const DURATION_WITH_UNIT = /^([1-9]\d*)(ms|s|m|h)?$/u;
-const UNIT_MULTIPLIER: Readonly<Record<string, number>> = {
-  ms: 1,
-  s: 1_000,
-  m: 60_000,
-  h: 3_600_000,
-};
-
-/**
- * Parses a duration into whole milliseconds.
- *
- * @param raw - Candidate duration. Surrounding whitespace is tolerated.
- * @returns The duration in milliseconds, or `null` when the value does not
- *   match the grammar or cannot be represented as a safe integer.
- */
-export function parseAgentDurationMs(raw: unknown): number | null {
-  if (typeof raw !== 'string' && typeof raw !== 'number') return null;
-  const match = DURATION_WITH_UNIT.exec(String(raw).trim());
-  if (match === null) return null;
-  const amount = Number(match[1]);
-  const milliseconds = amount * (match[2] === undefined ? 1 : (UNIT_MULTIPLIER[match[2]] ?? 1));
-  return Number.isSafeInteger(milliseconds) ? milliseconds : null;
-}
+// The duration grammar lives in the protocol so browser code shares it (FEAT-067).
+export {
+  AGENT_DURATION_HINT,
+  AGENT_DURATION_PATTERN,
+  parseAgentDurationMs,
+} from '@yantra/protocol';
 
 /**
  * Parses a budget count (`--max-tokens`, `--tool-retries`).

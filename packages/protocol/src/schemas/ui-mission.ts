@@ -101,3 +101,21 @@ export const ProviderReadiness = z
   .strict()
   .describe('Whether `do` can run, and how to fix it when not.');
 export type ProviderReadiness = z.infer<typeof ProviderReadiness>;
+
+/** `read.mission_context` result: what the composer needs from the host computer. */
+export const MissionContext = z
+  .object({
+    home: z
+      .string()
+      .refine(isAbsoluteCwd, 'home must be absolute')
+      .describe('The user’s home directory: the default working directory of a new run (D13).'),
+    platform: z
+      .string()
+      .min(1)
+      .describe(
+        'The host platform (`win32`, `darwin`, `linux`), for the default shell of a copied command.',
+      ),
+  })
+  .strict()
+  .describe('The host computer’s defaults for composing a run.');
+export type MissionContext = z.infer<typeof MissionContext>;

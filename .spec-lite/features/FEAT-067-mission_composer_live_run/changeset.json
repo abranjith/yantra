@@ -2,6 +2,12 @@
   "vcs": "git",
   "files": [
     {
+      "path": "apps/cli/src/agent-options.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
       "path": "apps/cli/src/commands/ask.ts",
       "status": "M",
       "role": "implement",
@@ -39,9 +45,15 @@
     },
     {
       "path": "apps/cli/src/ui/host/mission-reads.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
+    },
+    {
+      "path": "apps/cli/src/ui/host/reads.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
     },
     {
       "path": "apps/cli/src/ui/host/supervisor.ts",
@@ -57,7 +69,7 @@
     },
     {
       "path": "apps/cli/tests/ui/host/mission-reads.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
@@ -66,6 +78,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/app/nav-registry.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
     },
     {
       "path": "apps/web/src/app/router.tsx",
@@ -164,6 +182,24 @@
       "task": "TASK-004"
     },
     {
+      "path": "apps/web/src/features/composer/composer-model.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/src/features/composer/Composer.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/src/features/composer/field-renderers.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
       "path": "apps/web/src/features/live/announcer.ts",
       "status": "A",
       "role": "implement",
@@ -248,6 +284,18 @@
       "task": "TASK-002"
     },
     {
+      "path": "apps/web/src/routes/mission.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/tests/app/shell.spec.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
       "path": "apps/web/tests/features/cockpit/announcer-region.spec.tsx",
       "status": "A",
       "role": "implement",
@@ -288,6 +336,24 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "apps/web/tests/features/composer/__snapshots__/composer-model.spec.ts.snap",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/tests/features/composer/composer-model.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/tests/features/composer/composer.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
     },
     {
       "path": "apps/web/tests/features/live/announcer.spec.ts",
@@ -380,6 +446,12 @@
       "task": "TASK-007"
     },
     {
+      "path": "packages/core/src/profile/agent-budgets.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
       "path": "packages/protocol/src/commands/abort.ts",
       "status": "A",
       "role": "implement",
@@ -387,15 +459,27 @@
     },
     {
       "path": "packages/protocol/src/commands/dead-options.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
+    },
+    {
+      "path": "packages/protocol/src/commands/duration.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
     },
     {
       "path": "packages/protocol/src/commands/index.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-008"
+    },
+    {
+      "path": "packages/protocol/src/commands/presentation.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
     },
     {
       "path": "packages/protocol/src/index.ts",
@@ -411,7 +495,7 @@
     },
     {
       "path": "packages/protocol/src/schemas/ui-mission.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
@@ -422,8 +506,14 @@
       "task": "TASK-008"
     },
     {
-      "path": "packages/protocol/tests/schemas/ui-mission.spec.ts",
+      "path": "packages/protocol/tests/commands/composer-data.spec.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "packages/protocol/tests/schemas/ui-mission.spec.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },

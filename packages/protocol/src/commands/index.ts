@@ -41,6 +41,17 @@ export { validateCommandRegistry } from './validate.js';
 export { conditionHolds, executionClassFor, jsonEqual, type InvocationFacts } from './execution.js';
 export { ABORT_RULES, abortRule, honorsAbort, type AbortRule } from './abort.js';
 export {
+  APP_OPTION_EXEMPTIONS,
+  isAppExemptOption,
+  type AppOptionExemption,
+} from './presentation.js';
+export {
+  AGENT_DURATION_HINT,
+  AGENT_DURATION_PATTERN,
+  durationProblem,
+  parseAgentDurationMs,
+} from './duration.js';
+export {
   DEAD_OPTION_TODO,
   KNOWN_DEAD_OPTIONS,
   isKnownDeadOption,

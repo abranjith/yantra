@@ -189,4 +189,21 @@ describe('@no-llm read.effective_options', () => {
         .params.safeParse({ path: ['ask'], argv: ['q'], cwd: 'rel' }).success,
     ).toBe(false);
   });
+
+  it('serves the host defaults a new run composes from', async () => {
+    const methods = new RpcMethodRegistry();
+    registerMissionReads(methods, {
+      resolve: () => Promise.resolve([]),
+      home: () => home,
+      platform: 'win32',
+    });
+    const method = methods.get('read.mission_context')!;
+
+    const context = await Promise.resolve(
+      method.handler(method.params.parse({}), {} as RpcCallContext),
+    );
+
+    expect(context).toEqual({ home, platform: 'win32' });
+    expect(method.result.safeParse({ home: 'relative', platform: 'linux' }).success).toBe(false);
+  });
 });

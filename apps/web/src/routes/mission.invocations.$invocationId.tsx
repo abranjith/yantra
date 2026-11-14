@@ -90,7 +90,7 @@ export function MissionInvocationPage({
         <p className="text-ink-2">
           {notFound ? `There is no queued item ${invocationId}.` : invocation.error.message}
         </p>
-        <RouterLink to="/" className="text-accent-ink underline underline-offset-2">
+        <RouterLink to="/mission" className="text-accent-ink underline underline-offset-2">
           Back to Mission
         </RouterLink>
       </div>

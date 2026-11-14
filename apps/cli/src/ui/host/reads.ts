@@ -66,6 +66,8 @@ export const READERS: readonly ReaderSpec[] = [
   // The effective profile with defaults and provenance: what the app applies (TASK-011).
   { method: 'read.profile', path: ['profile'] },
   { method: 'read.daemon.status', path: ['daemon', 'status'] },
+  // The composer's template choice (FEAT-067).
+  { method: 'read.template.list', path: ['template', 'list'] },
 ];
 
 /** A `read`-class path with no reader yet; FEAT-070 empties this list. */
@@ -85,7 +87,6 @@ export const UNMAPPED_READS: readonly UnmappedRead[] = [
   'model list',
   'usage',
   'sites list',
-  'template list',
   'template show',
   'doctor',
   'browser list',
