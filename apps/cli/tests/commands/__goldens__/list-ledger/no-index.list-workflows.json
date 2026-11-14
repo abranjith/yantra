@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "0.2",
+  "kind": "list",
+  "items": [
+    {
+      "kind": "workflow",
+      "name": "fixture",
+      "stepCount": 1,
+      "securityClass": "public",
+      "modifiedAt": "2026-11-01T00:00:00.000Z"
+    }
+  ]
+}

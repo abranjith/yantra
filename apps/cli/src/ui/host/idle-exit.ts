@@ -71,7 +71,10 @@ export class IdleExit {
 
   /** Stops the countdown for good (shutdown already under way). */
   public cancel(): void {
-    if (this.timer !== null) (this.deps.timers?.clearTimeout ?? clearTimeout)(this.timer);
+    if (this.timer !== null) {
+      if (this.deps.timers === undefined) clearTimeout(this.timer as NodeJS.Timeout);
+      else this.deps.timers.clearTimeout(this.timer);
+    }
     this.timer = null;
     this.fired = true;
   }

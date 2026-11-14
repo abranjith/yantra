@@ -1,0 +1,6 @@
+20261101T000120Z-pipeline-0000abcd                succeeded          —  workflow=pipeline only
+tie-b                                             succeeded     2000ms  workflow=fixture
+tie-a                                             succeeded     2000ms  workflow=fixture
+20261101T000050Z-research-0000abcd                succeeded partial    2000ms  workflow=research
+20261101T000010Z-fixture-0000abcd                 succeeded     2000ms  workflow=fixture
+legacy-run                                        succeeded     2000ms  workflow=legacy

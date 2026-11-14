@@ -11,18 +11,15 @@
  *   yantra list runs --workflow bank-statement --status failed
  */
 
-import { join } from 'node:path';
-
 import {
   FileWorkflowStore,
-  readExecutionState,
+  queryRunLedger,
   reconcileAll,
   runsRoot,
   workflowsRoot,
-  type HistoryEntry,
+  type LedgerKey,
   type Logger,
 } from '@yantra/core';
-import { LocalRunStore, type RunSummary } from '@yantra/core/workflow/replay';
 import { COMMAND_REGISTRY } from '@yantra/protocol';
 import type { Command } from 'commander';
 
@@ -100,10 +97,7 @@ export async function listHandler(
 }
 
 /** A position in `startedAt DESC, runId DESC` order; pages continue strictly after it. */
-export interface ListCursorKey {
-  readonly startedAt: string;
-  readonly runId: string;
-}
+export type ListCursorKey = LedgerKey;
 
 /** What to list. */
 export interface ListQuery {
@@ -123,8 +117,9 @@ export interface ListJson {
 }
 
 /**
- * The one builder behind `yantra list --json` and the app's `read.list`
- * (FEAT-065 TASK-007), so the two shapes cannot drift. `note` receives the
+ * The one builder behind `yantra list --json`. Runs come from the shared
+ * Ledger query (`queryRunLedger`, FEAT-066), the same function the app's
+ * `read.list` pages with, so the two cannot drift. `note` receives the
  * index-unavailable hint the terminal prints on stderr.
  */
 export async function buildListJson(
@@ -143,115 +138,56 @@ export async function buildListJson(
     }));
     return { items, next: null };
   }
-  const items = await listRuns(query, deps.logger, deps.note);
-  const last = items.at(-1);
-  const next =
-    items.length === query.limit && last?.kind === 'run'
-      ? { startedAt: last.startedAt, runId: last.runId }
-      : null;
-  return { items, next };
-}
-
-/** `a` sorts before `b` in `startedAt DESC, runId DESC` order. */
-function newerFirst(a: ListCursorKey, b: ListCursorKey): number {
-  const byTime = b.startedAt.localeCompare(a.startedAt);
-  return byTime !== 0 ? byTime : b.runId.localeCompare(a.runId);
+  return listRuns(query, deps.logger, deps.note);
 }
 
 /**
- * Builds the `runs` list by merging the fast history index (which includes
- * `ask`/`research` tasks) with the file-based run store (workflow runs),
- * de-duplicated by run id. When the index is unavailable it degrades to the
- * file scan alone (with a stderr hint) — the "delete index.db, list still
- * works" fallback (TASK-002 verify). Both sources page by the same keyset.
+ * Lists runs through the Ledger query: the history index (which includes
+ * `ask`/`research` tasks) merged with the run directories, de-duplicated by
+ * run id with the index winning. When the index is unavailable it degrades to
+ * the file scan alone, with a stderr hint (the "delete index.db, list still
+ * works" fallback). Unfinished runs stay in the list (`activeMode: inline`).
  */
 async function listRuns(
   query: ListQuery,
   logger: Logger,
   note: (text: string) => void,
-): Promise<ListItem[]> {
-  const { limit, before } = query;
+): Promise<ListJson> {
   const history = await openHistory(logger);
-  // FEAT-064: end every run whose owner died before reading, so a killed run
-  // reads `interrupted`, never `running`. Blocking; failures never fail list.
-  await reconcileAll({
-    trigger: 'list',
-    includeRunningManifests: true,
-    history: history?.store ?? null,
-    logger,
-  }).catch(() => undefined);
-
-  const runStore = new LocalRunStore();
-  const fileRuns = await runStore.listRuns({ limit: 500 });
-
-  const byId = new Map<string, ListItem>();
-  for (const run of fileRuns) {
-    byId.set(run.runId, fileRunToItem(run));
-  }
-
-  if (history === null) {
-    note(
-      'note: history index unavailable — showing runs from files only ' +
-        '(run `yantra doctor` to rebuild the index)\n',
+  try {
+    const page = await queryRunLedger(
+      {
+        limit: query.limit,
+        activeMode: 'inline',
+        ...(query.before === undefined ? {} : { before: query.before }),
+        ...(query.workflow === undefined ? {} : { workflow: query.workflow }),
+        ...(query.status === undefined ? {} : { status: query.status }),
+      },
+      {
+        historyStore: history?.store ?? null,
+        runsDir: runsRoot(),
+        // FEAT-064: end every run whose owner died before reading, so a killed
+        // run reads `interrupted`, never `running`. Failures never fail list.
+        reconcile: async () => {
+          await reconcileAll({
+            trigger: 'list',
+            includeRunningManifests: true,
+            history: history?.store ?? null,
+            logger,
+          });
+        },
+      },
     );
-  } else {
-    try {
-      const listed = await history.store.list({
-        limit: 500,
-        ...(before === undefined ? {} : { before }),
-      });
-      if (listed.isOk) {
-        for (const entry of listed.value) {
-          byId.set(entry.runId, historyToItem(entry));
-        }
-      }
-    } finally {
-      history.close();
-    }
-  }
-
-  let runs = [...byId.values()].filter((item) => item.kind === 'run');
-  if (before !== undefined) runs = runs.filter((item) => newerFirst(before, item) < 0);
-  if (query.workflow !== undefined) {
-    runs = runs.filter((item) => item.workflowName === query.workflow);
-  }
-  if (query.status !== undefined) {
-    runs = runs.filter((item) => item.status === query.status);
-  }
-  runs.sort(newerFirst);
-  return Promise.all(
-    runs.slice(0, limit).map(async (item) => {
-      // A corrupt manifest fails only its own detail, never the list.
-      const executionState = await readExecutionState(join(runsRoot(), item.runId)).catch(
-        () => undefined,
+    if (history === null) {
+      note(
+        'note: history index unavailable — showing runs from files only ' +
+          '(run `yantra doctor` to rebuild the index)\n',
       );
-      return executionState === undefined ? item : { ...item, executionState };
-    }),
-  );
-}
-
-function fileRunToItem(run: RunSummary): ListItem {
-  return {
-    kind: 'run',
-    runId: run.runId,
-    workflowName: run.workflowName,
-    status: run.status,
-    startedAt: run.startedAt,
-    durationMs: run.durationMs ?? null,
-    ...(run.taskOutcome === undefined ? {} : { taskOutcome: run.taskOutcome }),
-  };
-}
-
-function historyToItem(entry: HistoryEntry): ListItem {
-  return {
-    kind: 'run',
-    runId: entry.runId,
-    workflowName: entry.intentText,
-    status: entry.status,
-    startedAt: entry.startedAt,
-    durationMs: entry.durationMs,
-    ...(entry.taskOutcome === null ? {} : { taskOutcome: entry.taskOutcome }),
-  };
+    }
+    return { items: [...page.items], next: page.next };
+  } finally {
+    history?.close();
+  }
 }
 
 function parseLimit(raw: string | undefined): number {

@@ -1,0 +1,55 @@
+{
+  "schemaVersion": "0.2",
+  "kind": "list",
+  "items": [
+    {
+      "kind": "run",
+      "runId": "20261101T000120Z-pipeline-0000abcd",
+      "workflowName": "pipeline only",
+      "status": "succeeded",
+      "startedAt": "2026-11-01T00:01:20.000Z",
+      "durationMs": null
+    },
+    {
+      "kind": "run",
+      "runId": "tie-b",
+      "workflowName": "fixture",
+      "status": "succeeded",
+      "startedAt": "2026-11-01T00:01:00.000Z",
+      "durationMs": 2000
+    },
+    {
+      "kind": "run",
+      "runId": "tie-a",
+      "workflowName": "fixture",
+      "status": "succeeded",
+      "startedAt": "2026-11-01T00:01:00.000Z",
+      "durationMs": 2000
+    },
+    {
+      "kind": "run",
+      "runId": "20261101T000050Z-research-0000abcd",
+      "workflowName": "research",
+      "status": "succeeded",
+      "startedAt": "2026-11-01T00:00:50.000Z",
+      "durationMs": 2000,
+      "taskOutcome": "partial"
+    },
+    {
+      "kind": "run",
+      "runId": "20261101T000010Z-fixture-0000abcd",
+      "workflowName": "fixture",
+      "status": "succeeded",
+      "startedAt": "2026-11-01T00:00:10.000Z",
+      "durationMs": 2000
+    },
+    {
+      "kind": "run",
+      "runId": "legacy-run",
+      "workflowName": "legacy",
+      "status": "succeeded",
+      "startedAt": "2026-11-01T00:00:05.000Z",
+      "durationMs": 2000
+    }
+  ]
+}

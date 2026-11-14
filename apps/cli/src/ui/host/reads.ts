@@ -9,8 +9,8 @@
  * A reader runs **the same function** the command's `--json` path runs: the
  * command's own handler, in-process through the FEAT-072 worker adapter with
  * `--json` appended, and the captured document is returned as `value`.
- * `read.list` is the exception only in that it pages: it calls
- * `buildListJson`, the builder `yantra list --json` itself uses.
+ * `read.list` is the exception: it pages the Ledger through `queryRunLedger`
+ * (FEAT-066), the core query `yantra list` itself uses; see `ledger-reads.ts`.
  *
  * A reader's failure becomes an RPC error for that call; it never reaches the
  * host.
@@ -20,8 +20,6 @@ import { Writable } from 'node:stream';
 
 import {
   COMMAND_REGISTRY,
-  READ_DEFAULT_LIMIT,
-  READ_MAX_LIMIT,
   ReadParams,
   ReadResult,
   createInvocationId,
@@ -30,6 +28,7 @@ import {
   parseInvocation,
   type CommandResultMessage,
   type LeafEntry,
+  type ListResult,
 } from '@yantra/protocol';
 import * as Protocol from '@yantra/protocol';
 import { z } from 'zod';
@@ -37,8 +36,9 @@ import { z } from 'zod';
 // The command surface is loaded on the first read, not at host start: it is
 // most of the CLI's module graph and would delay the host becoming ready.
 import type { runWorkerInvocation } from '../../adapters/worker/worker-adapter.js';
-import type { buildListJson, ListCursorKey } from '../../commands/list.js';
+import type { buildListJson } from '../../commands/list.js';
 
+import { registerLedgerRead, type LedgerReadDeps } from './ledger-reads.js';
 import { RpcError, type RpcMethodRegistry } from './rpc-server.js';
 
 /** One mapped reader. */
@@ -49,16 +49,18 @@ export interface ReaderSpec {
   readonly path: readonly [string, ...string[]];
   /** Arguments always prepended (an action word such as `list`). */
   readonly fixedArgs?: readonly string[];
-  /** Pages with a cursor (`read.list`). */
+  /** Pages with a cursor: `read.list`, registered by `ledger-reads.ts`. */
   readonly paged?: boolean;
+  /** Registered by `run-reads.ts` with typed params (FEAT-066), not the generic reader. */
+  readonly runRead?: boolean;
 }
 
 /** The M1 readers. */
 export const READERS: readonly ReaderSpec[] = [
   { method: 'read.list', path: ['list'], paged: true },
   { method: 'read.show', path: ['show'] },
-  { method: 'read.audit', path: ['audit'] },
-  { method: 'read.report', path: ['report'] },
+  { method: 'read.audit', path: ['audit'], runRead: true },
+  { method: 'read.report', path: ['report'], runRead: true },
   { method: 'read.prefs.list', path: ['prefs'], fixedArgs: ['list'] },
   { method: 'read.prefs.get', path: ['prefs'], fixedArgs: ['get'] },
   // The effective profile with defaults and provenance: what the app applies (TASK-011).
@@ -100,40 +102,6 @@ export function readPaths(): string[] {
           (entry.execution.rules ?? []).some((rule) => rule.class === 'read')),
     )
     .map((entry) => entry.path.join(' '));
-}
-
-const CursorPayload = z
-  .object({ v: z.literal(1), s: z.string().datetime({ offset: true }), r: z.string().min(1) })
-  .strict();
-
-/** Encodes a list position as an opaque cursor. */
-export function encodeCursor(key: ListCursorKey): string {
-  return Buffer.from(JSON.stringify({ v: 1, s: key.startedAt, r: key.runId }), 'utf8').toString(
-    'base64url',
-  );
-}
-
-/** Decodes a cursor, or throws `invalid_params`. */
-export function decodeCursor(cursor: string): ListCursorKey {
-  let parsed: z.SafeParseReturnType<unknown, z.infer<typeof CursorPayload>>;
-  try {
-    parsed = CursorPayload.safeParse(JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')));
-  } catch {
-    parsed = CursorPayload.safeParse(null);
-  }
-  if (!parsed.success) {
-    throw new RpcError(
-      'invalid_params',
-      'The cursor is not one this host issued.',
-      'Start again without a cursor.',
-    );
-  }
-  return { startedAt: parsed.data.s, runId: parsed.data.r };
-}
-
-/** Clamps a requested page size to 1..200, defaulting to 50. */
-export function clampLimit(limit: number | undefined): number {
-  return Math.min(limit ?? READ_DEFAULT_LIMIT, READ_MAX_LIMIT);
 }
 
 /** Builds argv tokens from by-name options, refusing anything the command does not take. */
@@ -179,6 +147,10 @@ export interface ReadDeps {
   /** Runs one invocation in-process; defaults to the FEAT-072 worker adapter. */
   readonly run?: typeof runWorkerInvocation;
   readonly buildList?: typeof buildListJson;
+  /** Runs the host knows are in progress, for the Ledger's active region. */
+  readonly activeRuns?: LedgerReadDeps['activeRuns'];
+  /** Opens the history index; defaults to the CLI's `openHistory`. */
+  readonly openHistory?: LedgerReadDeps['openHistory'];
 }
 
 const DISCARD = new Writable({
@@ -250,50 +222,25 @@ async function runRead(
   return { schema: validateAgainstRegistry(entry, value), value, next_cursor: null };
 }
 
-async function runList(params: ReadParams, deps: ReadDeps): Promise<ReadResult> {
-  const [target = 'runs', ...extra] = params.args ?? [];
-  if ((target !== 'runs' && target !== 'workflows') || extra.length > 0) {
-    throw new RpcError(
-      'invalid_params',
-      `Unknown list target "${target}".`,
-      'Use runs or workflows.',
-    );
-  }
-  const options = params.options ?? {};
-  for (const name of Object.keys(options)) {
-    if (name !== 'workflow' && name !== 'status') {
-      throw new RpcError(
-        'invalid_params',
-        `read.list takes only the workflow and status options (got ${name}).`,
-        'Page with limit and cursor instead of --limit.',
-      );
-    }
-  }
-  const { workflow, status } = options;
-  if (
-    (workflow !== undefined && typeof workflow !== 'string') ||
-    (status !== undefined && typeof status !== 'string')
-  ) {
-    throw new RpcError('invalid_params', 'workflow and status take string values.');
-  }
-  const before = params.cursor === undefined ? undefined : decodeCursor(params.cursor);
-  const buildList = deps.buildList ?? (await import('../../commands/list.js')).buildListJson;
-  const { makeStderrLogger } = await import('../../runtime.js');
-  const { listEnvelope } = await import('../../render/json.js');
-  const listed = await buildList(
-    {
-      target,
-      limit: clampLimit(params.limit),
-      ...(workflow === undefined ? {} : { workflow }),
-      ...(status === undefined ? {} : { status }),
-      ...(before === undefined ? {} : { before }),
-    },
-    { logger: makeStderrLogger(false, DISCARD), note: () => undefined },
-  );
+/** `list workflows` in the app: every saved workflow, up to the CLI's own cap. */
+const WORKFLOW_LIST_LIMIT = 500;
+
+/** The `read.list` dependencies over this host's environment. */
+function ledgerDeps(deps: ReadDeps): LedgerReadDeps {
+  const quietLogger = async () =>
+    (await import('../../runtime.js')).makeStderrLogger(false, DISCARD);
   return {
-    schema: null,
-    value: listEnvelope(listed.items),
-    next_cursor: listed.next === null ? null : encodeCursor(listed.next),
+    openHistory: deps.openHistory ?? (async () => (await import('../../history.js')).openHistory()),
+    listWorkflows: async () => {
+      const buildList = deps.buildList ?? (await import('../../commands/list.js')).buildListJson;
+      const { listEnvelope } = await import('../../render/json.js');
+      const listed = await buildList(
+        { target: 'workflows', limit: WORKFLOW_LIST_LIMIT },
+        { logger: await quietLogger(), note: () => undefined },
+      );
+      return listEnvelope(listed.items) as ListResult;
+    },
+    ...(deps.activeRuns === undefined ? {} : { activeRuns: deps.activeRuns }),
   };
 }
 
@@ -302,18 +249,23 @@ export function registerReads(methods: RpcMethodRegistry, deps: ReadDeps): void 
   for (const spec of READERS) {
     const entry = findLeaf(spec.path);
     if (entry === undefined) throw new Error(`No registry leaf for ${spec.path.join(' ')}.`);
+    if (spec.paged === true) {
+      registerLedgerRead(methods, ledgerDeps(deps));
+      continue;
+    }
+    if (spec.runRead === true) continue;
     methods.register(spec.method, {
       params: ReadParams,
       result: ReadResult,
       handler: (params) => {
-        if (!spec.paged && (params.cursor !== undefined || params.limit !== undefined)) {
+        if (params.cursor !== undefined || params.limit !== undefined) {
           throw new RpcError(
             'invalid_params',
             `${spec.method} is not paged.`,
             'Omit cursor and limit.',
           );
         }
-        return spec.paged === true ? runList(params, deps) : runRead(spec, entry, params, deps);
+        return runRead(spec, entry, params, deps);
       },
     });
   }

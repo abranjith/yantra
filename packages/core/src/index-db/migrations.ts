@@ -22,7 +22,7 @@
 import type { DatabaseSync } from './sqlite.js';
 
 /** The latest schema version this build knows how to produce. */
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 /** One forward-only migration step. */
 export interface Migration {
@@ -157,12 +157,28 @@ const migration004: Migration = {
   },
 };
 
+/**
+ * v5 — keyset paging for the app's Ledger (FEAT-066): an index on
+ * `(started_at DESC, run_id DESC)`, so a page continues strictly after its
+ * cursor without a sort. Additive; `IF NOT EXISTS` keeps a re-run harmless.
+ */
+const migration005: Migration = {
+  version: 5,
+  up: (db) => {
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_history_started_run
+        ON history(started_at DESC, run_id DESC);
+    `);
+  },
+};
+
 /** All migrations, ascending by version. Append-only. */
 export const MIGRATIONS: readonly Migration[] = [
   migration001,
   migration002,
   migration003,
   migration004,
+  migration005,
 ];
 
 /**

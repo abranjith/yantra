@@ -24,12 +24,15 @@ async function renderApp() {
 }
 
 describe('navigation', () => {
-  it('renders only the registered routes (Home)', async () => {
+  it('renders only the registered routes (Home, Ledger)', async () => {
     await renderApp();
     const nav = screen.getByRole('navigation', { name: 'Main' });
     const links = within(nav).getAllByRole('link');
-    expect(links.map((link) => link.textContent)).toEqual(['Home']);
-    expect(navRegistry.entries()).toEqual([{ path: '/', label: 'Home' }]);
+    expect(links.map((link) => link.textContent)).toEqual(['Home', 'Ledger']);
+    expect(navRegistry.entries()).toEqual([
+      { path: '/', label: 'Home' },
+      { path: '/runs', label: 'Ledger' },
+    ]);
     expect(links[0]?.getAttribute('aria-current')).toBe('page');
   });
 

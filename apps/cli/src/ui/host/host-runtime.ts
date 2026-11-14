@@ -48,9 +48,11 @@ import {
 import { HostStartError } from './errors.js';
 import { AppHost, SILENT_HOST_LOGGER, type HostLogger, type HostRoute } from './host.js';
 import { IdleExit } from './idle-exit.js';
+import { hostActiveRuns } from './ledger-reads.js';
 import { registerReads } from './reads.js';
 import { recoverHost } from './recovery.js';
 import { RpcMethodRegistry, RpcServer } from './rpc-server.js';
+import { registerRunReads } from './run-reads.js';
 import { RunRelay } from './run-relay.js';
 import { SessionStore, sessionRoute } from './sessions.js';
 import { Supervisor, type SupervisorDeps } from './supervisor.js';
@@ -167,7 +169,17 @@ export async function startHostRuntime(deps: HostRuntimeDeps): Promise<RunningHo
     cleanups.push(() => {
       rpc.close();
     });
-    registerReads(methods, { env: deps.env ?? {}, cwd: deps.cwd ?? dataDir() });
+    const store = new FileInvocationStore();
+    registerReads(methods, {
+      env: deps.env ?? {},
+      cwd: deps.cwd ?? dataDir(),
+      // The Ledger's active region: this host's invocations, then leased runs.
+      activeRuns: hostActiveRuns({
+        invocations: () => store.list(),
+        leasedRunIds: () => feed.liveRunIds(),
+      }),
+    });
+    registerRunReads(methods, { logger });
     const feed = new ChangeFeed({
       openSources: () => openDefaultSources({ runsRoot: runsRoot(), profilePath: profilePath() }),
       runsRoot: runsRoot(),
@@ -180,7 +192,6 @@ export async function startHostRuntime(deps: HostRuntimeDeps): Promise<RunningHo
     registerChangeFeed(methods, feed);
     const artifacts = new ArtifactUrls({ sessions, runsRoot: runsRoot(), logger });
     registerArtifactUrls(methods, artifacts);
-    const store = new FileInvocationStore();
     const resolveEffective = deps.resolveEffective ?? settingsResolver(deps.env ?? {});
     let attendance: Attendance | null = null;
     const relay = new RunRelay({

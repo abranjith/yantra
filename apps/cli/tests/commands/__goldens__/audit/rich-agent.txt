@@ -1,0 +1,32 @@
+# Audit — run agent-run
+
+Run completed in 3.0s. The agent made 2 LLM calls (sanitized prompts only) and 1 secret lookup were performed (keys only — never values). The engine executed 0 steps.
+
+Workflow:    do
+Status:      completed
+Started:     2026-07-14T12:00:00.000Z
+Ended:       2026-07-14T12:00:03.000Z
+Duration:    3000ms
+
+Agent calls: 2
+Steps:       0 (public=0, read-only-data=0, authenticated=0)
+Secrets used: 1
+  • shop_password at step fill-1
+
+Agent:       anthropic/claude-sonnet (thinking=medium, auth=environment)
+Prompt:      agent-v1 via pi-coding-agent 0.80.6
+Raw session: agent/session-1.jsonl
+Usage:       turns=2 input=20 output=8 cost=0.04
+
+Tool calls:
+  #0 web_search — ok 100ms
+  #2 browser_click — denied 10ms confirmation=confirm-1:denied
+  #4 browser_screenshot — ok 10ms
+  #5 web_fetch — incomplete ⚠ incomplete
+
+The model saw these images:
+  screenshots/capture-1-cccccccccccc-p1.png — 1280x4096, 4000 bytes, sha256=cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc, call=#4 browser_screenshot, budget=1 capture/5242880 pixels/4000 bytes
+Raw provider session log agent/session-1.jsonl contains the image data itself.
+
+Saved captures (kept on this computer, never sent to the model):
+  screenshots/capture-1-cccccccccccc-p2.png — 1280x4096, 4000 bytes, sha256=cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc, call=#4 browser_screenshot, budget=1 capture/5242880 pixels/4000 bytes

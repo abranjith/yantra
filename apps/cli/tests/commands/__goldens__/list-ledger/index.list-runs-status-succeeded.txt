@@ -1,0 +1,3 @@
+20261101T000130Z-ask-0000abcd                     succeeded fulfilled    1000ms  workflow=question 90
+20261101T000125Z-research-0000abcd                succeeded partial    1000ms  workflow=deep question
+20261101T000010Z-fixture-0000abcd                 succeeded fulfilled    1000ms  workflow=fixture

@@ -64,6 +64,43 @@ export interface HistoryListFilter {
   readonly before?: { readonly startedAt: string; readonly runId: string };
 }
 
+/** A Ledger outcome filter: a task outcome, or `unknown` for rows without one. */
+export type HistoryOutcomeFilter = TaskOutcome | 'unknown';
+
+/** One keyset page request for {@link HistoryStore.page} (FEAT-066). */
+export interface HistoryPageQuery {
+  /** Rows wanted; the store fetches one more to know whether a next page exists. */
+  readonly limit: number;
+  /** Only rows strictly after this one in `started_at DESC, run_id DESC` order. */
+  readonly before?: { readonly startedAt: string; readonly runId: string };
+  /** `task_outcome IN (…)`; `unknown` matches `task_outcome IS NULL`. */
+  readonly outcome?: readonly HistoryOutcomeFilter[];
+  /** `task_type IN (…)`. */
+  readonly mode?: readonly TaskType[];
+  /** `started_at >= since`. */
+  readonly since?: string;
+  /** `started_at < until`. */
+  readonly until?: string;
+  /** Case-insensitive literal substring of `intent_text` or `run_id`. */
+  readonly text?: string;
+  /** `intent_text = workflow` (the `list --workflow` semantics on index rows). */
+  readonly workflow?: string;
+  /** `status = status` (the `list --status` semantics on index rows). */
+  readonly status?: string;
+}
+
+/** One page of history rows. */
+export interface HistoryPage {
+  readonly entries: readonly HistoryEntry[];
+  /** True when at least one more row follows the last entry. */
+  readonly hasMore: boolean;
+}
+
+/** Escapes `%`, `_` and `\` so user text matches literally under `LIKE … ESCAPE '\'`. */
+export function escapeLikePattern(text: string): string {
+  return text.replace(/[\\%_]/g, (char) => `\\${char}`);
+}
+
 /** Filter for {@link HistoryStore.usageRollup}. */
 export interface UsageRollupFilter {
   /** Only rows with `started_at >= since` (ISO-8601). */
@@ -101,6 +138,13 @@ export interface HistoryStore {
   recordFromRunDir(runId: string): Promise<Result<boolean, IndexDbError>>;
   /** Lists tasks most-recent first, optionally filtered by type/since. */
   list(filter?: HistoryListFilter): Promise<Result<readonly HistoryEntry[], IndexDbError>>;
+  /**
+   * One keyset page with the Ledger filters (FEAT-066), always parameterized.
+   * Ties on `started_at` never skip or repeat a row.
+   */
+  page(query: HistoryPageQuery): Promise<Result<HistoryPage, IndexDbError>>;
+  /** Which of `runIds` have a history row, regardless of any filter. */
+  knownRunIds(runIds: readonly string[]): Promise<Result<ReadonlySet<string>, IndexDbError>>;
   /**
    * A value that changes whenever another connection commits to the index
    * (`PRAGMA data_version`), so a long-lived reader can poll for change
@@ -227,6 +271,98 @@ export class SqliteHistoryStore implements HistoryStore {
     } catch (error) {
       return Promise.resolve(
         err(new IndexDbError('failed to list history', { op: 'history.list', cause: error })),
+      );
+    }
+  }
+
+  public page(query: HistoryPageQuery): Promise<Result<HistoryPage, IndexDbError>> {
+    try {
+      const clauses: string[] = [];
+      const params: (string | number)[] = [];
+      if (query.before !== undefined) {
+        clauses.push('(started_at < ? OR (started_at = ? AND run_id < ?))');
+        params.push(query.before.startedAt, query.before.startedAt, query.before.runId);
+      }
+      if (query.outcome !== undefined && query.outcome.length > 0) {
+        const words = query.outcome.filter((word) => word !== 'unknown');
+        const parts: string[] = [];
+        if (words.length > 0) {
+          parts.push(`task_outcome IN (${words.map(() => '?').join(', ')})`);
+          params.push(...words);
+        }
+        if (query.outcome.includes('unknown')) parts.push('task_outcome IS NULL');
+        clauses.push(`(${parts.join(' OR ')})`);
+      }
+      if (query.mode !== undefined && query.mode.length > 0) {
+        clauses.push(`task_type IN (${query.mode.map(() => '?').join(', ')})`);
+        params.push(...query.mode);
+      }
+      if (query.since !== undefined) {
+        clauses.push('started_at >= ?');
+        params.push(query.since);
+      }
+      if (query.until !== undefined) {
+        clauses.push('started_at < ?');
+        params.push(query.until);
+      }
+      if (query.text !== undefined) {
+        // SQLite's LIKE is case-insensitive for ASCII; user wildcards are escaped.
+        const pattern = `%${escapeLikePattern(query.text)}%`;
+        clauses.push("(intent_text LIKE ? ESCAPE '\\' OR run_id LIKE ? ESCAPE '\\')");
+        params.push(pattern, pattern);
+      }
+      if (query.workflow !== undefined) {
+        clauses.push('intent_text = ?');
+        params.push(query.workflow);
+      }
+      if (query.status !== undefined) {
+        clauses.push('status = ?');
+        params.push(query.status);
+      }
+      const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+      const rows = this.db
+        .prepare(
+          `SELECT run_id, task_type, intent_text, brief_id, status,
+                  started_at, finished_at, duration_ms, cost_usd, provider, task_outcome
+             FROM history
+             ${where}
+             ORDER BY started_at DESC, run_id DESC
+             LIMIT ?`,
+        )
+        .all(...params, query.limit + 1) as unknown as HistoryRow[];
+      const entries = rows.slice(0, query.limit).map(rowToEntry);
+      return Promise.resolve(ok({ entries, hasMore: rows.length > query.limit }));
+    } catch (error) {
+      return Promise.resolve(
+        err(new IndexDbError('failed to page history', { op: 'history.page', cause: error })),
+      );
+    }
+  }
+
+  public knownRunIds(
+    runIds: readonly string[],
+  ): Promise<Result<ReadonlySet<string>, IndexDbError>> {
+    try {
+      const known = new Set<string>();
+      // Bounded batches keep each statement well under SQLite's variable limit.
+      for (let start = 0; start < runIds.length; start += 500) {
+        const batch = runIds.slice(start, start + 500);
+        const rows = this.db
+          .prepare(
+            `SELECT run_id FROM history WHERE run_id IN (${batch.map(() => '?').join(', ')})`,
+          )
+          .all(...batch) as unknown as { run_id: string }[];
+        for (const row of rows) known.add(row.run_id);
+      }
+      return Promise.resolve(ok(known));
+    } catch (error) {
+      return Promise.resolve(
+        err(
+          new IndexDbError('failed to look up history rows', {
+            op: 'history.knownRunIds',
+            cause: error,
+          }),
+        ),
       );
     }
   }

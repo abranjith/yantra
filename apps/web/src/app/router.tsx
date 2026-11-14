@@ -1,14 +1,14 @@
-import {
-  createRootRoute,
-  createRoute,
-  createRouter,
-  type RouterHistory,
-} from '@tanstack/react-router';
+import { createRoute, createRouter, type RouterHistory } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 
-import { AppShell } from './shell/AppShell.js';
+import { ledgerRoute } from '../routes/ledger.js';
+import { artifactRoute } from '../routes/runs.$runId.artifacts.$.js';
+import { auditRoute } from '../routes/runs.$runId.audit.js';
+import { runRoute } from '../routes/runs.$runId.js';
 
-/** Home: FEAT-065's only route. Later features add theirs beside it. */
+import { rootRoute } from './root-route.js';
+
+/** Home: FEAT-065's start page. Feature routes live in `src/routes/`. */
 export function HomePage(): ReactNode {
   return (
     <section className="flex max-w-2xl flex-col gap-2">
@@ -18,12 +18,16 @@ export function HomePage(): ReactNode {
   );
 }
 
-const rootRoute = createRootRoute({ component: () => <AppShell /> });
-
 const homeRoute = createRoute({ getParentRoute: () => rootRoute, path: '/', component: HomePage });
 
 /** The route tree; the shell renders it. */
-export const routeTree = rootRoute.addChildren([homeRoute]);
+export const routeTree = rootRoute.addChildren([
+  homeRoute,
+  ledgerRoute,
+  runRoute,
+  auditRoute,
+  artifactRoute,
+]);
 
 /** Builds the router, with an injected history in tests. */
 export function makeRouter(history?: RouterHistory) {

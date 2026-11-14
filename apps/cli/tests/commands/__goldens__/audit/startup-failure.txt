@@ -1,0 +1,15 @@
+# Audit — run fail-run
+
+Run failed. The agent made no LLM calls and no secrets were resolved. The engine executed 0 steps.
+
+Workflow:    research
+Status:      failed
+Started:     2026-07-14T12:00:00.000Z
+Ended:       —
+Duration:    —
+
+Agent calls: 0
+Steps:       0 (public=0, read-only-data=0, authenticated=0)
+Secrets used: 0
+
+Terminal error: AGENT_AUTH_UNAVAILABLE — No credentials for anthropic.

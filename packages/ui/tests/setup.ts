@@ -11,6 +11,8 @@ import { installMatchMedia, resetMatchMedia } from './support/match-media.js';
 installMatchMedia();
 installCssEscape();
 installIntersectionObserver();
+// jsdom has no canvas; axe probes it for checks that only run in real Chrome.
+HTMLCanvasElement.prototype.getContext = () => null;
 
 afterEach(() => {
   cleanup();

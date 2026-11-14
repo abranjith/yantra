@@ -197,6 +197,34 @@ Example:
 }
 ```
 
+## ArtifactInventoryItem
+
+One public run file.
+
+| Field           | Description                                                                                                                                                        |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| path            | Run-relative path, forward slashes.                                                                                                                                |
+| entry_id        | The RUN_ARTIFACT_REGISTRY entry it matched.                                                                                                                        |
+| exposure        | typed: only through a typed read (e.g. brief.json through read.run_result); view: through a bounded viewer; download: only as an attachment; denied: never served. |
+| viewer          | The bounded viewer that opens the file; `none` when no viewer exists.                                                                                              |
+| bytes           |                                                                                                                                                                    |
+| modified_at     |                                                                                                                                                                    |
+| over_inline_cap | Larger than its viewer loads whole.                                                                                                                                |
+
+Example:
+
+```json
+{
+  "path": "<path>",
+  "entry_id": "<entry_id>",
+  "exposure": "<exposure>",
+  "viewer": "<viewer>",
+  "bytes": "<bytes>",
+  "modified_at": "<modified_at>",
+  "over_inline_cap": "<over_inline_cap>"
+}
+```
+
 ## ArtifactKind
 
 What kind of file the artifact is.
@@ -245,6 +273,16 @@ Example:
 
 ```json
 "viewport"
+```
+
+## ArtifactSlotState
+
+No description provided.
+
+Example:
+
+```json
+"ok"
 ```
 
 ## ArtifactUrlParams
@@ -316,6 +354,146 @@ Example:
   "type": "<type>",
   "locator": "<locator>",
   "condition": "<condition>"
+}
+```
+
+## AuditPage
+
+One page of a run’s audit, at most 768 KiB serialized.
+
+| Field      | Description                 |
+| ---------- | --------------------------- |
+| report     | The audit story of one run. |
+| tool_calls |                             |
+| captures   |                             |
+
+Example:
+
+```json
+{
+  "report": "<report>",
+  "tool_calls": "<tool_calls>",
+  "captures": "<captures>"
+}
+```
+
+## AuditParams
+
+One page of a run’s audit.
+
+| Field             | Description                                                                    |
+| ----------------- | ------------------------------------------------------------------------------ |
+| run_id            | A run id, e.g. `20260511T091234Z-bank-statement-a7b3`; names `runs/<run_id>/`. |
+| tool_calls_cursor | Opaque cursor from a previous page.                                            |
+| captures_cursor   | Opaque cursor from a previous page.                                            |
+
+Example:
+
+```json
+{
+  "run_id": "<run_id>",
+  "tool_calls_cursor": "<tool_calls_cursor>",
+  "captures_cursor": "<captures_cursor>"
+}
+```
+
+## AuditReport
+
+The audit story of one run.
+
+| Field                       | Description                                                              |
+| --------------------------- | ------------------------------------------------------------------------ |
+| runId                       | The run id.                                                              |
+| workflowName                | The workflow or command name; `<unknown>` when absent.                   |
+| status                      | The manifest status; `unknown` when absent.                              |
+| startedAt                   | ISO start time; empty when absent.                                       |
+| endedAt                     | ISO end time, or null.                                                   |
+| durationMs                  | Wall-clock duration, or null.                                            |
+| llmCallCount                | Model calls (turns) the run made.                                        |
+| secretLookups               | Secret lookups: key names only, never values.                            |
+| stepCount                   | Distinct workflow steps started.                                         |
+| scopeMix                    | Step starts by security scope.                                           |
+| trustNarrative              | The two-to-three sentence summary the CLI prints first.                  |
+| agent                       | Provider provenance of an agentic run, or null.                          |
+| toolCalls                   | Agent tool calls in sequence order; in `read.audit`, one window of them. |
+| captures                    | Every capture the run wrote; in `read.audit`, one window of them.        |
+| rawSessionLogCaptureBearing | The raw provider session log contains image data a capture sent.         |
+| usage                       | Provider usage, or null.                                                 |
+| terminalError               | A typed startup failure, or null.                                        |
+
+Example:
+
+```json
+{
+  "runId": "<runId>",
+  "workflowName": "<workflowName>",
+  "status": "<status>",
+  "startedAt": "<startedAt>",
+  "endedAt": "<endedAt>",
+  "durationMs": "<durationMs>",
+  "llmCallCount": "<llmCallCount>",
+  "secretLookups": "<secretLookups>",
+  "stepCount": "<stepCount>",
+  "scopeMix": "<scopeMix>",
+  "trustNarrative": "<trustNarrative>",
+  "agent": "<agent>",
+  "toolCalls": "<toolCalls>",
+  "captures": "<captures>",
+  "rawSessionLogCaptureBearing": "<rawSessionLogCaptureBearing>",
+  "usage": "<usage>",
+  "terminalError": "<terminalError>"
+}
+```
+
+## AuditResult
+
+The `yantra audit --json` document.
+
+| Field                       | Description                                                              |
+| --------------------------- | ------------------------------------------------------------------------ |
+| runId                       | The run id.                                                              |
+| workflowName                | The workflow or command name; `<unknown>` when absent.                   |
+| status                      | The manifest status; `unknown` when absent.                              |
+| startedAt                   | ISO start time; empty when absent.                                       |
+| endedAt                     | ISO end time, or null.                                                   |
+| durationMs                  | Wall-clock duration, or null.                                            |
+| llmCallCount                | Model calls (turns) the run made.                                        |
+| secretLookups               | Secret lookups: key names only, never values.                            |
+| stepCount                   | Distinct workflow steps started.                                         |
+| scopeMix                    | Step starts by security scope.                                           |
+| trustNarrative              | The two-to-three sentence summary the CLI prints first.                  |
+| agent                       | Provider provenance of an agentic run, or null.                          |
+| toolCalls                   | Agent tool calls in sequence order; in `read.audit`, one window of them. |
+| captures                    | Every capture the run wrote; in `read.audit`, one window of them.        |
+| rawSessionLogCaptureBearing | The raw provider session log contains image data a capture sent.         |
+| usage                       | Provider usage, or null.                                                 |
+| terminalError               | A typed startup failure, or null.                                        |
+| schemaVersion               |                                                                          |
+| kind                        |                                                                          |
+
+Example:
+
+```json
+{
+  "runId": "<runId>",
+  "workflowName": "<workflowName>",
+  "status": "<status>",
+  "startedAt": "<startedAt>",
+  "endedAt": "<endedAt>",
+  "durationMs": "<durationMs>",
+  "llmCallCount": "<llmCallCount>",
+  "secretLookups": "<secretLookups>",
+  "stepCount": "<stepCount>",
+  "scopeMix": "<scopeMix>",
+  "trustNarrative": "<trustNarrative>",
+  "agent": "<agent>",
+  "toolCalls": "<toolCalls>",
+  "captures": "<captures>",
+  "rawSessionLogCaptureBearing": "<rawSessionLogCaptureBearing>",
+  "usage": "<usage>",
+  "terminalError": "<terminalError>",
+  "schemaVersion": "<schemaVersion>",
+  "kind": "<kind>"
 }
 ```
 
@@ -593,6 +771,16 @@ Example:
   "exemptions": "<exemptions>",
   "exempt_overflow": "<exempt_overflow>"
 }
+```
+
+## BriefSlot
+
+One artifact: ok with its value, or missing, corrupt, unsupported, too large or denied.
+
+Example:
+
+```json
+"<value>"
 ```
 
 ## BriefSource
@@ -2129,6 +2317,54 @@ Example:
 "<value>"
 ```
 
+## JsonlWindow
+
+One window of a JSONL artifact, at most 512 KiB serialized.
+
+| Field             | Description                                                        |
+| ----------------- | ------------------------------------------------------------------ |
+| path              | Run-relative path, forward slashes.                                |
+| total_lines_known | Complete lines counted so far; final once total_complete is true.  |
+| total_complete    | The index has reached the end of the file.                         |
+| from_line         |                                                                    |
+| lines             |                                                                    |
+| partial_tail      | The file ends in a line still being written; it is never returned. |
+
+Example:
+
+```json
+{
+  "path": "<path>",
+  "total_lines_known": "<total_lines_known>",
+  "total_complete": "<total_complete>",
+  "from_line": "<from_line>",
+  "lines": "<lines>",
+  "partial_tail": "<partial_tail>"
+}
+```
+
+## JsonlWindowRequest
+
+One window of a JSONL artifact.
+
+| Field     | Description                                                                    |
+| --------- | ------------------------------------------------------------------------------ |
+| run_id    | A run id, e.g. `20260511T091234Z-bank-statement-a7b3`; names `runs/<run_id>/`. |
+| path      | Run-relative path, forward slashes.                                            |
+| from_line | 0-based first line wanted.                                                     |
+| limit     | Lines wanted, 1–200.                                                           |
+
+Example:
+
+```json
+{
+  "run_id": "<run_id>",
+  "path": "<path>",
+  "from_line": "<from_line>",
+  "limit": "<limit>"
+}
+```
+
 ## KeyFinding
 
 A scannable, citation-backed finding bullet.
@@ -2224,6 +2460,176 @@ Example:
   "relations": "<relations>",
   "exit_codes": "<exit_codes>",
   "json": "<json>"
+}
+```
+
+## LedgerActiveRun
+
+A run in progress: never paginated, returned on the first page only.
+
+| Field          | Description                                                                                                                                                                                                                     |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| kind           |                                                                                                                                                                                                                                 |
+| runId          | The run directory name.                                                                                                                                                                                                         |
+| workflowName   | The workflow name, or the query or goal the run was started with.                                                                                                                                                               |
+| status         | The history status or the manifest status, exactly as the CLI prints it.                                                                                                                                                        |
+| startedAt      | ISO-8601 start time.                                                                                                                                                                                                            |
+| durationMs     | Wall-clock duration, or null while unknown.                                                                                                                                                                                     |
+| taskOutcome    | Present only on runs that recorded one.                                                                                                                                                                                         |
+| executionState | `interrupted` when the run’s owner died and a reconciler ended it (FEAT-064).                                                                                                                                                   |
+| taskType       | Additive (FEAT-066): the command that ran.                                                                                                                                                                                      |
+| costUsd        | Additive (FEAT-066): metered cost in USD, or null when not metered.                                                                                                                                                             |
+| hasDocument    | Additive (FEAT-066): the run saved a Brief or a templated document.                                                                                                                                                             |
+| displayedState | queued, starting, running, waiting_for_you, needs_review (settings drift), start_outcome_unknown, worker_not_responding (no heartbeat for 30 s), or unknown_owner (the manifest says running but its owner cannot be verified). |
+
+Example:
+
+```json
+{
+  "kind": "<kind>",
+  "runId": "<runId>",
+  "workflowName": "<workflowName>",
+  "status": "<status>",
+  "startedAt": "<startedAt>",
+  "durationMs": "<durationMs>",
+  "taskOutcome": "<taskOutcome>",
+  "executionState": "<executionState>",
+  "taskType": "<taskType>",
+  "costUsd": "<costUsd>",
+  "hasDocument": "<hasDocument>",
+  "displayedState": "<displayedState>"
+}
+```
+
+## LedgerCursor
+
+A position in `started_at DESC, run_id DESC` order.
+
+| Field      | Description |
+| ---------- | ----------- |
+| v          |             |
+| started_at |             |
+| run_id     |             |
+| source     |             |
+
+Example:
+
+```json
+{
+  "v": "<v>",
+  "started_at": "<started_at>",
+  "run_id": "<run_id>",
+  "source": "<source>"
+}
+```
+
+## LedgerDisplayedState
+
+queued, starting, running, waiting_for_you, needs_review (settings drift), start_outcome_unknown, worker_not_responding (no heartbeat for 30 s), or unknown_owner (the manifest says running but its owner cannot be verified).
+
+Example:
+
+```json
+"queued"
+```
+
+## LedgerMode
+
+The command that started the run: ask, research, do, or run (a saved workflow).
+
+Example:
+
+```json
+"ask"
+```
+
+## LedgerOutcomeFilter
+
+No description provided.
+
+Example:
+
+```json
+"<value>"
+```
+
+## ListResult
+
+The `yantra list --json` document.
+
+| Field         | Description |
+| ------------- | ----------- |
+| schemaVersion |             |
+| kind          |             |
+| items         |             |
+
+Example:
+
+```json
+{
+  "schemaVersion": "<schemaVersion>",
+  "kind": "<kind>",
+  "items": "<items>"
+}
+```
+
+## ListRunItem
+
+One run in `yantra list --json`.
+
+| Field          | Description                                                                   |
+| -------------- | ----------------------------------------------------------------------------- |
+| kind           |                                                                               |
+| runId          | The run directory name.                                                       |
+| workflowName   | The workflow name, or the query or goal the run was started with.             |
+| status         | The history status or the manifest status, exactly as the CLI prints it.      |
+| startedAt      | ISO-8601 start time.                                                          |
+| durationMs     | Wall-clock duration, or null while unknown.                                   |
+| taskOutcome    | Present only on runs that recorded one.                                       |
+| executionState | `interrupted` when the run’s owner died and a reconciler ended it (FEAT-064). |
+| taskType       | Additive (FEAT-066): the command that ran.                                    |
+| costUsd        | Additive (FEAT-066): metered cost in USD, or null when not metered.           |
+| hasDocument    | Additive (FEAT-066): the run saved a Brief or a templated document.           |
+
+Example:
+
+```json
+{
+  "kind": "<kind>",
+  "runId": "<runId>",
+  "workflowName": "<workflowName>",
+  "status": "<status>",
+  "startedAt": "<startedAt>",
+  "durationMs": "<durationMs>",
+  "taskOutcome": "<taskOutcome>",
+  "executionState": "<executionState>",
+  "taskType": "<taskType>",
+  "costUsd": "<costUsd>",
+  "hasDocument": "<hasDocument>"
+}
+```
+
+## ListWorkflowItem
+
+One saved workflow in `yantra list workflows --json`.
+
+| Field         | Description |
+| ------------- | ----------- |
+| kind          |             |
+| name          |             |
+| stepCount     |             |
+| securityClass |             |
+| modifiedAt    |             |
+
+Example:
+
+```json
+{
+  "kind": "<kind>",
+  "name": "<name>",
+  "stepCount": "<stepCount>",
+  "securityClass": "<securityClass>",
+  "modifiedAt": "<modifiedAt>"
 }
 ```
 
@@ -2487,6 +2893,16 @@ Example:
 }
 ```
 
+## OutputsSlot
+
+One artifact: ok with its value, or missing, corrupt, unsupported, too large or denied.
+
+Example:
+
+```json
+"<value>"
+```
+
 ## OwnedBrowserEvent
 
 An append-only record of a browser process the run spawned or proved exited. Readers fold the lines by identity and ignore a trailing partial line.
@@ -2677,6 +3093,16 @@ Example:
 }
 ```
 
+## ReadListParams
+
+No description provided.
+
+Example:
+
+```json
+"<value>"
+```
+
 ## ReadParams
 
 Arguments of an in-process read.
@@ -2863,6 +3289,30 @@ Example:
 }
 ```
 
+## ReportResult
+
+The `yantra report --json` document.
+
+| Field         | Description                             |
+| ------------- | --------------------------------------- |
+| schemaVersion |                                         |
+| kind          |                                         |
+| markdown      | The run report, verbatim.               |
+| truncated     | Only the head of report.md is included. |
+| bytes         | The full size of report.md.             |
+
+Example:
+
+```json
+{
+  "schemaVersion": "<schemaVersion>",
+  "kind": "<kind>",
+  "markdown": "<markdown>",
+  "truncated": "<truncated>",
+  "bytes": "<bytes>"
+}
+```
+
 ## ReportTemplateReference
 
 Template identity and content hash recorded with a rendered report.
@@ -2893,6 +3343,64 @@ Example:
 
 ```json
 "button"
+```
+
+## RunArtifactExposure
+
+typed: only through a typed read (e.g. brief.json through read.run_result); view: through a bounded viewer; download: only as an attachment; denied: never served.
+
+Example:
+
+```json
+"typed"
+```
+
+## RunArtifactRegistry
+
+The public run-artifact allowlist, in match order.
+
+Example:
+
+```json
+"<value>"
+```
+
+## RunArtifactRegistryEntry
+
+One entry of the public run-artifact allowlist.
+
+| Field            | Description                                                                                                                                                        |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| id               | Stable entry name, e.g. `brief.json` or `screenshots`.                                                                                                             |
+| pattern          | Run-relative, forward-slash glob (`*` within a segment, `**` across segments).                                                                                     |
+| exposure         | typed: only through a typed read (e.g. brief.json through read.run_result); view: through a bounded viewer; download: only as an attachment; denied: never served. |
+| viewer           | The bounded viewer that opens the file; `none` when no viewer exists.                                                                                              |
+| media_type       | The only Content-Type the host may send for the entry.                                                                                                             |
+| inline_cap_bytes | Largest file a viewer may load whole; above it the item is too_large. Null: windowed, or never loaded inline.                                                      |
+| description      | What the file is, for generated docs and parity.                                                                                                                   |
+
+Example:
+
+```json
+{
+  "id": "<id>",
+  "pattern": "<pattern>",
+  "exposure": "<exposure>",
+  "viewer": "<viewer>",
+  "media_type": "<media_type>",
+  "inline_cap_bytes": "<inline_cap_bytes>",
+  "description": "<description>"
+}
+```
+
+## RunArtifactViewer
+
+The bounded viewer that opens the file; `none` when no viewer exists.
+
+Example:
+
+```json
+"brief"
 ```
 
 ## RunChannelClientMessage
@@ -3005,6 +3513,26 @@ Example:
 }
 ```
 
+## RunHealthSlot
+
+One artifact: ok with its value, or missing, corrupt, unsupported, too large or denied.
+
+Example:
+
+```json
+"<value>"
+```
+
+## RunId
+
+A run id, e.g. `20260511T091234Z-bank-statement-a7b3`; names `runs/<run_id>/`.
+
+Example:
+
+```json
+"<value>"
+```
+
 ## RunLease
 
 Exclusive ownership of a run directory, written once by `link` and removed only after the terminal event and manifest are flushed. Owner-only file.
@@ -3053,6 +3581,68 @@ Example:
 "terminal"
 ```
 
+## RunLedgerPage
+
+One Ledger page.
+
+| Field          | Description                                                                  |
+| -------------- | ---------------------------------------------------------------------------- |
+| schemaVersion  |                                                                              |
+| kind           |                                                                              |
+| items          |                                                                              |
+| next_cursor    | Cursor for the next page; null on the last page.                             |
+| source         | `files` when the history index was unavailable and runs were read from disk. |
+| scan_truncated | File fallback only: the scan stopped at its directory cap.                   |
+| active         | Runs in progress (first page only).                                          |
+
+Example:
+
+```json
+{
+  "schemaVersion": "<schemaVersion>",
+  "kind": "<kind>",
+  "items": "<items>",
+  "next_cursor": "<next_cursor>",
+  "source": "<source>",
+  "scan_truncated": "<scan_truncated>",
+  "active": "<active>"
+}
+```
+
+## RunLedgerQuery
+
+One Ledger page request.
+
+| Field    | Description                                                  |
+| -------- | ------------------------------------------------------------ |
+| target   |                                                              |
+| cursor   | Opaque cursor from a previous page’s `next_cursor`.          |
+| limit    | Page size, 1–200 (default 50).                               |
+| outcome  | Only these outcomes; `unknown` matches runs without one.     |
+| mode     | Only these commands.                                         |
+| since    | Only runs started at or after this instant.                  |
+| until    | Only runs started before this instant.                       |
+| text     | Case-insensitive substring of the intent text or the run id. |
+| workflow | `yantra list --workflow`: exact name.                        |
+| status   | `yantra list --status`: exact status word.                   |
+
+Example:
+
+```json
+{
+  "target": "<target>",
+  "cursor": "<cursor>",
+  "limit": "<limit>",
+  "outcome": "<outcome>",
+  "mode": "<mode>",
+  "since": "<since>",
+  "until": "<until>",
+  "text": "<text>",
+  "workflow": "<workflow>",
+  "status": "<status>"
+}
+```
+
 ## RunRelativePath
 
 Run-relative POSIX path of a file inside the run directory.
@@ -3061,6 +3651,74 @@ Example:
 
 ```json
 "<value>"
+```
+
+## RunResultParams
+
+No description provided.
+
+| Field  | Description                                                                    |
+| ------ | ------------------------------------------------------------------------------ |
+| run_id | A run id, e.g. `20260511T091234Z-bank-statement-a7b3`; names `runs/<run_id>/`. |
+
+Example:
+
+```json
+{
+  "run_id": "<run_id>"
+}
+```
+
+## RunResultView
+
+One run, read for the app’s Run result page.
+
+| Field               | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| run_id              | A run id, e.g. `20260511T091234Z-bank-statement-a7b3`; names `runs/<run_id>/`.                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| mode                |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| title               | Document title, else the intent or query, else the workflow name.                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| started_at          |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ended_at            |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| duration_ms         |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| status              | The manifest status as the CLI prints it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| task_outcome        | Whether the task was done: fulfilled (every declared requirement met), partial (a result was saved but a requirement is unmet or no contract was declared), handoff (the run needs the user), failed (nothing usable was saved), or aborted (the user interrupted).                                                                                                                                                                                                                                        |
+| termination_reason  | Why the run stopped: stalled (no progress after recovery), turn-timeout (thinking limit), the model finished, a budget or the repeated-failure breaker ended it, a handoff was raised, the user aborted, or the provider failed. wall-clock-soft means the model finished after the exploration wind-down began. owner_lost means the process that owned the run died before writing a terminal result, and a reconciler recorded the end (FEAT-064). Added in FEAT-063: readable by new executables only. |
+| execution_state     | Set only by the reconciler when the owning process died before writing a terminal result (plan D7). Separate from the outcome, which follows the evidence and is never `aborted`. Absent for every run that ended on its own.                                                                                                                                                                                                                                                                              |
+| live                | Present only while the run has not ended; unknown_owner when its owner cannot be verified.                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| document            | The Brief or templated document, or none.                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| outputs             | A workflow run’s outputs.json; null for other runs.                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| terminal            | Why the run ended; every text bounded to 500 characters.                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| run_health          | One artifact: ok with its value, or missing, corrupt, unsupported, too large or denied.                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| report              | report.md; its body is read lazily through read.report.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| artifacts           |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| artifacts_truncated |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| notices_source      | Where the Notices block comes from.                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+
+Example:
+
+```json
+{
+  "run_id": "<run_id>",
+  "mode": "<mode>",
+  "title": "<title>",
+  "started_at": "<started_at>",
+  "ended_at": "<ended_at>",
+  "duration_ms": "<duration_ms>",
+  "status": "<status>",
+  "task_outcome": "<task_outcome>",
+  "termination_reason": "<termination_reason>",
+  "execution_state": "<execution_state>",
+  "live": "<live>",
+  "document": "<document>",
+  "outputs": "<outputs>",
+  "terminal": "<terminal>",
+  "run_health": "<run_health>",
+  "report": "<report>",
+  "artifacts": "<artifacts>",
+  "artifacts_truncated": "<artifacts_truncated>",
+  "notices_source": "<notices_source>"
+}
 ```
 
 ## RunSocketAddress
@@ -3579,6 +4237,42 @@ Example:
 }
 ```
 
+## TemplatedReportSlot
+
+One artifact: ok with its value, or missing, corrupt, unsupported, too large or denied.
+
+Example:
+
+```json
+"<value>"
+```
+
+## TerminalReason
+
+Why the run ended; every text bounded to 500 characters.
+
+| Field              | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| source             | Which reader answered: the run-event stream, manifest, events.jsonl or report.md.                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| failure_class      | The failure category, verbatim.                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| message            | What happened, ANSI-stripped and bounded.                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| blocker            | What blocked the run, for a handoff.                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| safest_next_action | The one next step the run recorded.                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| termination_reason | Why the run stopped: stalled (no progress after recovery), turn-timeout (thinking limit), the model finished, a budget or the repeated-failure breaker ended it, a handoff was raised, the user aborted, or the provider failed. wall-clock-soft means the model finished after the exploration wind-down began. owner_lost means the process that owned the run died before writing a terminal result, and a reconciler recorded the end (FEAT-064). Added in FEAT-063: readable by new executables only. |
+
+Example:
+
+```json
+{
+  "source": "<source>",
+  "failure_class": "<failure_class>",
+  "message": "<message>",
+  "blocker": "<blocker>",
+  "safest_next_action": "<safest_next_action>",
+  "termination_reason": "<termination_reason>"
+}
+```
+
 ## TerminationReason
 
 Why the run stopped: stalled (no progress after recovery), turn-timeout (thinking limit), the model finished, a budget or the repeated-failure breaker ended it, a handoff was raised, the user aborted, or the provider failed. wall-clock-soft means the model finished after the exploration wind-down began. owner_lost means the process that owned the run died before writing a terminal result, and a reconciler recorded the end (FEAT-064). Added in FEAT-063: readable by new executables only.
@@ -3910,6 +4604,22 @@ Example:
   "outputs_unredacted": "<outputs_unredacted>",
   "_unrecorded_frames": "<_unrecorded_frames>",
   "_locators": "<_locators>"
+}
+```
+
+## WorkflowListQuery
+
+List saved workflows.
+
+| Field  | Description |
+| ------ | ----------- |
+| target |             |
+
+Example:
+
+```json
+{
+  "target": "<target>"
 }
 ```
 

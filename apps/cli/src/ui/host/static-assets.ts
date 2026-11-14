@@ -5,7 +5,8 @@
  *   build is picked up on the next load (D17).
  * - Files under `assets/` are content-hashed by Vite and served `immutable`.
  * - An unknown extensionless path outside `assets/` is an app route and gets
- *   `index.html`; anything else unknown is 404.
+ *   `index.html`, as does every path under `/runs/` (the artifact viewer's
+ *   paths end in a file name, FEAT-066); anything else unknown is 404.
  * - Any `..` segment, backslash, NUL or encoded dot is 404 before a path is
  *   built, and every file is `realpath`-checked to stay inside the asset root.
  * - `Content-Type` comes from a fixed extension allowlist; other files are 404.
@@ -111,8 +112,11 @@ export class StaticAssets {
     }
     const isAsset = segments[0] === 'assets' && segments.length > 1;
     if (!isAsset) {
-      // Extensionless paths are client routes; a file-looking path is not one.
-      if (extname(segments[segments.length - 1] ?? '') === '') this.sendIndex(req, res, port);
+      // Extensionless paths are client routes; a file-looking path is not one,
+      // except under /runs/, where the viewer route names a run file (FEAT-066).
+      const appRoute =
+        segments[0] === 'runs' || extname(segments[segments.length - 1] ?? '') === '';
+      if (appRoute) this.sendIndex(req, res, port);
       else sendStatus(res, port, 404);
       return;
     }

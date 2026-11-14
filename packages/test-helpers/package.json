@@ -15,6 +15,10 @@
     "./layout-matrix": {
       "types": "./dist/layout-matrix/index.d.ts",
       "import": "./dist/layout-matrix/index.js"
+    },
+    "./run-dirs": {
+      "types": "./dist/run-dirs/index.d.ts",
+      "import": "./dist/run-dirs/index.js"
     }
   },
   "files": [

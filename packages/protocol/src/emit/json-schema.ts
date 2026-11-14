@@ -9,6 +9,7 @@ import { CommandRegistry } from '../commands/schema.js';
 import { AgentProgressEvent } from '../schemas/agent-progress.js';
 import { HostLockRecord, InvocationRecord } from '../schemas/app-host.js';
 import { Brief } from '../schemas/brief.js';
+import { AuditReport, ListResult } from '../schemas/cli-reads.js';
 import { CommandResultMessageSchema } from '../schemas/command-result.js';
 import { ConfirmationDecision, ConfirmationRequest } from '../schemas/confirmation.js';
 import { DiscoverySession } from '../schemas/discovery.js';
@@ -17,10 +18,12 @@ import { ExecutionReceiptSchema } from '../schemas/execution-receipt.js';
 import { ExtractionResultEnvelopeUnknown } from '../schemas/extraction.js';
 import { PlanSchema } from '../schemas/plan.js';
 import { LocatorChain, ValueRef } from '../schemas/refs.js';
+import { RunArtifactRegistry } from '../schemas/run-artifacts.js';
 import { RunChannelMessage, WorkerLaunch } from '../schemas/run-channel.js';
 import { RunEvent, RunEventRecord } from '../schemas/run-event.js';
 import { RunHealth } from '../schemas/run-health.js';
 import { RunLease } from '../schemas/run-lease.js';
+import { RunResultView } from '../schemas/run-result.js';
 import { Step } from '../schemas/steps.js';
 import { TaskContractRecord } from '../schemas/task-contract.js';
 import { TaskRequest } from '../schemas/task.js';
@@ -62,6 +65,10 @@ export const JSON_SCHEMA_ARTIFACTS: Record<string, { schema: z.ZodType<unknown>;
   'worker-launch.json': { schema: WorkerLaunch, name: 'WorkerLaunch' },
   'host-lock.json': { schema: HostLockRecord, name: 'HostLockRecord' },
   'invocation-record.json': { schema: InvocationRecord, name: 'InvocationRecord' },
+  'run-artifact-registry.json': { schema: RunArtifactRegistry, name: 'RunArtifactRegistry' },
+  'list-result.schema.json': { schema: ListResult, name: 'ListResult' },
+  'audit-report.schema.json': { schema: AuditReport, name: 'AuditReport' },
+  'run-result.schema.json': { schema: RunResultView, name: 'RunResultView' },
 } as const;
 
 export type JsonSchemaArtifactName = keyof typeof JSON_SCHEMA_ARTIFACTS;

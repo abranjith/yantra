@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "0.2",
+  "kind": "list",
+  "items": [
+    {
+      "kind": "run",
+      "runId": "20261101T000130Z-ask-0000abcd",
+      "workflowName": "question 90",
+      "status": "succeeded",
+      "startedAt": "2026-11-01T00:01:30.000Z",
+      "durationMs": 1000,
+      "taskOutcome": "fulfilled"
+    },
+    {
+      "kind": "run",
+      "runId": "20261101T000125Z-research-0000abcd",
+      "workflowName": "deep question",
+      "status": "succeeded",
+      "startedAt": "2026-11-01T00:01:25.000Z",
+      "durationMs": 1000,
+      "taskOutcome": "partial"
+    },
+    {
+      "kind": "run",
+      "runId": "20261101T000010Z-fixture-0000abcd",
+      "workflowName": "fixture",
+      "status": "succeeded",
+      "startedAt": "2026-11-01T00:00:10.000Z",
+      "durationMs": 1000,
+      "taskOutcome": "fulfilled"
+    }
+  ]
+}

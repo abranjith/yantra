@@ -85,6 +85,10 @@ const noHistory: HistoryStore = {
   record: () => Promise.resolve(ok(undefined)) as Promise<Result<void, IndexDbError>>,
   recordFromRunDir: () => Promise.resolve(ok(true)) as Promise<Result<boolean, IndexDbError>>,
   list: () => Promise.resolve(ok([])) as ReturnType<HistoryStore['list']>,
+  page: () =>
+    Promise.resolve(ok({ entries: [], hasMore: false })) as ReturnType<HistoryStore['page']>,
+  knownRunIds: () =>
+    Promise.resolve(ok(new Set<string>())) as ReturnType<HistoryStore['knownRunIds']>,
   changeToken: () => ok(0),
   usageRollup: () => Promise.resolve(ok([])) as ReturnType<HistoryStore['usageRollup']>,
   rebuildFromRuns: () =>

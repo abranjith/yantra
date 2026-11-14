@@ -39,3 +39,6 @@ apps/cli/tests/fixtures/live-output/
 # baselines stay byte-identical to the `baseline.json` their eval run wrote.
 e2e/task-fidelity/golden/
 e2e/task-fidelity/baselines/*.json
+
+# CLI output goldens (FEAT-066) are byte-compared `yantra list` / `yantra audit` output.
+apps/cli/tests/commands/__goldens__/

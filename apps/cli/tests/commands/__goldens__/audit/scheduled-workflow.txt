@@ -1,0 +1,15 @@
+# Audit — run wf-run
+
+Fired by schedule sched-1 (cron "0 9 * * 1") at 2026-07-14T09:00:00.000Z and paused-and-notified for confirmation — it never auto-confirmed. Run failed in 2.5s. The agent made no LLM calls and 2 secret lookups were performed (keys only — never values). The engine executed 4 steps.
+
+Workflow:    bank-statement
+Status:      failed
+Started:     2026-07-14T12:00:00.000Z
+Ended:       —
+Duration:    2500ms
+
+Agent calls: 0
+Steps:       4 (public=2, read-only-data=2, authenticated=1)
+Secrets used: 2
+  • bank_user at step s2
+  • bank_pass at step s2
