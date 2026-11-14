@@ -13,6 +13,7 @@ import type { CockpitMode } from '../live/cockpit-state.js';
 import { deriveDisplayedState } from '../live/displayed-state.js';
 import type { RunStream } from '../live/run-stream.js';
 import { useRunSnapshot } from '../live/use-run-stream.js';
+import { RecoveryActions } from '../recovery/RecoveryActions.js';
 
 import { CockpitAnnouncer, announceView } from './CockpitAnnouncer.js';
 import { CockpitLayout } from './CockpitLayout.js';
@@ -97,7 +98,12 @@ export function Cockpit({ stream, mode, invocation = null }: CockpitProps): Reac
       }
       understood={<UnderstoodPanel state={state} />}
       engine={<EnginePanel state={state} />}
-      command={<CommandPanel invocation={invocation?.invocation ?? null} />}
+      command={
+        <CommandPanel
+          invocation={invocation?.invocation ?? null}
+          recovery={state.outcome === null ? null : <RecoveryActions runId={state.runId} />}
+        />
+      }
       announcer={<CockpitAnnouncer view={view} />}
     />
   );

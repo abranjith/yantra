@@ -8,13 +8,48 @@ import { createRoute, redirect, useNavigate } from '@tanstack/react-router';
 import { useState, type ReactNode } from 'react';
 
 import { rootRoute } from '../app/root-route.js';
-import { Composer, type ComposerSubmission } from '../features/composer/Composer.js';
+import { valuesFromArgv, type ComposerPath } from '../features/composer/composer-model.js';
+import {
+  Composer,
+  useMissionContext,
+  type ComposerSubmission,
+} from '../features/composer/Composer.js';
 import { SubmitRefusedError, submitInvocation } from '../features/composer/submit.js';
+import { useRunRecovery } from '../features/recovery/RecoveryActions.js';
 import { useRpc } from '../host/app-rpc.js';
 
+/** `?from=<run-id>&settings=current|prior`: prefill from a finished run (Run again → Edit). */
+export interface MissionSearch {
+  readonly from?: string;
+  readonly settings?: 'current' | 'prior';
+}
+
+const PATHS: ReadonlySet<string> = new Set(['ask', 'research', 'do', 'run', 'resume']);
+
+/** The composer's starting mode and values for `?from=`, once the run's recovery is read. */
+function usePrefill(search: MissionSearch) {
+  const recovery = useRunRecovery(search.from ?? '', search.from !== undefined);
+  const context = useMissionContext();
+  if (search.from === undefined)
+    return { ready: true, path: undefined, values: undefined } as const;
+  const again = recovery.data?.run_again;
+  if (recovery.isError) return { ready: true, path: undefined, values: undefined } as const;
+  if (again === undefined || context.data === undefined) return { ready: false } as const;
+  const path = again.path?.[0];
+  const argv = search.settings === 'prior' ? again.pinned_argv : again.argv;
+  if (path === undefined || !PATHS.has(path) || argv === null) {
+    return { ready: true, path: undefined, values: undefined } as const;
+  }
+  const values = valuesFromArgv(path as ComposerPath, argv, context.data.home);
+  return values === null
+    ? ({ ready: true, path: undefined, values: undefined } as const)
+    : ({ ready: true, path: path as ComposerPath, values } as const);
+}
+
 /** The Mission page. */
-export function MissionPage(): ReactNode {
+export function MissionPage({ search = {} }: { readonly search?: MissionSearch }): ReactNode {
   const rpc = useRpc();
+  const prefill = usePrefill(search);
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
 
@@ -37,18 +72,44 @@ export function MissionPage(): ReactNode {
     }
   };
 
+  if (!prefill.ready) {
+    return (
+      <p role="status" className="text-ink-2">
+        Loading the earlier run…
+      </p>
+    );
+  }
   return (
     <div className="flex max-w-4xl flex-col gap-6">
-      <Composer onSubmit={onSubmit} submitError={error} />
+      <Composer
+        key={search.from ?? 'new'}
+        onSubmit={onSubmit}
+        submitError={error}
+        {...(prefill.path === undefined
+          ? {}
+          : { initialPath: prefill.path, initialValues: { [prefill.path]: prefill.values } })}
+      />
     </div>
   );
+}
+
+function MissionRoute(): ReactNode {
+  return <MissionPage search={missionRoute.useSearch()} />;
 }
 
 /** `/mission`. */
 export const missionRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/mission',
-  component: MissionPage,
+  validateSearch: (search: Record<string, unknown>): MissionSearch => ({
+    ...(typeof search.from === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(search.from)
+      ? { from: search.from }
+      : {}),
+    ...(search.settings === 'prior' || search.settings === 'current'
+      ? { settings: search.settings }
+      : {}),
+  }),
+  component: MissionRoute,
 });
 
 /** `/`: Mission is the start page. */

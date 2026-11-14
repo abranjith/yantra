@@ -746,7 +746,7 @@ Task order follows plan §8. TASK-001 to TASK-008 are the **M2 cockpit subset**,
 - [x] TASK-011: Submit exactly once and land in the cockpit
 - [x] TASK-012: Do and Run modes — provider readiness gate, workflow picker and params
 - [x] TASK-013: Run recovery assessment in core (resumability, prior invocation, prior effects)
-- [ ] TASK-014: Resume and Run again actions with the external-effects warning
+- [x] TASK-014: Resume and Run again actions with the external-effects warning
 - [ ] TASK-015: Finish — View Transition from the cockpit to the run result
 - [ ] TASK-016: Milestone acceptance — M2 research run, scripted `do`, reload and accessibility
 

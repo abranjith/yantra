@@ -35,6 +35,7 @@ import {
   findLeaf,
   isAppExemptOption,
   isKnownDeadOption,
+  parseInvocation,
   type InvocationFacts,
 } from '@yantra/protocol/commands';
 
@@ -391,4 +392,49 @@ export function valueText(field: ComposerField, value: JsonValue | null): string
   if (Array.isArray(value)) return value.length === 0 ? 'none' : value.map(String).join(', ');
   if (typeof value === 'object') return JSON.stringify(value);
   return String(value);
+}
+
+/**
+ * The composer values that reproduce `argv` (Run again, "Edit before
+ * running"): the operand, each option the argv sets, and run params from
+ * `--params key=value`. Null when the argv does not parse.
+ */
+export function valuesFromArgv(
+  path: ComposerPath,
+  argv: readonly string[],
+  cwd: string,
+): ComposerValues | null {
+  const parsed = parseInvocation([path, ...argv], { cwd });
+  if (!parsed.isOk) return null;
+  const entry = parsed.value.entry;
+  const specs = expandOptions(entry, COMMAND_REGISTRY.option_groups);
+  const positionalName = entry.arguments[0]?.name;
+  const operand = positionalName === undefined ? undefined : parsed.value.arguments[positionalName];
+  const options: Record<string, OptionValue> = {};
+  let params: WorkflowParamValue[] | undefined;
+  for (const attribute of parsed.value.explicit) {
+    const spec = specs.find((option) => option.attribute === attribute);
+    if (spec === undefined) continue;
+    const value = parsed.value.options[attribute];
+    if (path === 'run' && spec.long === '--params') {
+      const pairs = Array.isArray(value) ? value : [];
+      params = pairs.flatMap((pair) => {
+        if (typeof pair !== 'string' || !pair.includes('=')) return [];
+        const at = pair.indexOf('=');
+        return [
+          { key: pair.slice(0, at), type: 'string', required: false, value: pair.slice(at + 1) },
+        ];
+      });
+      continue;
+    }
+    if (spec.value === 'none') options[attribute] = true;
+    else if (Array.isArray(value)) options[attribute] = value.map(String);
+    else if (value !== null && value !== undefined && typeof value !== 'object')
+      options[attribute] = String(value);
+  }
+  return {
+    positional: typeof operand === 'string' ? operand : '',
+    options,
+    ...(params === undefined ? {} : { params }),
+  };
 }

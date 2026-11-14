@@ -81,7 +81,7 @@
     },
     {
       "path": "apps/cli/tests/ui/host/run-recovery.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-013"
     },
@@ -284,6 +284,12 @@
       "task": "TASK-001"
     },
     {
+      "path": "apps/web/src/features/recovery/RecoveryActions.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-014"
+    },
+    {
       "path": "apps/web/src/host/app-rpc.tsx",
       "status": "M",
       "role": "implement",
@@ -302,6 +308,12 @@
       "task": "TASK-005"
     },
     {
+      "path": "apps/web/src/routes/ledger.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-014"
+    },
+    {
       "path": "apps/web/src/routes/mission.invocations.$invocationId.tsx",
       "status": "A",
       "role": "implement",
@@ -318,6 +330,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/src/routes/runs.$runId.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-014"
     },
     {
       "path": "apps/web/tests/app/shell.spec.tsx",
@@ -434,6 +452,12 @@
       "task": "TASK-001"
     },
     {
+      "path": "apps/web/tests/features/recovery/recovery-actions.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-014"
+    },
+    {
       "path": "apps/web/tests/fixtures/research-no-llm.run-events.jsonl",
       "status": "A",
       "role": "implement",
@@ -444,6 +468,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/tests/routes/run-result.spec.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-014"
     },
     {
       "path": "apps/web/tests/support/recorded-runs.ts",
@@ -501,19 +531,19 @@
     },
     {
       "path": "packages/core/src/run-recovery/index.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-013"
     },
     {
       "path": "packages/core/src/run-recovery/prior-effects.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-013"
     },
     {
       "path": "packages/core/src/run-recovery/prior-invocation.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-013"
     },
@@ -525,7 +555,7 @@
     },
     {
       "path": "packages/core/src/workflow/replay/resumability.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-013"
     },
@@ -537,19 +567,19 @@
     },
     {
       "path": "packages/core/tests/run-recovery/prior-effects.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-013"
     },
     {
       "path": "packages/core/tests/run-recovery/prior-invocation.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-013"
     },
     {
       "path": "packages/core/tests/workflow/replay/resumability.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-013"
     },

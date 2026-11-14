@@ -21,6 +21,7 @@ import { rootRoute } from '../app/root-route.js';
 import { useRunResult, useRunsChangeInvalidation } from '../data/runs.js';
 import { AuditView } from '../features/audit/AuditView.js';
 import { formatBytes, formatDuration, formatTimestamp } from '../features/format.js';
+import { RecoveryActions } from '../features/recovery/RecoveryActions.js';
 import { DownloadArtifact, ViewerLink } from '../features/run-result/artifact-links.js';
 import { BriefDocument } from '../features/run-result/BriefDocument.js';
 import { CliTwin } from '../features/run-result/CliTwin.js';
@@ -73,6 +74,7 @@ function RunHeader({ view }: { readonly view: RunResultView }): ReactNode {
       ) : null}
       <p className="type-engine text-ink-2">{view.run_id}</p>
       <CliTwin command={`yantra open ${view.run_id}`} />
+      {view.live === null ? <RecoveryActions runId={view.run_id} /> : null}
     </header>
   );
 }
