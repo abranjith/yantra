@@ -28,7 +28,8 @@ import {
   type DisplayedState,
   type NextAction,
 } from '../live/displayed-state.js';
-import { CliTwin } from '../run-result/CliTwin.js';
+
+import { InvocationTwin, displayInvocation } from './cli-twin.js';
 
 const KIND_TONE: Readonly<Record<DisplayedKind, StatusBannerTone>> = {
   disconnected: 'caution',
@@ -63,11 +64,6 @@ export function statusTone(
     case 'handoff':
       return 'caution';
   }
-}
-
-/** The command line of a twin action (TASK-007 formats it per shell). */
-function twinText(action: NextAction): string {
-  return ['yantra', ...(action.twin?.path ?? []), ...(action.twin?.argv ?? [])].join(' ');
 }
 
 export interface CockpitStatusProps {
@@ -141,9 +137,15 @@ export function CockpitStatus({
         tone={statusTone(displayed, cockpit)}
         actions={buttons}
       >
-        {twins.map((action) => (
-          <CliTwin key={action.id} label={action.label} command={twinText(action)} />
-        ))}
+        {twins.map((action) =>
+          action.twin === undefined ? null : (
+            <InvocationTwin
+              key={action.id}
+              label={action.label}
+              invocation={displayInvocation(action.twin.path, action.twin.argv)}
+            />
+          ),
+        )}
         {error === null ? null : (
           <p role="alert" className="text-signal-failed-ink">
             {error}

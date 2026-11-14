@@ -32,6 +32,12 @@
       "task": "TASK-003"
     },
     {
+      "path": "apps/web/src/app/shell/toasts.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
       "path": "apps/web/src/app/shell/TopBar.tsx",
       "status": "M",
       "role": "implement",
@@ -44,6 +50,12 @@
       "task": "TASK-003"
     },
     {
+      "path": "apps/web/src/features/cockpit/cli-twin.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
       "path": "apps/web/src/features/cockpit/Cockpit.tsx",
       "status": "A",
       "role": "implement",
@@ -51,7 +63,7 @@
     },
     {
       "path": "apps/web/src/features/cockpit/CockpitAnnouncer.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
@@ -74,6 +86,12 @@
       "task": "TASK-003"
     },
     {
+      "path": "apps/web/src/features/cockpit/CommandPanel.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
       "path": "apps/web/src/features/cockpit/EnginePanel.tsx",
       "status": "A",
       "role": "implement",
@@ -87,7 +105,7 @@
     },
     {
       "path": "apps/web/src/features/live/announcer.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
@@ -171,7 +189,7 @@
     },
     {
       "path": "apps/web/tests/features/cockpit/announcer-region.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
@@ -180,6 +198,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/tests/features/cockpit/command-panel.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "apps/web/tests/features/cockpit/invocation-route.spec.tsx",
@@ -201,7 +225,7 @@
     },
     {
       "path": "apps/web/tests/features/live/announcer.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
@@ -260,6 +284,42 @@
       "task": "TASK-001"
     },
     {
+      "path": "docs/protocol-spec.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "e2e/app-cli-twin-shells.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "e2e/command-format-shells.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "e2e/fixtures/argv-echo/shells.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "eslint.config.js",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/protocol/src/schemas/app-rpc.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
       "path": "packages/ui/src/gallery/entries.tsx",
       "status": "M",
       "role": "implement",
@@ -288,6 +348,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/src/instruments/CliTwin.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "packages/ui/src/instruments/ContractRing.tsx",
@@ -348,6 +414,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/tests/instruments/cli-twin.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "packages/ui/tests/instruments/contract-ring.spec.tsx",

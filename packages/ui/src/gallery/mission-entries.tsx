@@ -8,6 +8,7 @@ import type { ReactNode } from 'react';
 
 import { BINDU_STATES, Bindu } from '../instruments/bindu.js';
 import { BudgetGauges } from '../instruments/BudgetGauge.js';
+import { CliTwin } from '../instruments/CliTwin.js';
 import { ContractRing, type RingSegment } from '../instruments/ContractRing.js';
 import { LiveRequirementList } from '../instruments/RequirementList.js';
 import { RunStatusBanner } from '../instruments/RunStatusBanner.js';
@@ -232,6 +233,34 @@ function StatusSheet(): ReactNode {
   );
 }
 
+function TwinSheet(): ReactNode {
+  return (
+    <div className="flex max-w-2xl flex-col gap-6">
+      <CliTwin
+        defaultShell="powershell"
+        formatted={{
+          posix: { text: "yantra research 'q'\\''s $x `y` 100%' --no-llm" },
+          powershell: { text: "yantra research 'q''s $x `y` 100%' --no-llm" },
+          cmd: {
+            unavailable:
+              'cmd cannot run this command: argument 2 contains a percent sign, which cmd expands as a variable',
+          },
+        }}
+      />
+      <CliTwin
+        defaultShell="cmd"
+        label="This run"
+        badge="Reconstructed"
+        formatted={{
+          posix: { text: "yantra ask 'electric vehicles' --no-llm" },
+          powershell: { text: "yantra ask 'electric vehicles' --no-llm" },
+          cmd: { unavailable: 'cmd cannot run this command: argument 2 contains a line break' },
+        }}
+      />
+    </div>
+  );
+}
+
 /** The Mission instruments' gallery entries. */
 export const MISSION_ENTRIES: readonly GalleryEntry[] = [
   {
@@ -247,6 +276,13 @@ export const MISSION_ENTRIES: readonly GalleryEntry[] = [
     primitive: null,
     render: () => <ContractSheet />,
     interactive: false,
+  },
+  {
+    id: 'instrument-cli-twin',
+    title: 'CliTwin',
+    primitive: null,
+    render: () => <TwinSheet />,
+    interactive: true,
   },
   {
     id: 'instrument-run-status',

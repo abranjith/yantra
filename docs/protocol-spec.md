@@ -2177,17 +2177,18 @@ Example:
 
 One app invocation, as the queue shows it.
 
-| Field           | Description                                                           |
-| --------------- | --------------------------------------------------------------------- |
-| invocation_id   |                                                                       |
-| state           | Launch-ownership state of one app invocation.                         |
-| execution_class | `run` holds a slot, `exclusive` needs zero runs, `mutate` holds none. |
-| path            | Command path, e.g. ["research"].                                      |
-| position        | 1-based place in the queue, while queued.                             |
-| run_id          |                                                                       |
-| queued_at       |                                                                       |
-| review          | Set on `needs_review`.                                                |
-| result          | Set on `finished`.                                                    |
+| Field           | Description                                                                      |
+| --------------- | -------------------------------------------------------------------------------- |
+| invocation_id   |                                                                                  |
+| state           | Launch-ownership state of one app invocation.                                    |
+| execution_class | `run` holds a slot, `exclusive` needs zero runs, `mutate` holds none.            |
+| path            | Command path, e.g. ["research"].                                                 |
+| invocation      | What was requested (path, argv, working directory), for the CLI twin (FEAT-067). |
+| position        | 1-based place in the queue, while queued.                                        |
+| run_id          |                                                                                  |
+| queued_at       |                                                                                  |
+| review          | Set on `needs_review`.                                                           |
+| result          | Set on `finished`.                                                               |
 
 Example:
 
@@ -2197,6 +2198,7 @@ Example:
   "state": "<state>",
   "execution_class": "<execution_class>",
   "path": "<path>",
+  "invocation": "<invocation>",
   "position": "<position>",
   "run_id": "<run_id>",
   "queued_at": "<queued_at>",

@@ -96,3 +96,10 @@ export {
   type StatusBannerAction,
   type StatusBannerTone,
 } from './RunStatusBanner.js';
+export {
+  CliTwin,
+  TWIN_SHELL_LABELS,
+  type CliTwinProps,
+  type TwinFormat,
+  type TwinShell,
+} from './CliTwin.js';

@@ -418,6 +418,7 @@ export class Supervisor {
       state: record.state,
       execution_class: record.execution_class,
       path: [...record.invocation.path],
+      invocation: record.invocation,
       ...(position === undefined ? {} : { position }),
       run_id: record.run_id,
       queued_at: record.queued_at,

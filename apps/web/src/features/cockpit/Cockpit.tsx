@@ -17,6 +17,7 @@ import { CockpitAnnouncer, announceView } from './CockpitAnnouncer.js';
 import { CockpitLayout } from './CockpitLayout.js';
 import { CockpitStatus } from './CockpitStatus.js';
 import { CockpitTopBar } from './CockpitTopBar.js';
+import { CommandPanel } from './CommandPanel.js';
 import { EnginePanel } from './EnginePanel.js';
 import { UnderstoodPanel } from './UnderstoodPanel.js';
 
@@ -63,7 +64,7 @@ export function Cockpit({ stream, mode, invocation = null }: CockpitProps): Reac
       }
       understood={<UnderstoodPanel state={state} />}
       engine={<EnginePanel state={state} />}
-      command={<div data-instrument="command" />}
+      command={<CommandPanel invocation={invocation?.invocation ?? null} />}
       announcer={<CockpitAnnouncer view={view} />}
     />
   );

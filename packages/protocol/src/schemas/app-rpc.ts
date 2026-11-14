@@ -316,6 +316,9 @@ export const InvocationSummary = z
     state: InvocationState,
     execution_class: WorkerExecutionClass,
     path: z.array(z.string().min(1)).describe('Command path, e.g. ["research"].'),
+    invocation: CommandInvocation.optional().describe(
+      'What was requested (path, argv, working directory), for the CLI twin (FEAT-067).',
+    ),
     position: z
       .number()
       .int()

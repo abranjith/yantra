@@ -62,7 +62,7 @@ export interface ActionRpc {
 
 /** A command a person can run in a terminal instead (shown as a CLI twin). */
 export interface ActionTwin {
-  readonly path: readonly string[];
+  readonly path: readonly [string, ...string[]];
   readonly argv: readonly string[];
 }
 

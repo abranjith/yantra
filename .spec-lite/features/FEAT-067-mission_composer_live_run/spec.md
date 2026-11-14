@@ -739,7 +739,7 @@ Task order follows plan §8. TASK-001 to TASK-008 are the **M2 cockpit subset**,
 - [x] TASK-004: Understood panel — contract summary, ContractRing and live RequirementList
 - [x] TASK-005: Explicit run states with next actions
 - [x] TASK-006: Polite announcements of meaningful changes
-- [ ] TASK-007: CliTwin with shell-aware Copy
+- [x] TASK-007: CliTwin with shell-aware Copy
 - [ ] TASK-008: Stop — graceful where the command honors abort, honest force-stop otherwise
 - [ ] TASK-009: Effective option values and their sources (host read)
 - [ ] TASK-010: Composer for Ask and Research — generated options, effective values, template selection
