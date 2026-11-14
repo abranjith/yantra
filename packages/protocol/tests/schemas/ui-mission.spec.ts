@@ -4,7 +4,9 @@ import { describe, expect, it } from 'vitest';
 import {
   EffectiveOptions,
   EffectiveOptionsParams,
+  MissionContext,
   ProviderReadiness,
+  WorkflowParams,
 } from '../../src/schemas/ui-mission.js';
 
 describe('Mission read schemas (FEAT-067)', () => {
@@ -85,5 +87,28 @@ describe('Mission read schemas (FEAT-067)', () => {
     expect(ProviderReadiness.parse(ready)).toEqual(ready);
     expect(ProviderReadiness.parse(notReady)).toEqual(notReady);
     expect(ProviderReadiness.safeParse({ ...ready, extra: 1 }).success).toBe(false);
+  });
+
+  it('round-trips workflow params and the mission context', () => {
+    const params = {
+      name: 'nightly',
+      params: [
+        { key: 'city', type: 'string', required: true, example: 'Pune' },
+        { key: 'limit', type: 'number', required: false, example: null },
+      ],
+    };
+
+    expect(WorkflowParams.parse(params)).toEqual(params);
+    expect(
+      WorkflowParams.safeParse({
+        ...params,
+        params: [{ key: 'x', type: 'list', required: true, example: null }],
+      }).success,
+    ).toBe(false);
+    expect(MissionContext.parse({ home: '/home/u', platform: 'linux' })).toEqual({
+      home: '/home/u',
+      platform: 'linux',
+    });
+    expect(MissionContext.safeParse({ home: '~', platform: 'linux' }).success).toBe(false);
   });
 });

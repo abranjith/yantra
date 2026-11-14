@@ -200,6 +200,7 @@ export async function startHostRuntime(deps: HostRuntimeDeps): Promise<RunningHo
     const resolveEffective = deps.resolveEffective ?? settingsResolver(deps.env ?? {});
     registerMissionReads(methods, {
       resolve: deps.resolveSettings ?? effectiveSettingsResolver(deps.env ?? {}),
+      env: { ...(deps.env ?? {}) },
       logger,
     });
     let attendance: Attendance | null = null;

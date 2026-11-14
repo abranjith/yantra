@@ -4767,6 +4767,40 @@ Example:
 }
 ```
 
+## WorkflowParams
+
+What Run mode asks for before starting a saved workflow.
+
+| Field  | Description                                               |
+| ------ | --------------------------------------------------------- |
+| name   |                                                           |
+| params | Declared params, in the order the workflow declares them. |
+
+Example:
+
+```json
+{
+  "name": "<name>",
+  "params": "<params>"
+}
+```
+
+## WorkflowParamsParams
+
+No description provided.
+
+| Field | Description                |
+| ----- | -------------------------- |
+| name  | The saved workflow’s name. |
+
+Example:
+
+```json
+{
+  "name": "<name>"
+}
+```
+
 ## WorkflowStep
 
 Workflow-friendly step union mirroring protocol step verbs.

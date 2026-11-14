@@ -119,3 +119,33 @@ export const MissionContext = z
   .strict()
   .describe('The host computer’s defaults for composing a run.');
 export type MissionContext = z.infer<typeof MissionContext>;
+
+/** `read.workflow_params` params. */
+export const WorkflowParamsParams = z
+  .object({ name: z.string().min(1).max(128).describe('The saved workflow’s name.') })
+  .strict();
+export type WorkflowParamsParams = z.infer<typeof WorkflowParamsParams>;
+
+/** `read.workflow_params` result: a saved workflow’s declared params, in declared order. */
+export const WorkflowParams = z
+  .object({
+    name: z.string().min(1),
+    params: z
+      .array(
+        z
+          .object({
+            key: z.string().min(1).describe('The param name, as `--params key=value` takes it.'),
+            type: z.enum(['string', 'number', 'boolean', 'date']).describe('The declared type.'),
+            required: z.boolean().describe('Whether the run needs a value.'),
+            example: z
+              .string()
+              .nullable()
+              .describe('An example value, when the workflow gives one.'),
+          })
+          .strict(),
+      )
+      .describe('Declared params, in the order the workflow declares them.'),
+  })
+  .strict()
+  .describe('What Run mode asks for before starting a saved workflow.');
+export type WorkflowParams = z.infer<typeof WorkflowParams>;

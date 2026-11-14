@@ -13,7 +13,11 @@ import { EffectiveOptions, type EffectiveOptionView } from '@yantra/protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { effectiveSettingsResolver } from '../../../src/ui/host/drift-review.js';
-import { effectiveOptions, registerMissionReads } from '../../../src/ui/host/mission-reads.js';
+import {
+  effectiveOptions,
+  loadWorkflowParams,
+  registerMissionReads,
+} from '../../../src/ui/host/mission-reads.js';
 import {
   RpcError,
   RpcMethodRegistry,
@@ -205,5 +209,86 @@ describe('@no-llm read.effective_options', () => {
 
     expect(context).toEqual({ home, platform: 'win32' });
     expect(method.result.safeParse({ home: 'relative', platform: 'linux' }).success).toBe(false);
+  });
+
+  it('reads a saved workflow’s declared params in declared order', async () => {
+    const store = {
+      load: () =>
+        Promise.resolve({
+          isOk: true as const,
+          value: {
+            name: 'nightly',
+            params: {
+              city: { type: 'string' as const, required: true, example: 'Pune' },
+              limit: { type: 'number' as const, required: false, example: null },
+            },
+          },
+        }),
+    };
+
+    const params = await loadWorkflowParams('nightly', store as never);
+
+    expect(params).toEqual({
+      name: 'nightly',
+      params: [
+        { key: 'city', type: 'string', required: true, example: 'Pune' },
+        { key: 'limit', type: 'number', required: false, example: null },
+      ],
+    });
+  });
+
+  it('answers not_found for a workflow that does not load', async () => {
+    const failing = { load: () => Promise.resolve({ isOk: false as const, error: {} }) };
+    const throwing = { load: () => Promise.reject(new Error('disk')) };
+    expect(await loadWorkflowParams('x', failing as never)).toBeNull();
+    expect(await loadWorkflowParams('x', throwing as never)).toBeNull();
+
+    const methods = new RpcMethodRegistry();
+    registerMissionReads(methods, {
+      resolve: () => Promise.resolve([]),
+      loadWorkflowParams: () => Promise.resolve(null),
+    });
+    const method = methods.get('read.workflow_params')!;
+    const refused = await Promise.resolve(
+      method.handler(method.params.parse({ name: 'missing' }), {} as RpcCallContext),
+    ).catch((caught: unknown) => caught);
+
+    expect((refused as RpcError).data).toMatchObject({ code: 'not_found' });
+    expect((refused as RpcError).message).toBe('There is no saved workflow missing.');
+  });
+
+  it('reads a real saved workflow through the store', async () => {
+    const dir = join(home, 'data', 'workflows');
+    const { mkdirSync } = await import('node:fs');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, 'nightly.yaml'),
+      [
+        'version: 1',
+        'name: nightly',
+        'description: Nightly prices',
+        'security_class: public',
+        'params:',
+        '  city:',
+        '    type: string',
+        '  limit:',
+        '    type: number',
+        '    required: false',
+        'steps:',
+        '  - id: s1',
+        '    verb: navigate',
+        '    url: https://example.test/',
+        '    scope: null',
+        '',
+      ].join('\n'),
+    );
+    resetPathCache();
+
+    const params = await loadWorkflowParams('nightly');
+
+    expect(params?.params.map((param) => [param.key, param.required])).toEqual([
+      ['city', true],
+      ['limit', false],
+    ]);
   });
 });

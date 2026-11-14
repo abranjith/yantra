@@ -74,6 +74,12 @@
       "task": "TASK-009"
     },
     {
+      "path": "apps/cli/tests/ui/host/provider-readiness.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
       "path": "apps/cli/tests/ui/host/supervisor.spec.ts",
       "status": "M",
       "role": "implement",
@@ -194,14 +200,26 @@
       "task": "TASK-010"
     },
     {
+      "path": "apps/web/src/features/composer/do-readiness.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
       "path": "apps/web/src/features/composer/field-renderers.tsx",
       "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
     {
-      "path": "apps/web/src/features/composer/submit.ts",
+      "path": "apps/web/src/features/composer/run-mode.tsx",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "apps/web/src/features/composer/submit.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
@@ -356,6 +374,12 @@
       "task": "TASK-010"
     },
     {
+      "path": "apps/web/tests/features/composer/composer-modes.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
       "path": "apps/web/tests/features/composer/composer.spec.tsx",
       "status": "A",
       "role": "implement",
@@ -363,7 +387,7 @@
     },
     {
       "path": "apps/web/tests/features/composer/submit.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },

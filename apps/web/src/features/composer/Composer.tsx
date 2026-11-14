@@ -41,7 +41,9 @@ import {
   type ComposerValues,
   type OptionValue,
 } from './composer-model.js';
+import { DoBlocked, useProviderReadiness } from './do-readiness.js';
 import { FieldRenderer } from './field-renderers.js';
+import { WorkflowParamsFields, WorkflowPicker } from './run-mode.js';
 
 /** The modes the switch offers, in order; `resume` arrives only through Run again. */
 export const COMPOSER_MODES: readonly { readonly path: ComposerPath; readonly label: string }[] = [
@@ -165,8 +167,20 @@ function ComposerBody({
     else options[attribute] = value;
     setValues({ ...values, options });
   };
-  const blocked = props.blockedReason?.(path) ?? null;
+  const readiness = useProviderReadiness(probe, cwd, path === 'do');
+  const notReady =
+    path === 'do' && readiness.data !== undefined && !readiness.data.ready ? readiness.data : null;
+  const blocked =
+    notReady === null ? (props.blockedReason?.(path) ?? null) : <DoBlocked readiness={notReady} />;
   const positionalError = errorFor('positional');
+  const shownErrors = new Map(
+    model.errors
+      .filter(
+        (error) =>
+          submitted || (error.field !== 'positional' && !error.field.startsWith('params.')),
+      )
+      .map((error) => [error.field, error.message]),
+  );
   const preview =
     cwd === null || model.positional.value.trim() === ''
       ? null
@@ -203,20 +217,27 @@ function ComposerBody({
         press();
       }}
     >
-      <TextField
-        label={POSITIONAL_LABEL[path]}
-        description={model.positional.help === '' ? undefined : model.positional.help}
-        multiline={path !== 'run' && path !== 'resume'}
-        voice={path === 'resume' ? 'engine' : 'body'}
-        isRequired={model.positional.required}
-        value={values.positional}
-        onChange={(next) => {
-          setValues({ ...values, positional: next });
-        }}
-        {...(positionalError === undefined
-          ? {}
-          : { isInvalid: true, errorMessage: positionalError })}
-      />
+      {path === 'run' ? (
+        <WorkflowPicker values={values} setValues={setValues} errors={shownErrors} />
+      ) : (
+        <TextField
+          label={POSITIONAL_LABEL[path]}
+          description={model.positional.help === '' ? undefined : model.positional.help}
+          multiline={path !== 'resume'}
+          voice={path === 'resume' ? 'engine' : 'body'}
+          isRequired={model.positional.required}
+          value={values.positional}
+          onChange={(next) => {
+            setValues({ ...values, positional: next });
+          }}
+          {...(positionalError === undefined
+            ? {}
+            : { isInvalid: true, errorMessage: positionalError })}
+        />
+      )}
+      {path === 'run' ? (
+        <WorkflowParamsFields values={values} setValues={setValues} errors={shownErrors} />
+      ) : null}
       {props.renderExtras?.(path, values, setValues)}
       <Disclosure>
         <DisclosureTrigger headingLevel={2}>Options ({model.fields.length})</DisclosureTrigger>
