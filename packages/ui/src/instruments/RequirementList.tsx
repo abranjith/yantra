@@ -1,4 +1,4 @@
-import type { BriefRequirement } from '@yantra/protocol';
+import type { BriefRequirement, LiveItem } from '@yantra/protocol';
 import type { ReactNode } from 'react';
 
 import { Icon } from '../icons/Icon.js';
@@ -23,6 +23,8 @@ const STATUS_TONE: Readonly<Record<string, Tone>> = {
   violated: 'failed',
   not_applicable: 'neutral',
   unverified: 'neutral',
+  pending: 'neutral',
+  advancing: 'neutral',
 };
 
 const TONE_ICON: Readonly<Record<Tone, IconName>> = {
@@ -79,6 +81,41 @@ export function RequirementList({ requirements, className }: RequirementListProp
               </ul>
             </div>
           )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export interface LiveRequirementListProps {
+  /** The latest `progress.items`, in requirement order. */
+  readonly items: readonly LiveItem[];
+  readonly className?: string;
+}
+
+/**
+ * The live mode of RequirementList (FEAT-067): each declared requirement
+ * with its live state word verbatim (`pending | advancing | met`) and its
+ * count when counted. Citations appear on the result page, not here.
+ */
+export function LiveRequirementList({ items, className }: LiveRequirementListProps): ReactNode {
+  if (items.length === 0) return null;
+  return (
+    <ul className={cn('flex flex-col gap-2', className)} aria-label="Requirements">
+      {items.map((item) => (
+        <li
+          key={item.id}
+          data-requirement={item.id}
+          data-state={item.state}
+          className="flex flex-wrap items-center gap-2"
+        >
+          <StatusWord word={item.state} />
+          <span className="text-ink">{item.label}</span>
+          {item.done !== null && item.total !== null ? (
+            <span className="type-engine text-ink-2">
+              {item.done} of {item.total}
+            </span>
+          ) : null}
         </li>
       ))}
     </ul>

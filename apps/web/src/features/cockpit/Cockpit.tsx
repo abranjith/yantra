@@ -12,6 +12,7 @@ import { useRunSnapshot } from '../live/use-run-stream.js';
 import { CockpitLayout } from './CockpitLayout.js';
 import { CockpitTopBar } from './CockpitTopBar.js';
 import { EnginePanel } from './EnginePanel.js';
+import { UnderstoodPanel } from './UnderstoodPanel.js';
 
 export interface CockpitProps {
   readonly stream: RunStream;
@@ -26,7 +27,7 @@ export function Cockpit({ stream, mode }: CockpitProps): ReactNode {
   return (
     <CockpitLayout
       topBar={<CockpitTopBar state={state} {...(mode === undefined ? {} : { mode })} />}
-      understood={<div data-instrument="contract" />}
+      understood={<UnderstoodPanel state={state} />}
       engine={<EnginePanel state={state} />}
       command={<div data-instrument="command" />}
     />

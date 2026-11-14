@@ -8,6 +8,8 @@ import type { ReactNode } from 'react';
 
 import { BINDU_STATES, Bindu } from '../instruments/bindu.js';
 import { BudgetGauges } from '../instruments/BudgetGauge.js';
+import { ContractRing, type RingSegment } from '../instruments/ContractRing.js';
+import { LiveRequirementList } from '../instruments/RequirementList.js';
 import { RunTimeline, type RunTimelineEntry } from '../instruments/RunTimeline.js';
 import { TruncatedText } from '../instruments/TruncatedText.js';
 
@@ -137,6 +139,61 @@ function BudgetSheet(): ReactNode {
   );
 }
 
+const STATES = ['met', 'advancing', 'pending'] as const;
+
+function ring(count: number): RingSegment[] {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `requirement-${String(index)}`,
+    label: `Requirement ${String(index + 1)}`,
+    state: STATES[index % STATES.length]!,
+  }));
+}
+
+function ContractSheet(): ReactNode {
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-center gap-6">
+        <ContractRing segments={ring(1)} />
+        <ContractRing segments={ring(5)} />
+        <ContractRing segments={ring(12)} />
+        <ContractRing
+          segments={ring(5).map((segment) => ({ ...segment, state: 'met' as const }))}
+        />
+        <span className="text-caption text-ink-2">0 requirements: no ring</span>
+        <ContractRing segments={[]} />
+      </div>
+      <LiveRequirementList
+        items={[
+          {
+            id: 'fill',
+            kind: 'fill',
+            label: 'Fill the contact form',
+            state: 'advancing',
+            done: 2,
+            total: 5,
+          },
+          {
+            id: 'artifact:screenshot:viewport',
+            kind: 'artifact',
+            label: 'Screenshot of the page',
+            state: 'pending',
+            done: null,
+            total: null,
+          },
+          {
+            id: 'deliverable',
+            kind: 'deliverable',
+            label: 'Report what was done',
+            state: 'met',
+            done: null,
+            total: null,
+          },
+        ]}
+      />
+    </div>
+  );
+}
+
 /** The Mission instruments' gallery entries. */
 export const MISSION_ENTRIES: readonly GalleryEntry[] = [
   {
@@ -145,6 +202,13 @@ export const MISSION_ENTRIES: readonly GalleryEntry[] = [
     primitive: null,
     render: () => <TimelineSheet />,
     interactive: true,
+  },
+  {
+    id: 'instrument-contract-ring',
+    title: 'ContractRing and live RequirementList',
+    primitive: null,
+    render: () => <ContractSheet />,
+    interactive: false,
   },
   {
     id: 'instrument-bindu-states',

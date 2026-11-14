@@ -15,7 +15,7 @@
     },
     {
       "path": "apps/web/src/app/shell/bindu-store.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -27,7 +27,7 @@
     },
     {
       "path": "apps/web/src/features/cockpit/bindu-state.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -45,7 +45,7 @@
     },
     {
       "path": "apps/web/src/features/cockpit/CockpitTopBar.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -54,6 +54,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/features/cockpit/UnderstoodPanel.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
     },
     {
       "path": "apps/web/src/features/live/bounded-log.ts",
@@ -81,7 +87,7 @@
     },
     {
       "path": "apps/web/src/features/live/tick-clock.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -105,9 +111,15 @@
     },
     {
       "path": "apps/web/tests/features/cockpit/top-bar.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/tests/features/cockpit/understood-panel.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
     },
     {
       "path": "apps/web/tests/features/live/bounded-log.spec.ts",
@@ -177,15 +189,27 @@
     },
     {
       "path": "packages/ui/src/instruments/BudgetGauge.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/src/instruments/ContractRing.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
     },
     {
       "path": "packages/ui/src/instruments/index.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/src/instruments/RequirementList.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
     },
     {
       "path": "packages/ui/src/instruments/RunTimeline.tsx",
@@ -195,13 +219,13 @@
     },
     {
       "path": "packages/ui/src/instruments/TruncatedText.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/ui/src/lib/motion.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -219,9 +243,15 @@
     },
     {
       "path": "packages/ui/tests/instruments/budget-gauge.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/tests/instruments/contract-ring.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
     },
     {
       "path": "packages/ui/tests/instruments/run-timeline.spec.tsx",
