@@ -1,0 +1,72 @@
+{
+  "vcs": "git",
+  "files": [
+    {
+      "path": "apps/web/src/features/live/bounded-log.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/web/src/features/live/cockpit-state.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/web/src/features/live/event-routes.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/web/src/features/live/run-stream.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/web/src/features/live/use-run-stream.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/web/tests/features/live/bounded-log.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/web/tests/features/live/cockpit-state.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/web/tests/features/live/run-stream.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/web/tests/support/run-events.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    }
+  ],
+  "excluded": [
+    ".spec-lite/features/FEAT-067-mission_composer_live_run/changeset.json",
+    ".spec-lite/features/FEAT-067-mission_composer_live_run/spec.md",
+    ".spec-lite/plan_ui.md"
+  ],
+  "baseline": {
+    "sha": "ec15687c567a58f92016710854b3bbf999c2e79a",
+    "capturedAt": "2026-11-14T07:20:21.306Z",
+    "dirtyAtBaseline": [],
+    "dirtyBlobHashes": {},
+    "workflow": "ft/feat-067-mission-composer-live-run@ec15687c567a58f92016710854b3bbf999c2e79a"
+  },
+  "featureId": "FEAT-067"
+}
