@@ -43,9 +43,17 @@ export type RunTab = 'result' | 'audit' | 'files';
 function RunHeader({ view }: { readonly view: RunResultView }): ReactNode {
   return (
     <header className="flex flex-col gap-3">
-      <h1 className="text-xl font-semibold text-ink">{view.title}</h1>
+      {/* The finish (FEAT-067) morphs the cockpit's goal here and may focus this heading. */}
+      <h1
+        tabIndex={-1}
+        data-focus-target="run-heading"
+        className="vt-run-goal text-xl font-semibold text-ink"
+      >
+        {view.title}
+      </h1>
       <div className="flex flex-wrap items-center gap-4">
         <OutcomeBadge
+          className="vt-run-outcome"
           status={view.status}
           taskOutcome={view.task_outcome ?? undefined}
           executionState={view.execution_state ?? undefined}

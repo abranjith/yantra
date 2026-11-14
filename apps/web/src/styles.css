@@ -1,3 +1,20 @@
 /* The Yantra app: Drshya plus this app's sources. */
 @import '@yantra/ui/drshya.css';
 @source './';
+
+/*
+ * The finish (FEAT-067): the cockpit and the run result share these names, so
+ * a View Transition morphs the goal, the outcome and the contract into place.
+ * Reduced motion makes view transitions instant (Drshya).
+ */
+@utility vt-run-goal {
+  view-transition-name: run-goal;
+}
+
+@utility vt-run-outcome {
+  view-transition-name: run-outcome;
+}
+
+@utility vt-run-contract {
+  view-transition-name: run-contract;
+}

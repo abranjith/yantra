@@ -4,8 +4,10 @@
  * connection. Each panel is its own component; this one only wires them.
  */
 
+import { useNavigate } from '@tanstack/react-router';
 import type { InvocationSummary } from '@yantra/protocol';
-import { useMemo, useState, type ReactNode } from 'react';
+import { usePrefersReducedMotion } from '@yantra/ui';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { useRpc } from '../../host/app-rpc.js';
 import { useConnection } from '../../host/connection-store.js';
@@ -21,6 +23,7 @@ import { CockpitStatus } from './CockpitStatus.js';
 import { CockpitTopBar } from './CockpitTopBar.js';
 import { CommandPanel } from './CommandPanel.js';
 import { EnginePanel } from './EnginePanel.js';
+import { finishTransition } from './finish-transition.js';
 import { StopControl, stopIsGraceful } from './StopControl.js';
 import { UnderstoodPanel } from './UnderstoodPanel.js';
 
@@ -67,6 +70,28 @@ export function Cockpit({ stream, mode, invocation = null }: CockpitProps): Reac
   };
   const canStop = invocation !== null && state.outcome === null;
   const view = useMemo(() => announceView(state, displayed.kind), [state, displayed.kind]);
+
+  // The finish (TASK-015): only for a run this window watched while it ran.
+  const navigate = useNavigate();
+  const reducedMotion = usePrefersReducedMotion();
+  const watchedRunning = useRef(false);
+  const finished = useRef(false);
+  const [outcomeSpoken, setOutcomeSpoken] = useState(false);
+  const [held, setHeld] = useState(false);
+  useEffect(() => {
+    if (state.firstSeq !== null && state.outcome === null) watchedRunning.current = true;
+  }, [state.firstSeq, state.outcome]);
+  const runId = state.runId;
+  useEffect(() => {
+    if (!outcomeSpoken || !watchedRunning.current || finished.current) return;
+    finished.current = true;
+    void finishTransition({
+      navigate: () => navigate({ to: '/runs/$runId', params: { runId } }),
+      reducedMotion,
+    }).then((result) => {
+      if (result === 'held') setHeld(true);
+    });
+  }, [outcomeSpoken, navigate, reducedMotion, runId]);
   return (
     <CockpitLayout
       topBar={
@@ -104,7 +129,15 @@ export function Cockpit({ stream, mode, invocation = null }: CockpitProps): Reac
           recovery={state.outcome === null ? null : <RecoveryActions runId={state.runId} />}
         />
       }
-      announcer={<CockpitAnnouncer view={view} />}
+      announcer={
+        <CockpitAnnouncer
+          view={view}
+          notice={held ? 'The result is ready. View result opens it.' : null}
+          onSpoken={(text) => {
+            if (text.includes('Run finished:')) setOutcomeSpoken(true);
+          }}
+        />
+      }
     />
   );
 }

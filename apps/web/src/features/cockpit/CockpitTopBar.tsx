@@ -66,7 +66,7 @@ export function CockpitTopBar({
             {mode === 'other' ? '—' : mode}
           </span>
         </span>
-        <span className="flex min-w-0 flex-1 items-baseline gap-1" data-part="goal">
+        <span className="vt-run-goal flex min-w-0 flex-1 items-baseline gap-1" data-part="goal">
           <span className="type-label shrink-0 text-ink-2">Goal</span>
           {state.goal === null ? (
             <span className="text-ink-2">Waiting for the run to start…</span>

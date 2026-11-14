@@ -74,7 +74,7 @@ export function UnderstoodPanel({ state }: { readonly state: CockpitState }): Re
       )}
       {state.requirements.length > 0 ? (
         <div className="flex flex-wrap items-start gap-4" data-instrument="requirements">
-          <ContractRing segments={state.requirements} />
+          <ContractRing segments={state.requirements} className="vt-run-contract" />
           <LiveRequirementList items={state.requirements} className="min-w-0 flex-1" />
         </div>
       ) : null}

@@ -139,6 +139,7 @@ export function CockpitStatus({
         detail={displayed.detail}
         tone={statusTone(displayed, cockpit)}
         actions={buttons}
+        {...(displayed.kind === 'finished' ? { className: 'vt-run-outcome' } : {})}
       >
         {twins.map((action) =>
           action.twin === undefined ? null : (

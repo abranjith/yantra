@@ -246,7 +246,7 @@ function finished(cockpit: CockpitState): DisplayedState {
     kind: 'finished',
     detail,
     position: null,
-    nextActions: [resultAction(cockpit.runId, 'Open the result')],
+    nextActions: [resultAction(cockpit.runId, 'View result')],
   };
 }
 
@@ -267,7 +267,7 @@ function finishedInvocation(invocation: InvocationSummary): DisplayedState {
     nextActions:
       invocation.run_id === null
         ? [{ id: 'mission', label: 'Start something new', href: '/mission' }]
-        : [resultAction(invocation.run_id, 'Open the result')],
+        : [resultAction(invocation.run_id, 'View result')],
   };
 }
 

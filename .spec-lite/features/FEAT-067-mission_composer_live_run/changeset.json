@@ -182,6 +182,12 @@
       "task": "TASK-002"
     },
     {
+      "path": "apps/web/src/features/cockpit/finish-transition.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-015"
+    },
+    {
       "path": "apps/web/src/features/cockpit/StopControl.tsx",
       "status": "A",
       "role": "implement",
@@ -285,7 +291,7 @@
     },
     {
       "path": "apps/web/src/features/recovery/RecoveryActions.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-014"
     },
@@ -338,6 +344,12 @@
       "task": "TASK-014"
     },
     {
+      "path": "apps/web/src/styles.css",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-015"
+    },
+    {
       "path": "apps/web/tests/app/shell.spec.tsx",
       "status": "M",
       "role": "implement",
@@ -360,6 +372,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-007"
+    },
+    {
+      "path": "apps/web/tests/features/cockpit/finish-transition.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-015"
     },
     {
       "path": "apps/web/tests/features/cockpit/invocation-route.spec.tsx",
@@ -453,7 +471,7 @@
     },
     {
       "path": "apps/web/tests/features/recovery/recovery-actions.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-014"
     },

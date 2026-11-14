@@ -41,10 +41,17 @@ export interface CockpitAnnouncerProps {
   readonly clock?: AnnounceClock;
   /** Called after each spoken text (the finish transition waits for the outcome's). */
   readonly onSpoken?: (text: string) => void;
+  /** A one-off message to say, kept through coalescing (e.g. the result is ready). */
+  readonly notice?: string | null;
 }
 
 /** See the module comment. */
-export function CockpitAnnouncer({ view, clock, onSpoken }: CockpitAnnouncerProps): ReactNode {
+export function CockpitAnnouncer({
+  view,
+  clock,
+  onSpoken,
+  notice = null,
+}: CockpitAnnouncerProps): ReactNode {
   const [text, setText] = useState('');
   const spoken = useRef(onSpoken);
   useEffect(() => {
@@ -63,6 +70,10 @@ export function CockpitAnnouncer({ view, clock, onSpoken }: CockpitAnnouncerProp
     previous.current = view;
     queue.push(items);
   }, [queue, view]);
+
+  useEffect(() => {
+    if (notice !== null) queue.push([{ category: 'outcome', text: notice, keep: true }]);
+  }, [queue, notice]);
 
   useEffect(
     () => () => {
