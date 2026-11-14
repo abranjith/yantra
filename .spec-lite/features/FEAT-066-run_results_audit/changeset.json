@@ -939,7 +939,7 @@
     },
     {
       "path": "e2e/app-run-results.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
@@ -1167,7 +1167,7 @@
     },
     {
       "path": "packages/test-helpers/src/run-dirs/audit-runs.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
@@ -1179,7 +1179,7 @@
     },
     {
       "path": "packages/test-helpers/src/run-dirs/index.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
