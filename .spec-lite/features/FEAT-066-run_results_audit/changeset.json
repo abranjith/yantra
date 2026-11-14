@@ -609,19 +609,19 @@
     },
     {
       "path": "apps/web/src/features/run-result/live-state.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
     {
       "path": "apps/web/src/features/run-result/NoDocumentResult.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
     {
       "path": "apps/web/src/features/run-result/run-health-lines.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
@@ -638,8 +638,26 @@
       "task": "TASK-005"
     },
     {
-      "path": "apps/web/src/features/viewers/JsonViewer.tsx",
+      "path": "apps/web/src/features/viewers/event-summary.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/web/src/features/viewers/ImageViewer.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/web/src/features/viewers/JsonlViewer.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/web/src/features/viewers/JsonViewer.tsx",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
@@ -648,6 +666,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/features/viewers/TextViewer.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "apps/web/src/host/app-rpc.tsx",
@@ -705,9 +729,15 @@
     },
     {
       "path": "apps/web/tests/features/run-result/no-document.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
+    },
+    {
+      "path": "apps/web/tests/features/viewers/viewers.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "apps/web/tests/host/app-rpc.spec.tsx",
@@ -836,6 +866,12 @@
       "task": "TASK-004"
     },
     {
+      "path": "packages/core/src/run-view/jsonl-window.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "packages/core/src/run-view/ledger.ts",
       "status": "A",
       "role": "implement",
@@ -878,6 +914,12 @@
       "task": "TASK-004"
     },
     {
+      "path": "packages/core/tests/run-view/jsonl-window.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "packages/core/tests/run-view/ledger.spec.ts",
       "status": "A",
       "role": "implement",
@@ -885,7 +927,7 @@
     },
     {
       "path": "packages/core/tests/run-view/run-health-parity.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
@@ -1029,7 +1071,7 @@
     },
     {
       "path": "packages/ui/src/instruments/EventInspector.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
@@ -1080,6 +1122,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "packages/ui/tests/instruments/event-inspector.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "packages/ui/tests/instruments/evidence.spec.tsx",

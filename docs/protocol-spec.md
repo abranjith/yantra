@@ -2177,6 +2177,54 @@ Example:
 "<value>"
 ```
 
+## JsonlWindow
+
+One window of a JSONL artifact, at most 512 KiB serialized.
+
+| Field             | Description                                                        |
+| ----------------- | ------------------------------------------------------------------ |
+| path              | Run-relative path, forward slashes.                                |
+| total_lines_known | Complete lines counted so far; final once total_complete is true.  |
+| total_complete    | The index has reached the end of the file.                         |
+| from_line         |                                                                    |
+| lines             |                                                                    |
+| partial_tail      | The file ends in a line still being written; it is never returned. |
+
+Example:
+
+```json
+{
+  "path": "<path>",
+  "total_lines_known": "<total_lines_known>",
+  "total_complete": "<total_complete>",
+  "from_line": "<from_line>",
+  "lines": "<lines>",
+  "partial_tail": "<partial_tail>"
+}
+```
+
+## JsonlWindowRequest
+
+One window of a JSONL artifact.
+
+| Field     | Description                                                                    |
+| --------- | ------------------------------------------------------------------------------ |
+| run_id    | A run id, e.g. `20260511T091234Z-bank-statement-a7b3`; names `runs/<run_id>/`. |
+| path      | Run-relative path, forward slashes.                                            |
+| from_line | 0-based first line wanted.                                                     |
+| limit     | Lines wanted, 1–200.                                                           |
+
+Example:
+
+```json
+{
+  "run_id": "<run_id>",
+  "path": "<path>",
+  "from_line": "<from_line>",
+  "limit": "<limit>"
+}
+```
+
 ## KeyFinding
 
 A scannable, citation-backed finding bullet.

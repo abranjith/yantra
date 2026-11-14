@@ -10,6 +10,7 @@ import { ActionEvidence } from '../instruments/ActionEvidence.js';
 import { CaptureGallery, type CaptureItem } from '../instruments/CaptureGallery.js';
 import { CitationChip } from '../instruments/CitationChip.js';
 import { ConditionTable } from '../instruments/ConditionTable.js';
+import { EventInspector } from '../instruments/EventInspector.js';
 import { EvidencePane, SourceEvidence } from '../instruments/EvidencePane.js';
 import {
   DISPLAYED_STATE_LABELS,
@@ -254,6 +255,24 @@ export const INSTRUMENT_ENTRIES: readonly GalleryEntry[] = [
     title: 'EvidencePane, ActionEvidence and ProtectedValue',
     primitive: null,
     render: () => <EvidenceSheet />,
+    interactive: true,
+  },
+  {
+    id: 'instrument-event-inspector',
+    title: 'EventInspector',
+    primitive: null,
+    render: () => (
+      <EventInspector
+        label="Unknown event"
+        value={{
+          ts: '2026-11-01T00:00:00.000Z',
+          kind: 'teleport_requested',
+          seq: 42,
+          destination: '<b>mars</b>',
+          detail: { attempts: [1, 2, 3], note: null, ok: false },
+        }}
+      />
+    ),
     interactive: true,
   },
 ];

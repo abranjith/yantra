@@ -24,6 +24,7 @@ import type {
   LedgerMode,
   LedgerOutcomeFilter,
   ArtifactUrlResult,
+  JsonlWindow,
   ListRunItem,
   ReportResult,
   RunLedgerPage,
@@ -252,6 +253,46 @@ export function useReport(runId: string, enabled: boolean) {
   return useQuery({
     queryKey: ['report', runId],
     queryFn: () => rpc.request<ReportResult>('read.report', { run_id: runId }),
+    enabled,
+  });
+}
+
+/** Lines per JSONL window the viewer asks for. */
+export const JSONL_WINDOW_LINES = 200;
+
+/** The window holding line `line` (`read.artifact_window`). */
+export function jsonlWindowStart(line: number): number {
+  return Math.floor(line / JSONL_WINDOW_LINES) * JSONL_WINDOW_LINES;
+}
+
+/** One JSONL window; `fromLine` is a window start. */
+export function useJsonlWindow(runId: string, path: string, fromLine: number, enabled = true) {
+  const rpc = useRpc();
+  return useQuery({
+    queryKey: ['jsonl', runId, path, fromLine],
+    queryFn: () =>
+      rpc.request<JsonlWindow>('read.artifact_window', {
+        run_id: runId,
+        path,
+        from_line: fromLine,
+        limit: JSONL_WINDOW_LINES,
+      }),
+    enabled,
+    staleTime: Infinity,
+  });
+}
+
+/** A whole small artifact as text, through a fresh signed URL (bounded viewers only). */
+export function useArtifactText(runId: string, path: string, enabled: boolean) {
+  const rpc = useRpc();
+  return useQuery({
+    queryKey: ['artifact-text', runId, path],
+    queryFn: async () => {
+      const { url } = await rpc.request<{ url: string }>('artifact.url', { run_id: runId, path });
+      const response = await fetch(url, { credentials: 'same-origin' });
+      if (!response.ok) throw new Error(`${path} could not be read (${String(response.status)}).`);
+      return response.text();
+    },
     enabled,
   });
 }

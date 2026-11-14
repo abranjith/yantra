@@ -14,7 +14,9 @@ import {
   ArtifactAccessError,
   RunNotFoundError,
   leaseLiveState,
+  SparseLineIndex,
   readHead,
+  readJsonlWindow,
   readRunResult,
   reconcileRun,
   resolvePublicArtifact,
@@ -24,6 +26,8 @@ import {
 } from '@yantra/core';
 import {
   CLI_READ_SCHEMA_VERSION,
+  JsonlWindow,
+  JsonlWindowRequest,
   REPORT_READ_CAP_BYTES,
   ReportResult,
   RunResultParams,
@@ -166,6 +170,39 @@ export async function readReportForApp(runId: string, deps: RunReadDeps): Promis
   return head.truncated ? { ...base, truncated: true, bytes: head.bytes } : base;
 }
 
+/**
+ * `read.artifact_window {run_id, path, from_line, limit}`: one window of a
+ * public JSONL artifact, through the gate, for `jsonl` viewers only.
+ */
+export async function readArtifactWindowForApp(
+  request: JsonlWindowRequest,
+  deps: RunReadDeps,
+  index: SparseLineIndex,
+): Promise<JsonlWindow> {
+  let artifact: PublicArtifact;
+  try {
+    artifact = await resolvePublicArtifact(
+      deps.runsDir ?? runsRoot(),
+      request.run_id,
+      request.path,
+      {
+        exposures: ['view'],
+      },
+    );
+  } catch (error) {
+    throw runReadError(error, request.run_id);
+  }
+  if (artifact.entry.viewer !== 'jsonl') {
+    throw new RpcError(
+      'not_allowed',
+      `${artifact.relPath} is not a JSONL artifact.`,
+      'Open it through its own viewer.',
+    );
+  }
+  const window = await readJsonlWindow(artifact.absPath, request.from_line, request.limit, index);
+  return { path: artifact.relPath, ...window };
+}
+
 /** Registers the per-run reads. */
 export function registerRunReads(methods: RpcMethodRegistry, deps: RunReadDeps = {}): void {
   const corrupt = new CorruptSlotLog(deps.logger ?? SILENT_HOST_LOGGER);
@@ -173,6 +210,15 @@ export function registerRunReads(methods: RpcMethodRegistry, deps: RunReadDeps =
     params: RunResultParams,
     result: RunResultView,
     handler: ({ run_id: runId }) => readRunResultForApp(runId, deps, corrupt),
+  });
+  const logger = deps.logger ?? SILENT_HOST_LOGGER;
+  const index = new SparseLineIndex(undefined, (event) => {
+    logger.debug?.({ read: 'artifact_window', ...event }, 'jsonl index built');
+  });
+  methods.register('read.artifact_window', {
+    params: JsonlWindowRequest,
+    result: JsonlWindow,
+    handler: (request) => readArtifactWindowForApp(request, deps, index),
   });
   methods.register('read.report', {
     params: RunResultParams,

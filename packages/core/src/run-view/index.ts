@@ -64,3 +64,13 @@ export {
   type NormalizedManifest,
   type RunResultDeps,
 } from './run-result.js';
+export {
+  CHECKPOINT_LINES,
+  LINE_INDEX_CAPACITY,
+  NODE_JSONL_WINDOW_FS,
+  SparseLineIndex,
+  readJsonlWindow,
+  type IndexBuildEvent,
+  type JsonlWindowFs,
+  type WindowFileHandle,
+} from './jsonl-window.js';

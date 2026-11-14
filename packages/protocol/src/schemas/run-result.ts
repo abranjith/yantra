@@ -174,3 +174,56 @@ export const RunResultView = z
   .strict()
   .describe('One run, read for the app’s Run result page.');
 export type RunResultView = z.infer<typeof RunResultView>;
+
+/** The longest line text one window returns; longer lines are cut and say so. */
+export const JSONL_LINE_MAX_BYTES = 16 * 1024;
+/** The largest serialized JSONL window. */
+export const JSONL_WINDOW_MAX_BYTES = 512 * 1024;
+/** The most lines one window asks for. */
+export const JSONL_WINDOW_MAX_LINES = 200;
+
+/** `read.artifact_window` params: one window of a public JSONL file. */
+export const JsonlWindowRequest = z
+  .object({
+    run_id: RunId,
+    path: RelPath,
+    from_line: z.number().int().nonnegative().describe('0-based first line wanted.'),
+    limit: z.number().int().min(1).max(JSONL_WINDOW_MAX_LINES).describe('Lines wanted, 1–200.'),
+  })
+  .strict()
+  .describe('One window of a JSONL artifact.');
+export type JsonlWindowRequest = z.infer<typeof JsonlWindowRequest>;
+
+/** `read.artifact_window` result. */
+export const JsonlWindow = z
+  .object({
+    path: RelPath,
+    total_lines_known: z
+      .number()
+      .int()
+      .nonnegative()
+      .describe('Complete lines counted so far; final once total_complete is true.'),
+    total_complete: z.boolean().describe('The index has reached the end of the file.'),
+    from_line: z.number().int().nonnegative(),
+    lines: z
+      .array(
+        z
+          .object({
+            n: z.number().int().nonnegative().describe('0-based line number.'),
+            text: z.string().describe('The line, cut at 16 KiB.'),
+            truncated_bytes: z
+              .number()
+              .int()
+              .nonnegative()
+              .describe('Bytes of the line not included; 0 when whole.'),
+          })
+          .strict(),
+      )
+      .max(JSONL_WINDOW_MAX_LINES),
+    partial_tail: z
+      .boolean()
+      .describe('The file ends in a line still being written; it is never returned.'),
+  })
+  .strict()
+  .describe('One window of a JSONL artifact, at most 512 KiB serialized.');
+export type JsonlWindow = z.infer<typeof JsonlWindow>;

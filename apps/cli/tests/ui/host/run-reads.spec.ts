@@ -17,6 +17,7 @@ import {
   buildRunDir,
   legacyReportRun,
   startupFailureRun,
+  workflowOutputsRun,
 } from '../../../../../packages/core/tests/run-view/fixtures/build-run-dir.js';
 import { openHistory } from '../../../src/history.js';
 import type { HostLogger } from '../../../src/ui/host/host.js';
@@ -493,5 +494,72 @@ describe('read.report', () => {
 
     expect(error).toBeInstanceOf(RpcError);
     expect(JSON.stringify((error as RpcError).data)).not.toContain('SECRET');
+  });
+});
+
+describe('read.artifact_window', () => {
+  const CALL = { windowId: 'w', connection: {} } as unknown as RpcCallContext;
+
+  function windowMethod() {
+    const methods = new RpcMethodRegistry();
+    registerRunReads(methods);
+    return methods.get('read.artifact_window')!;
+  }
+
+  async function call(params: Record<string, unknown>) {
+    const method = windowMethod();
+    return method.handler(method.params.parse(params), CALL);
+  }
+
+  it('returns a window of a public JSONL file', async () => {
+    const spec = workflowOutputsRun(7);
+    await buildRunDir(runsRoot(), spec);
+
+    const window = await call({
+      run_id: spec.runId,
+      path: 'events.jsonl',
+      from_line: 0,
+      limit: 10,
+    });
+
+    expect(windowMethod().result.safeParse(window).success).toBe(true);
+    expect(window).toMatchObject({
+      path: 'events.jsonl',
+      total_lines_known: 2,
+      total_complete: true,
+    });
+  });
+
+  it.each(['lease.json', 'decisions/x.json', '../events.jsonl'])('refuses %s', async (path) => {
+    const spec = askBriefRun(8);
+    await buildRunDir(runsRoot(), spec);
+    const error = await Promise.resolve(
+      call({ run_id: spec.runId, path, from_line: 0, limit: 5 }),
+    ).catch((caught: unknown) => caught);
+    expect((error as RpcError).data.code).toBe('not_allowed');
+  });
+
+  it('refuses a public file that is not JSONL', async () => {
+    const spec = askBriefRun(9);
+    await buildRunDir(runsRoot(), spec);
+    const error = await Promise.resolve(
+      call({ run_id: spec.runId, path: 'report.md', from_line: 0, limit: 5 }),
+    ).catch((caught: unknown) => caught);
+    expect((error as RpcError).data).toMatchObject({
+      code: 'not_allowed',
+      message: 'report.md is not a JSONL artifact.',
+    });
+  });
+
+  it.each([{ limit: 0 }, { limit: 201 }, { from_line: -1 }])('refuses the params %j', (patch) => {
+    expect(
+      windowMethod().params.safeParse({
+        run_id: askBriefRun(1).runId,
+        path: 'events.jsonl',
+        from_line: 0,
+        limit: 5,
+        ...patch,
+      }).success,
+    ).toBe(false);
   });
 });
