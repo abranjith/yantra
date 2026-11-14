@@ -11,11 +11,12 @@
 
 import { createRoute, Link as RouterLink, useNavigate } from '@tanstack/react-router';
 import type { InvocationSummary } from '@yantra/protocol';
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useMemo, type ReactNode } from 'react';
 
 import { rootRoute } from '../app/root-route.js';
+import { CockpitAnnouncer, announceView } from '../features/cockpit/CockpitAnnouncer.js';
 import { CockpitStatus } from '../features/cockpit/CockpitStatus.js';
-import { modeOf } from '../features/live/cockpit-state.js';
+import { initialCockpitState, modeOf } from '../features/live/cockpit-state.js';
 import { deriveDisplayedState } from '../features/live/displayed-state.js';
 import { useInvocation } from '../features/live/use-invocation.js';
 import { useConnection } from '../host/connection-store.js';
@@ -35,6 +36,11 @@ export function PreRunCockpit({
     cockpit: null,
     stopping: false,
   });
+  const empty = useMemo(
+    () => initialCockpitState(invocation.invocation_id),
+    [invocation.invocation_id],
+  );
+  const view = useMemo(() => announceView(empty, displayed.kind), [empty, displayed.kind]);
   return (
     <div data-part="cockpit" className="flex flex-col gap-4 rounded-frame bg-sunken p-4">
       <div className="glass rounded-frame p-3">
@@ -46,6 +52,7 @@ export function PreRunCockpit({
         </p>
       </div>
       <CockpitStatus displayed={displayed} cockpit={null} />
+      <CockpitAnnouncer view={view} />
     </div>
   );
 }

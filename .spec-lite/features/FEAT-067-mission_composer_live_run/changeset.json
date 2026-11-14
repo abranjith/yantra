@@ -50,6 +50,12 @@
       "task": "TASK-002"
     },
     {
+      "path": "apps/web/src/features/cockpit/CockpitAnnouncer.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
       "path": "apps/web/src/features/cockpit/CockpitLayout.tsx",
       "status": "A",
       "role": "implement",
@@ -57,7 +63,7 @@
     },
     {
       "path": "apps/web/src/features/cockpit/CockpitStatus.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
@@ -80,6 +86,12 @@
       "task": "TASK-004"
     },
     {
+      "path": "apps/web/src/features/live/announcer.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
       "path": "apps/web/src/features/live/bounded-log.ts",
       "status": "A",
       "role": "implement",
@@ -93,7 +105,7 @@
     },
     {
       "path": "apps/web/src/features/live/displayed-state.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
@@ -117,7 +129,7 @@
     },
     {
       "path": "apps/web/src/features/live/use-invocation.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
@@ -141,13 +153,13 @@
     },
     {
       "path": "apps/web/src/routes/invocation-id.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
     {
       "path": "apps/web/src/routes/mission.invocations.$invocationId.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
@@ -158,6 +170,12 @@
       "task": "TASK-002"
     },
     {
+      "path": "apps/web/tests/features/cockpit/announcer-region.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
       "path": "apps/web/tests/features/cockpit/cockpit-route.spec.tsx",
       "status": "A",
       "role": "implement",
@@ -165,7 +183,7 @@
     },
     {
       "path": "apps/web/tests/features/cockpit/invocation-route.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
@@ -182,6 +200,12 @@
       "task": "TASK-004"
     },
     {
+      "path": "apps/web/tests/features/live/announcer.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
       "path": "apps/web/tests/features/live/bounded-log.spec.ts",
       "status": "A",
       "role": "implement",
@@ -195,7 +219,7 @@
     },
     {
       "path": "apps/web/tests/features/live/displayed-state.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
@@ -285,7 +309,7 @@
     },
     {
       "path": "packages/ui/src/instruments/RunStatusBanner.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
@@ -333,7 +357,7 @@
     },
     {
       "path": "packages/ui/tests/instruments/run-status-banner.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },

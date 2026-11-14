@@ -5,7 +5,7 @@
  */
 
 import type { InvocationSummary } from '@yantra/protocol';
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 
 import { useConnection } from '../../host/connection-store.js';
 import type { CockpitMode } from '../live/cockpit-state.js';
@@ -13,6 +13,7 @@ import { deriveDisplayedState } from '../live/displayed-state.js';
 import type { RunStream } from '../live/run-stream.js';
 import { useRunSnapshot } from '../live/use-run-stream.js';
 
+import { CockpitAnnouncer, announceView } from './CockpitAnnouncer.js';
 import { CockpitLayout } from './CockpitLayout.js';
 import { CockpitStatus } from './CockpitStatus.js';
 import { CockpitTopBar } from './CockpitTopBar.js';
@@ -41,6 +42,7 @@ export function Cockpit({ stream, mode, invocation = null }: CockpitProps): Reac
     stopping: false,
     acknowledgedStall,
   });
+  const view = useMemo(() => announceView(state, displayed.kind), [state, displayed.kind]);
   return (
     <CockpitLayout
       topBar={
@@ -62,6 +64,7 @@ export function Cockpit({ stream, mode, invocation = null }: CockpitProps): Reac
       understood={<UnderstoodPanel state={state} />}
       engine={<EnginePanel state={state} />}
       command={<div data-instrument="command" />}
+      announcer={<CockpitAnnouncer view={view} />}
     />
   );
 }
