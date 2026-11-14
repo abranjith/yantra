@@ -103,9 +103,9 @@ export interface DisplayedInput {
   readonly stopping: boolean;
   /** The user chose to keep waiting through the current stall (its recovery seq). */
   readonly acknowledgedStall?: number | null;
+  /** Whether the Stop in progress is graceful (false: forced after 10 s). Default true. */
+  readonly gracefulStop?: boolean;
 }
-
-const STARTING_STATES: ReadonlySet<string> = new Set(['reserved', 'spawning', 'claimed']);
 
 function cancelAction(invocationId: string, label: string): NextAction {
   return {
@@ -311,7 +311,15 @@ export function deriveDisplayedState(input: DisplayedInput): DisplayedState {
   if (cockpit !== null && live && cockpit.pendingInterventions.length > 0)
     return waitingForYou(cockpit);
   if (stopping && live) {
-    return { kind: 'stopping', detail: 'Stopping…', position: null, nextActions: [] };
+    return {
+      kind: 'stopping',
+      detail:
+        input.gracefulStop === false
+          ? 'Stopping… This command cannot stop cleanly yet, so Yantra will end it after 10 seconds and record the run as interrupted.'
+          : 'Stopping…',
+      position: null,
+      nextActions: [],
+    };
   }
   if (
     cockpit !== null &&
@@ -333,8 +341,9 @@ export function deriveDisplayedState(input: DisplayedInput): DisplayedState {
   ) {
     return finishedInvocation(invocation);
   }
+  // While running, Stop lives in the top bar (TASK-008), not in the status line.
   if (cockpit?.firstSeq != null) {
-    return { kind: 'running', detail: 'Running.', position: null, nextActions: stop };
+    return { kind: 'running', detail: 'Running.', position: null, nextActions: [] };
   }
   if (invocation?.state === 'queued') {
     const position = invocation.position ?? null;
@@ -348,12 +357,6 @@ export function deriveDisplayedState(input: DisplayedInput): DisplayedState {
       nextActions: [cancelAction(invocation.invocation_id, 'Cancel')],
     };
   }
-  if (
-    invocation !== null &&
-    (STARTING_STATES.has(invocation.state) || invocation.state === 'running')
-  ) {
-    return { kind: 'starting', detail: 'Starting…', position: null, nextActions: stop };
-  }
-  // A run followed by ID with nothing recorded yet.
-  return { kind: 'starting', detail: 'Starting…', position: null, nextActions: stop };
+  // Starting, or followed by ID with nothing recorded yet; Stop is in the top bar.
+  return { kind: 'starting', detail: 'Starting…', position: null, nextActions: [] };
 }

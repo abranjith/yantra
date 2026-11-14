@@ -2,10 +2,34 @@
   "vcs": "git",
   "files": [
     {
+      "path": "apps/cli/src/commands/ask.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/cli/src/commands/doctor.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/cli/src/commands/research.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "apps/cli/src/ui/host/supervisor.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/registry/abort-rules.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "apps/cli/tests/ui/host/supervisor.spec.ts",
@@ -33,7 +57,7 @@
     },
     {
       "path": "apps/web/src/app/shell/toasts.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
@@ -51,7 +75,7 @@
     },
     {
       "path": "apps/web/src/features/cockpit/cli-twin.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
@@ -87,7 +111,7 @@
     },
     {
       "path": "apps/web/src/features/cockpit/CommandPanel.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
@@ -96,6 +120,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/features/cockpit/StopControl.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "apps/web/src/features/cockpit/UnderstoodPanel.tsx",
@@ -201,7 +231,7 @@
     },
     {
       "path": "apps/web/tests/features/cockpit/command-panel.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
@@ -210,6 +240,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/tests/features/cockpit/stop-control.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "apps/web/tests/features/cockpit/top-bar.spec.tsx",
@@ -291,7 +327,7 @@
     },
     {
       "path": "e2e/app-cli-twin-shells.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
@@ -303,7 +339,7 @@
     },
     {
       "path": "e2e/fixtures/argv-echo/shells.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
@@ -314,10 +350,28 @@
       "task": "TASK-007"
     },
     {
+      "path": "packages/protocol/src/commands/abort.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/protocol/src/commands/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "packages/protocol/src/schemas/app-rpc.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-007"
+    },
+    {
+      "path": "packages/protocol/tests/commands/abort.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "packages/ui/src/gallery/entries.tsx",
@@ -351,7 +405,7 @@
     },
     {
       "path": "packages/ui/src/instruments/CliTwin.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
@@ -417,7 +471,7 @@
     },
     {
       "path": "packages/ui/tests/instruments/cli-twin.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },

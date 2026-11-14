@@ -50,6 +50,7 @@ import {
   SCHEMA_VERSION,
   validateBrief,
   validateTemplatedReport,
+  honorsAbort as abortHonored,
 } from '@yantra/protocol';
 import { CommanderError, type Command } from 'commander';
 
@@ -308,8 +309,13 @@ export function makeResearchHandler(
 
         try {
           // Deterministic selection is resolved before any agent/provider setup.
+          // One rule with the app's Stop wording (protocol ABORT_RULES).
+          honorsAbort = abortHonored('research', {
+            options: {},
+            arguments: {},
+            mode: agent.mode === 'llm' ? 'llm' : 'deterministic',
+          });
           if (agent.mode === 'llm') {
-            honorsAbort = true;
             await runAgenticResearch(
               topicArg,
               invocation,

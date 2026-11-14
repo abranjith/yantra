@@ -39,6 +39,7 @@ export { expandOptions, type ExpandedOption } from './expand.js';
 export { attributeForLong, parseOptionFlags, type ParsedOptionFlags } from './flags.js';
 export { validateCommandRegistry } from './validate.js';
 export { conditionHolds, executionClassFor, jsonEqual, type InvocationFacts } from './execution.js';
+export { ABORT_RULES, abortRule, honorsAbort, type AbortRule } from './abort.js';
 export { OPTION_GROUP_INPUTS } from './groups.js';
 export {
   CommandInvocation,

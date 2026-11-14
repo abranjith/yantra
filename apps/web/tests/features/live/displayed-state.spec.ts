@@ -288,6 +288,15 @@ describe('@no-llm displayed state: each state', () => {
     });
   });
 
+  it('keeps Stop out of the status line while running or starting (it is in the top bar)', () => {
+    const running = holding('running') as Draft;
+    running.invocation = invocation();
+    const starting = holding('starting');
+
+    expect(deriveDisplayedState(running).nextActions).toEqual([]);
+    expect(deriveDisplayedState(starting).nextActions).toEqual([]);
+  });
+
   it('shows starting for a run followed by ID before its first event', () => {
     expect(deriveDisplayedState(base()).kind).toBe('starting');
   });

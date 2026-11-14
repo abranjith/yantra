@@ -7,6 +7,7 @@
 import type { InvocationSummary } from '@yantra/protocol';
 import { useMemo, useState, type ReactNode } from 'react';
 
+import { useRpc } from '../../host/app-rpc.js';
 import { useConnection } from '../../host/connection-store.js';
 import type { CockpitMode } from '../live/cockpit-state.js';
 import { deriveDisplayedState } from '../live/displayed-state.js';
@@ -19,6 +20,7 @@ import { CockpitStatus } from './CockpitStatus.js';
 import { CockpitTopBar } from './CockpitTopBar.js';
 import { CommandPanel } from './CommandPanel.js';
 import { EnginePanel } from './EnginePanel.js';
+import { StopControl, stopIsGraceful } from './StopControl.js';
 import { UnderstoodPanel } from './UnderstoodPanel.js';
 
 export interface CockpitProps {
@@ -33,16 +35,36 @@ export interface CockpitProps {
 export function Cockpit({ stream, mode, invocation = null }: CockpitProps): ReactNode {
   const snapshot = useRunSnapshot(stream);
   const connection = useConnection();
+  const rpc = useRpc();
   const [acknowledgedStall, setAcknowledgedStall] = useState<number | null>(null);
+  const [stopping, setStopping] = useState(false);
+  const [stopError, setStopError] = useState<string | null>(null);
   const state = snapshot.cockpit;
+  const requested = invocation?.invocation ?? null;
+  const graceful = requested === null ? true : stopIsGraceful(requested, state);
   const displayed = deriveDisplayedState({
     invocation,
     connection,
     channel: snapshot.channel,
     cockpit: state,
-    stopping: false,
+    stopping,
     acknowledgedStall,
+    gracefulStop: graceful,
   });
+
+  /** One cancel per Stop: a second press while stopping sends nothing. */
+  const requestStop = (): void => {
+    if (stopping || invocation === null) return;
+    setStopping(true);
+    setStopError(null);
+    rpc
+      .request('command.cancel', { invocation_id: invocation.invocation_id })
+      .catch((caught: unknown) => {
+        setStopping(false);
+        setStopError(caught instanceof Error ? caught.message : 'Yantra could not stop this run.');
+      });
+  };
+  const canStop = invocation !== null && state.outcome === null;
   const view = useMemo(() => announceView(state, displayed.kind), [state, displayed.kind]);
   return (
     <CockpitLayout
@@ -51,12 +73,23 @@ export function Cockpit({ stream, mode, invocation = null }: CockpitProps): Reac
           state={state}
           displayedKind={displayed.kind}
           {...(mode === undefined ? {} : { mode })}
+          stop={
+            canStop ? (
+              <StopControl graceful={graceful} stopping={stopping} onStop={requestStop} />
+            ) : null
+          }
         />
       }
       status={
         <CockpitStatus
           displayed={displayed}
           cockpit={state}
+          error={stopError}
+          onAction={(action) => {
+            if (action.id !== 'cancel' || invocation === null) return false;
+            requestStop();
+            return true;
+          }}
           onKeepWaiting={() => {
             setAcknowledgedStall(state.stalledAt);
           }}

@@ -50,6 +50,7 @@ import {
   validateBrief,
   validateTemplatedReport,
   type TemplatedReport,
+  honorsAbort as abortHonored,
 } from '@yantra/protocol';
 import { CommanderError, type Command } from 'commander';
 
@@ -180,7 +181,12 @@ export function makeAskHandler(
           context.settings.env(),
           effective,
         );
-        honorsAbort = agent.mode === 'llm';
+        // One rule with the app's Stop wording (protocol ABORT_RULES).
+        honorsAbort = abortHonored('ask', {
+          options: {},
+          arguments: {},
+          mode: agent.mode === 'llm' ? 'llm' : 'deterministic',
+        });
         if (agent.mode === 'no-llm' && agent.reason === 'unavailable') {
           runEvents.emit(
             warningEvent(

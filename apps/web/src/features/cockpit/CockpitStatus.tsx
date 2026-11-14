@@ -76,6 +76,8 @@ export interface CockpitStatusProps {
   readonly onAction?: (action: NextAction) => boolean;
   /** "Keep waiting" through the current stall. */
   readonly onKeepWaiting?: () => void;
+  /** A refusal from an action handled elsewhere (Stop), shown with the others. */
+  readonly error?: string | null;
 }
 
 /** See the module comment. */
@@ -84,6 +86,7 @@ export function CockpitStatus({
   cockpit,
   onAction,
   onKeepWaiting,
+  error: outsideError = null,
 }: CockpitStatusProps): ReactNode {
   const rpc = useRpc();
   const navigate = useNavigate();
@@ -146,9 +149,9 @@ export function CockpitStatus({
             />
           ),
         )}
-        {error === null ? null : (
+        {(error ?? outsideError) === null ? null : (
           <p role="alert" className="text-signal-failed-ink">
-            {error}
+            {error ?? outsideError}
           </p>
         )}
       </RunStatusBanner>
