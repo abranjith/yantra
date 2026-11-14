@@ -743,7 +743,7 @@ Task order follows plan §8. TASK-001 to TASK-008 are the **M2 cockpit subset**,
 - [x] TASK-008: Stop — graceful where the command honors abort, honest force-stop otherwise
 - [x] TASK-009: Effective option values and their sources (host read)
 - [x] TASK-010: Composer for Ask and Research — generated options, effective values, template selection
-- [ ] TASK-011: Submit exactly once and land in the cockpit
+- [x] TASK-011: Submit exactly once and land in the cockpit
 - [ ] TASK-012: Do and Run modes — provider readiness gate, workflow picker and params
 - [ ] TASK-013: Run recovery assessment in core (resumability, prior invocation, prior effects)
 - [ ] TASK-014: Resume and Run again actions with the external-effects warning

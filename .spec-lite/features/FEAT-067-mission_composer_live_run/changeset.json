@@ -183,21 +183,27 @@
     },
     {
       "path": "apps/web/src/features/composer/composer-model.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
     {
       "path": "apps/web/src/features/composer/Composer.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
     {
       "path": "apps/web/src/features/composer/field-renderers.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/src/features/composer/submit.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-011"
     },
     {
       "path": "apps/web/src/features/live/announcer.ts",
@@ -285,7 +291,7 @@
     },
     {
       "path": "apps/web/src/routes/mission.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
@@ -339,21 +345,27 @@
     },
     {
       "path": "apps/web/tests/features/composer/__snapshots__/composer-model.spec.ts.snap",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
     {
       "path": "apps/web/tests/features/composer/composer-model.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
     {
       "path": "apps/web/tests/features/composer/composer.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/tests/features/composer/submit.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-011"
     },
     {
       "path": "apps/web/tests/features/live/announcer.spec.ts",
@@ -465,7 +477,7 @@
     },
     {
       "path": "packages/protocol/src/commands/duration.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
@@ -477,7 +489,7 @@
     },
     {
       "path": "packages/protocol/src/commands/presentation.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
@@ -507,7 +519,7 @@
     },
     {
       "path": "packages/protocol/tests/commands/composer-data.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },

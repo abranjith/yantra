@@ -26,7 +26,7 @@ import {
   Tabs,
   TextField,
 } from '@yantra/ui';
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { useRpc } from '../../host/app-rpc.js';
 import { InvocationTwin } from '../cockpit/cli-twin.js';
@@ -172,12 +172,16 @@ function ComposerBody({
       ? null
       : toInvocation(model, { invocationId: 'composer-preview', cwd });
 
+  // A ref, not state: two presses in one tick must not both get through.
+  const inFlight = useRef(false);
   const submit = async (): Promise<void> => {
-    if (cwd === null || busy) return;
+    if (cwd === null || inFlight.current) return;
+    inFlight.current = true;
     setBusy(true);
     try {
       await props.onSubmit?.({ model, effective: effective.data ?? null, cwd });
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   };
