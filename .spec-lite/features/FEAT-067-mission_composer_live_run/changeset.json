@@ -8,20 +8,50 @@
       "task": "TASK-002"
     },
     {
-      "path": "apps/web/src/features/cockpit/Cockpit.tsx",
+      "path": "apps/web/src/app/shell/AppShell.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/src/app/shell/bindu-store.tsx",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/src/app/shell/TopBar.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/src/features/cockpit/bindu-state.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/src/features/cockpit/Cockpit.tsx",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/web/src/features/cockpit/CockpitLayout.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
-      "path": "apps/web/src/features/cockpit/EnginePanel.tsx",
+      "path": "apps/web/src/features/cockpit/CockpitTopBar.tsx",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/src/features/cockpit/EnginePanel.tsx",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
@@ -50,6 +80,12 @@
       "task": "TASK-001"
     },
     {
+      "path": "apps/web/src/features/live/tick-clock.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
       "path": "apps/web/src/features/live/use-run-stream.ts",
       "status": "A",
       "role": "implement",
@@ -57,15 +93,21 @@
     },
     {
       "path": "apps/web/src/routes/mission.runs.$runId.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/web/tests/features/cockpit/cockpit-route.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/tests/features/cockpit/top-bar.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
     },
     {
       "path": "apps/web/tests/features/live/bounded-log.spec.ts",
@@ -81,7 +123,7 @@
     },
     {
       "path": "apps/web/tests/features/live/event-routes.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
@@ -93,13 +135,13 @@
     },
     {
       "path": "apps/web/tests/fixtures/research-no-llm.run-events.jsonl",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
       "path": "apps/web/tests/support/recorded-runs.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
@@ -117,9 +159,27 @@
     },
     {
       "path": "packages/ui/src/gallery/mission-entries.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/src/instruments/bindu.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/src/instruments/BudgetGauge.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
     },
     {
       "path": "packages/ui/src/instruments/index.ts",
@@ -129,13 +189,43 @@
     },
     {
       "path": "packages/ui/src/instruments/RunTimeline.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     },
     {
-      "path": "packages/ui/tests/instruments/run-timeline.spec.tsx",
+      "path": "packages/ui/src/instruments/TruncatedText.tsx",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/src/lib/motion.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/src/styles/drshya.css",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/tests/instruments/bindu.spec.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/tests/instruments/budget-gauge.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/tests/instruments/run-timeline.spec.tsx",
+      "status": "A",
       "role": "implement",
       "task": "TASK-002"
     }

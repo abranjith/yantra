@@ -5,28 +5,27 @@
 
 import type { ReactNode } from 'react';
 
+import type { CockpitMode } from '../live/cockpit-state.js';
 import type { RunStream } from '../live/run-stream.js';
 import { useRunSnapshot } from '../live/use-run-stream.js';
 
 import { CockpitLayout } from './CockpitLayout.js';
+import { CockpitTopBar } from './CockpitTopBar.js';
 import { EnginePanel } from './EnginePanel.js';
 
 export interface CockpitProps {
   readonly stream: RunStream;
+  /** The command word, when the route knows it (invocation or run result). */
+  readonly mode?: CockpitMode;
 }
 
 /** See the module comment. */
-export function Cockpit({ stream }: CockpitProps): ReactNode {
+export function Cockpit({ stream, mode }: CockpitProps): ReactNode {
   const snapshot = useRunSnapshot(stream);
   const state = snapshot.cockpit;
   return (
     <CockpitLayout
-      topBar={
-        <div data-instrument="top_bar" className="flex flex-wrap items-center gap-3">
-          <span className="type-engine text-ink">{state.mode}</span>
-          <span className="min-w-0 truncate text-ink">{state.goal ?? ''}</span>
-        </div>
-      }
+      topBar={<CockpitTopBar state={state} {...(mode === undefined ? {} : { mode })} />}
       understood={<div data-instrument="contract" />}
       engine={<EnginePanel state={state} />}
       command={<div data-instrument="command" />}

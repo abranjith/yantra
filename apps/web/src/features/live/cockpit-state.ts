@@ -84,6 +84,8 @@ export interface CockpitOutcome {
   readonly exitCode: number;
   readonly failureClass: string | null;
   readonly stopDetail: string | null;
+  /** When the run ended (the `run_outcome` event time). */
+  readonly endedAt: string;
 }
 
 /** What the engine is doing, for the Bindu. */
@@ -495,6 +497,7 @@ function apply(state: CockpitState, seq: number, event: RunEvent): CockpitState 
           exitCode: event.exit_code,
           failureClass: event.failure_class,
           stopDetail: event.stop_detail,
+          endedAt: event.at,
         },
       };
     case 'search_completed':

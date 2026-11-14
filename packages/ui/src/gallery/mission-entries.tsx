@@ -6,7 +6,10 @@
 
 import type { ReactNode } from 'react';
 
+import { BINDU_STATES, Bindu } from '../instruments/bindu.js';
+import { BudgetGauges } from '../instruments/BudgetGauge.js';
 import { RunTimeline, type RunTimelineEntry } from '../instruments/RunTimeline.js';
+import { TruncatedText } from '../instruments/TruncatedText.js';
 
 import type { GalleryEntry } from './entries.js';
 
@@ -99,6 +102,41 @@ function TimelineSheet(): ReactNode {
   );
 }
 
+function BinduSheet(): ReactNode {
+  return (
+    <ul className="flex flex-wrap items-center gap-4">
+      {BINDU_STATES.map((state) => (
+        <li key={state} className="flex items-center gap-2">
+          <Bindu state={state} />
+          <span className="type-engine text-ink-2">{state}</span>
+        </li>
+      ))}
+      <li className="flex items-center gap-2">
+        <Bindu state="idle" label="Engine: partial" />
+        <span className="type-engine text-ink-2">partial</span>
+      </li>
+    </ul>
+  );
+}
+
+function BudgetSheet(): ReactNode {
+  return (
+    <div className="flex max-w-xl flex-col gap-6">
+      <BudgetGauges
+        dimensions={[
+          { name: 'elapsed', used: 95_000, limit: 900_000, unit: 'ms' },
+          { name: 'tool_calls', used: 12, limit: 40, unit: 'count' },
+          { name: 'hosts', used: 3, limit: 3, unit: 'count' },
+          { name: 'captures', used: 2, limit: null, unit: 'count' },
+        ]}
+      />
+      <div className="max-w-xs">
+        <TruncatedText text="find quiet laptops for long flights under $1,200 with at least 14 hours of battery" />
+      </div>
+    </div>
+  );
+}
+
 /** The Mission instruments' gallery entries. */
 export const MISSION_ENTRIES: readonly GalleryEntry[] = [
   {
@@ -106,6 +144,20 @@ export const MISSION_ENTRIES: readonly GalleryEntry[] = [
     title: 'RunTimeline',
     primitive: null,
     render: () => <TimelineSheet />,
+    interactive: true,
+  },
+  {
+    id: 'instrument-bindu-states',
+    title: 'Bindu run states',
+    primitive: null,
+    render: () => <BinduSheet />,
+    interactive: false,
+  },
+  {
+    id: 'instrument-budget-gauge',
+    title: 'BudgetGauge and TruncatedText',
+    primitive: null,
+    render: () => <BudgetSheet />,
     interactive: true,
   },
 ];

@@ -735,7 +735,7 @@ Task order follows plan §8. TASK-001 to TASK-008 are the **M2 cockpit subset**,
 
 - [x] TASK-001: Follow a run's event stream with gap-free, duplicate-free replay and reconnect
 - [x] TASK-002: Route every RunEvent kind to an instrument or the EventInspector, and render the cockpit
-- [ ] TASK-003: Top bar — Bindu, mode, goal echo, elapsed time and BudgetGauges
+- [x] TASK-003: Top bar — Bindu, mode, goal echo, elapsed time and BudgetGauges
 - [ ] TASK-004: Understood panel — contract summary, ContractRing and live RequirementList
 - [ ] TASK-005: Explicit run states with next actions
 - [ ] TASK-006: Polite announcements of meaningful changes

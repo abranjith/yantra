@@ -203,6 +203,7 @@ describe('@no-llm cockpit reducer: fields', () => {
       exitCode: 0,
       failureClass: null,
       stopDetail: null,
+      endedAt: ev('run_outcome').at,
     });
     expect(state.openTools).toEqual([]);
     expect(state.pendingInterventions).toEqual([]);

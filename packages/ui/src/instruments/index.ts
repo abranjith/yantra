@@ -69,3 +69,15 @@ export {
   type RunTimelineProps,
   type ToolStatus,
 } from './RunTimeline.js';
+export {
+  BudgetGauge,
+  BudgetGauges,
+  budgetName,
+  formatBudgetAmount,
+  isExhausted,
+  type BudgetGaugeProps,
+  type BudgetGaugesProps,
+  type BudgetGaugeValue,
+  type BudgetUnit,
+} from './BudgetGauge.js';
+export { TruncatedText, type TruncatedTextProps } from './TruncatedText.js';
