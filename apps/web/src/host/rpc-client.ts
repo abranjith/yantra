@@ -199,6 +199,19 @@ export class RpcClient {
     return () => set.delete(handler);
   }
 
+  /**
+   * Reconnects now instead of waiting out the backoff (the cockpit's "Retry
+   * now", FEAT-067). Does nothing while connected, connecting, or ended.
+   */
+  public reconnectNow(): void {
+    if (this.closed || this.socket !== null) return;
+    if (this.reconnectTimer !== null) {
+      this.timers.clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.connect();
+  }
+
   /** Closes for good (the page is unloading or the session ended). */
   public close(): void {
     this.closed = true;

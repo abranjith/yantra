@@ -2,6 +2,18 @@
   "vcs": "git",
   "files": [
     {
+      "path": "apps/cli/src/ui/host/supervisor.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/supervisor.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
       "path": "apps/web/src/app/router.tsx",
       "status": "M",
       "role": "implement",
@@ -44,6 +56,12 @@
       "task": "TASK-002"
     },
     {
+      "path": "apps/web/src/features/cockpit/CockpitStatus.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
       "path": "apps/web/src/features/cockpit/CockpitTopBar.tsx",
       "status": "A",
       "role": "implement",
@@ -57,7 +75,7 @@
     },
     {
       "path": "apps/web/src/features/cockpit/UnderstoodPanel.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
@@ -72,6 +90,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "apps/web/src/features/live/displayed-state.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "apps/web/src/features/live/event-routes.ts",
@@ -92,10 +116,40 @@
       "task": "TASK-003"
     },
     {
+      "path": "apps/web/src/features/live/use-invocation.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
       "path": "apps/web/src/features/live/use-run-stream.ts",
       "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "apps/web/src/host/app-rpc.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/host/rpc-client.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/routes/invocation-id.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/routes/mission.invocations.$invocationId.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "apps/web/src/routes/mission.runs.$runId.tsx",
@@ -110,6 +164,12 @@
       "task": "TASK-002"
     },
     {
+      "path": "apps/web/tests/features/cockpit/invocation-route.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
       "path": "apps/web/tests/features/cockpit/top-bar.spec.tsx",
       "status": "A",
       "role": "implement",
@@ -117,7 +177,7 @@
     },
     {
       "path": "apps/web/tests/features/cockpit/understood-panel.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
@@ -132,6 +192,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "apps/web/tests/features/live/displayed-state.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "apps/web/tests/features/live/event-routes.spec.ts",
@@ -150,6 +216,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/tests/host/rpc-client.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "apps/web/tests/support/recorded-runs.ts",
@@ -195,7 +267,7 @@
     },
     {
       "path": "packages/ui/src/instruments/ContractRing.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
@@ -210,6 +282,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "packages/ui/src/instruments/RunStatusBanner.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "packages/ui/src/instruments/RunTimeline.tsx",
@@ -249,9 +327,15 @@
     },
     {
       "path": "packages/ui/tests/instruments/contract-ring.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "packages/ui/tests/instruments/run-status-banner.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "packages/ui/tests/instruments/run-timeline.spec.tsx",

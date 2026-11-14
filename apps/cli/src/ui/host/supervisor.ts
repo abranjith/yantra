@@ -14,6 +14,9 @@
  *    2 s) takes queued items first-in first-out through drift review and the
  *    slot reservation, then spawns.
  *
+ * `read.invocation` returns one item's summary (with its queue position), so
+ * a reloaded cockpit can follow an invocation before its run exists.
+ *
  * `command.cancel` withdraws an item that has not started; a started one is
  * stopped through its run socket (FEAT-064 `stopRun`: cancel, a 10 s grace,
  * identity-verified termination, always reconciliation). A worker with no run
@@ -138,7 +141,7 @@ export class Supervisor {
     this.timer = null;
   }
 
-  /** Registers `command.*` and `queue.*`. */
+  /** Registers `command.*`, `queue.*` and `read.invocation`. */
   public register(methods: RpcMethodRegistry): void {
     methods
       .register('command.invoke', {
@@ -151,6 +154,12 @@ export class Supervisor {
         params: InvocationIdParams,
         result: InvocationSummary,
         handler: ({ invocation_id: id }) => this.cancel(id),
+      })
+      // FEAT-067: one invocation with its queue position, for a reloaded cockpit.
+      .register('read.invocation', {
+        params: InvocationIdParams,
+        result: InvocationSummary,
+        handler: async ({ invocation_id: id }) => this.current(await this.require(id)),
       })
       .register('queue.list', {
         params: EmptyParams,

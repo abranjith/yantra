@@ -737,7 +737,7 @@ Task order follows plan §8. TASK-001 to TASK-008 are the **M2 cockpit subset**,
 - [x] TASK-002: Route every RunEvent kind to an instrument or the EventInspector, and render the cockpit
 - [x] TASK-003: Top bar — Bindu, mode, goal echo, elapsed time and BudgetGauges
 - [x] TASK-004: Understood panel — contract summary, ContractRing and live RequirementList
-- [ ] TASK-005: Explicit run states with next actions
+- [x] TASK-005: Explicit run states with next actions
 - [ ] TASK-006: Polite announcements of meaningful changes
 - [ ] TASK-007: CliTwin with shell-aware Copy
 - [ ] TASK-008: Stop — graceful where the command honors abort, honest force-stop otherwise

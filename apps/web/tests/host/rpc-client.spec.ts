@@ -213,6 +213,34 @@ describe('reconnect', () => {
     expect(order).toEqual(['auth', 'host.hello', 'runs.subscribe']);
   });
 
+  it('reconnects now on request, cancelling the scheduled retry (FEAT-067)', async () => {
+    const env = setup();
+    await connect(env);
+    env.sockets.current.serverClose(1006);
+    expect(env.timers.scheduled).toHaveLength(1);
+
+    env.client.reconnectNow();
+
+    expect(env.timers.scheduled).toHaveLength(0);
+    expect(env.sockets.sockets).toHaveLength(2);
+    env.sockets.current.open();
+    env.sockets.current.answer('host.hello', HELLO);
+    await flush();
+    expect(env.store.getSnapshot()).toEqual({ status: 'connected' });
+  });
+
+  it('ignores reconnect-now while connected or after the session ended', async () => {
+    const env = setup();
+    await connect(env);
+
+    env.client.reconnectNow();
+    expect(env.sockets.sockets).toHaveLength(1);
+
+    env.sockets.current.serverClose(4401);
+    env.client.reconnectNow();
+    expect(env.sockets.sockets).toHaveLength(1);
+  });
+
   it('resets the backoff after a successful reconnect', async () => {
     const env = setup();
     await connect(env);

@@ -10,6 +10,7 @@ import { BINDU_STATES, Bindu } from '../instruments/bindu.js';
 import { BudgetGauges } from '../instruments/BudgetGauge.js';
 import { ContractRing, type RingSegment } from '../instruments/ContractRing.js';
 import { LiveRequirementList } from '../instruments/RequirementList.js';
+import { RunStatusBanner } from '../instruments/RunStatusBanner.js';
 import { RunTimeline, type RunTimelineEntry } from '../instruments/RunTimeline.js';
 import { TruncatedText } from '../instruments/TruncatedText.js';
 
@@ -194,6 +195,43 @@ function ContractSheet(): ReactNode {
   );
 }
 
+const noop = (): void => undefined;
+
+function StatusSheet(): ReactNode {
+  return (
+    <div className="flex max-w-2xl flex-col gap-3">
+      <RunStatusBanner
+        word="queued"
+        detail="Queued: number 1 in line; it starts when a slot is free (at most two runs at once)."
+        actions={[{ id: 'cancel', label: 'Cancel', onPress: noop }]}
+      />
+      <RunStatusBanner
+        word="running"
+        detail="Running."
+        actions={[{ id: 'stop', label: 'Stop', onPress: noop }]}
+      />
+      <RunStatusBanner
+        word="waiting for you"
+        detail="Submit the order form."
+        tone="attention"
+        actions={[{ id: 'open', label: 'Open the run result', onPress: noop }]}
+      />
+      <RunStatusBanner
+        word="start outcome unknown"
+        detail="Yantra cannot tell whether this run started. It may already have run."
+        tone="caution"
+        actions={[
+          { id: 'start', label: 'Start anyway', onPress: noop, tone: 'danger' },
+          { id: 'discard', label: 'Discard', onPress: noop },
+        ]}
+      />
+      <RunStatusBanner word="stopping" detail="Stopping…" />
+      <RunStatusBanner word="finished" detail="The run ended fulfilled." tone="fulfilled" />
+      <RunStatusBanner word="finished" detail="The run ended failed." tone="failed" />
+    </div>
+  );
+}
+
 /** The Mission instruments' gallery entries. */
 export const MISSION_ENTRIES: readonly GalleryEntry[] = [
   {
@@ -209,6 +247,13 @@ export const MISSION_ENTRIES: readonly GalleryEntry[] = [
     primitive: null,
     render: () => <ContractSheet />,
     interactive: false,
+  },
+  {
+    id: 'instrument-run-status',
+    title: 'RunStatusBanner',
+    primitive: null,
+    render: () => <StatusSheet />,
+    interactive: true,
   },
   {
     id: 'instrument-bindu-states',

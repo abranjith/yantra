@@ -19,6 +19,8 @@ export interface AppRpc {
   on(method: string, handler: (params: Record<string, unknown>) => void): () => void;
   /** Subscribes now and after every reconnect (e.g. `runs.subscribe`). */
   subscribe(method: string, params?: Record<string, unknown>): void;
+  /** Reconnects now instead of waiting out the backoff, when disconnected. */
+  reconnectNow?(): void;
 }
 
 /** An {@link AppRpc} over a client that is attached once the session opens. */
@@ -67,6 +69,10 @@ export class DeferredRpc implements AppRpc {
   public subscribe(method: string, params: Record<string, unknown> = {}): void {
     if (this.client !== null) this.client.subscribe(method, params);
     else this.pendingSubscriptions.push({ method, params });
+  }
+
+  public reconnectNow(): void {
+    this.client?.reconnectNow();
   }
 
   private ready(): Promise<void> {
