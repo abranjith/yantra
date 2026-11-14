@@ -2,6 +2,7 @@ import { createRoute, createRouter, type RouterHistory } from '@tanstack/react-r
 import type { ReactNode } from 'react';
 
 import { ledgerRoute } from '../routes/ledger.js';
+import { missionRunRoute } from '../routes/mission.runs.$runId.js';
 import { artifactRoute } from '../routes/runs.$runId.artifacts.$.js';
 import { auditRoute } from '../routes/runs.$runId.audit.js';
 import { runRoute } from '../routes/runs.$runId.js';
@@ -27,6 +28,7 @@ export const routeTree = rootRoute.addChildren([
   runRoute,
   auditRoute,
   artifactRoute,
+  missionRunRoute,
 ]);
 
 /** Builds the router, with an injected history in tests. */

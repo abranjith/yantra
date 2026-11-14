@@ -12,7 +12,7 @@ type Of<K extends RunEventKind> = Extract<RunEvent, { readonly kind: K }>;
 const TASK = { task_id: 'task-1', at: AT } as const;
 
 const CONFIRMATION_REQUEST = {
-  confirmation_id: '01JCONFIRM00000000000000000',
+  confirmation_id: '01JD0000000000000000000000',
   run_id: 'run-1',
   step_id: 'submit',
   action_kind: 'click',

@@ -2,58 +2,142 @@
   "vcs": "git",
   "files": [
     {
-      "path": "apps/web/src/features/live/bounded-log.ts",
+      "path": "apps/web/src/app/router.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/features/cockpit/Cockpit.tsx",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/features/cockpit/CockpitLayout.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/features/cockpit/EnginePanel.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/features/live/bounded-log.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/web/src/features/live/cockpit-state.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/web/src/features/live/event-routes.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/web/src/features/live/run-stream.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/web/src/features/live/use-run-stream.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
-      "path": "apps/web/tests/features/live/bounded-log.spec.ts",
+      "path": "apps/web/src/routes/mission.runs.$runId.tsx",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/tests/features/cockpit/cockpit-route.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/tests/features/live/bounded-log.spec.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "apps/web/tests/features/live/cockpit-state.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "apps/web/tests/features/live/event-routes.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
     },
     {
       "path": "apps/web/tests/features/live/run-stream.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
-      "path": "apps/web/tests/support/run-events.ts",
+      "path": "apps/web/tests/fixtures/research-no-llm.run-events.jsonl",
       "status": "U",
       "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/tests/support/recorded-runs.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/tests/support/run-events.ts",
+      "status": "A",
+      "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/ui/src/gallery/entries.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/src/gallery/mission-entries.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/src/instruments/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/src/instruments/RunTimeline.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/tests/instruments/run-timeline.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
     }
   ],
   "excluded": [

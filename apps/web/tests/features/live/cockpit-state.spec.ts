@@ -165,7 +165,7 @@ describe('@no-llm cockpit reducer: fields', () => {
 
     expect(raised.pendingInterventions).toEqual([
       {
-        interventionId: '01JCONFIRM00000000000000000',
+        interventionId: '01JD0000000000000000000000',
         kind: 'confirmation',
         summary: 'Submit the order form',
         deadlineAt: '2026-11-14T10:03:00.000Z',

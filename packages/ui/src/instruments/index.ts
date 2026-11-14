@@ -60,3 +60,12 @@ export {
   type EventInspectorProps,
   type JsonTreeOptions,
 } from './EventInspector.js';
+export {
+  RunTimeline,
+  timelineRowLabel,
+  type Phase,
+  type RowTone,
+  type RunTimelineEntry,
+  type RunTimelineProps,
+  type ToolStatus,
+} from './RunTimeline.js';

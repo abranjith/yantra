@@ -22,6 +22,7 @@ import type {
   TaskOutcome,
   TerminationReason,
 } from '@yantra/protocol';
+import type { Phase, RowTone, RunTimelineEntry, ToolStatus } from '@yantra/ui';
 
 import { appendLog, emptyLog, logAt, replaceLog, type BoundedLog } from './bounded-log.js';
 import { isInspected, isKnownKind } from './event-routes.js';
@@ -53,51 +54,9 @@ export interface BudgetView {
   readonly at: string;
 }
 
-/** How a tool call stands. */
-export type ToolStatus = 'running' | 'ok' | 'error' | 'denied' | 'aborted';
-
-/** A deterministic `ask`/`research` phase. */
-export type Phase = 'search' | 'fetch' | 'extract' | 'synthesize';
-
-/** The tone of a workflow or advisory timeline row. */
-export type RowTone = 'neutral' | 'ok' | 'warn' | 'error';
-
-/** One RunTimeline row. */
-export type TimelineEntry =
-  | {
-      readonly type: 'tool';
-      readonly seq: number;
-      readonly tool: string;
-      readonly summary: string;
-      readonly status: ToolStatus;
-      /** The finish summary (status and error code only), once finished. */
-      readonly result: string | null;
-      readonly durationMs: number | null;
-      readonly at: string;
-    }
-  | {
-      readonly type: 'recovery';
-      readonly seq: number;
-      readonly rung: 'steer' | 'freeze' | 'stop';
-      readonly trigger: 'stalled' | 'turn-timeout';
-      readonly summary: string;
-      readonly at: string;
-    }
-  | {
-      readonly type: 'phase';
-      readonly seq: number;
-      readonly phase: Phase;
-      readonly text: string;
-      readonly at: string;
-    }
-  | {
-      readonly type: 'step';
-      readonly seq: number;
-      readonly kind: string;
-      readonly text: string;
-      readonly tone: RowTone;
-      readonly at: string;
-    };
+/** One RunTimeline row (the Drshya instrument's own row type). */
+export type TimelineEntry = RunTimelineEntry;
+export type { Phase, RowTone, ToolStatus };
 
 /** One event shown in the EventInspector. */
 export interface InspectedEvent {
