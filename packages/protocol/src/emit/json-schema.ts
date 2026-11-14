@@ -9,7 +9,7 @@ import { CommandRegistry } from '../commands/schema.js';
 import { AgentProgressEvent } from '../schemas/agent-progress.js';
 import { HostLockRecord, InvocationRecord } from '../schemas/app-host.js';
 import { Brief } from '../schemas/brief.js';
-import { ListResult } from '../schemas/cli-reads.js';
+import { AuditReport, ListResult } from '../schemas/cli-reads.js';
 import { CommandResultMessageSchema } from '../schemas/command-result.js';
 import { ConfirmationDecision, ConfirmationRequest } from '../schemas/confirmation.js';
 import { DiscoverySession } from '../schemas/discovery.js';
@@ -67,6 +67,7 @@ export const JSON_SCHEMA_ARTIFACTS: Record<string, { schema: z.ZodType<unknown>;
   'invocation-record.json': { schema: InvocationRecord, name: 'InvocationRecord' },
   'run-artifact-registry.json': { schema: RunArtifactRegistry, name: 'RunArtifactRegistry' },
   'list-result.schema.json': { schema: ListResult, name: 'ListResult' },
+  'audit-report.schema.json': { schema: AuditReport, name: 'AuditReport' },
   'run-result.schema.json': { schema: RunResultView, name: 'RunResultView' },
 } as const;
 

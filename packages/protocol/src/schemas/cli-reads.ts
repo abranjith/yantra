@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { RunId } from './run-artifacts.js';
 import { ExecutionState } from './run-lease.js';
 import { TaskOutcome } from './task-outcome.js';
 
@@ -213,3 +214,158 @@ export const ReportResult = z
   .strict()
   .describe('The `yantra report --json` document.');
 export type ReportResult = z.infer<typeof ReportResult>;
+
+/** Rows of `toolCalls` or `captures` one `read.audit` page carries. */
+export const AUDIT_WINDOW_ROWS = 500;
+
+const nullableNumber = z.number().nullable();
+
+/** The structured audit of one run: `yantra audit --json` without its envelope. */
+export const AuditReport = z
+  .object({
+    runId: z.string().describe('The run id.'),
+    workflowName: z.string().describe('The workflow or command name; `<unknown>` when absent.'),
+    status: z.string().describe('The manifest status; `unknown` when absent.'),
+    startedAt: z.string().describe('ISO start time; empty when absent.'),
+    endedAt: z.string().nullable().describe('ISO end time, or null.'),
+    durationMs: nullableNumber.describe('Wall-clock duration, or null.'),
+    llmCallCount: z.number().int().nonnegative().describe('Model calls (turns) the run made.'),
+    secretLookups: z
+      .array(
+        z
+          .object({
+            key: z.string().describe('The secret’s key name; never its value.'),
+            stepId: z.string(),
+            ts: z.string(),
+          })
+          .strict(),
+      )
+      .describe('Secret lookups: key names only, never values.'),
+    stepCount: z.number().int().nonnegative().describe('Distinct workflow steps started.'),
+    scopeMix: z
+      .object({
+        publicCount: z.number().int().nonnegative(),
+        readOnlyDataCount: z.number().int().nonnegative(),
+        authenticatedCount: z.number().int().nonnegative(),
+      })
+      .strict()
+      .describe('Step starts by security scope.'),
+    trustNarrative: z.string().describe('The two-to-three sentence summary the CLI prints first.'),
+    agent: z
+      .object({
+        adapter: z.string(),
+        sdkVersion: z.string(),
+        provider: z.string(),
+        model: z.string(),
+        thinking: z.string(),
+        authSource: z.string(),
+        sessionId: z.string(),
+        sessionFile: z.string().describe('Run-relative path of the provider session log.'),
+        promptVersion: z.string(),
+      })
+      .strict()
+      .nullable()
+      .describe('Provider provenance of an agentic run, or null.'),
+    toolCalls: z
+      .array(
+        z
+          .object({
+            seq: z.number().int(),
+            callId: z.string(),
+            tool: z.string(),
+            status: z.enum(['ok', 'error', 'denied', 'aborted', 'incomplete']),
+            durationMs: nullableNumber,
+            confirmationId: z.string().nullable(),
+            confirmationDecision: z.string().nullable(),
+            incomplete: z.boolean(),
+          })
+          .strict(),
+      )
+      .describe('Agent tool calls in sequence order; in `read.audit`, one window of them.'),
+    captures: z
+      .array(
+        z
+          .object({
+            path: z.string(),
+            sha256: z.string(),
+            mimeType: z.literal('image/png'),
+            width: nullableNumber,
+            height: nullableNumber,
+            bytes: z.number().int().nonnegative(),
+            sentToModel: z.boolean().describe('Shown to the model provider (Vision Assist).'),
+            toolCall: z
+              .object({ seq: z.number().int(), callId: z.string(), tool: z.string() })
+              .strict(),
+            budgetConsumed: z
+              .object({
+                captures: z.literal(1),
+                pixels: z.number().nonnegative(),
+                bytes: z.number().int().nonnegative(),
+              })
+              .strict(),
+          })
+          .strict(),
+      )
+      .describe('Every capture the run wrote; in `read.audit`, one window of them.'),
+    rawSessionLogCaptureBearing: z
+      .boolean()
+      .describe('The raw provider session log contains image data a capture sent.'),
+    usage: z
+      .object({
+        turns: z.number().int().nonnegative(),
+        inputTokens: nullableNumber,
+        outputTokens: nullableNumber,
+        costUsd: nullableNumber,
+      })
+      .strict()
+      .nullable()
+      .describe('Provider usage, or null.'),
+    terminalError: z
+      .object({ code: z.string(), message: z.string() })
+      .strict()
+      .nullable()
+      .describe('A typed startup failure, or null.'),
+  })
+  .strict()
+  .describe('The audit story of one run.');
+export type AuditReport = z.infer<typeof AuditReport>;
+
+/** `yantra audit --json`: the report inside the CLI envelope. */
+export const AuditResult = AuditReport.extend({
+  schemaVersion: z.literal(CLI_READ_SCHEMA_VERSION),
+  kind: z.literal('audit'),
+})
+  .strict()
+  .describe('The `yantra audit --json` document.');
+export type AuditResult = z.infer<typeof AuditResult>;
+
+const AuditCursor = z.string().min(1).max(128).describe('Opaque cursor from a previous page.');
+
+/** `read.audit` params. */
+export const AuditParams = z
+  .object({
+    run_id: RunId,
+    tool_calls_cursor: AuditCursor.optional(),
+    captures_cursor: AuditCursor.optional(),
+  })
+  .strict()
+  .describe('One page of a run’s audit.');
+export type AuditParams = z.infer<typeof AuditParams>;
+
+const AuditWindow = z
+  .object({
+    total: z.number().int().nonnegative().describe('Rows in the whole run.'),
+    next_cursor: z.string().nullable().describe('Cursor for the next window; null at the end.'),
+  })
+  .strict();
+
+/** `read.audit` result: the report with one window of tool calls and of captures. */
+export const AuditPage = z
+  .object({
+    report: AuditReport,
+    tool_calls: AuditWindow,
+    captures: AuditWindow,
+  })
+  .strict()
+  .describe('One page of a run’s audit, at most 768 KiB serialized.');
+export type AuditPage = z.infer<typeof AuditPage>;

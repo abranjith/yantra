@@ -1,0 +1,387 @@
+{
+  "$ref": "#/definitions/AuditReport",
+  "definitions": {
+    "AuditReport": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string",
+          "description": "The run id."
+        },
+        "workflowName": {
+          "type": "string",
+          "description": "The workflow or command name; `<unknown>` when absent."
+        },
+        "status": {
+          "type": "string",
+          "description": "The manifest status; `unknown` when absent."
+        },
+        "startedAt": {
+          "type": "string",
+          "description": "ISO start time; empty when absent."
+        },
+        "endedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "ISO end time, or null."
+        },
+        "durationMs": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Wall-clock duration, or null."
+        },
+        "llmCallCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Model calls (turns) the run made."
+        },
+        "secretLookups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string",
+                "description": "The secret’s key name; never its value."
+              },
+              "stepId": {
+                "type": "string"
+              },
+              "ts": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "stepId",
+              "ts"
+            ],
+            "additionalProperties": false
+          },
+          "description": "Secret lookups: key names only, never values."
+        },
+        "stepCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Distinct workflow steps started."
+        },
+        "scopeMix": {
+          "type": "object",
+          "properties": {
+            "publicCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "readOnlyDataCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "authenticatedCount": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "publicCount",
+            "readOnlyDataCount",
+            "authenticatedCount"
+          ],
+          "additionalProperties": false,
+          "description": "Step starts by security scope."
+        },
+        "trustNarrative": {
+          "type": "string",
+          "description": "The two-to-three sentence summary the CLI prints first."
+        },
+        "agent": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "adapter": {
+                  "type": "string"
+                },
+                "sdkVersion": {
+                  "type": "string"
+                },
+                "provider": {
+                  "type": "string"
+                },
+                "model": {
+                  "type": "string"
+                },
+                "thinking": {
+                  "type": "string"
+                },
+                "authSource": {
+                  "type": "string"
+                },
+                "sessionId": {
+                  "type": "string"
+                },
+                "sessionFile": {
+                  "type": "string",
+                  "description": "Run-relative path of the provider session log."
+                },
+                "promptVersion": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "adapter",
+                "sdkVersion",
+                "provider",
+                "model",
+                "thinking",
+                "authSource",
+                "sessionId",
+                "sessionFile",
+                "promptVersion"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Provider provenance of an agentic run, or null."
+        },
+        "toolCalls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "seq": {
+                "type": "integer"
+              },
+              "callId": {
+                "type": "string"
+              },
+              "tool": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "ok",
+                  "error",
+                  "denied",
+                  "aborted",
+                  "incomplete"
+                ]
+              },
+              "durationMs": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "confirmationId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "confirmationDecision": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "incomplete": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "seq",
+              "callId",
+              "tool",
+              "status",
+              "durationMs",
+              "confirmationId",
+              "confirmationDecision",
+              "incomplete"
+            ],
+            "additionalProperties": false
+          },
+          "description": "Agent tool calls in sequence order; in `read.audit`, one window of them."
+        },
+        "captures": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "sha256": {
+                "type": "string"
+              },
+              "mimeType": {
+                "type": "string",
+                "const": "image/png"
+              },
+              "width": {
+                "$ref": "#/definitions/AuditReport/properties/toolCalls/items/properties/durationMs"
+              },
+              "height": {
+                "$ref": "#/definitions/AuditReport/properties/toolCalls/items/properties/durationMs"
+              },
+              "bytes": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "sentToModel": {
+                "type": "boolean",
+                "description": "Shown to the model provider (Vision Assist)."
+              },
+              "toolCall": {
+                "type": "object",
+                "properties": {
+                  "seq": {
+                    "type": "integer"
+                  },
+                  "callId": {
+                    "type": "string"
+                  },
+                  "tool": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "seq",
+                  "callId",
+                  "tool"
+                ],
+                "additionalProperties": false
+              },
+              "budgetConsumed": {
+                "type": "object",
+                "properties": {
+                  "captures": {
+                    "type": "number",
+                    "const": 1
+                  },
+                  "pixels": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "bytes": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "captures",
+                  "pixels",
+                  "bytes"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "path",
+              "sha256",
+              "mimeType",
+              "width",
+              "height",
+              "bytes",
+              "sentToModel",
+              "toolCall",
+              "budgetConsumed"
+            ],
+            "additionalProperties": false
+          },
+          "description": "Every capture the run wrote; in `read.audit`, one window of them."
+        },
+        "rawSessionLogCaptureBearing": {
+          "type": "boolean",
+          "description": "The raw provider session log contains image data a capture sent."
+        },
+        "usage": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "turns": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "inputTokens": {
+                  "$ref": "#/definitions/AuditReport/properties/toolCalls/items/properties/durationMs"
+                },
+                "outputTokens": {
+                  "$ref": "#/definitions/AuditReport/properties/toolCalls/items/properties/durationMs"
+                },
+                "costUsd": {
+                  "$ref": "#/definitions/AuditReport/properties/toolCalls/items/properties/durationMs"
+                }
+              },
+              "required": [
+                "turns",
+                "inputTokens",
+                "outputTokens",
+                "costUsd"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Provider usage, or null."
+        },
+        "terminalError": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "A typed startup failure, or null."
+        }
+      },
+      "required": [
+        "runId",
+        "workflowName",
+        "status",
+        "startedAt",
+        "endedAt",
+        "durationMs",
+        "llmCallCount",
+        "secretLookups",
+        "stepCount",
+        "scopeMix",
+        "trustNarrative",
+        "agent",
+        "toolCalls",
+        "captures",
+        "rawSessionLogCaptureBearing",
+        "usage",
+        "terminalError"
+      ],
+      "additionalProperties": false,
+      "description": "The audit story of one run."
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

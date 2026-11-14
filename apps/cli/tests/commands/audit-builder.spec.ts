@@ -1,12 +1,21 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Writable } from 'node:stream';
 
+import { AuditReport } from '@yantra/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { buildAuditReport } from '../../src/commands/audit-builder.js';
+import { buildAuditReport, createAuditCache } from '../../src/commands/audit-builder.js';
 import { TerminalRenderer } from '../../src/render/terminal.js';
+
+import {
+  toolCall,
+  writeLargeRun,
+  writeRichAgentRun,
+  writeScheduledWorkflowRun,
+  writeStartupFailureRun,
+} from './support/audit-fixtures.js';
 
 async function makeRunDir(): Promise<string> {
   return mkdtemp(join(tmpdir(), 'yantra-audit-builder-'));
@@ -663,5 +672,91 @@ describe('@no-llm cli/audit-builder capture listings (FEAT-058)', () => {
     expect(text.slice(seenAt, keptAt)).toContain(`screenshots/1-${SHA.slice(0, 12)}.png`);
     expect(text.slice(keptAt)).toContain(`screenshots/capture-1-${SHA.slice(0, 12)}-p1.png`);
     expect(text.slice(keptAt)).not.toContain(`screenshots/1-${SHA.slice(0, 12)}.png`);
+  });
+});
+
+describe('@no-llm cli/audit-builder streaming, windows and cache (FEAT-066)', () => {
+  let root: string;
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'yantra-audit-window-'));
+  });
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  it('every fixture report parses as the protocol AuditReport, and every key is a schema field', async () => {
+    for (const [runId, write] of [
+      ['agent-run', writeRichAgentRun],
+      ['wf-run', writeScheduledWorkflowRun],
+      ['fail-run', writeStartupFailureRun],
+    ] as const) {
+      const dir = await write(join(root, runId));
+      const result = await buildAuditReport(runId, dir);
+      if (result.kind !== 'ok') throw new Error(result.error.message);
+      expect(AuditReport.parse(result.report)).toEqual(result.report);
+      expect(Object.keys(result.report).sort()).toEqual(Object.keys(AuditReport.shape).sort());
+    }
+  });
+
+  it('counts 50,000 tool calls and materializes only a window of 500', async () => {
+    const dir = await writeLargeRun(join(root, 'big'), 50_000);
+
+    const result = await buildAuditReport('big-run', dir, {
+      window: { toolCalls: { offset: 49_800, limit: 500 }, captures: { offset: 0, limit: 500 } },
+    });
+
+    if (result.kind !== 'ok') throw new Error(result.error.message);
+    expect(result.totals).toEqual({ toolCalls: 50_000, captures: 5_000 });
+    expect(result.report.toolCalls).toHaveLength(200);
+    expect(result.report.toolCalls[0]!.callId).toBe('call-49800');
+    expect(result.report.captures).toHaveLength(500);
+  }, 60_000);
+
+  it('skips corrupt lines exactly as before', async () => {
+    const dir = await writeRichAgentRun(join(root, 'rich'));
+    const result = await buildAuditReport('agent-run', dir);
+    if (result.kind !== 'ok') throw new Error(result.error.message);
+    expect(result.report.toolCalls.map((call) => call.callId)).toEqual(['a', 'b', 'c', 'd']);
+    expect(result.totals.toolCalls).toBe(4);
+  });
+
+  it('caches by input sizes and times: same object when unchanged, rebuilt after an append', async () => {
+    const dir = await writeRichAgentRun(join(root, 'rich'));
+    const cache = createAuditCache();
+
+    const first = await buildAuditReport('agent-run', dir, { cache });
+    const second = await buildAuditReport('agent-run', dir, { cache });
+    await appendFile(
+      join(dir, 'tool-calls.jsonl'),
+      `${JSON.stringify(toolCall('agent-run', 9, 'z', 'web_fetch', 'end'))}\n`,
+    );
+    const third = await buildAuditReport('agent-run', dir, { cache });
+
+    expect(second).toBe(first);
+    expect(third).not.toBe(first);
+    expect(third.kind === 'ok' && third.totals.toolCalls).toBe(5);
+  });
+
+  it('keeps at most its capacity of audits', async () => {
+    const cache = createAuditCache(1);
+    const a = await writeStartupFailureRun(join(root, 'a'));
+    const b = await writeStartupFailureRun(join(root, 'b'));
+    const firstA = await buildAuditReport('fail-run', a, { cache });
+    await buildAuditReport('fail-run', b, { cache });
+    expect(await buildAuditReport('fail-run', a, { cache })).not.toBe(firstA);
+  });
+
+  it('a window never changes the CLI path, which passes none', async () => {
+    const dir = await writeRichAgentRun(join(root, 'rich'));
+    const plain = await buildAuditReport('agent-run', dir);
+    const windowed = await buildAuditReport('agent-run', dir, {
+      window: { toolCalls: { offset: 0, limit: 1 } },
+    });
+    if (plain.kind !== 'ok' || windowed.kind !== 'ok') throw new Error('audit failed');
+    expect(plain.report.toolCalls).toHaveLength(4);
+    expect(windowed.report.toolCalls).toHaveLength(1);
+    expect(windowed.report.captures).toEqual(plain.report.captures);
   });
 });

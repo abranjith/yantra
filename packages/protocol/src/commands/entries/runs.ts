@@ -96,7 +96,7 @@ export const audit = leaf({
   effect: 'none',
   danger: NO_DANGER,
   exit_codes: [exit.ok(), exit.validation(`${PARSE_ERRORS}, an unknown run, or an audit failure`)],
-  json: { flag: '--json', shape: 'envelope', schema: null },
+  json: { flag: '--json', shape: 'envelope', schema: 'AuditResult' },
 });
 
 export const report = leaf({

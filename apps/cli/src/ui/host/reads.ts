@@ -59,7 +59,7 @@ export interface ReaderSpec {
 export const READERS: readonly ReaderSpec[] = [
   { method: 'read.list', path: ['list'], paged: true },
   { method: 'read.show', path: ['show'] },
-  { method: 'read.audit', path: ['audit'] },
+  { method: 'read.audit', path: ['audit'], runRead: true },
   { method: 'read.report', path: ['report'], runRead: true },
   { method: 'read.prefs.list', path: ['prefs'], fixedArgs: ['list'] },
   { method: 'read.prefs.get', path: ['prefs'], fixedArgs: ['get'] },

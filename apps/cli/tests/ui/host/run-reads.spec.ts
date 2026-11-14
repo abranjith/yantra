@@ -36,10 +36,13 @@ import {
   type RpcCallContext,
 } from '../../../src/ui/host/rpc-server.js';
 import {
+  decodeAuditCursor,
+  encodeAuditCursor,
   registerRunReads,
   runReadError,
   type RunReadDeps,
 } from '../../../src/ui/host/run-reads.js';
+import { writeLargeRun } from '../../commands/support/audit-fixtures.js';
 
 let home: string;
 
@@ -561,5 +564,74 @@ describe('read.artifact_window', () => {
         ...patch,
       }).success,
     ).toBe(false);
+  });
+});
+
+describe('read.audit', () => {
+  const CALL = { windowId: 'w', connection: {} } as unknown as RpcCallContext;
+
+  function audit() {
+    const methods = new RpcMethodRegistry();
+    registerRunReads(methods);
+    return methods.get('read.audit')!;
+  }
+
+  it('pages a 50,000-call run in windows of 500 under 768 KiB, with no gap', async () => {
+    const runIdValue = runId(60, 'do');
+    await writeLargeRun(join(runsRoot(), runIdValue), 50_000);
+    const method = audit();
+
+    const seen: string[] = [];
+    let cursor: string | null | undefined;
+    let largest = 0;
+    let pages = 0;
+    do {
+      const page = (await method.handler(
+        method.params.parse({
+          run_id: runIdValue,
+          ...(cursor ? { tool_calls_cursor: cursor } : {}),
+        }),
+        CALL,
+      )) as AuditPage;
+      expect(method.result.safeParse(page).success).toBe(true);
+      largest = Math.max(largest, jsonBytes(page));
+      seen.push(...page.report.toolCalls.map((call) => call.callId));
+      expect(page.tool_calls.total).toBe(50_000);
+      expect(page.captures.total).toBe(5_000);
+      cursor = page.tool_calls.next_cursor;
+      pages += 1;
+    } while (cursor !== null);
+
+    expect(pages).toBe(100);
+    expect(seen).toHaveLength(50_000);
+    expect(new Set(seen).size).toBe(50_000);
+    expect(largest).toBeLessThanOrEqual(768 * 1024);
+  }, 120_000);
+
+  it('maps a missing run to not_found and a run without a manifest to not_found', async () => {
+    const method = audit();
+    const missing = await Promise.resolve(
+      method.handler(method.params.parse({ run_id: runId(61) }), CALL),
+    ).catch((caught: unknown) => caught);
+    expect((missing as RpcError).data.code).toBe('not_found');
+
+    await mkdir(join(runsRoot(), runId(62)), { recursive: true });
+    const bare = await Promise.resolve(
+      method.handler(method.params.parse({ run_id: runId(62) }), CALL),
+    ).catch((caught: unknown) => caught);
+    expect((bare as RpcError).data.code).toBe('not_found');
+  });
+
+  it.each([
+    'garbage!!',
+    Buffer.from('{"v":2,"o":1}').toString('base64url'),
+    Buffer.from('{"v":1,"o":-5}').toString('base64url'),
+  ])('refuses the cursor %j', (cursor) => {
+    expect(() => decodeAuditCursor(cursor)).toThrow(RpcError);
+  });
+
+  it('round-trips a cursor', () => {
+    expect(decodeAuditCursor(encodeAuditCursor(1_500))).toBe(1_500);
+    expect(decodeAuditCursor(undefined)).toBe(0);
   });
 });

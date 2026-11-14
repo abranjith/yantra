@@ -8,6 +8,12 @@
       "task": "TASK-001"
     },
     {
+      "path": "apps/cli/src/commands/audit-builder.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
       "path": "apps/cli/src/commands/list.ts",
       "status": "M",
       "role": "implement",
@@ -72,6 +78,42 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "apps/cli/tests/commands/__goldens__/audit/rich-agent.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "apps/cli/tests/commands/__goldens__/audit/rich-agent.txt",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "apps/cli/tests/commands/__goldens__/audit/scheduled-workflow.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "apps/cli/tests/commands/__goldens__/audit/scheduled-workflow.txt",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "apps/cli/tests/commands/__goldens__/audit/startup-failure.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "apps/cli/tests/commands/__goldens__/audit/startup-failure.txt",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
     },
     {
       "path": "apps/cli/tests/commands/__goldens__/list-ledger/index.list-runs-limit-3.json",
@@ -506,10 +548,28 @@
       "task": "TASK-002"
     },
     {
+      "path": "apps/cli/tests/commands/audit-builder.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "apps/cli/tests/commands/audit-golden.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
       "path": "apps/cli/tests/commands/list-ledger.spec.ts",
       "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "apps/cli/tests/commands/support/audit-fixtures.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
     },
     {
       "path": "apps/cli/tests/ui/host/artifact-serving.spec.ts",
@@ -570,6 +630,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/src/features/audit/AuditView.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
     },
     {
       "path": "apps/web/src/features/format.ts",
@@ -639,19 +705,19 @@
     },
     {
       "path": "apps/web/src/features/viewers/event-summary.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
     {
       "path": "apps/web/src/features/viewers/ImageViewer.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
     {
       "path": "apps/web/src/features/viewers/JsonlViewer.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
@@ -669,7 +735,7 @@
     },
     {
       "path": "apps/web/src/features/viewers/TextViewer.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
@@ -704,6 +770,12 @@
       "task": "TASK-005"
     },
     {
+      "path": "apps/web/src/routes/runs.$runId.audit.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
       "path": "apps/web/src/routes/runs.$runId.tsx",
       "status": "A",
       "role": "implement",
@@ -722,6 +794,12 @@
       "task": "TASK-003"
     },
     {
+      "path": "apps/web/tests/features/audit/audit.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
       "path": "apps/web/tests/features/run-result/evidence.spec.tsx",
       "status": "A",
       "role": "implement",
@@ -735,7 +813,7 @@
     },
     {
       "path": "apps/web/tests/features/viewers/viewers.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
@@ -867,7 +945,7 @@
     },
     {
       "path": "packages/core/src/run-view/jsonl-window.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
@@ -915,7 +993,7 @@
     },
     {
       "path": "packages/core/tests/run-view/jsonl-window.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
@@ -948,6 +1026,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/generated/json-schema/audit-report.schema.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
     },
     {
       "path": "packages/protocol/generated/json-schema/list-result.schema.json",
@@ -1125,7 +1209,7 @@
     },
     {
       "path": "packages/ui/tests/instruments/event-inspector.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },

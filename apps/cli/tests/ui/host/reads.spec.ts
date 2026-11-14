@@ -158,7 +158,6 @@ describe('parity with yantra <cmd> --json', () => {
       ['show', 'fixture', '--workflow'],
     ],
     ['read.show', { args: [FIXED_RUN], options: { run: true } }, ['show', FIXED_RUN, '--run']],
-    ['read.audit', { args: [FIXED_RUN] }, ['audit', FIXED_RUN]],
     ['read.prefs.list', {}, ['prefs', 'list']],
     ['read.prefs.get', { args: ['defaults.detail'] }, ['prefs', 'get', 'defaults.detail']],
     ['read.daemon.status', {}, ['daemon', 'status']],
@@ -170,6 +169,25 @@ describe('parity with yantra <cmd> --json', () => {
     // Assert
     expect(result.value).toEqual(cli);
     expect(result.schema).toBeNull();
+  });
+});
+
+describe('read.audit', () => {
+  it('carries the same report as yantra audit --json', async () => {
+    await writeRun(FIXED_RUN, '2026-11-07T00:00:00.000Z');
+    registerRunReads(methods);
+    const method = methods.get('read.audit')!;
+
+    const page = (await method.handler(method.params.parse({ run_id: FIXED_RUN }), CALL)) as {
+      report: Record<string, unknown>;
+    };
+
+    const {
+      schemaVersion: _version,
+      kind: _kind,
+      ...cli
+    } = (await cliJson(['audit', FIXED_RUN])) as Record<string, unknown>;
+    expect(page.report).toEqual(cli);
   });
 });
 
@@ -297,7 +315,7 @@ describe('read.list paging', () => {
 
 describe('errors', () => {
   it('turns a reader failure into not_found with the CLI message', async () => {
-    const error = await read('read.audit', { args: ['no-such-run'] }).catch(
+    const error = await read('read.show', { args: ['no-such-run'], options: { run: true } }).catch(
       (caught: unknown) => caught,
     );
     expect(error).toBeInstanceOf(RpcError);

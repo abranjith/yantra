@@ -357,6 +357,146 @@ Example:
 }
 ```
 
+## AuditPage
+
+One page of a run’s audit, at most 768 KiB serialized.
+
+| Field      | Description                 |
+| ---------- | --------------------------- |
+| report     | The audit story of one run. |
+| tool_calls |                             |
+| captures   |                             |
+
+Example:
+
+```json
+{
+  "report": "<report>",
+  "tool_calls": "<tool_calls>",
+  "captures": "<captures>"
+}
+```
+
+## AuditParams
+
+One page of a run’s audit.
+
+| Field             | Description                                                                    |
+| ----------------- | ------------------------------------------------------------------------------ |
+| run_id            | A run id, e.g. `20260511T091234Z-bank-statement-a7b3`; names `runs/<run_id>/`. |
+| tool_calls_cursor | Opaque cursor from a previous page.                                            |
+| captures_cursor   | Opaque cursor from a previous page.                                            |
+
+Example:
+
+```json
+{
+  "run_id": "<run_id>",
+  "tool_calls_cursor": "<tool_calls_cursor>",
+  "captures_cursor": "<captures_cursor>"
+}
+```
+
+## AuditReport
+
+The audit story of one run.
+
+| Field                       | Description                                                              |
+| --------------------------- | ------------------------------------------------------------------------ |
+| runId                       | The run id.                                                              |
+| workflowName                | The workflow or command name; `<unknown>` when absent.                   |
+| status                      | The manifest status; `unknown` when absent.                              |
+| startedAt                   | ISO start time; empty when absent.                                       |
+| endedAt                     | ISO end time, or null.                                                   |
+| durationMs                  | Wall-clock duration, or null.                                            |
+| llmCallCount                | Model calls (turns) the run made.                                        |
+| secretLookups               | Secret lookups: key names only, never values.                            |
+| stepCount                   | Distinct workflow steps started.                                         |
+| scopeMix                    | Step starts by security scope.                                           |
+| trustNarrative              | The two-to-three sentence summary the CLI prints first.                  |
+| agent                       | Provider provenance of an agentic run, or null.                          |
+| toolCalls                   | Agent tool calls in sequence order; in `read.audit`, one window of them. |
+| captures                    | Every capture the run wrote; in `read.audit`, one window of them.        |
+| rawSessionLogCaptureBearing | The raw provider session log contains image data a capture sent.         |
+| usage                       | Provider usage, or null.                                                 |
+| terminalError               | A typed startup failure, or null.                                        |
+
+Example:
+
+```json
+{
+  "runId": "<runId>",
+  "workflowName": "<workflowName>",
+  "status": "<status>",
+  "startedAt": "<startedAt>",
+  "endedAt": "<endedAt>",
+  "durationMs": "<durationMs>",
+  "llmCallCount": "<llmCallCount>",
+  "secretLookups": "<secretLookups>",
+  "stepCount": "<stepCount>",
+  "scopeMix": "<scopeMix>",
+  "trustNarrative": "<trustNarrative>",
+  "agent": "<agent>",
+  "toolCalls": "<toolCalls>",
+  "captures": "<captures>",
+  "rawSessionLogCaptureBearing": "<rawSessionLogCaptureBearing>",
+  "usage": "<usage>",
+  "terminalError": "<terminalError>"
+}
+```
+
+## AuditResult
+
+The `yantra audit --json` document.
+
+| Field                       | Description                                                              |
+| --------------------------- | ------------------------------------------------------------------------ |
+| runId                       | The run id.                                                              |
+| workflowName                | The workflow or command name; `<unknown>` when absent.                   |
+| status                      | The manifest status; `unknown` when absent.                              |
+| startedAt                   | ISO start time; empty when absent.                                       |
+| endedAt                     | ISO end time, or null.                                                   |
+| durationMs                  | Wall-clock duration, or null.                                            |
+| llmCallCount                | Model calls (turns) the run made.                                        |
+| secretLookups               | Secret lookups: key names only, never values.                            |
+| stepCount                   | Distinct workflow steps started.                                         |
+| scopeMix                    | Step starts by security scope.                                           |
+| trustNarrative              | The two-to-three sentence summary the CLI prints first.                  |
+| agent                       | Provider provenance of an agentic run, or null.                          |
+| toolCalls                   | Agent tool calls in sequence order; in `read.audit`, one window of them. |
+| captures                    | Every capture the run wrote; in `read.audit`, one window of them.        |
+| rawSessionLogCaptureBearing | The raw provider session log contains image data a capture sent.         |
+| usage                       | Provider usage, or null.                                                 |
+| terminalError               | A typed startup failure, or null.                                        |
+| schemaVersion               |                                                                          |
+| kind                        |                                                                          |
+
+Example:
+
+```json
+{
+  "runId": "<runId>",
+  "workflowName": "<workflowName>",
+  "status": "<status>",
+  "startedAt": "<startedAt>",
+  "endedAt": "<endedAt>",
+  "durationMs": "<durationMs>",
+  "llmCallCount": "<llmCallCount>",
+  "secretLookups": "<secretLookups>",
+  "stepCount": "<stepCount>",
+  "scopeMix": "<scopeMix>",
+  "trustNarrative": "<trustNarrative>",
+  "agent": "<agent>",
+  "toolCalls": "<toolCalls>",
+  "captures": "<captures>",
+  "rawSessionLogCaptureBearing": "<rawSessionLogCaptureBearing>",
+  "usage": "<usage>",
+  "terminalError": "<terminalError>",
+  "schemaVersion": "<schemaVersion>",
+  "kind": "<kind>"
+}
+```
+
 ## BranchCondition
 
 Branch condition expression.

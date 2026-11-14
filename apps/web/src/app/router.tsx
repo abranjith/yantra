@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 
 import { ledgerRoute } from '../routes/ledger.js';
 import { artifactRoute } from '../routes/runs.$runId.artifacts.$.js';
+import { auditRoute } from '../routes/runs.$runId.audit.js';
 import { runRoute } from '../routes/runs.$runId.js';
 
 import { rootRoute } from './root-route.js';
@@ -20,7 +21,13 @@ export function HomePage(): ReactNode {
 const homeRoute = createRoute({ getParentRoute: () => rootRoute, path: '/', component: HomePage });
 
 /** The route tree; the shell renders it. */
-export const routeTree = rootRoute.addChildren([homeRoute, ledgerRoute, runRoute, artifactRoute]);
+export const routeTree = rootRoute.addChildren([
+  homeRoute,
+  ledgerRoute,
+  runRoute,
+  auditRoute,
+  artifactRoute,
+]);
 
 /** Builds the router, with an injected history in tests. */
 export function makeRouter(history?: RouterHistory) {

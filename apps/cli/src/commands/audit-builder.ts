@@ -11,8 +11,10 @@
  * here so both terminal and JSON renderers see the same text.
  */
 
-import { readFile } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createInterface } from 'node:readline';
 
 import {
   AgentManifestSection,
@@ -30,17 +32,73 @@ export interface AuditBuilderError {
 
 const SCOPE_KEYS = ['public', 'read-only-data', 'authenticated'] as const;
 
+/** A slice of the tool calls or captures (FEAT-066 host windows). */
+export interface AuditWindowRange {
+  readonly offset: number;
+  readonly limit: number;
+}
+
+/** Which rows of the long lists to materialize; the CLI passes none. */
+export interface AuditWindow {
+  readonly toolCalls?: AuditWindowRange;
+  readonly captures?: AuditWindowRange;
+}
+
+/** A built audit and the full lengths of its windowed lists. */
+export interface AuditBuildOk {
+  readonly kind: 'ok';
+  readonly report: AuditRenderReport;
+  readonly totals: { readonly toolCalls: number; readonly captures: number };
+}
+
+export type AuditBuildResult = AuditBuildOk | { kind: 'err'; error: AuditBuilderError };
+
+export interface AuditBuildOptions {
+  /** Materialize only these rows; totals still count the whole run. */
+  readonly window?: AuditWindow;
+  /** The host's cache (FEAT-066); the CLI builds fresh every time. */
+  readonly cache?: AuditCache;
+}
+
+function slice<T>(rows: readonly T[], range: AuditWindowRange | undefined): T[] {
+  return range === undefined ? [...rows] : rows.slice(range.offset, range.offset + range.limit);
+}
+
 /**
  * Reads run-dir artifacts and synthesizes an {@link AuditRenderReport}.
  *
  * The function is tolerant of partial runs (e.g. `outputs.json` missing
  * because the run failed before writing it). Missing `manifest.json` is the
  * only fatal condition — without it we have no run identity.
+ *
+ * JSONL inputs are streamed line by line, so a multi-hundred-megabyte
+ * `tool-calls.jsonl` never becomes one string. With a `window`, the report
+ * carries only those rows of `toolCalls` and `captures`; `totals` counts all
+ * of them. With a `cache`, an unchanged run directory is not read again.
  */
 export async function buildAuditReport(
   runId: string,
   runDir: string,
-): Promise<{ kind: 'ok'; report: AuditRenderReport } | { kind: 'err'; error: AuditBuilderError }> {
+  options: AuditBuildOptions = {},
+): Promise<AuditBuildResult> {
+  const full =
+    options.cache === undefined
+      ? await buildFull(runId, runDir)
+      : await options.cache.get(runId, runDir, () => buildFull(runId, runDir));
+  if (full.kind === 'err' || options.window === undefined) return full;
+  return {
+    kind: 'ok',
+    report: {
+      ...full.report,
+      toolCalls: slice(full.report.toolCalls, options.window.toolCalls),
+      captures: slice(full.report.captures, options.window.captures),
+    },
+    totals: full.totals,
+  };
+}
+
+/** The whole audit, every row materialized. */
+async function buildFull(runId: string, runDir: string): Promise<AuditBuildResult> {
   const manifest = await readJsonFile(join(runDir, 'manifest.json'));
   if (manifest === null) {
     return {
@@ -165,7 +223,11 @@ export async function buildAuditReport(
     terminalError,
   };
 
-  return { kind: 'ok', report };
+  return {
+    kind: 'ok',
+    report,
+    totals: { toolCalls: toolCalls.length, captures: captures.length },
+  };
 }
 
 /**
@@ -353,11 +415,25 @@ async function readJsonFile(path: string): Promise<unknown> {
   }
 }
 
+/**
+ * Every parseable line of a JSONL file, streamed: corrupt lines are skipped
+ * exactly as before, and a missing file reads as empty.
+ */
 async function readJsonl(path: string): Promise<readonly unknown[]> {
+  const out: unknown[] = [];
+  const stream = createReadStream(path, { encoding: 'utf8' });
+  const opened = await new Promise<boolean>((resolve) => {
+    stream.once('open', () => {
+      resolve(true);
+    });
+    stream.once('error', () => {
+      resolve(false);
+    });
+  });
+  if (!opened) return out;
+  const lines = createInterface({ input: stream, crlfDelay: Infinity });
   try {
-    const text = await readFile(path, 'utf8');
-    const out: unknown[] = [];
-    for (const line of text.split('\n')) {
+    for await (const line of lines) {
       const trimmed = line.trim();
       if (trimmed.length === 0) continue;
       try {
@@ -366,8 +442,72 @@ async function readJsonl(path: string): Promise<readonly unknown[]> {
         // skip corrupt line
       }
     }
-    return out;
   } catch {
-    return [];
+    // A read error mid-file keeps the lines read so far, as a partial run would.
+  } finally {
+    lines.close();
+    stream.destroy();
   }
+  return out;
+}
+
+/** The run files an audit reads; a change to any of them rebuilds the cached audit. */
+const AUDIT_INPUTS = [
+  'manifest.json',
+  'secrets.jsonl',
+  'events.jsonl',
+  'usage.json',
+  'agent.jsonl',
+  'tool-calls.jsonl',
+  'confirmations.jsonl',
+  'schedule.json',
+] as const;
+
+/** Audits the host keeps, keyed by run directory and the sizes and times of its inputs. */
+export interface AuditCache {
+  get(
+    runId: string,
+    runDir: string,
+    build: () => Promise<AuditBuildResult>,
+  ): Promise<AuditBuildResult>;
+}
+
+/** Most audits the host cache keeps. */
+export const AUDIT_CACHE_ENTRIES = 8;
+
+/** The host's audit cache: an LRU of {@link AUDIT_CACHE_ENTRIES} built audits. */
+export function createAuditCache(capacity = AUDIT_CACHE_ENTRIES): AuditCache {
+  const entries = new Map<
+    string,
+    { readonly fingerprint: string; readonly result: AuditBuildResult }
+  >();
+  return {
+    async get(runId, runDir, build) {
+      const stats = await Promise.all(
+        AUDIT_INPUTS.map((name) =>
+          stat(join(runDir, name)).then(
+            (info) => `${name}:${String(info.size)}:${String(info.mtimeMs)}`,
+            () => `${name}:-`,
+          ),
+        ),
+      );
+      const key = `${runId}\u0000${runDir}`;
+      const fingerprint = stats.join('|');
+      const hit = entries.get(key);
+      if (hit?.fingerprint === fingerprint) {
+        entries.delete(key);
+        entries.set(key, hit);
+        return hit.result;
+      }
+      const result = await build();
+      entries.delete(key);
+      entries.set(key, { fingerprint, result });
+      while (entries.size > capacity) {
+        const oldest = entries.keys().next().value;
+        if (oldest === undefined) break;
+        entries.delete(oldest);
+      }
+      return result;
+    },
+  };
 }

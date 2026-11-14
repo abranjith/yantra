@@ -9,7 +9,7 @@
  * {@link JSONRenderer}) live in adjacent modules.
  */
 
-import type { Brief, ListRunItem, TaskEvent, TemplatedReport } from '@yantra/protocol';
+import type { AuditReport, Brief, ListRunItem, TaskEvent, TemplatedReport } from '@yantra/protocol';
 
 /**
  * Terminal progressive-disclosure level. Declared here (not in
@@ -154,81 +154,8 @@ export interface DoctorSmokeRenderResult {
   };
 }
 
-export interface AuditRenderReport {
-  readonly runId: string;
-  readonly workflowName: string;
-  readonly status: string;
-  readonly startedAt: string;
-  readonly endedAt: string | null;
-  readonly durationMs: number | null;
-  readonly llmCallCount: number;
-  readonly secretLookups: readonly {
-    readonly key: string;
-    readonly stepId: string;
-    readonly ts: string;
-  }[];
-  readonly stepCount: number;
-  readonly scopeMix: {
-    readonly publicCount: number;
-    readonly readOnlyDataCount: number;
-    readonly authenticatedCount: number;
-  };
-  readonly trustNarrative: string;
-  readonly agent: {
-    readonly adapter: string;
-    readonly sdkVersion: string;
-    readonly provider: string;
-    readonly model: string;
-    readonly thinking: string;
-    readonly authSource: string;
-    readonly sessionId: string;
-    readonly sessionFile: string;
-    readonly promptVersion: string;
-  } | null;
-  readonly toolCalls: readonly {
-    readonly seq: number;
-    readonly callId: string;
-    readonly tool: string;
-    readonly status: 'ok' | 'error' | 'denied' | 'aborted' | 'incomplete';
-    readonly durationMs: number | null;
-    readonly confirmationId: string | null;
-    readonly confirmationDecision: string | null;
-    readonly incomplete: boolean;
-  }[];
-  /**
-   * Every capture the run wrote, projected without image bytes: images the
-   * model saw (`sentToModel`) and captures kept on this computer.
-   */
-  readonly captures: readonly {
-    readonly path: string;
-    readonly sha256: string;
-    readonly mimeType: 'image/png';
-    readonly width: number | null;
-    readonly height: number | null;
-    readonly bytes: number;
-    /** True when the image was shown to the model provider (Vision Assist). */
-    readonly sentToModel: boolean;
-    readonly toolCall: {
-      readonly seq: number;
-      readonly callId: string;
-      readonly tool: string;
-    };
-    readonly budgetConsumed: {
-      readonly captures: 1;
-      readonly pixels: number;
-      readonly bytes: number;
-    };
-  }[];
-  /** True only when the raw provider session artifact contains capture data. */
-  readonly rawSessionLogCaptureBearing: boolean;
-  readonly usage: {
-    readonly turns: number;
-    readonly inputTokens: number | null;
-    readonly outputTokens: number | null;
-    readonly costUsd: number | null;
-  } | null;
-  readonly terminalError: { readonly code: string; readonly message: string } | null;
-}
+/** The audit story of one run: the protocol `AuditReport` (FEAT-066), field for field. */
+export type AuditRenderReport = AuditReport;
 
 export interface OutputRenderer {
   renderList(items: readonly ListItem[], opts: ConnectorRenderOpts): void;

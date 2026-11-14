@@ -24,6 +24,7 @@ import type {
   LedgerMode,
   LedgerOutcomeFilter,
   ArtifactUrlResult,
+  AuditPage,
   JsonlWindow,
   ListRunItem,
   ReportResult,
@@ -294,5 +295,26 @@ export function useArtifactText(runId: string, path: string, enabled: boolean) {
       return response.text();
     },
     enabled,
+  });
+}
+
+/** Which list an audit query pages. */
+export type AuditList = 'tool_calls' | 'captures';
+
+/**
+ * A run's audit (`read.audit`), paged through one of its two long lists:
+ * `['audit', runId, list]`. Every page also carries the full report.
+ */
+export function useAuditPages(runId: string, list: AuditList) {
+  const rpc = useRpc();
+  return useInfiniteQuery({
+    queryKey: ['audit', runId, list],
+    queryFn: ({ pageParam }) =>
+      rpc.request<AuditPage>('read.audit', {
+        run_id: runId,
+        ...(pageParam === undefined ? {} : { [`${list}_cursor`]: pageParam }),
+      }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last[list].next_cursor ?? undefined,
   });
 }

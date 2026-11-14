@@ -1,0 +1,97 @@
+{
+  "schemaVersion": "0.2",
+  "kind": "audit",
+  "runId": "agent-run",
+  "workflowName": "do",
+  "status": "completed",
+  "startedAt": "2026-07-14T12:00:00.000Z",
+  "endedAt": "2026-07-14T12:00:03.000Z",
+  "durationMs": 3000,
+  "llmCallCount": 2,
+  "secretLookups": [
+    { "key": "shop_password", "stepId": "fill-1", "ts": "2026-07-14T12:00:01.000Z" }
+  ],
+  "stepCount": 0,
+  "scopeMix": { "publicCount": 0, "readOnlyDataCount": 0, "authenticatedCount": 0 },
+  "trustNarrative": "Run completed in 3.0s. The agent made 2 LLM calls (sanitized prompts only) and 1 secret lookup were performed (keys only — never values). The engine executed 0 steps.",
+  "agent": {
+    "adapter": "pi-coding-agent",
+    "sdkVersion": "0.80.6",
+    "provider": "anthropic",
+    "model": "claude-sonnet",
+    "thinking": "medium",
+    "authSource": "environment",
+    "sessionId": "session-1",
+    "sessionFile": "agent/session-1.jsonl",
+    "promptVersion": "agent-v1"
+  },
+  "toolCalls": [
+    {
+      "seq": 0,
+      "callId": "a",
+      "tool": "web_search",
+      "status": "ok",
+      "durationMs": 100,
+      "confirmationId": null,
+      "confirmationDecision": null,
+      "incomplete": false
+    },
+    {
+      "seq": 2,
+      "callId": "b",
+      "tool": "browser_click",
+      "status": "denied",
+      "durationMs": 10,
+      "confirmationId": "confirm-1",
+      "confirmationDecision": "denied",
+      "incomplete": false
+    },
+    {
+      "seq": 4,
+      "callId": "c",
+      "tool": "browser_screenshot",
+      "status": "ok",
+      "durationMs": 10,
+      "confirmationId": null,
+      "confirmationDecision": null,
+      "incomplete": false
+    },
+    {
+      "seq": 5,
+      "callId": "d",
+      "tool": "web_fetch",
+      "status": "incomplete",
+      "durationMs": null,
+      "confirmationId": null,
+      "confirmationDecision": null,
+      "incomplete": true
+    }
+  ],
+  "captures": [
+    {
+      "path": "screenshots/capture-1-cccccccccccc-p1.png",
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "mimeType": "image/png",
+      "width": 1280,
+      "height": 4096,
+      "bytes": 4000,
+      "sentToModel": true,
+      "toolCall": { "seq": 4, "callId": "c", "tool": "browser_screenshot" },
+      "budgetConsumed": { "captures": 1, "pixels": 5242880, "bytes": 4000 }
+    },
+    {
+      "path": "screenshots/capture-1-cccccccccccc-p2.png",
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "mimeType": "image/png",
+      "width": 1280,
+      "height": 4096,
+      "bytes": 4000,
+      "sentToModel": false,
+      "toolCall": { "seq": 4, "callId": "c", "tool": "browser_screenshot" },
+      "budgetConsumed": { "captures": 1, "pixels": 5242880, "bytes": 4000 }
+    }
+  ],
+  "rawSessionLogCaptureBearing": true,
+  "usage": { "turns": 2, "inputTokens": 20, "outputTokens": 8, "costUsd": 0.04 },
+  "terminalError": null
+}

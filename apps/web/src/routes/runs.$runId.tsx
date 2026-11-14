@@ -19,7 +19,8 @@ import { useMemo, useState, type ReactNode } from 'react';
 
 import { rootRoute } from '../app/root-route.js';
 import { useRunResult, useRunsChangeInvalidation } from '../data/runs.js';
-import { formatBytes, formatDuration, formatTimestamp, NOT_RECORDED } from '../features/format.js';
+import { AuditView } from '../features/audit/AuditView.js';
+import { formatBytes, formatDuration, formatTimestamp } from '../features/format.js';
 import { DownloadArtifact, ViewerLink } from '../features/run-result/artifact-links.js';
 import { BriefDocument } from '../features/run-result/BriefDocument.js';
 import { CliTwin } from '../features/run-result/CliTwin.js';
@@ -169,12 +170,9 @@ export function FilesRegion({ view }: { readonly view: RunResultView }): ReactNo
 export function RunPage({
   runId,
   tab = 'result',
-  audit,
 }: {
   readonly runId: string;
   readonly tab?: RunTab;
-  /** The Audit tab's content (`routes/runs.$runId.audit.tsx`). */
-  readonly audit?: ReactNode;
 }): ReactNode {
   const result = useRunResult(runId);
   useRunsChangeInvalidation();
@@ -228,7 +226,9 @@ export function RunPage({
         <TabPanel id="result">
           <DocumentRegion view={view} />
         </TabPanel>
-        <TabPanel id="audit">{audit ?? <p className="text-ink-2">{NOT_RECORDED}</p>}</TabPanel>
+        <TabPanel id="audit">
+          <AuditView runId={view.run_id} artifacts={view.artifacts} />
+        </TabPanel>
         <TabPanel id="files">
           <FilesRegion view={view} />
         </TabPanel>

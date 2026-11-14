@@ -8,6 +8,7 @@
  * run ids, slot states and error codes only, never file content (plan §11).
  */
 
+import { stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import {
@@ -25,6 +26,9 @@ import {
   type PublicArtifact,
 } from '@yantra/core';
 import {
+  AUDIT_WINDOW_ROWS,
+  AuditPage,
+  AuditParams,
   CLI_READ_SCHEMA_VERSION,
   JsonlWindow,
   JsonlWindowRequest,
@@ -33,6 +37,12 @@ import {
   RunResultParams,
   RunResultView,
 } from '@yantra/protocol';
+
+import {
+  buildAuditReport,
+  createAuditCache,
+  type AuditCache,
+} from '../../commands/audit-builder.js';
 
 import { SILENT_HOST_LOGGER, type HostLogger } from './host.js';
 import { RpcError, type RpcMethodRegistry } from './rpc-server.js';
@@ -203,6 +213,78 @@ export async function readArtifactWindowForApp(
   return { path: artifact.relPath, ...window };
 }
 
+/** Encodes a row offset as an opaque audit cursor. */
+export function encodeAuditCursor(offset: number): string {
+  return Buffer.from(JSON.stringify({ v: 1, o: offset }), 'utf8').toString('base64url');
+}
+
+/** Decodes an audit cursor, or throws `invalid_params`; it never falls back to the start. */
+export function decodeAuditCursor(cursor: string | undefined): number {
+  if (cursor === undefined) return 0;
+  try {
+    const value = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as unknown;
+    if (value !== null && typeof value === 'object') {
+      const { v, o } = value as { v?: unknown; o?: unknown };
+      if (v === 1 && typeof o === 'number' && Number.isInteger(o) && o >= 0) return o;
+    }
+  } catch {
+    // Falls through to the refusal.
+  }
+  throw new RpcError(
+    'invalid_params',
+    'The cursor is not one this host issued.',
+    'Start again without a cursor.',
+  );
+}
+
+function nextCursor(offset: number, total: number): string | null {
+  return offset + AUDIT_WINDOW_ROWS < total ? encodeAuditCursor(offset + AUDIT_WINDOW_ROWS) : null;
+}
+
+/**
+ * `read.audit {run_id, tool_calls_cursor?, captures_cursor?}`: the same audit
+ * `yantra audit` tells, from the same builder, with windows of
+ * {@link AUDIT_WINDOW_ROWS} tool calls and captures, so a run of any size
+ * stays within the message limit.
+ */
+export async function readAuditForApp(
+  params: AuditParams,
+  deps: RunReadDeps,
+  cache: AuditCache,
+): Promise<AuditPage> {
+  const toolOffset = decodeAuditCursor(params.tool_calls_cursor);
+  const captureOffset = decodeAuditCursor(params.captures_cursor);
+  const runDir = runDirOf(deps, params.run_id);
+  const isDir = await stat(runDir).then(
+    (info) => info.isDirectory(),
+    () => false,
+  );
+  if (!isDir) throw runReadError(new RunNotFoundError(params.run_id), params.run_id);
+  const result = await buildAuditReport(params.run_id, runDir, {
+    cache,
+    window: {
+      toolCalls: { offset: toolOffset, limit: AUDIT_WINDOW_ROWS },
+      captures: { offset: captureOffset, limit: AUDIT_WINDOW_ROWS },
+    },
+  });
+  if (result.kind === 'err') {
+    throw result.error.kind === 'missing'
+      ? new RpcError('not_found', `Run ${params.run_id} has no manifest.json to audit.`)
+      : new RpcError('internal_error', `The audit of run ${params.run_id} could not be built.`);
+  }
+  return {
+    report: result.report,
+    tool_calls: {
+      total: result.totals.toolCalls,
+      next_cursor: nextCursor(toolOffset, result.totals.toolCalls),
+    },
+    captures: {
+      total: result.totals.captures,
+      next_cursor: nextCursor(captureOffset, result.totals.captures),
+    },
+  };
+}
+
 /** Registers the per-run reads. */
 export function registerRunReads(methods: RpcMethodRegistry, deps: RunReadDeps = {}): void {
   const corrupt = new CorruptSlotLog(deps.logger ?? SILENT_HOST_LOGGER);
@@ -219,6 +301,12 @@ export function registerRunReads(methods: RpcMethodRegistry, deps: RunReadDeps =
     params: JsonlWindowRequest,
     result: JsonlWindow,
     handler: (request) => readArtifactWindowForApp(request, deps, index),
+  });
+  const audits = createAuditCache();
+  methods.register('read.audit', {
+    params: AuditParams,
+    result: AuditPage,
+    handler: (params) => readAuditForApp(params, deps, audits),
   });
   methods.register('read.report', {
     params: RunResultParams,
