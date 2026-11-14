@@ -40,6 +40,12 @@ export { attributeForLong, parseOptionFlags, type ParsedOptionFlags } from './fl
 export { validateCommandRegistry } from './validate.js';
 export { conditionHolds, executionClassFor, jsonEqual, type InvocationFacts } from './execution.js';
 export { ABORT_RULES, abortRule, honorsAbort, type AbortRule } from './abort.js';
+export {
+  DEAD_OPTION_TODO,
+  KNOWN_DEAD_OPTIONS,
+  isKnownDeadOption,
+  type KnownDeadOption,
+} from './dead-options.js';
 export { OPTION_GROUP_INPUTS } from './groups.js';
 export {
   CommandInvocation,

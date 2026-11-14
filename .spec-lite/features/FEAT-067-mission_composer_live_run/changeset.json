@@ -20,6 +20,30 @@
       "task": "TASK-008"
     },
     {
+      "path": "apps/cli/src/registry/dead-options.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "apps/cli/src/ui/host/drift-review.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "apps/cli/src/ui/host/host-runtime.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "apps/cli/src/ui/host/mission-reads.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
       "path": "apps/cli/src/ui/host/supervisor.ts",
       "status": "M",
       "role": "implement",
@@ -27,9 +51,15 @@
     },
     {
       "path": "apps/cli/tests/registry/abort-rules.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/mission-reads.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
     },
     {
       "path": "apps/cli/tests/ui/host/supervisor.spec.ts",
@@ -123,7 +153,7 @@
     },
     {
       "path": "apps/web/src/features/cockpit/StopControl.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
@@ -243,7 +273,7 @@
     },
     {
       "path": "apps/web/tests/features/cockpit/stop-control.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
@@ -351,9 +381,15 @@
     },
     {
       "path": "packages/protocol/src/commands/abort.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
+    },
+    {
+      "path": "packages/protocol/src/commands/dead-options.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
     },
     {
       "path": "packages/protocol/src/commands/index.ts",
@@ -362,16 +398,34 @@
       "task": "TASK-008"
     },
     {
+      "path": "packages/protocol/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
       "path": "packages/protocol/src/schemas/app-rpc.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-007"
     },
     {
-      "path": "packages/protocol/tests/commands/abort.spec.ts",
+      "path": "packages/protocol/src/schemas/ui-mission.ts",
       "status": "U",
       "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/protocol/tests/commands/abort.spec.ts",
+      "status": "A",
+      "role": "implement",
       "task": "TASK-008"
+    },
+    {
+      "path": "packages/protocol/tests/schemas/ui-mission.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
     },
     {
       "path": "packages/ui/src/gallery/entries.tsx",

@@ -741,7 +741,7 @@ Task order follows plan §8. TASK-001 to TASK-008 are the **M2 cockpit subset**,
 - [x] TASK-006: Polite announcements of meaningful changes
 - [x] TASK-007: CliTwin with shell-aware Copy
 - [x] TASK-008: Stop — graceful where the command honors abort, honest force-stop otherwise
-- [ ] TASK-009: Effective option values and their sources (host read)
+- [x] TASK-009: Effective option values and their sources (host read)
 - [ ] TASK-010: Composer for Ask and Research — generated options, effective values, template selection
 - [ ] TASK-011: Submit exactly once and land in the cockpit
 - [ ] TASK-012: Do and Run modes — provider readiness gate, workflow picker and params

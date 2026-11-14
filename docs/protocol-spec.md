@@ -1523,6 +1523,68 @@ Example:
 }
 ```
 
+## EffectiveOptionView
+
+One option as the command would resolve it now.
+
+| Field  | Description                                                                                                         |
+| ------ | ------------------------------------------------------------------------------------------------------------------- |
+| option | The registry option attribute, e.g. `model` (`llm` for `--no-llm`).                                                 |
+| flag   | The long flag, e.g. `--model`.                                                                                      |
+| value  | The effective value; never a secret.                                                                                |
+| source | Where the value came from: the flag, an environment variable (by name), a preference or config key, or the default. |
+
+Example:
+
+```json
+{
+  "option": "<option>",
+  "flag": "<flag>",
+  "value": "<value>",
+  "source": "<source>"
+}
+```
+
+## EffectiveOptions
+
+Effective option values for one composed command.
+
+| Field   | Description                                                                                    |
+| ------- | ---------------------------------------------------------------------------------------------- |
+| path    | Command path, e.g. ["research"].                                                               |
+| mode    | The mode these options resolve to (`--no-llm` or `LLM_PROVIDER=none` mean deterministic).      |
+| options | Every option that applies in this mode, in help order: no secret input, no known dead control. |
+
+Example:
+
+```json
+{
+  "path": "<path>",
+  "mode": "<mode>",
+  "options": "<options>"
+}
+```
+
+## EffectiveOptionsParams
+
+Resolve every option the command would use, read-only.
+
+| Field | Description                                                           |
+| ----- | --------------------------------------------------------------------- |
+| path  | Command path, e.g. ["research"].                                      |
+| argv  | The tokens after the path, exactly as the composer would submit them. |
+| cwd   | The absolute working directory the run would start in.                |
+
+Example:
+
+```json
+{
+  "path": "<path>",
+  "argv": "<argv>",
+  "cwd": "<cwd>"
+}
+```
+
 ## ElementDescriptorSchema
 
 Sanitized structural fingerprint of a captured DOM element
@@ -1900,6 +1962,26 @@ Example:
   "locator": "<locator>",
   "value": "<value>",
   "submit": "<submit>"
+}
+```
+
+## FixCommand
+
+A real registry command that fixes the problem.
+
+| Field | Description                      |
+| ----- | -------------------------------- |
+| label | What the fix does, in words.     |
+| path  | Command path, e.g. ["research"]. |
+| argv  | The tokens after the path.       |
+
+Example:
+
+```json
+{
+  "label": "<label>",
+  "path": "<path>",
+  "argv": "<argv>"
 }
 ```
 
@@ -3038,6 +3120,30 @@ Example:
 {
   "pid": "<pid>",
   "start_token": "<start_token>"
+}
+```
+
+## ProviderReadiness
+
+Whether `do` can run, and how to fix it when not.
+
+| Field    | Description                                               |
+| -------- | --------------------------------------------------------- |
+| ready    | Whether an agentic run could open a provider session now. |
+| provider | The provider an agentic run would use.                    |
+| model    | The model an agentic run would use.                       |
+| reason   | Why it is not ready, in words; absent when ready.         |
+| fix      | The command that fixes it, when there is one.             |
+
+Example:
+
+```json
+{
+  "ready": "<ready>",
+  "provider": "<provider>",
+  "model": "<model>",
+  "reason": "<reason>",
+  "fix": "<fix>"
 }
 ```
 
