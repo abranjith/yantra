@@ -75,9 +75,15 @@
     },
     {
       "path": "apps/cli/tests/ui/host/provider-readiness.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/run-recovery.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-013"
     },
     {
       "path": "apps/cli/tests/ui/host/supervisor.spec.ts",
@@ -201,7 +207,7 @@
     },
     {
       "path": "apps/web/src/features/composer/do-readiness.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
@@ -213,7 +219,7 @@
     },
     {
       "path": "apps/web/src/features/composer/run-mode.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
@@ -375,7 +381,7 @@
     },
     {
       "path": "apps/web/tests/features/composer/composer-modes.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
@@ -482,10 +488,70 @@
       "task": "TASK-007"
     },
     {
+      "path": "packages/core/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
       "path": "packages/core/src/profile/agent-budgets.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-010"
+    },
+    {
+      "path": "packages/core/src/run-recovery/index.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "packages/core/src/run-recovery/prior-effects.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "packages/core/src/run-recovery/prior-invocation.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "packages/core/src/workflow/replay/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "packages/core/src/workflow/replay/resumability.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "packages/core/src/workflow/replay/resume.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "packages/core/tests/run-recovery/prior-effects.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "packages/core/tests/run-recovery/prior-invocation.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "packages/core/tests/workflow/replay/resumability.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-013"
     },
     {
       "path": "packages/protocol/src/commands/abort.ts",

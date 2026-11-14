@@ -6,6 +6,7 @@ import {
   EffectiveOptionsParams,
   MissionContext,
   ProviderReadiness,
+  RunRecoveryAssessment,
   WorkflowParams,
 } from '../../src/schemas/ui-mission.js';
 
@@ -110,5 +111,41 @@ describe('Mission read schemas (FEAT-067)', () => {
       platform: 'linux',
     });
     expect(MissionContext.safeParse({ home: '~', platform: 'linux' }).success).toBe(false);
+  });
+
+  it('round-trips a recovery assessment with and without Resume', () => {
+    const resumable = {
+      run_id: 'r-1',
+      resume: { available: true, requires_consent: true, failure_class: 'scope_violation' },
+      run_again: {
+        prior: 'receipt',
+        path: ['run'],
+        argv: ['nightly'],
+        pinned_argv: ['nightly', '--debug'],
+        cwd: '/home/u',
+        effects: 'possible',
+        effect_reasons: ['It was allowed to submit a form.'],
+        notices: [],
+      },
+    };
+    const notResumable = {
+      ...resumable,
+      resume: {
+        available: false,
+        reason: 'Only saved workflow runs can be resumed. Use Run again.',
+      },
+      run_again: {
+        ...resumable.run_again,
+        prior: null,
+        path: null,
+        argv: null,
+        pinned_argv: null,
+        cwd: null,
+      },
+    };
+
+    expect(RunRecoveryAssessment.parse(resumable)).toEqual(resumable);
+    expect(RunRecoveryAssessment.parse(notResumable)).toEqual(notResumable);
+    expect(RunRecoveryAssessment.safeParse({ ...resumable, run_id: '../x' }).success).toBe(false);
   });
 });

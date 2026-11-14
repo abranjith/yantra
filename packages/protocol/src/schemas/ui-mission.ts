@@ -4,6 +4,7 @@ import { isAbsoluteCwd } from '../commands/invocation.js';
 import { JsonValue } from '../commands/schema.js';
 
 import { SettingSourceSchema } from './execution-receipt.js';
+import { FailureClass } from './security.js';
 
 /**
  * The Mission screen's host reads (FEAT-067): what the composer shows next to
@@ -149,3 +150,64 @@ export const WorkflowParams = z
   .strict()
   .describe('What Run mode asks for before starting a saved workflow.');
 export type WorkflowParams = z.infer<typeof WorkflowParams>;
+
+const RUN_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
+
+/** `read.run_recovery` params. */
+export const RunRecoveryParams = z
+  .object({ run_id: z.string().regex(RUN_ID).describe('The finished run.') })
+  .strict();
+export type RunRecoveryParams = z.infer<typeof RunRecoveryParams>;
+
+/** What a finished run can do next: Resume, and Run again with its prior command. */
+export const RunRecoveryAssessment = z
+  .object({
+    run_id: z.string().regex(RUN_ID),
+    resume: z
+      .union([
+        z
+          .object({
+            available: z.literal(false),
+            reason: z.string().min(1).describe('Why it cannot resume, in the CLI’s words.'),
+          })
+          .strict(),
+        z
+          .object({
+            available: z.literal(true),
+            requires_consent: z
+              .boolean()
+              .describe('True after a scope violation or ethics refusal: Resume needs --force.'),
+            failure_class: FailureClass.optional().describe('Why the run failed, when it did.'),
+          })
+          .strict(),
+      ])
+      .describe('Whether `yantra resume` would continue this run (the core resumability rule).'),
+    run_again: z
+      .object({
+        prior: z
+          .enum(['receipt', 'reconstructed', 'goal_only'])
+          .nullable()
+          .describe('Where the prior command came from; null when it could not be rebuilt.'),
+        path: z.array(z.string().min(1)).nullable().describe('The command path.'),
+        argv: z
+          .array(z.string())
+          .nullable()
+          .describe('The operand and the flags the user set ("current settings").'),
+        pinned_argv: z
+          .array(z.string())
+          .nullable()
+          .describe(
+            'The operand and every recorded non-default setting as a flag ("prior settings").',
+          ),
+        cwd: z.string().nullable().describe('The working directory the run used, when recorded.'),
+        effects: z
+          .enum(['none', 'possible', 'verified'])
+          .describe('What the run may have changed on websites.'),
+        effect_reasons: z.array(z.string().min(1)).describe('Why, in plain words.'),
+        notices: z.array(z.string()).describe('Run files that could not be read.'),
+      })
+      .strict(),
+  })
+  .strict()
+  .describe('Resume and Run again for one finished run.');
+export type RunRecoveryAssessment = z.infer<typeof RunRecoveryAssessment>;

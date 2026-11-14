@@ -1,6 +1,8 @@
 /**
  * The Mission screen's host reads (FEAT-067).
  *
+ * `read.run_recovery {run_id}`: Resume and Run again for a finished run.
+ *
  * `read.workflow_params {name}`: a saved workflow's declared params, in
  * declared order, for Run mode.
  *
@@ -24,14 +26,26 @@
  * code, never argv, values or goals (plan §11).
  */
 
+import { stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
+import { join } from 'node:path';
 
-import { FileWorkflowStore, workflowsRoot } from '@yantra/core';
+import {
+  FileWorkflowStore,
+  assessPriorEffects,
+  recoverPriorInvocation,
+  runsRoot,
+  workflowsRoot,
+} from '@yantra/core';
+import { LocalRunStore, assessResumability } from '@yantra/core/workflow/replay';
 import {
   COMMAND_REGISTRY,
   EmptyParams,
   MissionContext,
   ProviderReadiness,
+  RunRecoveryAssessment,
+  RunRecoveryParams,
+  findLeaf,
   WorkflowParams,
   WorkflowParamsParams,
   EffectiveOptions,
@@ -127,6 +141,51 @@ export async function providerReadiness(
   };
 }
 
+/**
+ * `read.run_recovery {run_id}`: Resume through the core resumability rule
+ * (the one `yantra resume` applies), and Run again from the run's recorded
+ * command with what it may have changed on websites. Each artifact fails on
+ * its own; only an unknown run is an error.
+ */
+export async function runRecovery(
+  runId: string,
+  root: string = runsRoot(),
+): Promise<RunRecoveryAssessment> {
+  const runDir = join(root, runId);
+  const exists = await stat(runDir).then(
+    (info) => info.isDirectory(),
+    () => false,
+  );
+  if (!exists)
+    throw new RpcError('not_found', `There is no run ${runId}.`, 'Open the Ledger to find it.');
+  const [resume, prior] = await Promise.all([
+    assessResumability(new LocalRunStore(root), runId),
+    recoverPriorInvocation(runDir),
+  ]);
+  const effect = (prior.path === null ? undefined : findLeaf(prior.path))?.effect ?? 'external';
+  const effects = await assessPriorEffects(runDir, effect);
+  return {
+    run_id: runId,
+    resume: resume.available
+      ? {
+          available: true,
+          requires_consent: resume.requiresConsent,
+          ...(resume.failureClass === undefined ? {} : { failure_class: resume.failureClass }),
+        }
+      : { available: false, reason: resume.reason },
+    run_again: {
+      prior: prior.prior,
+      path: prior.path === null ? null : [...prior.path],
+      argv: prior.argv === null ? null : [...prior.argv],
+      pinned_argv: prior.pinnedArgv === null ? null : [...prior.pinnedArgv],
+      cwd: prior.cwd,
+      effects: effects.effects,
+      effect_reasons: [...effects.reasons],
+      notices: [...prior.notices],
+    },
+  };
+}
+
 export interface MissionReadDeps {
   /** Resolves an invocation's effective settings (production: `effectiveSettingsResolver`). */
   readonly resolve: InvocationSettingsResolver;
@@ -135,6 +194,8 @@ export interface MissionReadDeps {
   readonly env?: NodeJS.ProcessEnv;
   /** Resolves an agentic invocation (production: `resolveAgentInvocation` over preferences). */
   readonly resolveAgent?: AgentResolver;
+  /** The runs root (tests inject one). */
+  readonly runsRoot?: () => string;
   /** Loads a saved workflow's declared params (tests inject one). */
   readonly loadWorkflowParams?: (name: string) => Promise<WorkflowParams | null>;
   /** The user's home directory (tests inject one). */
@@ -193,6 +254,11 @@ export function registerMissionReads(methods: RpcMethodRegistry, deps: MissionRe
       home: (deps.home ?? homedir)(),
       platform: deps.platform ?? process.platform,
     }),
+  });
+  methods.register('read.run_recovery', {
+    params: RunRecoveryParams,
+    result: RunRecoveryAssessment,
+    handler: ({ run_id: runId }) => runRecovery(runId, (deps.runsRoot ?? runsRoot)()),
   });
   methods.register('read.workflow_params', {
     params: WorkflowParamsParams,

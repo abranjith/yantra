@@ -98,6 +98,14 @@ export { MarkdownReportRenderer, renderJsonSummary, renderRunReport } from './re
 
 // Resume helpers
 export { loadResumePoint, requiresUserConsent } from './resume.js';
+export {
+  NOT_A_WORKFLOW_RUN,
+  assessResumability,
+  checkResumable,
+  type NotResumableCode,
+  type ResumeCheck,
+  type Resumability,
+} from './resumability.js';
 
 // Chrome drift + frame diagnostic
 export { checkChromeDrift } from './chrome-drift.js';

@@ -3769,6 +3769,42 @@ Example:
 }
 ```
 
+## RunRecoveryAssessment
+
+Resume and Run again for one finished run.
+
+| Field     | Description                                                                   |
+| --------- | ----------------------------------------------------------------------------- |
+| run_id    |                                                                               |
+| resume    | Whether `yantra resume` would continue this run (the core resumability rule). |
+| run_again |                                                                               |
+
+Example:
+
+```json
+{
+  "run_id": "<run_id>",
+  "resume": "<resume>",
+  "run_again": "<run_again>"
+}
+```
+
+## RunRecoveryParams
+
+No description provided.
+
+| Field  | Description       |
+| ------ | ----------------- |
+| run_id | The finished run. |
+
+Example:
+
+```json
+{
+  "run_id": "<run_id>"
+}
+```
+
 ## RunRelativePath
 
 Run-relative POSIX path of a file inside the run directory.
