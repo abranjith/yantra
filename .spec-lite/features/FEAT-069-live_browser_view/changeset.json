@@ -81,7 +81,7 @@
     },
     {
       "path": "packages/core/src/browser/screen-protection.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -116,8 +116,32 @@
       "task": "TASK-003"
     },
     {
-      "path": "packages/core/tests/browser/screen-protection.spec.ts",
+      "path": "packages/core/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/live-view/errors.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/live-view/focus-guard.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/live-view/index.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/browser/screen-protection.spec.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -129,9 +153,21 @@
     },
     {
       "path": "packages/core/tests/executor/fill-protection.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/live-view/focus-guard.chrome.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/live-view/focus-guard.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
     },
     {
       "path": "packages/protocol/generated/json-schema/run-channel-message.json",

@@ -379,7 +379,7 @@ tests/browser/screen-protection.spec.ts tests/executor/fill-protection.spec.ts`;
 
 ### TASK-004: Protected-control focus guard in an isolated world
 
-- [ ] **Implementation**: Add `packages/core/src/live-view/focus-guard.ts`:
+- [x] **Implementation**: Add `packages/core/src/live-view/focus-guard.ts`:
       `installFocusGuard(page, onFocus): Promise<FocusGuardHandle>`. Over a CDP session on the task
       page: `Runtime.addBinding({name, executionContextName: 'yantra-live-view'})`,
       `Page.addScriptToEvaluateOnNewDocument({source, worldName: 'yantra-live-view',
@@ -395,7 +395,7 @@ runImmediately: true})`, and `Page.createIsolatedWorld` for the current document
       see the binding. If any install step fails, report `unknown` (fail closed) and surface
       `LiveViewError('FOCUS_GUARD_UNAVAILABLE')` to the hub. The guard is installed only while a
       screencast stream is active and is re-installed on target change.
-- [ ] **Unit Tests**: jsdom parity table: the in-page classifier and `classifyWithheld` agree on
+- [x] **Unit Tests**: jsdom parity table: the in-page classifier and `classifyWithheld` agree on
       password, each sensitive autocomplete token, `section-pay cc-number`, `cc-name` (not
       protected), `data-yantra-secret`, plain text. Real Chrome (memory: an in-page function needs
       one real-Chrome test): focusing a password field reports `protected`, blurring reports
@@ -404,12 +404,27 @@ runImmediately: true})`, and `Page.createIsolatedWorld` for the current document
       `typeof` check finds no binding; a main-world `MutationObserver` records zero mutations
       across a focus cycle; the guard survives a real navigation (`page.goto('about:blank')`, not
       `setContent`, per memory).
-- [ ] **Documentation Update**: Invoke **Document** update mode for Safety and Privacy (focus on a
+- [x] **Documentation Update**: Invoke **Document** update mode for Safety and Privacy (focus on a
       protected field hides the live view).
 - **Verify**: `cd packages/core && npx vitest run tests/live-view/focus-guard.spec.ts
 tests/live-view/focus-guard.chrome.spec.ts` passes alone and in the full core suite (own
   timeout for the real-Chrome cases).
 - **Depends on**: TASK-003
+- **Outcome (2026-11-15)**: Behavior verified against real Chrome, with three changes from the plan
+  above:
+  1. The guard's own CDP session must call `Page.enable`, or its new-document script never runs
+     after a navigation.
+  2. `runImmediately: true` already creates the world in, and runs the guard on, the current
+     documents, so `Page.createIsolatedWorld` is not needed.
+  3. A tab without focus (a background or adopted page) moves `activeElement` but fires no focus
+     events, so the guard also polls every 100 ms (`FOCUS_GUARD_POLL_MS`).
+
+  The guard also listens for window `blur`, because focus entering an iframe from nothing fires no
+  `focusin`. A second install on the same document rebinds the existing guard to the new binding
+  name. After `dispose()`, the guard in already-loaded documents keeps polling, but nothing hears it
+  (session detached) until the next navigation. Closed shadow roots are detected heuristically: a
+  focused custom element with no open shadow root, `tabindex` or `contenteditable` reports
+  `unknown`.
 
 ### TASK-005: Frame gate — generations, fresh-capture admission and clear signals
 
@@ -698,7 +713,7 @@ tests/browser/agent-popup-policy.spec.ts tests/browser/agent-controller.spec.ts`
 - [/] TASK-001: Spike S1 — glass and readability over a live screencast, with a report
 - [x] TASK-002: Protocol — screencast frame metadata, control messages and payload codec
 - [x] TASK-003: Screen protection — observable latch, fill holds, and the deterministic fill paths
-- [ ] TASK-004: Protected-control focus guard in an isolated world
+- [x] TASK-004: Protected-control focus guard in an isolated world
 - [ ] TASK-005: Frame gate — generations, fresh-capture admission and clear signals
 - [ ] TASK-006: Task page source and the CDP screencast source
 - [ ] TASK-007: Live-view hub — per-client latest-wins delivery, states, and orchestrator wiring
