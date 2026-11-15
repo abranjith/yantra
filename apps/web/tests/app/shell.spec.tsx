@@ -24,14 +24,15 @@ async function renderApp() {
 }
 
 describe('navigation', () => {
-  it('renders only the registered routes (Mission, Ledger)', async () => {
+  it('renders the registered routes (Mission, Ledger, Inbox)', async () => {
     await renderApp();
     const nav = screen.getByRole('navigation', { name: 'Main' });
     const links = within(nav).getAllByRole('link');
-    expect(links.map((link) => link.textContent)).toEqual(['Mission', 'Ledger']);
+    expect(links.map((link) => link.textContent)).toEqual(['Mission', 'Ledger', 'Inbox']);
     expect(navRegistry.entries()).toEqual([
       { path: '/mission', label: 'Mission' },
       { path: '/runs', label: 'Ledger' },
+      { path: '/inbox', label: 'Inbox' },
     ]);
     expect(links[0]?.getAttribute('aria-current')).toBe('page');
   });
