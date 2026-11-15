@@ -79,9 +79,35 @@ const defaultTimers: InterventionTimers = {
 export class InterventionAuthority {
   private readonly timers: InterventionTimers;
   private readonly pending = new Map<string, PendingIntervention>();
+  private readonly raisedListeners = new Set<(intervention: Intervention) => void>();
+  private readonly resolvedListeners = new Set<(interventionId: string) => void>();
+  private readonly attendanceListeners = new Set<(count: number) => void>();
 
   public constructor(private readonly options: InterventionAuthorityOptions) {
     this.timers = options.timers ?? defaultTimers;
+  }
+
+  /** Current number of attending windows. */
+  public attendance(): number {
+    return this.options.ceiling.attendance();
+  }
+
+  /** Observe raises without affecting the decision path. */
+  public onRaised(listener: (intervention: Intervention) => void): () => void {
+    this.raisedListeners.add(listener);
+    return () => this.raisedListeners.delete(listener);
+  }
+
+  /** Observe resolutions without affecting the decision path. */
+  public onResolved(listener: (interventionId: string) => void): () => void {
+    this.resolvedListeners.add(listener);
+    return () => this.resolvedListeners.delete(listener);
+  }
+
+  /** Observe attendance changes without affecting the decision path. */
+  public onAttendance(listener: (count: number) => void): () => void {
+    this.attendanceListeners.add(listener);
+    return () => this.attendanceListeners.delete(listener);
   }
 
   /** Register and durably raise a consent, returning its eventual decision. */
@@ -129,6 +155,7 @@ export class InterventionAuthority {
 
     void this.persistRaised(state).then(
       () => {
+        for (const listener of this.raisedListeners) listener(state.intervention);
         this.armTimer(state);
       },
       (error: unknown) => {
@@ -202,6 +229,7 @@ export class InterventionAuthority {
       } as unknown as RunEvent);
       await this.options.events.flush();
     }
+    for (const listener of this.attendanceListeners) listener(this.options.ceiling.attendance());
     for (const state of this.pending.values()) this.armTimer(state);
   }
 
@@ -257,6 +285,7 @@ export class InterventionAuthority {
     state.state = 'resolved';
     this.pending.delete(state.intervention.intervention_id);
     if (state.timer !== null) this.timers.clearTimeout(state.timer);
+    for (const listener of this.resolvedListeners) listener(state.intervention.intervention_id);
     state.resolve(decision);
   }
 

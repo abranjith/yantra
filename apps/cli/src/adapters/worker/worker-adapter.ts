@@ -8,7 +8,9 @@ import {
   collectInitContextGrants,
   InterventionAuthority,
   InterventionLog,
+  NeedsYouNotifier,
   NodeDaemonProcessControl,
+  SinkNotifier,
   UnattendedCeilingClock,
   runsRoot,
 } from '@yantra/core';
@@ -114,6 +116,12 @@ export async function runWorkerInvocation(
       events: { publish: () => undefined, flush: () => Promise.resolve() },
       clock: { now: () => new Date().toISOString() },
       ceiling,
+    });
+    new NeedsYouNotifier({
+      authority: interventionAuthority,
+      notifier: new SinkNotifier(),
+      runId: request.run_id,
+      subject: invocation.path.join(' '),
     });
     return interventionAuthority;
   };

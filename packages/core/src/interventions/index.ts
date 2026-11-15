@@ -34,3 +34,8 @@ export {
   type ConfirmationAnswer,
 } from './authority-connector-gateway.js';
 export { InterventionLog, appendInterventionLogEntry } from './intervention-log.js';
+export {
+  NeedsYouNotifier,
+  type NeedsYouNotifierOptions,
+  type NeedsYouNotifierSink,
+} from './needs-you-notifier.js';

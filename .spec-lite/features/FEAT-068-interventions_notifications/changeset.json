@@ -182,6 +182,12 @@
       "task": "TASK-007"
     },
     {
+      "path": "packages/core/src/interventions/needs-you-notifier.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
       "path": "packages/core/src/interventions/parked-decision.ts",
       "status": "A",
       "role": "implement",
@@ -200,10 +206,22 @@
       "task": "TASK-009"
     },
     {
+      "path": "packages/core/src/scheduler/daemon-confirmation-gateway.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
       "path": "packages/core/src/scheduler/index.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/scheduler/notify.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-011"
     },
     {
       "path": "packages/core/src/scheduler/parked-resolver.ts",

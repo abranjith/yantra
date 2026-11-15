@@ -19,7 +19,7 @@ import { spawn } from 'node:child_process';
 import { appendFile, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
-import { generateUlid } from '@yantra/protocol';
+import { generateUlid, NotificationAttempt } from '@yantra/protocol';
 
 import { dataDir } from '../browser/paths.js';
 import type { Logger } from '../browser/types.js';
@@ -31,7 +31,7 @@ export type NotificationKind = 'completed' | 'failed' | 'confirmation_needed';
 /** A durable, secret-free notification record (one jsonl line). */
 export interface Notification {
   readonly id: string;
-  readonly schedule_id: string;
+  readonly schedule_id: string | null;
   readonly run_id: string | null;
   readonly kind: NotificationKind;
   readonly title: string;
@@ -42,9 +42,12 @@ export interface Notification {
 
 /** Inputs to {@link buildNotification} — only safe, non-secret fields. */
 export interface NotificationInput {
-  readonly scheduleId: string;
+  readonly scheduleId?: string | null;
   readonly runId: string | null;
-  readonly workflowName: string;
+  /** Safe subject used in notification text. */
+  readonly subject?: string;
+  /** Legacy alias retained for existing scheduler callers. */
+  readonly workflowName?: string;
   readonly kind: NotificationKind;
   /** Optional path to the run's brief/report, surfaced in the body. */
   readonly artifactPath?: string | null;
@@ -63,11 +66,12 @@ export function notificationsPath(): string {
  * captured content into a body (plan §6 secret-free-by-construction).
  */
 export function buildNotification(input: NotificationInput, now: Date = new Date()): Notification {
-  const title = titleFor(input.kind, input.workflowName);
-  const body = bodyFor(input);
+  const subject = input.subject ?? input.workflowName ?? 'run';
+  const title = titleFor(input.kind, subject);
+  const body = bodyFor({ ...input, subject });
   return {
     id: generateUlid(),
-    schedule_id: input.scheduleId,
+    schedule_id: input.scheduleId ?? null,
     run_id: input.runId,
     kind: input.kind,
     title,
@@ -142,19 +146,67 @@ export class SinkNotifier implements Notifier {
   }
 
   public async notify(notification: Notification, target: NotifyTarget): Promise<void> {
-    // Always write the durable record first.
-    await this.appendJsonl(notification);
+    await this.notifyWithAttempts(notification, target);
+  }
 
-    if (target === 'desktop') {
-      const delivered = await this.tryDesktop(notification);
-      if (!delivered) {
-        this.logger?.warn?.(
-          { id: notification.id },
-          'desktop notification failed; recorded to notifications.jsonl only',
-        );
-      }
+  /** Writes a notification and, when linked to an intervention, its delivery attempts. */
+  public async notifyWithAttempts(
+    notification: Notification,
+    target: NotifyTarget,
+    context?: { readonly interventionId: string; readonly runId: string },
+  ): Promise<void> {
+    await this.appendJsonl(notification);
+    if (target !== 'desktop') return;
+    const command = desktopCommand(this.platform, notification);
+    if (context !== undefined) {
+      await this.appendAttempt(context, 'attempted', null);
     }
-    // `file` and `none` need no extra delivery — the jsonl record is the sink.
+    if (command === null) {
+      if (context !== undefined)
+        await this.appendAttempt(context, 'unsupported', 'platform_unsupported');
+      return;
+    }
+    const delivered = await this.tryDesktop(notification);
+    if (context !== undefined) {
+      await this.appendAttempt(
+        context,
+        delivered ? 'delivered' : 'failed',
+        delivered ? null : 'nonzero_exit',
+      );
+    }
+    if (!delivered) {
+      this.logger?.warn?.(
+        { id: notification.id },
+        'desktop notification failed; recorded to notifications.jsonl only',
+      );
+    }
+  }
+
+  private async appendAttempt(
+    context: { readonly interventionId: string; readonly runId: string },
+    status: 'attempted' | 'delivered' | 'failed' | 'unsupported',
+    detail: 'spawn_error' | 'nonzero_exit' | 'platform_unsupported' | null,
+  ): Promise<void> {
+    const attempt = NotificationAttempt.parse({
+      record: 'attempt',
+      attempt_id: generateUlid(),
+      notification_id: null,
+      intervention_id: context.interventionId,
+      run_id: context.runId,
+      channel: 'desktop',
+      status,
+      at: new Date().toISOString(),
+      detail,
+    });
+    try {
+      await mkdir(dirname(this.jsonlPath), { recursive: true, mode: 0o700 });
+      await appendFile(this.jsonlPath, `${JSON.stringify(attempt)}\\n`, 'utf8');
+    } catch (error) {
+      this.logger?.warn?.(
+        { error: error instanceof Error ? error.message : String(error) },
+        'failed to append notification attempt',
+      );
+    }
   }
 
   /** Appends the durable jsonl record (best-effort — never throws). */
