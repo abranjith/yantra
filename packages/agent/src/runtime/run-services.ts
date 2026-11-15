@@ -23,6 +23,7 @@ import type {
   SearchResult,
   AgentBrowserController,
   Logger,
+  ScreenProtection,
   SensitiveScreenLatch,
   OpaqueRefResolver,
   RankSignalSink,
@@ -274,6 +275,11 @@ export interface BrowserToolDeps {
   readonly secretResolver: OpaqueRefResolver | null;
   /** Shared fail-closed latch guarding screenshots after secret dispatch. */
   readonly sensitiveScreenLatch?: SensitiveScreenLatch;
+  /**
+   * The controller's screen protection (FEAT-069). A masked-value fill holds
+   * it while it runs so the live view hides the screen; never model-visible.
+   */
+  readonly screenProtection?: ScreenProtection;
   /** Trusted metadata lookup; bindings never come from model input. */
   readonly secretHosts: (key: string) => Promise<readonly string[]>;
   readonly captureThresholdBytes: number;

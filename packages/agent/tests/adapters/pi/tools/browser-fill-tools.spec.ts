@@ -20,6 +20,7 @@ import {
   type ObservationFingerprint,
   type OpaqueRefResolver,
   type PageDelta,
+  ScreenProtection,
   SensitiveScreenLatch,
   ToolCallWriter,
   UserInputVault,
@@ -683,6 +684,160 @@ describe('@no-llm browser_fill_element contract', () => {
         value: { kind: 'literal', value: '{{user:email:1}}' },
       }),
     ]);
+  });
+
+  describe('masked-value fills hide the live view (FEAT-069)', () => {
+    /** Records the screen's protection at every input event the fill dispatches. */
+    function watchProtection(
+      controller: FormController,
+      selector: string,
+      screen: ScreenProtection,
+    ) {
+      const during: boolean[] = [];
+      controller.document.querySelector(selector)?.addEventListener('input', () => {
+        during.push(screen.isProtectedNow);
+      });
+      return during;
+    }
+
+    it('holds protection while a user-input value is typed, and releases it after', async () => {
+      const controller = new FormController('<input id="email" aria-label="Email">');
+      const vault = new UserInputVault();
+      vault.redact('sign up with john@example.com');
+      const latch = new SensitiveScreenLatch();
+      const screen = new ScreenProtection(latch);
+      const transitions: boolean[] = [];
+      screen.subscribe((value) => transitions.push(value));
+      const during = watchProtection(controller, '#email', screen);
+
+      const { result } = await runElement(
+        controller,
+        { field: 'Email', value: '{{user:email:1}}' },
+        new AgentTrace(),
+        { sensitiveScreenLatch: latch, screenProtection: screen },
+        false,
+        vault,
+      );
+
+      expect(result.status).toBe('ok');
+      expect(during.length).toBeGreaterThan(0);
+      expect(during.every(Boolean)).toBe(true);
+      expect(screen.isProtectedNow).toBe(false);
+      expect(transitions).toEqual([true, false]);
+      // A hold, not the latch: the next navigation is not needed to show the page again.
+      expect(latch.isLatched(null)).toBe(false);
+    });
+
+    it('holds protection for a literal into a protected control', async () => {
+      const controller = new FormController(
+        '<input id="password" type="password" aria-label="Password">',
+      );
+      const describeOriginal = controller.describeRef.bind(controller);
+      vi.spyOn(controller, 'describeRef').mockImplementation((ref) => {
+        const entry = describeOriginal(ref);
+        return entry === undefined ? undefined : { ...entry, withheld: 'password' };
+      });
+      const screen = new ScreenProtection(new SensitiveScreenLatch());
+      const during = watchProtection(controller, '#password', screen);
+
+      const { result } = await runElement(
+        controller,
+        { field: 'Password', value: 'YANTRA-protected-synthetic-pw' },
+        new AgentTrace(),
+        { screenProtection: screen },
+      );
+
+      expect(result.status).toBe('ok');
+      expect(during.length).toBeGreaterThan(0);
+      expect(during.every(Boolean)).toBe(true);
+      expect(screen.openHolds).toBe(0);
+    });
+
+    it('does not hold for a plain literal', async () => {
+      const controller = new FormController('<input id="email" aria-label="Email">');
+      const screen = new ScreenProtection(new SensitiveScreenLatch());
+      const holds = vi.spyOn(screen, 'hold');
+      const during = watchProtection(controller, '#email', screen);
+
+      const { result } = await runElement(
+        controller,
+        { field: 'Email', value: 'plain@example.test' },
+        new AgentTrace(),
+        { screenProtection: screen },
+        false,
+        new UserInputVault(),
+      );
+
+      expect(result.status).toBe('ok');
+      expect(holds).not.toHaveBeenCalled();
+      expect(during.some(Boolean)).toBe(false);
+    });
+
+    it('releases the hold when the fill fails, and leaves the result unchanged', async () => {
+      const controller = new FormController('<input id="email" aria-label="Email">');
+      const vault = new UserInputVault();
+      vault.redact('sign up with john@example.com');
+      const screen = new ScreenProtection(new SensitiveScreenLatch());
+      vi.spyOn(controller, 'fill').mockRejectedValue(new Error('page crashed'));
+      vi.spyOn(controller, 'type').mockRejectedValue(new Error('page crashed'));
+
+      const withHold = await runElement(
+        controller,
+        { field: 'Email', value: '{{user:email:1}}' },
+        new AgentTrace(),
+        { screenProtection: screen },
+        false,
+        vault,
+      );
+      const without = await runElement(
+        controller,
+        { field: 'Email', value: '{{user:email:1}}' },
+        new AgentTrace(),
+        {},
+        false,
+        vault,
+      );
+
+      expect(withHold.result.status).not.toBe('ok');
+      expect(screen.openHolds).toBe(0);
+      expect(screen.isProtectedNow).toBe(false);
+      expect(withHold.result.modelText).toBe(without.result.modelText);
+    });
+
+    it('leaves a stored-secret fill on the latch alone, with no hold', async () => {
+      const controller = new FormController(
+        '<input id="password" type="password" aria-label="Password">',
+      );
+      const latch = new SensitiveScreenLatch();
+      const screen = new ScreenProtection(latch);
+      const holds = vi.spyOn(screen, 'hold');
+      const resolver: OpaqueRefResolver = {
+        resolve: vi.fn().mockResolvedValue({
+          value: 'CANARY-super-secret',
+          isSecret: true,
+          source: 'secret',
+          sourceKey: 'site.password',
+          dispose: vi.fn(),
+        }),
+      };
+
+      const { result } = await runElement(
+        controller,
+        { field: 'Password', value: { kind: 'secret_ref', key: 'site.password' } },
+        new AgentTrace(),
+        {
+          secretResolver: resolver,
+          secretHosts: () => Promise.resolve(['example.test']),
+          sensitiveScreenLatch: latch,
+          screenProtection: screen,
+        },
+        true,
+      );
+
+      expect(result.status).toBe('ok');
+      expect(holds).not.toHaveBeenCalled();
+      expect(screen.isProtectedNow).toBe(true);
+    });
   });
 
   it('does not let a resolved user placeholder bypass the credential guard', async () => {

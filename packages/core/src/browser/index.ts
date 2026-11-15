@@ -54,6 +54,7 @@ export {
 } from './page-source.js';
 export * from './provider.js';
 export * from './session.js';
+export * from './screen-protection.js';
 export * from './sensitive-screen-latch.js';
 export * from './set-of-marks.js';
 export * from './user-simulation.js';

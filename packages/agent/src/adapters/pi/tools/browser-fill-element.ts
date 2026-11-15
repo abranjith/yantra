@@ -277,12 +277,20 @@ export async function applyBrowserFill(
     const intent = parseFillValue(literal, target.role);
     if (!('kind' in intent)) return mapFillFailure(intent);
     let outcome: FillOutcome;
+    // FEAT-069: a masked-value fill (into a protected control, or carrying a
+    // user-input value) hides the live view while it runs. Nothing else about
+    // the fill or its result changes.
+    const release = isMaskedValueFill(controller, target, literal, services)
+      ? deps.screenProtection?.hold('masked_fill')
+      : undefined;
     try {
       outcome = await driveWithRetry(port, controller, field, target, intent, {
         ...(located.observation ? { observation: located.observation } : {}),
       });
     } catch (error) {
       return browserFailure(error, services);
+    } finally {
+      release?.();
     }
     if (!outcome.ok) {
       await bestEffortDismiss(port, target);
@@ -385,6 +393,22 @@ export async function applyBrowserFill(
   } finally {
     resolved.dispose();
   }
+}
+
+/**
+ * A masked-value fill (FEAT-069 §1): the target is a FEAT-056 protected control,
+ * or the literal carries a FEAT-FP-008 user-input value. Reads only the
+ * controller's in-memory ref registry, never the page.
+ */
+function isMaskedValueFill(
+  controller: AgentBrowserController,
+  target: WidgetTarget,
+  literal: string,
+  services: RunServices,
+): boolean {
+  if (controller.describeRef(target.ref)?.withheld !== undefined) return true;
+  const masked = services.userInput?.mask(literal);
+  return masked !== undefined && masked !== literal;
 }
 
 /**

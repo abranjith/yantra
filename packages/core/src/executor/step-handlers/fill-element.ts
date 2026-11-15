@@ -7,6 +7,7 @@ import {
   type AgentBrowserObservation,
   type AgentInteractable,
 } from '../../browser/agent-controller.js';
+import { withProtectionHold } from '../../browser/screen-protection.js';
 import { collectComposedInteractables } from '../../discovery/composed-handles.js';
 import { ensureLocatorRuntime } from '../../discovery/observe.js';
 import { fillField, fillSecretField, parseFillValue, type FillFailure } from '../../fill/index.js';
@@ -87,8 +88,10 @@ export const handleFillElement: StepHandler<FillElementStep> = async (
     }
 
     let target: WidgetTarget;
+    let withheld: WithheldReason | undefined;
     if (semantic.kind === 'match') {
       target = toTarget(semantic.target);
+      withheld = semantic.target.withheld;
     } else {
       if (
         !step.field_label_origin &&
@@ -131,9 +134,10 @@ export const handleFillElement: StepHandler<FillElementStep> = async (
       }
       if (located.kind === 'error') return failed('unexpected', located.error);
       target = await port.adopt(located.elementHandle, step.field_name);
+      withheld = port.withheldOf(target.ref);
     }
 
-    return driveFillElement(step, ctx, port, target);
+    return driveFillElement(step, ctx, port, target, { protectedTarget: withheld !== undefined });
   } catch (error) {
     return failed('unexpected', error instanceof Error ? error : new Error(String(error)));
   } finally {
@@ -141,12 +145,23 @@ export const handleFillElement: StepHandler<FillElementStep> = async (
   }
 };
 
+/** What the caller knows about the resolved target beyond its {@link WidgetTarget}. */
+export interface DriveFillElementOptions {
+  /**
+   * The target is a FEAT-056 protected control (its descriptor carries
+   * `withheld`). A non-secret fill into it is a masked-value fill: the live
+   * view stays hidden while it runs (FEAT-069).
+   */
+  readonly protectedTarget?: boolean;
+}
+
 /** Execute a resolved replay field; exported for focused handler tests. */
 export async function driveFillElement(
   step: FillElementStep,
   ctx: ExecutionContext,
   port: WidgetPort,
   target: WidgetTarget,
+  options: DriveFillElementOptions = {},
 ): Promise<StepResult> {
   const resolver = new ValueResolver(ctx.captures, ctx.params ?? {}, ctx.secrets);
   if (step.value.kind === 'secret') {
@@ -157,6 +172,9 @@ export async function driveFillElement(
       return failed('validation_error', asError(error));
     }
     try {
+      // FEAT-069: latch after the secret resolved and before any character is
+      // dispatched; a thrown fill leaves it set until navigation or teardown.
+      ctx.sensitiveScreenLatch?.latch(ctx.settler?.epoch ?? null);
       const outcome = await fillSecretField(
         port,
         { field: step.field_name, target },
@@ -181,12 +199,12 @@ export async function driveFillElement(
   }
   const intent = parseFillValue(raw, target.role);
   if (!('kind' in intent)) return fromFailure(step, ctx, intent);
-  const outcome = await fillField(
-    port,
-    { field: step.field_name, target },
-    intent,
-    defaultWidgetBudget(port),
-  );
+  const fill = () =>
+    fillField(port, { field: step.field_name, target }, intent, defaultWidgetBudget(port));
+  const outcome =
+    options.protectedTarget === true
+      ? await withProtectionHold(ctx.screenProtection, 'masked_fill', fill)
+      : await fill();
   if (!outcome.ok) return fromFailure(step, ctx, outcome);
   return {
     kind: 'completed',
@@ -274,6 +292,8 @@ function toTarget(entry: AgentInteractable): WidgetTarget {
 class ReplayWidgetPort implements WidgetPort {
   private readonly refs = new Map<string, ElementHandle<Element>>();
   private readonly refByIdentity = new Map<string, string>();
+  /** Protected-control reasons by ref, from the latest observation or adoption. */
+  private readonly withheldByRef = new Map<string, WithheldReason>();
   private nextRef = 1;
 
   public constructor(
@@ -325,6 +345,10 @@ class ReplayWidgetPort implements WidgetPort {
       next.set(ref, handle);
       interactables.push({ ...described, ref });
     }
+    this.withheldByRef.clear();
+    for (const entry of interactables) {
+      if (entry.withheld !== undefined) this.withheldByRef.set(entry.ref, entry.withheld);
+    }
     for (const [ref, handle] of this.refs) {
       if (next.get(ref) !== handle) dispose(handle);
     }
@@ -358,7 +382,15 @@ class ReplayWidgetPort implements WidgetPort {
     const described = (await describeReplayHandle(handle)) ?? { role: 'textbox', name: fieldName };
     const ref = `e${this.nextRef++}`;
     this.refs.set(ref, handle);
+    if ('withheld' in described && described.withheld !== undefined) {
+      this.withheldByRef.set(ref, described.withheld);
+    }
     return toTarget({ ref, ...described });
+  }
+
+  /** Why `ref` is a protected control, when it is one. */
+  public withheldOf(ref: string): WithheldReason | undefined {
+    return this.withheldByRef.get(ref);
   }
 
   public async click(ref: string): Promise<void> {

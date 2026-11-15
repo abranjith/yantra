@@ -100,6 +100,10 @@ export const handleFill: StepHandler<FillStep> = async (step, ctx): Promise<Step
   }
 
   try {
+    // FEAT-069: latch after the secret resolved and before any character is
+    // dispatched. A thrown fill leaves it set until navigation or teardown,
+    // the same rule as the agent path. Inside this try so the finally zeroes.
+    if (step.value.kind === 'secret') ctx.sensitiveScreenLatch?.latch(ctx.settler?.epoch ?? null);
     await withPageSettling(ctx, FILL_NAV_DETECT_MS, async () => {
       const puppeteerPage = ctx.page?.puppeteerPage;
       if (!puppeteerPage) throw new Error('Fill step requires a Puppeteer-backed page.');

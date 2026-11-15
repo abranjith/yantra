@@ -74,6 +74,7 @@ import {
   type MintedCandidates,
   type PointerPoint,
 } from './pointer-preflight.js';
+import { ScreenProtection } from './screen-protection.js';
 import { SensitiveScreenLatch } from './sensitive-screen-latch.js';
 import { wrapPuppeteerPage } from './session.js';
 import {
@@ -401,6 +402,11 @@ export class AgentBrowserController implements WidgetPort {
   public readonly runId: string;
   /** Shared run-local latch consulted by secret fills and screenshot capture. */
   public readonly sensitiveScreenLatch = new SensitiveScreenLatch();
+  /**
+   * Whether the task page might show a secret (FEAT-069): the latch above,
+   * open fill holds, and protected-control focus. Read only by the live view.
+   */
+  public readonly screenProtection = new ScreenProtection(this.sensitiveScreenLatch);
 
   private readonly provider: BrowserProvider;
   private readonly extractor: Extractor;

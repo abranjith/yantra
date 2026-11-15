@@ -2582,6 +2582,7 @@ function composeDefaultEnvironment(
         ethics,
         secretResolver,
         sensitiveScreenLatch: browserController.sensitiveScreenLatch,
+        screenProtection: browserController.screenProtection,
         // Host bindings are trusted metadata and are intentionally not inferred
         // from model input. A future config store can inject them here.
         secretHosts: () => Promise.resolve([]),

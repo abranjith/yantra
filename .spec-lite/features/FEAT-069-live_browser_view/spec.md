@@ -329,7 +329,7 @@ specs' final locations)
 
 ### TASK-003: Screen protection — observable latch, fill holds, and the deterministic fill paths
 
-- [ ] **Implementation**: (1) Add `subscribe(listener: (latched: boolean) => void): () => void` to
+- [x] **Implementation**: (1) Add `subscribe(listener: (latched: boolean) => void): () => void` to
       `SensitiveScreenLatch`: notify `true` synchronously inside `latch()`, `false` when
       `isLatched()` clears on an epoch change and in `clearOnTeardown()`. Existing semantics
       (fail-closed on unreadable epoch, clear only by epoch change or teardown) stay byte-for-byte.
@@ -349,7 +349,7 @@ specs' final locations)
       `finally`. (6) Agent path: in `applyBrowserFill`, hold `masked_fill` for the literal path when
       the target carries `withheld` or `services.userInput?.mask(literal) !== literal`; the secret
       path's existing latch is unchanged. No new artifact, log line, or tool-result field.
-- [ ] **Unit Tests**: latch `subscribe` fires `true` on latch, `false` on epoch change and teardown,
+- [x] **Unit Tests**: latch `subscribe` fires `true` on latch, `false` on epoch change and teardown,
       never fires on a repeated `isLatched` with the same epoch, unsubscribe stops delivery;
       existing `sensitive-screen-latch.spec.ts` cases pass unchanged. `ScreenProtection`: holds nest
       and a double release is a no-op; `unknown` focus is protected; listener fires once per
@@ -360,12 +360,22 @@ specs' final locations)
       a literal fill whose value came from a user-input placeholder holds during the fill; a plain
       literal does not; the model-visible secret-fill result stays byte-identical (existing
       snapshot).
-- [ ] **Documentation Update**: Invoke **Document** update mode for Safety and Privacy
+- [x] **Documentation Update**: Invoke **Document** update mode for Safety and Privacy
       (protected screens now include deterministic secret fills).
 - **Verify**: `cd packages/core && npx vitest run tests/browser/sensitive-screen-latch.spec.ts
 tests/browser/screen-protection.spec.ts tests/executor/fill-protection.spec.ts`; rebuild core
   (`npx turbo run build --filter=@yantra/core`) then
   `cd packages/agent && npx vitest run tests/adapters/pi/tools/browser-fill-tools.spec.ts`.
+- **Outcome (2026-11-15)**: `SensitiveScreenLatch.subscribe` pushes transitions only. A throwing
+  listener does not stop the others, and the first error is rethrown after the state has changed.
+  Inside `latch()` that fails the fill closed. The legacy `fill` step and `fill_element` latch
+  inside the dispatch `try`, so the secret is still zeroed. The masked-value hold covers
+  `fill_element` only: the legacy `fill` step has no target descriptor, and classifying the element
+  would add a page read to every fill (memory: diagnostic work only on the path that needs it). Its
+  protected-control case is covered by the TASK-004 focus guard. On the agent path the masked check
+  reads only the controller's in-memory ref registry (`describeRef(...).withheld`) and the vault's
+  `mask()`. `BrowserToolDeps.screenProtection` is optional, so fakes are unaffected. Human-facing
+  docs are batched into the Finalize Document update (Safety and Privacy).
 
 ### TASK-004: Protected-control focus guard in an isolated world
 
@@ -687,7 +697,7 @@ tests/browser/agent-popup-policy.spec.ts tests/browser/agent-controller.spec.ts`
 
 - [/] TASK-001: Spike S1 — glass and readability over a live screencast, with a report
 - [x] TASK-002: Protocol — screencast frame metadata, control messages and payload codec
-- [ ] TASK-003: Screen protection — observable latch, fill holds, and the deterministic fill paths
+- [x] TASK-003: Screen protection — observable latch, fill holds, and the deterministic fill paths
 - [ ] TASK-004: Protected-control focus guard in an isolated world
 - [ ] TASK-005: Frame gate — generations, fresh-capture admission and clear signals
 - [ ] TASK-006: Task page source and the CDP screencast source

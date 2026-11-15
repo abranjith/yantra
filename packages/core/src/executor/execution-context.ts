@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import type { Plan } from '@yantra/protocol';
 
 import { PageSettler } from '../browser/page-settle.js';
+import { ScreenProtection } from '../browser/screen-protection.js';
+import { SensitiveScreenLatch } from '../browser/sensitive-screen-latch.js';
 import type { BrowserSession, Logger, Page } from '../browser/types.js';
 import { openTaskEventBus } from '../run-events/mirroring-event-bus.js';
 import { RecordingConfirmationGateway } from '../run-events/recording-confirmation-gateway.js';
@@ -95,6 +97,9 @@ export function createExecutionContext(opts: ExecutionContextOptions): Execution
     taskId: opts.taskId,
     runId,
   });
+  // FEAT-069: run-local, in memory, never persisted; the live view's only input.
+  const sensitiveScreenLatch = new SensitiveScreenLatch();
+  const screenProtection = new ScreenProtection(sensitiveScreenLatch);
 
   return {
     runId,
@@ -127,6 +132,8 @@ export function createExecutionContext(opts: ExecutionContextOptions): Execution
         : (opts.confirmationGateway ?? null),
     confirmationStore: createConfirmationStore(opts.runDir),
     evidence: opts.evidence === undefined ? new ReplayEvidenceLedger() : opts.evidence,
+    sensitiveScreenLatch,
+    screenProtection,
   };
 }
 
