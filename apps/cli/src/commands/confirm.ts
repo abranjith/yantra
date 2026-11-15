@@ -12,8 +12,8 @@
  *   yantra confirm 20260701T120000Z-shop-checkout-a7b3 deny --json
  */
 
-import { runsRoot, createConfirmationStore } from '@yantra/core';
-import type { ConfirmationDecision } from '@yantra/protocol';
+import { ParkedDecisionService, createConfirmationStore, runsRoot } from '@yantra/core';
+import type { ConfirmationDecision, DecisionResponse } from '@yantra/protocol';
 import { type Command } from 'commander';
 
 import { createTerminalContext } from '../adapters/terminal/terminal-adapter.js';
@@ -31,6 +31,22 @@ export function makeConfirmCommand(): Command {
 }
 
 /** Handlers for `confirm`, bound by registry id; each is its former commander action, unchanged. */
+function decisionForOutput(
+  response: DecisionResponse,
+  confirmationId: string | undefined,
+): ConfirmationDecision | null {
+  if (response.status === 'accepted') return response.decision;
+  if (response.status === 'already_decided' && confirmationId !== undefined) {
+    return {
+      confirmation_id: confirmationId,
+      decision: response.decision,
+      decided_at: response.decided_at,
+      decided_by: response.decided_by,
+    };
+  }
+  return null;
+}
+
 export function confirmHandlers(context: CommandContext = createTerminalContext()) {
   return {
     confirm: fromAction(async (runId: string, decisionArg: string, options: ConfirmOptions) => {
@@ -46,7 +62,16 @@ export function confirmHandlers(context: CommandContext = createTerminalContext(
         const store = createConfirmationStore(runDir);
 
         const pendingRequest = await store.findPending(runId);
-        if (pendingRequest === null) {
+        const request = pendingRequest ?? (await store.latestRequest(runId));
+        const service = new ParkedDecisionService();
+        const response = await service.decideParked({
+          runDir,
+          runId,
+          decision: decisionArg === 'grant' ? 'granted' : 'denied',
+          decidedBy: 'user_cli_confirm',
+        });
+
+        if (response.status === 'stale' && request === null) {
           const message = `No pending confirmation found for run "${runId}".`;
           if (options.json === true) {
             context.output.json({ error: message, runId }, { indent: 2 });
@@ -56,43 +81,25 @@ export function confirmHandlers(context: CommandContext = createTerminalContext(
           return { exitCode: 1 as ExitCode };
         }
 
-        const alreadyResolved = await store.hasDecision(pendingRequest.confirmation_id);
-        if (alreadyResolved) {
-          const message = `Confirmation ${pendingRequest.confirmation_id} is already resolved.`;
-          if (options.json === true) {
-            context.output.json({ error: message, runId }, { indent: 2 });
-          } else {
-            context.output.stderr.write(`${message}\n`);
-          }
-          return { exitCode: 1 as ExitCode };
-        }
-
-        const decision: ConfirmationDecision = {
-          confirmation_id: pendingRequest.confirmation_id,
-          decision: decisionArg === 'grant' ? 'granted' : 'denied',
-          decided_at: new Date().toISOString(),
-          decided_by: 'user_cli_confirm',
-        };
-
-        await store.appendDecision(decision);
-
+        const decision = decisionForOutput(response, request?.confirmation_id);
         if (options.json === true) {
-          context.output.json({ runId, decision, request: pendingRequest }, { indent: 2 });
-        } else {
-          const icon = decisionArg === 'grant' ? '✓' : '✗';
-          context.output.stdout.write(
-            `${icon} Confirmation ${decisionArg}ed for run ${runId} (step: ${pendingRequest.step_id})\n`,
+          context.output.json(
+            { runId, decision, request, case: 'parked', response },
+            { indent: 2 },
           );
-        }
-
-        if (decisionArg === 'grant') {
-          context.output.stdout.write(`Resuming run ${runId}...\n`);
-          context.output.stdout.write(`Use "yantra resume ${runId}" to continue execution.\n`);
+        } else if (response.status === 'accepted') {
+          context.output.stdout.write(`Decided (parked run): ${response.decision.decision}\n`);
+        } else if (response.status === 'already_decided') {
+          context.output.stdout.write(
+            `Already decided by ${response.decided_by} at ${response.decided_at}\n`,
+          );
+        } else if (response.status === 'expired') {
+          context.output.stderr.write(`Confirmation expired at ${response.decided_at}\n`);
         } else {
-          context.output.stdout.write(`Run ${runId} aborted (denied).\n`);
+          context.output.stderr.write(`No pending confirmation found for run "${runId}".\n`);
         }
 
-        return { exitCode: 0 as ExitCode };
+        return { exitCode: response.status === 'accepted' ? 0 : 1 };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         context.output.stderr.write(`Error: ${message}\n`);

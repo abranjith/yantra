@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Writable } from 'node:stream';
 
-import { ConfirmationStore, createConfirmationStore, resetPathCache, runsRoot } from '@yantra/core';
+import { createConfirmationStore, resetPathCache, runsRoot } from '@yantra/core';
 import type { ConfirmationRequest } from '@yantra/protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -63,59 +63,32 @@ afterEach(async () => {
 });
 
 describe('@no-llm yantra confirm concurrency characterization (FEAT-068 TASK-001)', () => {
-  it.fails(
-    'allows only one concurrent confirm decision when two callers race between hasDecision and appendDecision',
-    async () => {
-      const runId = '20261103T120000Z-race-a1b2';
-      const runDir = join(runsRoot(), runId);
-      const store = createConfirmationStore(runDir);
-      const req: ConfirmationRequest = {
-        confirmation_id: '01J00000000000000000000010',
-        run_id: runId,
-        step_id: 'step_checkout',
-        action_kind: 'click',
-        host: 'shop.example',
-        description: 'Confirm checkout',
-        expected_cost: null,
-        consequence: 'unknown',
-        requested_at: '2026-11-03T12:00:00.000Z',
-        timeout_ms: null,
-      };
-      await store.appendRequest(req);
+  it('allows only one concurrent confirm decision for one parked request', async () => {
+    const runId = '20261103T120000Z-race-a1b2';
+    const runDir = join(runsRoot(), runId);
+    const store = createConfirmationStore(runDir);
+    const req: ConfirmationRequest = {
+      confirmation_id: '01J00000000000000000000010',
+      run_id: runId,
+      step_id: 'step_checkout',
+      action_kind: 'click',
+      host: 'shop.example',
+      description: 'Confirm checkout',
+      expected_cost: null,
+      consequence: 'unknown',
+      requested_at: '2026-11-03T12:00:00.000Z',
+      timeout_ms: null,
+    };
+    await store.appendRequest(req);
 
-      // Barrier: pause after `hasDecision` returns so both callers pass the check
-      // before either proceeds to `appendDecision`.
-      const origHasDecision = ConfirmationStore.prototype.hasDecision;
-      let arrived = 0;
-      let releaseBarrier!: () => void;
-      const barrier = new Promise<void>((resolve) => {
-        releaseBarrier = resolve;
-      });
-      vi.spyOn(ConfirmationStore.prototype, 'hasDecision').mockImplementation(async function (
-        this: ConfirmationStore,
-        confirmationId: string,
-      ) {
-        const result = await origHasDecision.call(this, confirmationId);
-        arrived += 1;
-        if (arrived === 2) {
-          releaseBarrier();
-        }
-        await barrier;
-        return result;
-      });
+    const [first, second] = await Promise.all([
+      runConfirm(['confirm', runId, 'grant']),
+      runConfirm(['confirm', runId, 'deny']),
+    ]);
 
-      const [first, second] = await Promise.all([
-        runConfirm(['confirm', runId, 'grant']),
-        runConfirm(['confirm', runId, 'deny']),
-      ]);
-
-      const entries = await store.readAll();
-      const decisions = entries.filter((e) => e.kind === 'decision');
-
-      // What SHOULD happen: exactly one winner (exit 0) and one loser (exit 1),
-      // and exactly one decision line appended. Currently fails because both append.
-      expect(decisions).toHaveLength(1);
-      expect([first.exitCode, second.exitCode].sort((a, b) => a - b)).toEqual([0, 1]);
-    },
-  );
+    const entries = await store.readAll();
+    const decisions = entries.filter((e) => e.kind === 'decision');
+    expect(decisions).toHaveLength(1);
+    expect([first.exitCode, second.exitCode].sort((a, b) => a - b)).toEqual([0, 1]);
+  });
 });

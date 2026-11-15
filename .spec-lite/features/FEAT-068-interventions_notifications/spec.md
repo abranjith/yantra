@@ -702,7 +702,7 @@ Sequencing (plan §8): FEAT-068 starts after FEAT-067. TASK-001 to TASK-007 are 
 - [x] TASK-001: Verify the narrowed §15 gap with failing characterization tests
 - [x] TASK-002: Protocol: the `Intervention` model, `DecisionResponse`, claims, notification attempts and binding fields, readable in both directions
 - [x] TASK-003: Every workflow consent request carries its action binding; one canonical-digest implementation
-- [ ] TASK-004: Parked decisions are claimed atomically; `yantra confirm` on a parked run reports `already_decided`
+- [x] TASK-004: Parked decisions are claimed atomically; `yantra confirm` on a parked run reports `already_decided`
 - [ ] TASK-005: A resumed run consumes a grant only for the exact approved action; the daemon pickup stays zero-LLM
 - [ ] TASK-006: Attended deadlines and the cumulative unattended ceiling on absolute instants
 - [ ] TASK-007: The live run owner is the sole decision authority with one atomic transition and defined responses

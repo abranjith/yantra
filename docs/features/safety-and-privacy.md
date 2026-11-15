@@ -329,7 +329,8 @@ An allowlisted host grants navigation within that user-named host; it does not w
 
 ### Resolve and inspect consent
 
-Interactive consent happens inline. For a parked run:
+Interactive consent happens inline. For a parked run, `confirm` creates one
+exclusive, step-bound decision claim:
 
 ```bash
 yantra confirm <run-id> grant
@@ -338,6 +339,9 @@ yantra resume <run-id>
 # Or deny it permanently:
 yantra confirm <run-id> deny
 ```
+
+If another answer wins first, the command reports `already decided` and does
+not append a second decision. A claim cannot be reused for a different step.
 
 Inspect the resulting trail in human-readable or structured form:
 

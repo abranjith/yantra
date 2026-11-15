@@ -14,10 +14,14 @@
  * @see .spec-lite/features/feature_human_in_the_loop.md §3, TASK-002
  */
 
-import { appendFile, mkdir, readFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, readdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
-import type { ConfirmationDecision, ConfirmationRequest } from '@yantra/protocol';
+import {
+  ParkedDecisionClaim,
+  type ConfirmationDecision,
+  type ConfirmationRequest,
+} from '@yantra/protocol';
 
 /**
  * Signal returned by an **unattended** gateway (the daemon, FEAT-021) that
@@ -135,6 +139,7 @@ export class ConfirmationStore {
     }[];
 
     const resolvedIds = new Set(decisions.map((d) => d.data.confirmation_id));
+    for (const claimId of await this.claimIds()) resolvedIds.add(claimId);
 
     for (let i = requests.length - 1; i >= 0; i--) {
       const req = requests[i]!.data;
@@ -150,7 +155,20 @@ export class ConfirmationStore {
    */
   async hasDecision(confirmationId: string): Promise<boolean> {
     const entries = await this.readAll();
-    return entries.some((e) => e.kind === 'decision' && e.data.confirmation_id === confirmationId);
+    if (entries.some((e) => e.kind === 'decision' && e.data.confirmation_id === confirmationId)) {
+      return true;
+    }
+    return (await this.claimIds()).has(confirmationId);
+  }
+
+  /** Return the most recent request for a run, whether or not it is resolved. */
+  async latestRequest(runId: string): Promise<ConfirmationRequest | null> {
+    const entries = await this.readAll();
+    for (let i = entries.length - 1; i >= 0; i--) {
+      const entry = entries[i];
+      if (entry?.kind === 'request' && entry.data.run_id === runId) return entry.data;
+    }
+    return null;
   }
 
   /**
@@ -174,8 +192,58 @@ export class ConfirmationStore {
         latest = entry.data;
       }
     }
+    const claims = await this.claims();
+    for (const claim of claims) {
+      if (requestIds.has(claim.confirmation_id)) latest = claimToDecision(claim);
+    }
     return latest;
   }
+
+  private async claimIds(): Promise<Set<string>> {
+    const directory = join(dirname(this.filePath), 'decisions');
+    let names: string[];
+    try {
+      names = await readdir(directory);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return new Set();
+      throw error;
+    }
+    return new Set(
+      names.filter((name) => name.endsWith('.json')).map((name) => name.slice(0, -'.json'.length)),
+    );
+  }
+
+  private async claims(): Promise<ParkedDecisionClaim[]> {
+    const directory = join(dirname(this.filePath), 'decisions');
+    let names: string[];
+    try {
+      names = await readdir(directory);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+      throw error;
+    }
+    const claims: ParkedDecisionClaim[] = [];
+    for (const name of names.filter((candidate) => candidate.endsWith('.json'))) {
+      try {
+        const parsed = JSON.parse(await readFile(join(directory, name), 'utf8')) as unknown;
+        const result = ParkedDecisionClaim.safeParse(parsed);
+        if (result.success) claims.push(result.data);
+      } catch {
+        // A corrupt claim is still handled as decided by the parked service;
+        // it is not treated as a pending request here.
+      }
+    }
+    return claims;
+  }
+}
+
+function claimToDecision(claim: ParkedDecisionClaim): ConfirmationDecision {
+  return {
+    confirmation_id: claim.confirmation_id,
+    decision: claim.decision,
+    decided_at: claim.decided_at,
+    decided_by: claim.decided_by,
+  };
 }
 
 export type ConfirmationEntry =

@@ -1089,9 +1089,10 @@ yantra confirm <run-id> grant
 yantra confirm <run-id> deny
 ```
 
-Granting records the decision; the daemon resumes the parked run on a later
-poll. It never auto-confirms. See
-[Scheduling and the Local Daemon](features/scheduling.md).
+Granting records one exclusive parked-decision claim; the daemon resumes the
+parked run on a later poll. A concurrent answer reports that the request was
+already decided, and the claim is bound to the approved run step. It never
+auto-confirms. See [Scheduling and the Local Daemon](features/scheduling.md).
 
 ## Diagnostics and run inspection
 

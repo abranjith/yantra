@@ -2,16 +2,46 @@
   "vcs": "git",
   "files": [
     {
+      "path": "apps/cli/src/commands/confirm.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "apps/cli/tests/commands/confirm-race.spec.ts",
       "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
+      "path": "apps/cli/tests/commands/confirm.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "docs/features/safety-and-privacy.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "docs/features/scheduling.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "docs/protocol-spec.md",
       "status": "M",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "docs/usage.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
     },
     {
       "path": "packages/agent/src/runtime/catalog-hash.ts",
@@ -24,6 +54,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/executor/confirmation-gateway.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
     },
     {
       "path": "packages/core/src/executor/executor.ts",
@@ -39,27 +75,39 @@
     },
     {
       "path": "packages/core/src/interventions/binding.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/core/src/interventions/canonical-digest.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
       "path": "packages/core/src/interventions/index.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
     {
-      "path": "packages/core/tests/interventions/binding.spec.ts",
+      "path": "packages/core/src/interventions/parked-decision.ts",
       "status": "U",
       "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/interventions/binding.spec.ts",
+      "status": "A",
+      "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/interventions/parked-decision.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
     },
     {
       "path": "packages/core/tests/scheduler/pregranted-gap.spec.ts",

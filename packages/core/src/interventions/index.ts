@@ -6,3 +6,4 @@ export {
   normalizeTargetHost,
   type ComputedConfirmationBinding,
 } from './binding.js';
+export { ParkedDecisionService, type DecideParkedInput } from './parked-decision.js';
