@@ -68,6 +68,24 @@ const UI_BOUNDARY_PATTERNS = [
   },
 ];
 
+/**
+ * The app (`apps/web`) may also run the browser-safe command registry
+ * (`@yantra/protocol/commands`: the invocation parser, the shell formatter and
+ * condition evaluation, which no browser code may restate, FEAT-067). Its
+ * barrel imports no Node built-in, which a protocol boundary test enforces;
+ * the rest of protocol stays type-only.
+ */
+const WEB_BOUNDARY_PATTERNS = UI_BOUNDARY_PATTERNS.map((pattern) => {
+  if (!pattern.group.includes('@yantra/protocol')) return pattern;
+  // A regex, because gitignore-style groups cannot re-include a path under an excluded parent.
+  const { group: _group, ...rest } = pattern;
+  return {
+    ...rest,
+    regex: '^@yantra/protocol(?!/commands$)(?:/.*)?$',
+    message: `${pattern.message}; apps/web may also import values from @yantra/protocol/commands`,
+  };
+});
+
 /** Icons come from the semantic registry only (plan_ui.md §9). */
 const LUCIDE_PATTERN = {
   group: ['lucide-react', 'lucide-react/*'],
@@ -77,6 +95,9 @@ const LUCIDE_PATTERN = {
 
 /** Every browser-code import restriction, the icon rule included. */
 export const UI_IMPORT_RESTRICTIONS = { patterns: [...UI_BOUNDARY_PATTERNS, LUCIDE_PATTERN] };
+
+/** The app's restrictions: Drshya's, plus value imports from the command registry. */
+export const WEB_IMPORT_RESTRICTIONS = { patterns: [...WEB_BOUNDARY_PATTERNS, LUCIDE_PATTERN] };
 
 /** The same restrictions without the icon rule, for the registry file alone. */
 export const UI_REGISTRY_IMPORT_RESTRICTIONS = { patterns: [...UI_BOUNDARY_PATTERNS] };
@@ -407,6 +428,12 @@ export default tseslint.config(
     rules: {
       'import/no-nodejs-modules': 'error',
       '@typescript-eslint/no-restricted-imports': ['error', UI_IMPORT_RESTRICTIONS],
+    },
+  },
+  {
+    files: ['apps/web/src/**/*.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': ['error', WEB_IMPORT_RESTRICTIONS],
     },
   },
   // The icon registry is the one file that may import lucide-react; every

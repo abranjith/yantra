@@ -4,33 +4,33 @@
  * connection live region, and the session-ended view.
  */
 
-import { createMemoryHistory, RouterProvider } from '@tanstack/react-router';
 import { act, render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { NavRegistry, navRegistry } from '../../src/app/nav-registry.js';
-import { makeRouter } from '../../src/app/router.js';
 import { AppShell } from '../../src/app/shell/AppShell.js';
 import { ConnectionBanner, connectionMessage } from '../../src/app/shell/ConnectionBanner.js';
 import { ConnectionStore } from '../../src/host/connection-store.js';
+import { FakeRpc, renderAt } from '../support/fake-rpc.js';
 
+/** The app at `/` (Mission) over a host that answers the composer's reads. */
 async function renderApp() {
-  const router = makeRouter(createMemoryHistory({ initialEntries: ['/'] }));
-  render(<RouterProvider router={router} />);
-  await act(async () => {
-    await router.load();
-  });
+  const rpc = new FakeRpc()
+    .answer('read.mission_context', { home: '/home/u', platform: 'linux' })
+    .answer('read.template.list', { schema: null, value: { items: [] }, next_cursor: null })
+    .answer('read.effective_options', { path: ['ask'], mode: 'llm', options: [] });
+  const { router } = await renderAt('/', rpc);
   return router;
 }
 
 describe('navigation', () => {
-  it('renders only the registered routes (Home, Ledger)', async () => {
+  it('renders only the registered routes (Mission, Ledger)', async () => {
     await renderApp();
     const nav = screen.getByRole('navigation', { name: 'Main' });
     const links = within(nav).getAllByRole('link');
-    expect(links.map((link) => link.textContent)).toEqual(['Home', 'Ledger']);
+    expect(links.map((link) => link.textContent)).toEqual(['Mission', 'Ledger']);
     expect(navRegistry.entries()).toEqual([
-      { path: '/', label: 'Home' },
+      { path: '/mission', label: 'Mission' },
       { path: '/runs', label: 'Ledger' },
     ]);
     expect(links[0]?.getAttribute('aria-current')).toBe('page');

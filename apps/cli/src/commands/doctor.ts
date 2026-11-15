@@ -58,7 +58,7 @@ import {
   runsRoot,
   storageDirSources,
 } from '@yantra/core';
-import { COMMAND_REGISTRY } from '@yantra/protocol';
+import { COMMAND_REGISTRY, honorsAbort as abortHonored } from '@yantra/protocol';
 import { PROTOCOL_VERSION } from '@yantra/protocol';
 import { type Command, CommanderError } from 'commander';
 
@@ -155,7 +155,11 @@ export function makeDoctorHandler(
   let honorsAbort = false;
   const bound = handler(
     async (_args: HandlerArgs, options: DoctorOptions, command: Command): Promise<void> => {
-      honorsAbort = options.agentSmoke === true;
+      // One rule with the app's Stop wording (protocol ABORT_RULES).
+      honorsAbort = abortHonored('doctor', {
+        options: { agentSmoke: options.agentSmoke === true },
+        arguments: {},
+      });
       const entry = COMMAND_REGISTRY.commands.find((e) => e.id === 'doctor');
       if (entry?.kind === 'leaf') context.settings.bind(entry, command);
       const preferences = await resolved.loadPreferences();

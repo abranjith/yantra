@@ -12,8 +12,14 @@ import { SCREENSHOT_ARTIFACT_PATH_PATTERN } from './artifact-ref.js';
  * denials come first, and anything unmatched is denied.
  */
 
-/** The run-id grammar `formatRunId` produces: `<yyyymmdd>T<hhmmss>Z-<name>-<short id>`. */
-export const RUN_ID_PATTERN = /^[0-9]{8}T[0-9]{6}Z-[A-Za-z0-9-]+$/;
+/**
+ * The run-id grammars: `formatRunId`'s `<yyyymmdd>T<hhmmss>Z-<name>-<short id>`
+ * (workflow and agentic runs), and the lower-case UUID the deterministic
+ * `ask`/`research` pipelines name their runs with (FEAT-067 found these
+ * could not be opened in the app). Neither admits a separator or `..`.
+ */
+export const RUN_ID_PATTERN =
+  /^(?:[0-9]{8}T[0-9]{6}Z-[A-Za-z0-9-]+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
 
 /** The longest run id accepted. */
 export const RUN_ID_MAX_LENGTH = 96;

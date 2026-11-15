@@ -46,6 +46,20 @@
   }
 }
 
+/*
+ * The Bindu breathes while the engine thinks or acts (FEAT-067). The component
+ * leaves this class off under reduced motion; the rule below would stop it anyway.
+ */
+@utility bindu-pulse {
+  animation: drshya-bindu-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes drshya-bindu-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
 /* Three voices (brainstorm rule 3): the user in plain sans, the agent in italic, the engine in mono. */
 @utility type-label {
   font-family: var(--font-sans);

@@ -60,6 +60,31 @@ Source spec: [spec.md](features/FEAT-065-app_host_yantra_ui/spec.md)
 Source spec: [spec.md](features/FEAT-066-run_results_audit/spec.md)
 The Yantra app shows every recorded run, CLI and daemon runs included. The **Ledger** (`/runs`) lists an Active region (runs not yet ended, with their displayed state; an owner that cannot be verified reads `status unknown`) above a virtualized History table paged by cursor, filtered by outcome (or no outcome), mode, date range and text through shareable URL search params, refreshed by `runs.changed` without a reload and announced politely; outcome words are exactly `yantra list`'s, and it says when it falls back to reading run files. **Run result** (`/runs/<id>`, the `open` command's in-app view) renders a Brief (conditions, overview, findings, sections and alternatives, the comparison table, requirements, capture sets, Sources and Also consulted, notices by kind, metadata) or a templated document, through Markdown with raw HTML skipped, http(s)-only links and images shown as alt text; every `[n]` and `A<n>` chip opens its evidence in a side pane (the source excerpt as its quote, "Quote not recorded" or "Action evidence not recorded for this run" otherwise, back-references to the citing claims; protected fills show a fixed mask with no value or length). A run with no document shows its outcome (with the interrupted wording), why it ended and from which file, outputs, run health in `report.md`'s words, notices, `report.md` (the first 512 KiB, line-cut, with a banner) and its files; each artifact fails on its own as missing, corrupt, older format (with `brief.md`/`brief.html` recovery) or too large ("Show in folder", shown as the CLI twin). **Audit** (`/runs/<id>/audit`) tells `yantra audit`'s story from the same builder, in 500-row cursor windows, with secret keys only. **Files** opens any public file in a bounded viewer (JSONL of any length in 200-line windows with event summaries and an inspector; JSON, Markdown, text and images only within their caps). The host serves only files the public allowlist (`RUN_ARTIFACT_REGISTRY`) names, after `realpath` containment in `realpath(runsRoot)/<run-id>`, with the registry media type and `nosniff`; HTML is download-only, leases, locks, decision claims, temp files and browser profiles are never served or listed. `yantra list --json` items gain the optional `taskType`, `costUsd` and `hasDocument` fields; terminal and `audit --json` output are unchanged.
 
+**FEAT-067 — Mission: Composer & Live Run Screen** _(completed: 2026-11-14 by implement)_
+Source spec: [spec.md](features/FEAT-067-mission_composer_live_run/spec.md)
+**Mission** (`/mission`, the app's home; `/` redirects to it) composes and watches runs.
+
+- **Composer.** It has Ask, Research, Do and Run tabs (plus Resume when offered), generated from the command registry.
+  - Each option shows its effective value and the source of that value, from `read.effective_options` (the FEAT-072 resolver).
+  - Templates come from `read.template.list`.
+  - Do waits for `read.provider_readiness`, with a fix command when not ready. Run picks a workflow from `read.list` and fills its params from `read.workflow_params`.
+- **Submit.** Each submission gets one `command.invoke` ID, reused on up to 3 retries with backoff. A refusal is shown inline and is not retried. A lost answer says to check the Ledger. `displayed_effective` is exactly what the composer showed.
+- **Cockpit.** A queued invocation shows a pre-run view (`/mission/invocations/<id>`). It moves to `/mission/runs/<run-id>` once the run exists.
+  - Run events are replayed through `run.subscribe` with `from_seq`, gap- and duplicate-free across reconnects and reloads, into a pure reducer with bounded logs.
+  - Every `RunEvent` kind goes to an instrument or to the "Other events" inspector.
+  - **Top bar:** Bindu (thinking/acting/needs you/fulfilled), mode, goal, elapsed time and budget gauges.
+  - **Understood panel:** the contract summary, ContractRing and a live requirement list.
+  - **Engine panel:** RunTimeline.
+  - **Command panel:** the CLI twin with shell-aware Copy. For a run the app did not launch, it shows the command rebuilt from the run's records, with a badge.
+  - **Status banner:** explicit states (queued, starting, waiting for you, disconnected, worker not responding, engine stalled, stopping, finished), with next actions.
+  - **Announcements:** polite, coalesced to one every 2 s.
+- **Stop.** It is graceful where the command honors abort (`honorsAbort`, in `@yantra/protocol/commands`). Elsewhere it reads "Stop (force)" and explains the 10 s forced end. It sends one `command.cancel` per press.
+- **Recovery** (`read.run_recovery`, on the cockpit and the run result):
+  - Resume is offered only when core's shared resumability rule allows it. A consent-required class needs an acknowledgement that adds `--force`.
+  - Run again uses current or prior settings, shows a settings diff and warns about external effects. "Edit before running" pre-fills the composer.
+- **Finish.** A run this window launched or watched becomes its result page through a View Transition. It navigates without animation under reduced motion or Solid surfaces. It holds, offering "View result", while focus is in the Command panel or a dialog.
+- **Protocol.** `RunId` now accepts lowercase UUIDs.
+
 ---
 
 ## Configuration & Storage

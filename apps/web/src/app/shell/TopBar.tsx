@@ -1,20 +1,25 @@
 import { Link } from '@tanstack/react-router';
-import { Bindu, type BinduState } from '@yantra/ui';
+import { Bindu } from '@yantra/ui';
 import type { ReactNode } from 'react';
 
 import type { NavEntry } from '../nav-registry.js';
 
+import { useShellBindu } from './bindu-store.js';
+
 export interface TopBarProps {
   readonly nav: readonly NavEntry[];
-  readonly bindu?: BinduState;
 }
 
-/** The product name, the Bindu and the registered navigation. */
-export function TopBar({ nav, bindu = 'idle' }: TopBarProps): ReactNode {
+/**
+ * The product name, the Bindu and the registered navigation. The Bindu shows
+ * what the shell's store says; the cockpit drives it while a run is on screen.
+ */
+export function TopBar({ nav }: TopBarProps): ReactNode {
+  const bindu = useShellBindu();
   return (
     <header className="flex items-center gap-4 border-b border-rule bg-surface px-4 py-2">
       <div className="flex items-center gap-2">
-        <Bindu state={bindu} />
+        <Bindu state={bindu.state} {...(bindu.label === undefined ? {} : { label: bindu.label })} />
         <span className="font-semibold text-ink">Yantra</span>
       </div>
       <nav aria-label="Main">

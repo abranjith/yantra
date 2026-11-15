@@ -281,6 +281,41 @@ describe('queue.*', () => {
     ]);
   });
 
+  it('reads one invocation with its queue position (FEAT-067)', async () => {
+    await supervisor.invoke(invocation(['research'], ['a']), DISPLAYED);
+    await supervisor.invoke(invocation(['research'], ['b']), DISPLAYED);
+    const waiting = await supervisor.invoke(invocation(['research'], ['c']), DISPLAYED);
+
+    const read = (await call('read.invocation', { invocation_id: waiting.invocation_id })) as {
+      state: string;
+      position?: number;
+      path: string[];
+    };
+
+    expect(read).toMatchObject({ state: 'queued', position: 1, path: ['research'] });
+  });
+
+  it('reads an invocation with no position once it has started', async () => {
+    const started = await supervisor.invoke(invocation(['research'], ['a']), DISPLAYED);
+
+    const read = (await call('read.invocation', { invocation_id: started.invocation_id })) as {
+      state: string;
+      position?: number;
+    };
+
+    expect(read.state).toBe('spawning');
+    expect(read.position).toBeUndefined();
+  });
+
+  it('answers not_found for an unknown invocation, and refuses a malformed ID', async () => {
+    const missing = await call('read.invocation', {
+      invocation_id: '01JD2X7Q8R9S0T1V2W3X999999',
+    }).catch((caught: unknown) => caught);
+    expect(missing).toMatchObject({ code: -32004 });
+
+    await expect(call('read.invocation', { invocation_id: 'x' })).rejects.toThrow(/Invalid/u);
+  });
+
   it('needs confirmation to start a start_unknown item, then starts it', async () => {
     supervisor = make({ spawn: () => Promise.reject(new Error('x')) });
     const unknown = await supervisor.invoke(invocation(['research'], ['q']), DISPLAYED);

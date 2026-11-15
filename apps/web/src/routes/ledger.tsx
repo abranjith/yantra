@@ -16,6 +16,9 @@ import type { LedgerMode, LedgerOutcomeFilter, ListRunItem } from '@yantra/proto
 import {
   Button,
   Checkbox,
+  Menu,
+  MenuItem,
+  MenuTrigger,
   OutcomeBadge,
   Select,
   Table,
@@ -132,7 +135,34 @@ const COLUMNS: readonly TableColumn<ListRunItem>[] = [
   },
   { id: 'cost', header: 'Cost', width: 90, align: 'end', cell: (run) => formatCost(run.costUsd) },
   { id: 'run', header: 'Run ID', voice: 'engine', cell: (run) => run.runId },
+  { id: 'actions', header: 'Actions', width: 120, cell: (run) => <RowMenu runId={run.runId} /> },
 ];
+
+/** A run's actions in the Ledger (FEAT-067): open it, or run it again from the composer. */
+function RowMenu({ runId }: { readonly runId: string }): ReactNode {
+  const navigate = useNavigate();
+  return (
+    <MenuTrigger>
+      <Button
+        size="sm"
+        variant="quiet"
+        icon="nav.chevronDown"
+        aria-label={`Actions for ${runId}`}
+      />
+      <Menu
+        aria-label={`Actions for ${runId}`}
+        onAction={(key) => {
+          if (key === 'open') void navigate({ to: '/runs/$runId', params: { runId } });
+          if (key === 'again')
+            void navigate({ to: '/mission', search: { from: runId, settings: 'current' } });
+        }}
+      >
+        <MenuItem id="open">Open the result</MenuItem>
+        <MenuItem id="again">Run again…</MenuItem>
+      </Menu>
+    </MenuTrigger>
+  );
+}
 
 function FilterBar({
   search,

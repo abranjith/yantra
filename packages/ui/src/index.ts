@@ -22,6 +22,7 @@ export {
   type ThemePreference,
 } from './appearance.js';
 export { cn, focusRing, tv } from './lib/cn.js';
+export { usePrefersReducedMotion } from './lib/motion.js';
 export { prepareStrictCsp, REACT_ARIA_PRESSABLE_STYLE_ID } from './csp.js';
 export * from './primitives/index.js';
 export { buttonStyles } from './primitives/Button.js';

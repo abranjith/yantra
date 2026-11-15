@@ -58,6 +58,29 @@ Business value: this is the M2 milestone's visible half. A `research --no-llm` r
   - Agentic `ask`/`research`/`do` runs are never resumable; `yantra resume` takes workflow runs only.
   - _This feature:_ the app follows core's rule through a single non-throwing predicate that `loadResumePoint` also uses (TASK-013), so the rule cannot diverge. A consent-required class shows Resume behind an explicit acknowledgement that adds `--force`.
 
+### Implementation deviations (recorded by implement, 2026-11-14)
+
+- **DEVIATION-3: shared command data moved into `@yantra/protocol/commands`.** `apps/web` may import values only from that subpath (eslint `WEB_IMPORT_RESTRICTIONS`). So these moved there, with `apps/cli` re-exporting or calling them:
+  - the abort rules (`ABORT_RULES`, `honorsAbort`), which Stop wording and the CLI commands share;
+  - `KNOWN_DEAD_OPTIONS`;
+  - the agent duration pattern and parser;
+  - `APP_OPTION_EXEMPTIONS` (`--json`, `--open`, `--no-color`).
+- **DEVIATION-4: extra host reads.** Beyond `read.effective_options`, the host serves:
+  - `read.mission_context` (cwd and platform for the composer and the CLI twin);
+  - `read.provider_readiness`;
+  - `read.workflow_params`;
+  - `read.run_recovery`;
+  - `read.invocation`;
+  - `read.template.list`, which was taken off `UNMAPPED_READS`.
+
+  Their schemas are in `packages/protocol/src/schemas/ui-mission.ts`. `InvocationSummary` gains an optional `invocation` (the submitted argv) so the cockpit can show the CLI twin.
+
+- **DEVIATION-5: `RunId` accepts lowercase UUIDs (a FEAT-066 defect).** `research` run IDs are UUIDs, and `RUN_ID_PATTERN` rejected them, so their result pages failed. The pattern now also accepts them. The JSON Schema and the protocol spec were regenerated.
+- **DEVIATION-6: Stop wording uses the host-resolved mode.** The run's mode is resolved by the host (`LLM_PROVIDER=none` makes an unflagged `research` deterministic). The cockpit asks the host for it and shows Stop only once the answer is in, so "Stop" never flips to "Stop (force)".
+- **DEVIATION-7: TASK-016 coverage gaps, both in `.spec-lite/TODO.md`.**
+  - The scripted `do` e2e (graceful Stop on a real `do`) is not written. Graceful Stop is covered by unit tests only.
+  - The manual NVDA/VoiceOver pass has not been done.
+
 ## 2. Data Model (Granular)
 
 > `.spec-lite/data_model.md` does not exist. This feature adds **no persisted storage**. Everything here is an in-memory client model, a protocol read schema, or a pure core result type. Persisted run state (`run-events.jsonl`, `execution-receipt.json`, invocation records, leases) is owned by FEAT-063, FEAT-064, FEAT-065 and FEAT-072. This feature only reads it.
@@ -733,21 +756,21 @@ Task order follows plan §8. TASK-001 to TASK-008 are the **M2 cockpit subset**,
 
 ## 8. State Tracking
 
-- [ ] TASK-001: Follow a run's event stream with gap-free, duplicate-free replay and reconnect
-- [ ] TASK-002: Route every RunEvent kind to an instrument or the EventInspector, and render the cockpit
-- [ ] TASK-003: Top bar — Bindu, mode, goal echo, elapsed time and BudgetGauges
-- [ ] TASK-004: Understood panel — contract summary, ContractRing and live RequirementList
-- [ ] TASK-005: Explicit run states with next actions
-- [ ] TASK-006: Polite announcements of meaningful changes
-- [ ] TASK-007: CliTwin with shell-aware Copy
-- [ ] TASK-008: Stop — graceful where the command honors abort, honest force-stop otherwise
-- [ ] TASK-009: Effective option values and their sources (host read)
-- [ ] TASK-010: Composer for Ask and Research — generated options, effective values, template selection
-- [ ] TASK-011: Submit exactly once and land in the cockpit
-- [ ] TASK-012: Do and Run modes — provider readiness gate, workflow picker and params
-- [ ] TASK-013: Run recovery assessment in core (resumability, prior invocation, prior effects)
-- [ ] TASK-014: Resume and Run again actions with the external-effects warning
-- [ ] TASK-015: Finish — View Transition from the cockpit to the run result
-- [ ] TASK-016: Milestone acceptance — M2 research run, scripted `do`, reload and accessibility
+- [x] TASK-001: Follow a run's event stream with gap-free, duplicate-free replay and reconnect
+- [x] TASK-002: Route every RunEvent kind to an instrument or the EventInspector, and render the cockpit
+- [x] TASK-003: Top bar — Bindu, mode, goal echo, elapsed time and BudgetGauges
+- [x] TASK-004: Understood panel — contract summary, ContractRing and live RequirementList
+- [x] TASK-005: Explicit run states with next actions
+- [x] TASK-006: Polite announcements of meaningful changes
+- [x] TASK-007: CliTwin with shell-aware Copy
+- [x] TASK-008: Stop — graceful where the command honors abort, honest force-stop otherwise
+- [x] TASK-009: Effective option values and their sources (host read)
+- [x] TASK-010: Composer for Ask and Research — generated options, effective values, template selection
+- [x] TASK-011: Submit exactly once and land in the cockpit
+- [x] TASK-012: Do and Run modes — provider readiness gate, workflow picker and params
+- [x] TASK-013: Run recovery assessment in core (resumability, prior invocation, prior effects)
+- [x] TASK-014: Resume and Run again actions with the external-effects warning
+- [x] TASK-015: Finish — View Transition from the cockpit to the run result
+- [x] TASK-016: Milestone acceptance — M2 research run, scripted `do`, reload and accessibility
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

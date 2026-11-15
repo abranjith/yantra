@@ -1,0 +1,849 @@
+{
+  "vcs": "git",
+  "files": [
+    {
+      "path": "apps/cli/src/agent-options.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/cli/src/commands/ask.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/cli/src/commands/doctor.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/cli/src/commands/research.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/cli/src/registry/dead-options.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "apps/cli/src/ui/host/drift-review.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "apps/cli/src/ui/host/host-runtime.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "apps/cli/src/ui/host/mission-reads.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "apps/cli/src/ui/host/reads.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/cli/src/ui/host/supervisor.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/tests/registry/abort-rules.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/mission-reads.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/provider-readiness.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/run-recovery.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/supervisor.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/app/nav-registry.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/src/app/router.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/app/shell/AppShell.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/src/app/shell/bindu-store.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/src/app/shell/toasts.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "apps/web/src/app/shell/TopBar.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/src/features/cockpit/bindu-state.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/src/features/cockpit/cli-twin.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "apps/web/src/features/cockpit/Cockpit.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/features/cockpit/CockpitAnnouncer.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/web/src/features/cockpit/CockpitLayout.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/features/cockpit/CockpitStatus.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/features/cockpit/CockpitTopBar.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/src/features/cockpit/CommandPanel.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "apps/web/src/features/cockpit/EnginePanel.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/features/cockpit/finish-transition.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-015"
+    },
+    {
+      "path": "apps/web/src/features/cockpit/StopControl.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/web/src/features/cockpit/UnderstoodPanel.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "apps/web/src/features/composer/composer-model.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/src/features/composer/Composer.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/src/features/composer/do-readiness.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "apps/web/src/features/composer/field-renderers.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/src/features/composer/run-mode.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "apps/web/src/features/composer/submit.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/src/features/live/announcer.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/web/src/features/live/bounded-log.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/web/src/features/live/cockpit-state.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/web/src/features/live/displayed-state.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/features/live/event-routes.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/web/src/features/live/run-stream.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/web/src/features/live/tick-clock.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/src/features/live/use-invocation.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/features/live/use-run-stream.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/web/src/features/recovery/RecoveryActions.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-014"
+    },
+    {
+      "path": "apps/web/src/host/app-rpc.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/host/rpc-client.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/routes/invocation-id.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/routes/ledger.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-014"
+    },
+    {
+      "path": "apps/web/src/routes/mission.invocations.$invocationId.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/routes/mission.runs.$runId.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/routes/mission.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/src/routes/runs.$runId.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-014"
+    },
+    {
+      "path": "apps/web/src/styles.css",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-015"
+    },
+    {
+      "path": "apps/web/tests/app/shell.spec.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/tests/features/cockpit/announcer-region.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/web/tests/features/cockpit/cockpit-route.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/tests/features/cockpit/command-panel.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "apps/web/tests/features/cockpit/finish-transition.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-015"
+    },
+    {
+      "path": "apps/web/tests/features/cockpit/invocation-route.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/tests/features/cockpit/stop-control.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/web/tests/features/cockpit/top-bar.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/web/tests/features/cockpit/understood-panel.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "apps/web/tests/features/composer/__snapshots__/composer-model.spec.ts.snap",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/tests/features/composer/composer-model.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/tests/features/composer/composer-modes.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "apps/web/tests/features/composer/composer.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/tests/features/composer/submit.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/tests/features/live/announcer.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/web/tests/features/live/bounded-log.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/web/tests/features/live/cockpit-state.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/web/tests/features/live/displayed-state.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/tests/features/live/event-routes.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/tests/features/live/run-stream.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/web/tests/features/recovery/recovery-actions.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-014"
+    },
+    {
+      "path": "apps/web/tests/fixtures/research-no-llm.run-events.jsonl",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/tests/host/rpc-client.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/tests/routes/run-result.spec.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-014"
+    },
+    {
+      "path": "apps/web/tests/support/recorded-runs.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/tests/support/run-events.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "docs/features/app-mission.md",
+      "status": "U",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/safety-and-privacy.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/yantra-app.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/protocol-spec.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "e2e/app-cli-twin-shells.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "e2e/app-host.spec.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "e2e/app-mission.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-016"
+    },
+    {
+      "path": "e2e/command-format-shells.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "e2e/fixtures/argv-echo/shells.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "eslint.config.js",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/core/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "packages/core/src/profile/agent-budgets.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "packages/core/src/run-recovery/index.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "packages/core/src/run-recovery/prior-effects.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "packages/core/src/run-recovery/prior-invocation.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "packages/core/src/workflow/replay/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "packages/core/src/workflow/replay/resumability.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "packages/core/src/workflow/replay/resume.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "packages/core/tests/run-recovery/prior-effects.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "packages/core/tests/run-recovery/prior-invocation.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "packages/core/tests/workflow/replay/resumability.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-013"
+    },
+    {
+      "path": "packages/protocol/generated/json-schema/run-result.schema.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-016"
+    },
+    {
+      "path": "packages/protocol/src/commands/abort.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/protocol/src/commands/dead-options.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/protocol/src/commands/duration.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "packages/protocol/src/commands/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/protocol/src/commands/presentation.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "packages/protocol/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/protocol/src/schemas/app-rpc.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/protocol/src/schemas/run-artifacts.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-016"
+    },
+    {
+      "path": "packages/protocol/src/schemas/ui-mission.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/protocol/tests/commands/abort.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/protocol/tests/commands/composer-data.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "packages/protocol/tests/run-artifacts.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-016"
+    },
+    {
+      "path": "packages/protocol/tests/schemas/ui-mission.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/ui/src/gallery/entries.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/src/gallery/mission-entries.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/src/instruments/bindu.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/src/instruments/BudgetGauge.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/src/instruments/CliTwin.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/ui/src/instruments/ContractRing.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/ui/src/instruments/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/src/instruments/RequirementList.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/ui/src/instruments/RunStatusBanner.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/ui/src/instruments/RunTimeline.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/src/instruments/TruncatedText.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/src/lib/motion.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/src/styles/drshya.css",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/tests/instruments/bindu.spec.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/tests/instruments/budget-gauge.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/tests/instruments/cli-twin.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/ui/tests/instruments/contract-ring.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/ui/tests/instruments/run-status-banner.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/ui/tests/instruments/run-timeline.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    }
+  ],
+  "excluded": [
+    ".spec-lite/feature-summary.md",
+    ".spec-lite/features/FEAT-067-mission_composer_live_run/changeset.json",
+    ".spec-lite/features/FEAT-067-mission_composer_live_run/spec.md",
+    ".spec-lite/plan_ui.md"
+  ],
+  "baseline": {
+    "sha": "ec15687c567a58f92016710854b3bbf999c2e79a",
+    "capturedAt": "2026-11-14T07:20:21.306Z",
+    "dirtyAtBaseline": [],
+    "dirtyBlobHashes": {},
+    "workflow": "ft/feat-067-mission-composer-live-run@ec15687c567a58f92016710854b3bbf999c2e79a"
+  },
+  "featureId": "FEAT-067"
+}

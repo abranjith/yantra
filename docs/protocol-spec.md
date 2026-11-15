@@ -1523,6 +1523,68 @@ Example:
 }
 ```
 
+## EffectiveOptionView
+
+One option as the command would resolve it now.
+
+| Field  | Description                                                                                                         |
+| ------ | ------------------------------------------------------------------------------------------------------------------- |
+| option | The registry option attribute, e.g. `model` (`llm` for `--no-llm`).                                                 |
+| flag   | The long flag, e.g. `--model`.                                                                                      |
+| value  | The effective value; never a secret.                                                                                |
+| source | Where the value came from: the flag, an environment variable (by name), a preference or config key, or the default. |
+
+Example:
+
+```json
+{
+  "option": "<option>",
+  "flag": "<flag>",
+  "value": "<value>",
+  "source": "<source>"
+}
+```
+
+## EffectiveOptions
+
+Effective option values for one composed command.
+
+| Field   | Description                                                                                    |
+| ------- | ---------------------------------------------------------------------------------------------- |
+| path    | Command path, e.g. ["research"].                                                               |
+| mode    | The mode these options resolve to (`--no-llm` or `LLM_PROVIDER=none` mean deterministic).      |
+| options | Every option that applies in this mode, in help order: no secret input, no known dead control. |
+
+Example:
+
+```json
+{
+  "path": "<path>",
+  "mode": "<mode>",
+  "options": "<options>"
+}
+```
+
+## EffectiveOptionsParams
+
+Resolve every option the command would use, read-only.
+
+| Field | Description                                                           |
+| ----- | --------------------------------------------------------------------- |
+| path  | Command path, e.g. ["research"].                                      |
+| argv  | The tokens after the path, exactly as the composer would submit them. |
+| cwd   | The absolute working directory the run would start in.                |
+
+Example:
+
+```json
+{
+  "path": "<path>",
+  "argv": "<argv>",
+  "cwd": "<cwd>"
+}
+```
+
 ## ElementDescriptorSchema
 
 Sanitized structural fingerprint of a captured DOM element
@@ -1903,6 +1965,26 @@ Example:
 }
 ```
 
+## FixCommand
+
+A real registry command that fixes the problem.
+
+| Field | Description                      |
+| ----- | -------------------------------- |
+| label | What the fix does, in words.     |
+| path  | Command path, e.g. ["research"]. |
+| argv  | The tokens after the path.       |
+
+Example:
+
+```json
+{
+  "label": "<label>",
+  "path": "<path>",
+  "argv": "<argv>"
+}
+```
+
 ## GroupEntry
 
 A command with subcommands and no action.
@@ -2177,17 +2259,18 @@ Example:
 
 One app invocation, as the queue shows it.
 
-| Field           | Description                                                           |
-| --------------- | --------------------------------------------------------------------- |
-| invocation_id   |                                                                       |
-| state           | Launch-ownership state of one app invocation.                         |
-| execution_class | `run` holds a slot, `exclusive` needs zero runs, `mutate` holds none. |
-| path            | Command path, e.g. ["research"].                                      |
-| position        | 1-based place in the queue, while queued.                             |
-| run_id          |                                                                       |
-| queued_at       |                                                                       |
-| review          | Set on `needs_review`.                                                |
-| result          | Set on `finished`.                                                    |
+| Field           | Description                                                                      |
+| --------------- | -------------------------------------------------------------------------------- |
+| invocation_id   |                                                                                  |
+| state           | Launch-ownership state of one app invocation.                                    |
+| execution_class | `run` holds a slot, `exclusive` needs zero runs, `mutate` holds none.            |
+| path            | Command path, e.g. ["research"].                                                 |
+| invocation      | What was requested (path, argv, working directory), for the CLI twin (FEAT-067). |
+| position        | 1-based place in the queue, while queued.                                        |
+| run_id          |                                                                                  |
+| queued_at       |                                                                                  |
+| review          | Set on `needs_review`.                                                           |
+| result          | Set on `finished`.                                                               |
 
 Example:
 
@@ -2197,6 +2280,7 @@ Example:
   "state": "<state>",
   "execution_class": "<execution_class>",
   "path": "<path>",
+  "invocation": "<invocation>",
   "position": "<position>",
   "run_id": "<run_id>",
   "queued_at": "<queued_at>",
@@ -2727,6 +2811,24 @@ Example:
 }
 ```
 
+## MissionContext
+
+The host computer’s defaults for composing a run.
+
+| Field    | Description                                                                                |
+| -------- | ------------------------------------------------------------------------------------------ |
+| home     | The user’s home directory: the default working directory of a new run (D13).               |
+| platform | The host platform (`win32`, `darwin`, `linux`), for the default shell of a copied command. |
+
+Example:
+
+```json
+{
+  "home": "<home>",
+  "platform": "<platform>"
+}
+```
+
 ## NameMatch
 
 Accessible-name matcher for intent locators.
@@ -3036,6 +3138,30 @@ Example:
 {
   "pid": "<pid>",
   "start_token": "<start_token>"
+}
+```
+
+## ProviderReadiness
+
+Whether `do` can run, and how to fix it when not.
+
+| Field    | Description                                               |
+| -------- | --------------------------------------------------------- |
+| ready    | Whether an agentic run could open a provider session now. |
+| provider | The provider an agentic run would use.                    |
+| model    | The model an agentic run would use.                       |
+| reason   | Why it is not ready, in words; absent when ready.         |
+| fix      | The command that fixes it, when there is one.             |
+
+Example:
+
+```json
+{
+  "ready": "<ready>",
+  "provider": "<provider>",
+  "model": "<model>",
+  "reason": "<reason>",
+  "fix": "<fix>"
 }
 ```
 
@@ -3640,6 +3766,42 @@ Example:
   "text": "<text>",
   "workflow": "<workflow>",
   "status": "<status>"
+}
+```
+
+## RunRecoveryAssessment
+
+Resume and Run again for one finished run.
+
+| Field     | Description                                                                   |
+| --------- | ----------------------------------------------------------------------------- |
+| run_id    |                                                                               |
+| resume    | Whether `yantra resume` would continue this run (the core resumability rule). |
+| run_again |                                                                               |
+
+Example:
+
+```json
+{
+  "run_id": "<run_id>",
+  "resume": "<resume>",
+  "run_again": "<run_again>"
+}
+```
+
+## RunRecoveryParams
+
+No description provided.
+
+| Field  | Description       |
+| ------ | ----------------- |
+| run_id | The finished run. |
+
+Example:
+
+```json
+{
+  "run_id": "<run_id>"
 }
 ```
 
@@ -4638,6 +4800,40 @@ Example:
 {
   "name": "<name>",
   "from": "<from>"
+}
+```
+
+## WorkflowParams
+
+What Run mode asks for before starting a saved workflow.
+
+| Field  | Description                                               |
+| ------ | --------------------------------------------------------- |
+| name   |                                                           |
+| params | Declared params, in the order the workflow declares them. |
+
+Example:
+
+```json
+{
+  "name": "<name>",
+  "params": "<params>"
+}
+```
+
+## WorkflowParamsParams
+
+No description provided.
+
+| Field | Description                |
+| ----- | -------------------------- |
+| name  | The saved workflow’s name. |
+
+Example:
+
+```json
+{
+  "name": "<name>"
 }
 ```
 

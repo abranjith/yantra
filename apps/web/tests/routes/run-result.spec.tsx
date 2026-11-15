@@ -50,7 +50,8 @@ function rpcFor(view: ReturnType<typeof runView>): FakeRpc {
 async function open(view: ReturnType<typeof runView>) {
   const rpc = rpcFor(view);
   const rendered = await renderAt(`/runs/${view.run_id}`, rpc);
-  await screen.findByRole('tablist', { name: 'Run views' });
+  // Scoped to this page: a test may open a second one beside it.
+  await within(rendered.container).findByRole('tablist', { name: 'Run views' });
   return { ...rendered, rpc };
 }
 

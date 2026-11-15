@@ -24,6 +24,7 @@ import {
   expandOptions,
   jsonEqual,
   parseInvocation,
+  type CommandInvocation,
   type DisplayedEffective,
   type DriftDifference,
   type InvocationRecord,
@@ -61,18 +62,27 @@ async function sha256(path: string): Promise<string | null> {
   }
 }
 
-/** The production resolver; see the module comment. */
-export function settingsResolver(env: Readonly<NodeJS.ProcessEnv>): EffectiveResolver {
-  return async (record) => {
-    const { invocation } = record;
+/**
+ * Resolves the effective settings of one invocation, read-only: the
+ * command's own registry binding runs with a handler that only drafts the
+ * execution receipt (FEAT-072), so the precedence chain the worker will use
+ * answers and nothing executes. Shared by drift review and the composer's
+ * `read.effective_options` (FEAT-067): one path, so they cannot disagree.
+ */
+export type InvocationSettingsResolver = (
+  invocation: CommandInvocation,
+) => Promise<readonly ReceiptSetting[]>;
+
+/** The production {@link InvocationSettingsResolver} over the host's environment. */
+export function effectiveSettingsResolver(
+  env: Readonly<NodeJS.ProcessEnv>,
+): InvocationSettingsResolver {
+  return async (invocation) => {
     const parsed = parseInvocation([...invocation.path, ...invocation.argv], {
       cwd: invocation.cwd,
       invocationId: invocation.invocation_id,
     });
-    const content = new Map<string, string | null>();
-    for (const item of record.displayed_effective.content)
-      content.set(item.path, await sha256(item.path));
-    if (!parsed.isOk) return { settings: [], content };
+    if (!parsed.isOk) return [];
     let settings: readonly ReceiptSetting[] = [];
     // Loaded on first use: the command surface would delay the host becoming ready.
     const { createTerminalContext } = await import('../../adapters/terminal/terminal-adapter.js');
@@ -94,7 +104,18 @@ export function settingsResolver(env: Readonly<NodeJS.ProcessEnv>): EffectiveRes
         },
       },
     );
-    return { settings, content };
+    return settings;
+  };
+}
+
+/** The production drift resolver; see the module comment. */
+export function settingsResolver(env: Readonly<NodeJS.ProcessEnv>): EffectiveResolver {
+  const resolve = effectiveSettingsResolver(env);
+  return async (record) => {
+    const content = new Map<string, string | null>();
+    for (const item of record.displayed_effective.content)
+      content.set(item.path, await sha256(item.path));
+    return { settings: await resolve(record.invocation), content };
   };
 }
 

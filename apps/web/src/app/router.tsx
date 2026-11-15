@@ -1,32 +1,25 @@
-import { createRoute, createRouter, type RouterHistory } from '@tanstack/react-router';
-import type { ReactNode } from 'react';
+import { createRouter, type RouterHistory } from '@tanstack/react-router';
 
 import { ledgerRoute } from '../routes/ledger.js';
+import { missionInvocationRoute } from '../routes/mission.invocations.$invocationId.js';
+import { homeRoute, missionRoute } from '../routes/mission.js';
+import { missionRunRoute } from '../routes/mission.runs.$runId.js';
 import { artifactRoute } from '../routes/runs.$runId.artifacts.$.js';
 import { auditRoute } from '../routes/runs.$runId.audit.js';
 import { runRoute } from '../routes/runs.$runId.js';
 
 import { rootRoute } from './root-route.js';
 
-/** Home: FEAT-065's start page. Feature routes live in `src/routes/`. */
-export function HomePage(): ReactNode {
-  return (
-    <section className="flex max-w-2xl flex-col gap-2">
-      <h1 className="text-xl font-semibold text-ink">Yantra</h1>
-      <p className="text-ink-2">Connected to the Yantra on this computer.</p>
-    </section>
-  );
-}
-
-const homeRoute = createRoute({ getParentRoute: () => rootRoute, path: '/', component: HomePage });
-
 /** The route tree; the shell renders it. */
 export const routeTree = rootRoute.addChildren([
   homeRoute,
+  missionRoute,
   ledgerRoute,
   runRoute,
   auditRoute,
   artifactRoute,
+  missionRunRoute,
+  missionInvocationRoute,
 ]);
 
 /** Builds the router, with an injected history in tests. */

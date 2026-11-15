@@ -218,6 +218,10 @@ A local capture keeps the protections a capture needs:
 
 `--no-screenshots` works only downward. It removes both capture tools for one run and can never add one. A model-authored task contract grants nothing either: declaring a screenshot in `artifacts` cannot register `browser_screenshot`, change the Vision Assist gate, or bypass the latch. Both capture decisions are recorded before the first tool call, with the reasons any tool is off, in `manifest.json` (`agent.capture`) and `run-health.json` (`capture`). `browser_capture` exists only in agentic sessions. Replay, scheduled runs, and nested workflows never register it.
 
+### Starting runs from the app
+
+The app's Mission composer (see [Mission](app-mission.md)) never shows a secret-input option, so credentials never become command-line arguments of an app-started run. An option's source shows an environment variable by name, never its value. **Run again** warns before repeating a run that changed, or may have changed, things on websites (for example a submitted form) and lists why. **Resume** past a consent refusal needs an explicit acknowledgement, which adds `--force` to the shown command.
+
 ### Audit records and sensitive local artifacts
 
 Each run has a local directory under `<yantra-data-dir>/runs/<run-id>/`. Depending on the path taken, it can contain:

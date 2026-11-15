@@ -24,7 +24,6 @@ import {
 } from '@yantra/agent';
 import {
   AGENT_DURATION_HINT,
-  AGENT_DURATION_PATTERN,
   loadConfig,
   parseAgentCount,
   parseAgentDurationMs,
@@ -32,6 +31,7 @@ import {
   preferenceValue,
   type EffectivePreferences,
 } from '@yantra/core';
+import { durationProblem } from '@yantra/protocol';
 import { CommanderError } from 'commander';
 
 import { noLlmReason } from './global-flags.js';
@@ -96,15 +96,11 @@ export type AgentInvocation =
 export function parseDuration(raw: string, flag: string): number {
   const milliseconds = parseAgentDurationMs(raw);
   if (milliseconds !== null) return milliseconds;
-  // The grammar and the safe-integer ceiling are distinct failures; a caller
-  // that typed `99999999999h` needs to hear a different thing than one who
-  // typed `soon`.
+  // The words are the protocol's, so the app composer says exactly the same.
   throw new CommanderError(
     1,
     'yantra.agent.invalid-duration',
-    AGENT_DURATION_PATTERN.test(raw.trim())
-      ? `${flag} is too large to represent safely in milliseconds.`
-      : `${flag} must be ${AGENT_DURATION_HINT}.`,
+    durationProblem(raw, flag) ?? `${flag} must be ${AGENT_DURATION_HINT}.`,
   );
 }
 

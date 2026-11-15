@@ -42,13 +42,16 @@ import { ControlSocketServer } from './control-socket.js';
 import {
   driftReview,
   registerDriftReview,
+  effectiveSettingsResolver,
   settingsResolver,
+  type InvocationSettingsResolver,
   type EffectiveResolver,
 } from './drift-review.js';
 import { HostStartError } from './errors.js';
 import { AppHost, SILENT_HOST_LOGGER, type HostLogger, type HostRoute } from './host.js';
 import { IdleExit } from './idle-exit.js';
 import { hostActiveRuns } from './ledger-reads.js';
+import { registerMissionReads } from './mission-reads.js';
 import { registerReads } from './reads.js';
 import { recoverHost } from './recovery.js';
 import { RpcMethodRegistry, RpcServer } from './rpc-server.js';
@@ -71,6 +74,8 @@ export interface HostRuntimeDeps {
   readonly now?: () => Date;
   /** Extra HTTP routes (artifact URLs, TASK-010). */
   readonly routes?: readonly HostRoute[];
+  /** Resolves one invocation's effective settings for the composer (tests). */
+  readonly resolveSettings?: InvocationSettingsResolver;
   /** Re-resolves effective settings for drift review (tests). */
   readonly resolveEffective?: EffectiveResolver;
   /** Called when the host has been idle for 10 minutes; the entry shuts down. */
@@ -193,6 +198,11 @@ export async function startHostRuntime(deps: HostRuntimeDeps): Promise<RunningHo
     const artifacts = new ArtifactUrls({ sessions, runsRoot: runsRoot(), logger });
     registerArtifactUrls(methods, artifacts);
     const resolveEffective = deps.resolveEffective ?? settingsResolver(deps.env ?? {});
+    registerMissionReads(methods, {
+      resolve: deps.resolveSettings ?? effectiveSettingsResolver(deps.env ?? {}),
+      env: { ...(deps.env ?? {}) },
+      logger,
+    });
     let attendance: Attendance | null = null;
     const relay = new RunRelay({
       runsRoot: runsRoot(),

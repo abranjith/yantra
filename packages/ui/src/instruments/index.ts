@@ -60,3 +60,46 @@ export {
   type EventInspectorProps,
   type JsonTreeOptions,
 } from './EventInspector.js';
+export {
+  RunTimeline,
+  timelineRowLabel,
+  type Phase,
+  type RowTone,
+  type RunTimelineEntry,
+  type RunTimelineProps,
+  type ToolStatus,
+} from './RunTimeline.js';
+export {
+  BudgetGauge,
+  BudgetGauges,
+  budgetName,
+  formatBudgetAmount,
+  isExhausted,
+  type BudgetGaugeProps,
+  type BudgetGaugesProps,
+  type BudgetGaugeValue,
+  type BudgetUnit,
+} from './BudgetGauge.js';
+export { TruncatedText, type TruncatedTextProps } from './TruncatedText.js';
+export {
+  ContractRing,
+  arcPath,
+  contractRingLabel,
+  type ContractRingProps,
+  type RingSegment,
+  type RingSegmentState,
+} from './ContractRing.js';
+export { LiveRequirementList, type LiveRequirementListProps } from './RequirementList.js';
+export {
+  RunStatusBanner,
+  type RunStatusBannerProps,
+  type StatusBannerAction,
+  type StatusBannerTone,
+} from './RunStatusBanner.js';
+export {
+  CliTwin,
+  TWIN_SHELL_LABELS,
+  type CliTwinProps,
+  type TwinFormat,
+  type TwinShell,
+} from './CliTwin.js';

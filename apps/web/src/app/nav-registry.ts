@@ -1,7 +1,7 @@
 /**
  * The app's navigation entries (FEAT-065 TASK-011). A feature registers its
  * entry when it registers its route, so the top bar never shows a dead link.
- * FEAT-065 registers Home; FEAT-066 the Ledger.
+ * FEAT-067 registers Mission (the start page); FEAT-066 the Ledger.
  */
 
 /** One navigation entry. */
@@ -31,5 +31,6 @@ export class NavRegistry {
 /** The app-wide registry. */
 export const navRegistry = new NavRegistry();
 
-navRegistry.register({ path: '/', label: 'Home' });
+// Mission is the start page (FEAT-067); `/` redirects to it.
+navRegistry.register({ path: '/mission', label: 'Mission' });
 navRegistry.register({ path: '/runs', label: 'Ledger' });

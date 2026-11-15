@@ -12,66 +12,34 @@
  * // point.nextStepIndex, point.lastCheckpoint, point.plan, ...
  */
 
-import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-
-import type { Plan } from '@yantra/protocol';
-import type { FailureClass } from '@yantra/protocol';
 
 import { FilesystemCheckpointStore } from '../../executor/checkpoint-store.js';
 
 import { RunDirMissingError, RunNotResumableError } from './errors.js';
+import { checkResumable } from './resumability.js';
 import type { ResumePoint, RunStore } from './types.js';
 
-const RESUMABLE_STATUSES = new Set(['failed', 'paused']);
+export { requiresUserConsent } from './resumability.js';
 
 /**
- * Loads the information needed to resume a run.
+ * Loads the information needed to resume a run. Whether it may resume is
+ * decided by {@link checkResumable}, the one rule the app's Resume action
+ * shares (FEAT-067).
  *
  * @throws RunDirMissingError if the run directory does not exist.
- * @throws RunNotResumableError if the run status is not 'failed' or 'paused',
- *   or if the workflow used `cookies: none`.
+ * @throws RunNotResumableError if the run is not a resumable workflow run:
+ *   its status is not 'failed' or 'paused', it is an agentic run, it used
+ *   `cookies: none`, or its plan.json cannot be read.
  */
 export async function loadResumePoint(runStore: RunStore, runId: string): Promise<ResumePoint> {
-  const found = await runStore.getRun(runId);
-  if (found === null) {
-    throw new RunDirMissingError(runId);
+  const check = await checkResumable(runStore, runId);
+  if (!check.available) {
+    if (check.code === 'missing') throw new RunDirMissingError(runId);
+    if (check.code === 'unreadable') throw check.error;
+    throw new RunNotResumableError(runId, check.status ?? 'unknown', check.reason);
   }
-
-  const { manifest, runDir } = found;
-
-  if (!RESUMABLE_STATUSES.has(manifest.status)) {
-    throw new RunNotResumableError(
-      runId,
-      manifest.status,
-      `Run "${runId}" has status "${manifest.status}" which is not resumable. ` +
-        `Only failed or paused runs can be resumed.`,
-    );
-  }
-
-  // Workflows with cookies: none cannot be resumed — no session to restore
-  if (manifest.profileKind === 'ephemeral') {
-    throw new RunNotResumableError(
-      runId,
-      manifest.status,
-      `Run "${runId}" used \`cookies: none\` (ephemeral profile) and cannot be resumed. ` +
-        `Re-run the workflow instead: yantra run ${manifest.workflowName}`,
-    );
-  }
-
-  // Load the original plan
-  const planPath = join(runDir, 'plan.json');
-  let plan: Plan;
-  try {
-    const raw = await readFile(planPath, 'utf8');
-    plan = JSON.parse(raw) as Plan;
-  } catch {
-    throw new RunNotResumableError(
-      runId,
-      manifest.status,
-      `Run "${runId}" plan.json could not be read. The run directory may be corrupted.`,
-    );
-  }
+  const { manifest, runDir, plan } = check;
 
   // Load last checkpoint
   const checkpointDir = join(runDir, 'checkpoints');
@@ -96,15 +64,4 @@ export async function loadResumePoint(runStore: RunStore, runId: string): Promis
     profileKind: manifest.profileKind as 'workflow',
     cookieProfilePath: manifest.cookieProfilePath ?? null,
   };
-}
-
-/**
- * Whether resuming a run with this failure class requires explicit user consent.
- *
- * Scope violations and ethics refusals need the user to acknowledge the
- * restriction before the run can be retried.
- */
-export function requiresUserConsent(failureClass: FailureClass | undefined): boolean {
-  if (!failureClass) return false;
-  return failureClass === 'scope_violation' || failureClass === 'ethics_refused';
 }
