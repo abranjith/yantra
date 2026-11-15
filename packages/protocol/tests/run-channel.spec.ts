@@ -72,7 +72,7 @@ describe('@no-llm RunChannelClientMessage', () => {
   });
 
   it('parses an unknown type as passthrough, keeping its fields', () => {
-    const message = { type: 'intervention.answer', intervention_id: 'c1', decision: 'grant' };
+    const message = { type: 'future.request', request_id: 'c1', choice: 'grant' };
     expect(RunChannelClientMessage.parse(message)).toEqual(message);
   });
 
@@ -129,8 +129,8 @@ describe('@no-llm RunChannelServerMessage', () => {
     expect(RunChannelServerMessage.parse(message)).toEqual(message);
   });
 
-  it('parses an unknown type as passthrough (later frame-control messages need no version bump)', () => {
-    const message = { type: 'frames.cleared', generation: 3 };
+  it('parses an unknown type as passthrough (later messages need no version bump)', () => {
+    const message = { type: 'future.notice', generation: 3 };
     expect(RunChannelServerMessage.parse(message)).toEqual(message);
   });
 

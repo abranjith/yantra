@@ -15,6 +15,10 @@
     "./commands": {
       "types": "./dist/commands/index.d.ts",
       "import": "./dist/commands/index.js"
+    },
+    "./screencast": {
+      "types": "./dist/schemas/screencast.d.ts",
+      "import": "./dist/schemas/screencast.js"
     }
   },
   "files": [

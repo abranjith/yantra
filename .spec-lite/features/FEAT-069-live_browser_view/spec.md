@@ -294,7 +294,7 @@ specs' final locations)
 
 ### TASK-002: Protocol — screencast frame metadata, control messages and payload codec
 
-- [ ] **Implementation**: Add `packages/protocol/src/schemas/screencast.ts` with Zod schemas (every
+- [x] **Implementation**: Add `packages/protocol/src/schemas/screencast.ts` with Zod schemas (every
       field `.describe()`d, every object `.strict()`) for `ScreencastFrameMeta`, `FramesStart`,
       `FramesStop`, `FrameAck`, `FramesCleared`, `FramesState`, `FramesSubscribe`,
       `FramesUnsubscribe` (§2), `FRAMES_CAPABILITY = 'frames/1'`, and limits as named constants
@@ -305,18 +305,27 @@ specs' final locations)
       message kinds in FEAT-064's run-socket message union and the RPC methods in FEAT-065's
       method table (additive). Export from `packages/protocol/src/index.ts`; generated JSON Schema
       follows the existing `zod-to-json-schema` path.
-- [ ] **Unit Tests**: encode/decode round trip; `meta_len` larger than the buffer, zero, or beyond
+- [x] **Unit Tests**: encode/decode round trip; `meta_len` larger than the buffer, zero, or beyond
       1 KiB rejected; payload over 4 MiB rejected; non-JPEG bytes rejected; unknown `state`,
       `reason` or extra field rejected (strict); `document_epoch: null` accepted; negative
       generation rejected; a property test (existing protocol property-test style) that any valid
       meta plus any SOI-prefixed byte array round-trips; no Node `Buffer` import (boundary test
       over the module source).
-- [ ] **Documentation Update**: Invoke **Document** update mode for the protocol spec
+- [x] **Documentation Update**: Invoke **Document** update mode for the protocol spec
       (`docs/protocol-spec.md`, screencast messages).
 - **Verify**: `pnpm --filter @yantra/protocol test` and `npx turbo run lint typecheck` pass;
   `packages/ui` can import the codec types without pulling Node built-ins (import-boundary lint).
 - **Depends on**: TASK-001 (go decision); FEAT-064 and FEAT-065 message tables for registration
   (the schemas themselves can land first).
+- **Outcome (2026-11-15)**: All schemas live in `screencast.ts`. The run-channel union carries them
+  as `{type, ...fields}` variants. `@yantra/protocol/screencast` is a new browser-safe subpath
+  export, and the web boundary rule now allows value imports from it, as it already did for
+  `/commands`, because the app decodes frames. Drshya stays type-only, and both rules are pinned in
+  `packages/ui/tests/boundary-rules.spec.ts`. The FEAT-065 RPC methods are registered in TASK-009,
+  where the host method table lives. `docs/protocol-spec.md` and the JSON Schemas were regenerated
+  (`screencast-frame-meta.json`). One fix unrelated to this feature: a `run-channel.spec.ts` case
+  had been failing on `development` because it used `intervention.answer` as its "unknown type"
+  example, and that type is now known. It and the server-side twin now use real unknown types.
 
 ### TASK-003: Screen protection — observable latch, fill holds, and the deterministic fill paths
 
@@ -677,7 +686,7 @@ tests/browser/agent-popup-policy.spec.ts tests/browser/agent-controller.spec.ts`
 ## 8. State Tracking
 
 - [/] TASK-001: Spike S1 — glass and readability over a live screencast, with a report
-- [ ] TASK-002: Protocol — screencast frame metadata, control messages and payload codec
+- [x] TASK-002: Protocol — screencast frame metadata, control messages and payload codec
 - [ ] TASK-003: Screen protection — observable latch, fill holds, and the deterministic fill paths
 - [ ] TASK-004: Protected-control focus guard in an isolated world
 - [ ] TASK-005: Frame gate — generations, fresh-capture admission and clear signals

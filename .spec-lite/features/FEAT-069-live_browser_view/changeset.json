@@ -3,33 +3,105 @@
   "files": [
     {
       "path": ".github/workflows/spike-s1.yml",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
+      "path": "docs/protocol-spec.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
       "path": "e2e/spikes/live-view-s1/metrics.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "e2e/spikes/live-view-s1/metrics.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "e2e/spikes/live-view-s1/run-spike.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
     {
       "path": "e2e/spikes/live-view-s1/viewer.html",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "eslint.config.js",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/generated/json-schema/run-channel-message.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/generated/json-schema/screencast-frame-meta.json",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/package.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/src/emit/json-schema.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/src/schemas/run-channel.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/src/schemas/screencast.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/tests/run-channel.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/tests/schemas/screencast.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/tests/boundary-rules.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
     }
   ],
   "excluded": [

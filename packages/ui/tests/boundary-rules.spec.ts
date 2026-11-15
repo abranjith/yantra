@@ -258,6 +258,38 @@ describe('@no-llm Drshya lint boundary rules', () => {
       ]);
     }, 60_000);
 
+    it('lets apps/web import values from @yantra/protocol/screencast and nowhere else in protocol (FEAT-069)', async () => {
+      const messages = await lintSnippet(
+        'apps/web/src/in-memory-probe.ts',
+        [
+          "import { decodeFramePayload } from '@yantra/protocol/screencast';",
+          "import { parseInvocation } from '@yantra/protocol/commands';",
+          "import { TaskEvent } from '@yantra/protocol';",
+          "import { Other } from '@yantra/protocol/screencast-extra';",
+          'export const probe = [decodeFramePayload, parseInvocation, TaskEvent, Other];',
+        ].join('\n'),
+        '@typescript-eslint/no-restricted-imports',
+      );
+
+      expect(messages).toEqual([
+        expect.stringContaining('with `import type` only'),
+        expect.stringContaining('with `import type` only'),
+      ]);
+    }, 60_000);
+
+    it('keeps @yantra/protocol/screencast type-only inside Drshya', async () => {
+      const messages = await lintSnippet(
+        'packages/ui/src/instruments/in-memory-probe.ts',
+        [
+          "import { decodeFramePayload } from '@yantra/protocol/screencast';",
+          'export const probe = decodeFramePayload;',
+        ].join('\n'),
+        '@typescript-eslint/no-restricted-imports',
+      );
+
+      expect(messages).toEqual([expect.stringContaining('with `import type` only')]);
+    }, 60_000);
+
     it('keeps lucide-react imports out of production source except the registry (source scan)', () => {
       const importers = productionSources().filter(
         (path) =>
