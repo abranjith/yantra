@@ -1,0 +1,27 @@
+{
+  "$ref": "#/definitions/InboxDismissal",
+  "definitions": {
+    "InboxDismissal": {
+      "type": "object",
+      "properties": {
+        "item_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Dismissed Inbox item id."
+        },
+        "dismissed_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO-8601 UTC timestamp of dismissal."
+        }
+      },
+      "required": [
+        "item_id",
+        "dismissed_at"
+      ],
+      "additionalProperties": false,
+      "description": "App presentation dismissal entry in ui/inbox-dismissed.jsonl."
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

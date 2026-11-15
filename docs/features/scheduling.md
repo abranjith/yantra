@@ -177,11 +177,13 @@ yantra confirm <run-id> grant
 yantra confirm <run-id> deny
 ```
 
-A grant is appended to the run's confirmation log. On a subsequent daemon poll,
-Yantra resumes the checkpoint and replays that human grant once for the parked
-step. A denial is finalized as a `handoff` without resuming the step. While a
-schedule remains `pending-confirmation`, the daemon does not start later cron
-occurrences for that schedule.
+A grant creates an exclusive claim under the run's `decisions/` directory and
+is projected into the confirmation log. On a subsequent daemon poll, Yantra
+resumes the checkpoint and replays that human grant once for the exact bound
+parked step. A concurrent answer reports `already_decided`; a denial is
+finalized as a `handoff` without resuming the step. While a schedule remains
+`pending-confirmation`, the daemon does not start later cron occurrences for
+that schedule.
 
 The CLI confirmation gateway never executes the flagged step before the grant,
 and notification failure does not change the park outcome.

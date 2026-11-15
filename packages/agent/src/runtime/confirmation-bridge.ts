@@ -1,4 +1,9 @@
-import type { ConfirmationGateway, ConfirmationStore } from '@yantra/core';
+import type {
+  ConfirmationGateway,
+  ConfirmationStore,
+  GatewayDecision,
+  InterventionAuthority,
+} from '@yantra/core';
 import type { ConfirmationDecision, ConfirmationRequest } from '@yantra/protocol';
 
 /** Connector surface needed to resolve a live agent confirmation. */
@@ -15,7 +20,7 @@ export interface ConfirmationConnector {
   requestConfirmation(
     request: ConfirmationRequest,
     signal: AbortSignal,
-  ): Promise<'granted' | 'denied'>;
+  ): Promise<'granted' | 'denied' | GatewayDecision>;
 }
 
 /** Configuration and dependencies for {@link ConfirmationBridge}. */
@@ -29,6 +34,7 @@ export interface ConfirmationBridgeOptions {
   readonly remainingWallClockMs: () => number;
   /** Optional durable audit store for request/decision linkage. */
   readonly store?: ConfirmationStore | null;
+  readonly authority?: InterventionAuthority;
   readonly nowIso?: () => string;
 }
 
@@ -69,7 +75,7 @@ export class ConfirmationBridge implements ConfirmationGateway {
    * @param request Core confirmation request generated immediately before the action.
    * @returns A grant, denial, or fail-closed timeout decision.
    */
-  public async request(request: ConfirmationRequest): Promise<ConfirmationDecision> {
+  public async request(request: ConfirmationRequest): Promise<GatewayDecision> {
     await this.options.store?.appendRequest(request);
 
     if (!this.options.connector.interactive) {
@@ -87,6 +93,9 @@ export class ConfirmationBridge implements ConfirmationGateway {
     const requestedWait = request.timeout_ms ?? configuredWait;
     const confirmationWait = Math.min(configuredWait, requestedWait);
     const controller = new AbortController();
+    if (this.options.authority !== undefined) {
+      return this.requestThroughAuthority(request, controller, confirmationWait, remaining);
+    }
     const cleanup: (() => void)[] = [];
 
     try {
@@ -96,11 +105,14 @@ export class ConfirmationBridge implements ConfirmationGateway {
         this.wallClockRace(remaining, confirmationWait, cleanup),
         this.timeoutRace(confirmationWait, remaining, cleanup),
       ]);
-      const decision = this.makeDecision(
-        request,
-        response === 'granted' ? 'granted' : 'denied',
-        'user_interactive',
-      );
+      const decision =
+        typeof response === 'string'
+          ? this.makeDecision(
+              request,
+              response === 'granted' ? 'granted' : 'denied',
+              'user_interactive',
+            )
+          : { ...response, confirmation_id: request.confirmation_id };
       await this.options.store?.appendDecision(decision);
       return decision;
     } catch (error) {
@@ -113,6 +125,36 @@ export class ConfirmationBridge implements ConfirmationGateway {
     } finally {
       controller.abort('confirmation-settled');
       for (const dispose of cleanup) dispose();
+    }
+  }
+
+  private async requestThroughAuthority(
+    request: ConfirmationRequest,
+    controller: AbortController,
+    confirmationWait: number,
+    remaining: number,
+  ): Promise<GatewayDecision> {
+    const waiting = this.options.authority!.raise(request, {
+      agentConfirmTimeoutMs: confirmationWait,
+      wallClockDeadlineAt: new Date(Date.now() + remaining).toISOString(),
+    });
+    void this.options.connector
+      .requestConfirmation(request, controller.signal)
+      .then((response) => {
+        const decision = typeof response === 'string' ? response : response.decision;
+        return this.options.authority!.answer({
+          interventionId: request.confirmation_id,
+          decision: decision === 'granted' ? 'granted' : 'denied',
+          decidedBy: typeof response === 'string' ? 'user_interactive' : response.decided_by,
+        });
+      })
+      .catch(() => undefined);
+    try {
+      const decision = await waiting;
+      await this.options.store?.appendDecision(decision);
+      return decision;
+    } finally {
+      controller.abort('confirmation-settled');
     }
   }
 
@@ -157,7 +199,7 @@ export class ConfirmationBridge implements ConfirmationGateway {
     request: ConfirmationRequest,
     decision: ConfirmationDecision['decision'],
     decidedBy: ConfirmationDecision['decided_by'],
-  ): ConfirmationDecision {
+  ): GatewayDecision {
     return {
       confirmation_id: request.confirmation_id,
       decision,

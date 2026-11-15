@@ -50,6 +50,10 @@ import {
   redactRunInput,
   createAskEthicsAdapter,
   createConfirmationStore,
+  InterventionAuthority,
+  InterventionLog,
+  UnattendedCeilingClock,
+  recordRunEndInterventions,
   createKeychainProvider,
   loadEthicsConfig,
   loadSearchConfig,
@@ -728,33 +732,97 @@ export async function runAgenticTask(
     budgetTracker = new BudgetTracker(budgetsConfig, dependencies.budgetNow);
     const runBudget = budgetTracker;
     const actionPhase = new ActionPhase();
+    const interventionCeiling = new UnattendedCeilingClock({ now: () => Date.now() });
+    interventionCeiling.setAttendance(request.connector.interactive ? 1 : 0);
+    const interventionAuthority = new InterventionAuthority({
+      runId: created.runId,
+      log: new InterventionLog(join(created.runDir, 'interventions.jsonl')),
+      events: {
+        publish: (event) => runEvents.emit(event),
+        flush: () => Promise.resolve(runEvents.flush()),
+      },
+      clock: { now: () => now().toISOString() },
+      ceiling: interventionCeiling,
+    });
+    ownership?.registerChannelHandler('attendance', 'interventions', (message, connection) => {
+      const count =
+        typeof message.count === 'number' && Number.isInteger(message.count) ? message.count : null;
+      if (count === null || count < 0) {
+        connection.send({ type: 'error', code: 'bad_request', message: 'attendance' });
+        return;
+      }
+      void interventionAuthority.setAttendance(count);
+    });
+    ownership?.registerChannelHandler(
+      'intervention.answer',
+      'interventions',
+      (message, connection) => {
+        const interventionId =
+          typeof message.intervention_id === 'string' ? message.intervention_id : null;
+        const decision =
+          message.decision === 'granted' || message.decision === 'denied' ? message.decision : null;
+        const decidedBy =
+          message.decided_by === 'user_app' || message.decided_by === 'user_cli_confirm'
+            ? message.decided_by
+            : null;
+        if (interventionId === null || decision === null || decidedBy === null) {
+          connection.send({ type: 'error', code: 'bad_request', message: 'intervention.answer' });
+          return;
+        }
+        void interventionAuthority
+          .answer({
+            interventionId,
+            decision,
+            decidedBy,
+          })
+          .then(
+            (response) => {
+              connection.send({
+                type: 'intervention.response',
+                intervention_id: interventionId,
+                response,
+              });
+            },
+            () => {
+              connection.send({
+                type: 'error',
+                code: 'bad_request',
+                message: 'intervention.answer',
+              });
+            },
+          );
+      },
+    );
     const confirmationBridge = new ConfirmationBridge({
       connector: request.connector,
       timeoutMs: budgetsConfig.confirmationWaitMs,
       runSignal: runAbort.signal,
       remainingWallClockMs: () => runBudget.remainingWallClockMs(),
       store: createConfirmationStore(created.runDir),
+      authority: interventionAuthority,
       nowIso: () => now().toISOString(),
     });
     // FEAT-063: every consent wait is recorded as intervention_raised /
     // intervention_resolved. The deadline is the bridge's effective wait: the
     // shorter of its timeout and the wall clock left (the D5 ceiling arrives
     // with FEAT-068).
-    const recordedConfirmations = new RecordingConfirmationGateway(confirmationBridge, runEvents, {
-      now: () => now().toISOString(),
-      deadlineFor: (confirmation) =>
-        new Date(
-          now().getTime() +
-            Math.max(
-              0,
-              Math.min(
-                budgetsConfig.confirmationWaitMs,
-                confirmation.timeout_ms ?? budgetsConfig.confirmationWaitMs,
-                runBudget.remainingWallClockMs(),
-              ),
-            ),
-        ).toISOString(),
-    });
+    const recordedConfirmations = interventionAuthority
+      ? confirmationBridge
+      : new RecordingConfirmationGateway(confirmationBridge, runEvents, {
+          now: () => now().toISOString(),
+          deadlineFor: (confirmation) =>
+            new Date(
+              now().getTime() +
+                Math.max(
+                  0,
+                  Math.min(
+                    budgetsConfig.confirmationWaitMs,
+                    confirmation.timeout_ms ?? budgetsConfig.confirmationWaitMs,
+                    runBudget.remainingWallClockMs(),
+                  ),
+                ),
+            ).toISOString(),
+        });
     // The ingress vault owns the redacted placeholders for this entire run;
     // tool middleware resolves them only at the execution boundary.
     // The other half of the same contract: values the MODEL supplies in tool
@@ -1077,6 +1145,17 @@ export async function runAgenticTask(
       if (budgetTracker !== undefined) {
         runEvents.emit(budgetSnapshotEvent(budgetTracker.snapshot(), budgetsConfig, now()));
       }
+      const finalTerminal = terminal;
+      await captureTeardown(
+        () =>
+          recordRunEndInterventions({
+            runDir: created.runDir,
+            outcome: finalTerminal.kind,
+            ...(executionState?.handoff === undefined ? {} : { handoff: executionState.handoff }),
+            resumable: finalTerminal.kind === 'failed',
+          }),
+        teardownErrors,
+      );
       await finalizeRun({
         outcome: terminal,
         taskId,

@@ -91,3 +91,5 @@ export { parseAgentTurnTimeoutMs } from './profile/agent-budgets.js';
 export * from './receipt/index.js';
 
 export * from './setup/init-service.js';
+
+export * from './interventions/index.js';

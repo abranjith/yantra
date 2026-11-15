@@ -16,7 +16,7 @@
  * human already made via `yantra confirm` (plan §6).
  */
 
-import type { ConfirmationDecision } from '@yantra/protocol';
+import type { ConfirmationDecision, ParkedDecisionClaim } from '@yantra/protocol';
 
 import type { Logger } from '../browser/types.js';
 import type { LastFireStatus } from '../index-db/schedule-store.js';
@@ -30,13 +30,20 @@ export interface ConfirmationDecisionReader {
 
 /** Resumes a run from its checkpoint and reports the settled status. */
 export interface ResumeDriver {
-  resume(runId: string): Promise<{ status: LastFireStatus; runId: string }>;
+  resume(
+    runId: string,
+    claim?: ParkedDecisionClaim,
+  ): Promise<{ status: LastFireStatus; runId: string }>;
 }
 
 /** Dependencies for {@link resolveParkedRun}. */
 export interface ParkedResolverDeps {
   /** Reads the run's `confirmations.jsonl` for the latest decision. */
   readonly reader: ConfirmationDecisionReader;
+  /** Reads the authoritative claim for a granted parked decision. */
+  readonly claimReader?: {
+    readClaim(runId: string, confirmationId: string): Promise<ParkedDecisionClaim | null>;
+  };
   /** Resumes the run when the decision is `granted`. */
   readonly resume: ResumeDriver;
   readonly logger: Logger;
@@ -62,8 +69,18 @@ export async function resolveParkedRun(
   }
 
   if (decision.decision === 'granted') {
+    const claim = deps.claimReader
+      ? await deps.claimReader.readClaim(runId, decision.confirmation_id)
+      : undefined;
+    if (claim === null) {
+      deps.logger.warn({ runId }, 'parked grant has no readable claim — refusing resume');
+      return { runId, status: 'handoff' };
+    }
     deps.logger.info({ runId }, 'parked run granted out-of-band — resuming');
-    const outcome = await deps.resume.resume(runId);
+    const outcome =
+      claim === undefined
+        ? await deps.resume.resume(runId)
+        : await deps.resume.resume(runId, claim);
     return { runId: outcome.runId, status: outcome.status };
   }
 

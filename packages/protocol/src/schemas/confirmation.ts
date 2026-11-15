@@ -78,6 +78,34 @@ export const ConfirmationRequest = z
       .positive()
       .nullable()
       .describe('Timeout in milliseconds, or null to wait indefinitely (interactive mode).'),
+    target_host: z
+      .string()
+      .min(1)
+      .refine(
+        (value) =>
+          value === value.toLowerCase() &&
+          (value.startsWith('[') ? value.endsWith(']') : !value.includes(':')) &&
+          !/\s/u.test(value),
+        'target_host must be a lowercase hostname without port',
+      )
+      .optional()
+      .describe(
+        'Normalized lowercase hostname without port used for action binding (FEAT-068). The existing host stays the display value.',
+      ),
+    plan_digest: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/u)
+      .optional()
+      .describe(
+        'SHA-256 hex digest of the canonical JSON of the resolved plan (workflow requests only; FEAT-068).',
+      ),
+    step_digest: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/u)
+      .optional()
+      .describe(
+        'SHA-256 hex digest of the canonical JSON of the flagged step definition (workflow requests only; FEAT-068).',
+      ),
   })
   .describe('Structured consent request emitted before a flagged step executes.');
 
@@ -113,6 +141,13 @@ export const ConfirmationDecision = z
       .describe('Outcome: granted proceeds, denied/timed_out abort.'),
     decided_at: z.string().datetime().describe('ISO-8601 UTC timestamp of the decision.'),
     decided_by: ConfirmationDecidedBy.describe('Provenance of the decision — never agent.'),
+    replayed_at: z
+      .string()
+      .datetime()
+      .optional()
+      .describe(
+        'ISO-8601 UTC timestamp set only when a resumed run consumes a prior human grant (FEAT-068).',
+      ),
   })
   .describe('Terminal resolution of a ConfirmationRequest — always human-originated.');
 

@@ -17,11 +17,15 @@
  * @see .spec-lite/features/feature_scheduling_runner.md TASK-004
  */
 
+import { join } from 'node:path';
+
 import type { ConfirmationRequest } from '@yantra/protocol';
 
+import { runsRoot } from '../browser/paths.js';
 import type { Logger } from '../browser/types.js';
 import type { ConfirmationGateway, ConfirmationOutcome } from '../executor/confirmation-gateway.js';
 import type { NotifyTarget } from '../index-db/schedule-store.js';
+import { InterventionLog } from '../interventions/intervention-log.js';
 
 import { buildNotification, type Notifier } from './notify.js';
 
@@ -56,6 +60,32 @@ export class DaemonConfirmationGateway implements ConfirmationGateway {
 
   public async request(request: ConfirmationRequest): Promise<ConfirmationOutcome> {
     this.parked = true;
+
+    try {
+      await new InterventionLog(join(runsRoot(), request.run_id, 'interventions.jsonl')).append({
+        entry: 'raised',
+        intervention: {
+          intervention_id: request.confirmation_id,
+          run_id: request.run_id,
+          kind: 'consent',
+          state: 'pending',
+          raised_at: request.requested_at,
+          request,
+          attended_deadline_at: null,
+          deadline_basis: 'none',
+          unattended_ceiling_ms: 900_000,
+          unattended_accrued_ms: 0,
+          handoff: null,
+          missing: null,
+          recovery: 'resume',
+        },
+      });
+    } catch (error) {
+      this.deps.logger?.warn?.(
+        { runId: request.run_id, error: error instanceof Error ? error.message : String(error) },
+        'failed to record parked intervention',
+      );
+    }
 
     const notification = buildNotification(
       {

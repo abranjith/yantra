@@ -16,6 +16,15 @@ import { DiscoverySession } from '../schemas/discovery.js';
 import { TaskEvent } from '../schemas/events.js';
 import { ExecutionReceiptSchema } from '../schemas/execution-receipt.js';
 import { ExtractionResultEnvelopeUnknown } from '../schemas/extraction.js';
+import {
+  DecisionResponse,
+  InboxDismissal,
+  InboxItem,
+  Intervention,
+  InterventionLogEntry,
+  NotificationAttempt,
+  ParkedDecisionClaim,
+} from '../schemas/intervention.js';
 import { PlanSchema } from '../schemas/plan.js';
 import { LocatorChain, ValueRef } from '../schemas/refs.js';
 import { RunArtifactRegistry } from '../schemas/run-artifacts.js';
@@ -69,6 +78,13 @@ export const JSON_SCHEMA_ARTIFACTS: Record<string, { schema: z.ZodType<unknown>;
   'list-result.schema.json': { schema: ListResult, name: 'ListResult' },
   'audit-report.schema.json': { schema: AuditReport, name: 'AuditReport' },
   'run-result.schema.json': { schema: RunResultView, name: 'RunResultView' },
+  'intervention.json': { schema: Intervention, name: 'Intervention' },
+  'intervention-log-entry.json': { schema: InterventionLogEntry, name: 'InterventionLogEntry' },
+  'decision-response.json': { schema: DecisionResponse, name: 'DecisionResponse' },
+  'parked-decision-claim.json': { schema: ParkedDecisionClaim, name: 'ParkedDecisionClaim' },
+  'notification-attempt.json': { schema: NotificationAttempt, name: 'NotificationAttempt' },
+  'inbox-item.json': { schema: InboxItem, name: 'InboxItem' },
+  'inbox-dismissal.json': { schema: InboxDismissal, name: 'InboxDismissal' },
 } as const;
 
 export type JsonSchemaArtifactName = keyof typeof JSON_SCHEMA_ARTIFACTS;

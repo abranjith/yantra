@@ -28,7 +28,12 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { isAbsolute, relative, resolve } from 'node:path';
 
-import { isParked, type SanitizationProfile, type UserInputVault } from '@yantra/core';
+import {
+  isParked,
+  normalizeTargetHost,
+  type SanitizationProfile,
+  type UserInputVault,
+} from '@yantra/core';
 import { generateUlid, type ConfirmationRequest } from '@yantra/protocol';
 import pino from 'pino';
 import type { Static, TSchema } from 'typebox';
@@ -946,6 +951,7 @@ async function runConfirmation<TParams extends TSchema>(
   const spec_ = spec.buildConfirmation(params, services);
   const confirmationId = generateUlid();
   const waitMs = Math.min(DEFAULT_CONFIRMATION_TIMEOUT_MS, services.budgets.remainingWallClockMs());
+  const targetHost = normalizeTargetHost(spec_.host);
   const request: ConfirmationRequest = {
     confirmation_id: confirmationId,
     run_id: services.runId,
@@ -957,6 +963,7 @@ async function runConfirmation<TParams extends TSchema>(
     consequence: spec_.consequence ?? 'unknown',
     requested_at: services.nowIso(),
     timeout_ms: waitMs > 0 ? Math.floor(waitMs) : 1,
+    ...(targetHost !== null ? { target_host: targetHost } : {}),
   };
 
   await confirmationServices.store?.appendRequest(request);

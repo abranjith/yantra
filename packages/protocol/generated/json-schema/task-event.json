@@ -801,6 +801,21 @@
                     }
                   ],
                   "description": "Timeout in milliseconds, or null to wait indefinitely (interactive mode)."
+                },
+                "target_host": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Normalized lowercase hostname without port used for action binding (FEAT-068). The existing host stays the display value."
+                },
+                "plan_digest": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$",
+                  "description": "SHA-256 hex digest of the canonical JSON of the resolved plan (workflow requests only; FEAT-068)."
+                },
+                "step_digest": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$",
+                  "description": "SHA-256 hex digest of the canonical JSON of the flagged step definition (workflow requests only; FEAT-068)."
                 }
               },
               "required": [

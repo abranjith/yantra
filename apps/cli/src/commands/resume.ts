@@ -10,8 +10,12 @@
  *   yantra resume 20260511T091234Z-bank-statement-a7b3 --json
  */
 
+import { join } from 'node:path';
+
 import { PiAgentProvider } from '@yantra/agent';
 import {
+  BoundResumeConfirmationGateway,
+  ParkedDecisionService,
   ResourceBusyError,
   RunEventLogError,
   type RunEventStream,
@@ -19,6 +23,8 @@ import {
   BrowserManagedInstallError,
   type EffectivePreferences,
   type Logger,
+  createConfirmationStore,
+  runsRoot,
 } from '@yantra/core';
 import type { RunManifest } from '@yantra/core/workflow/replay';
 import {
@@ -72,6 +78,18 @@ export function makeResumeHandler(
 }
 
 /** `yantra resume <run-id>`: bound to the `resume` registry entry. */
+async function createResumeClaim(runId: string) {
+  const decision = await createConfirmationStore(join(runsRoot(), runId)).latestDecision(runId);
+  if (decision?.decision !== 'granted') return null;
+  return {
+    decision,
+    claim: await new ParkedDecisionService().readClaim(
+      join(runsRoot(), runId),
+      decision.confirmation_id,
+    ),
+  };
+}
+
 export async function resumeHandler(
   args: HandlerArgs,
   options: ResumeOptions,
@@ -121,9 +139,14 @@ export async function resumeHandler(
       await context.settings.preferences(),
       context.cwd,
     );
+    const parkedDecision = await createResumeClaim(runId);
+    const confirmationGateway =
+      parkedDecision?.claim === null || parkedDecision === null
+        ? context.gateways.confirmation(interactive)
+        : new BoundResumeConfirmationGateway({ claim: parkedDecision.claim, logger });
     const runtime = await (dependencies.build ?? buildOrchestratorRuntime)({
       logger,
-      confirmationGateway: context.gateways.confirmation(interactive),
+      confirmationGateway,
       browser: {
         resourceLockOptions: resourceOptions(context, 'resume'),
         installOfferGateway: context.gateways.installOffer(interactive),

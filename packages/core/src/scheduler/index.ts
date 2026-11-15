@@ -33,10 +33,6 @@ export {
   type DaemonConfirmationGatewayDeps,
 } from './daemon-confirmation-gateway.js';
 export {
-  PreGrantedConfirmationGateway,
-  type PreGrantedConfirmationGatewayOptions,
-} from './pregranted-confirmation-gateway.js';
-export {
   runScheduledFire,
   type FireRunDriver,
   type FireRunOutcome,

@@ -15,7 +15,13 @@
  * FEAT-068 owns the intervention model and answers.
  */
 
-import { EmptyParams } from '@yantra/protocol';
+import { appendFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
+import { ParkedDecisionService, dataDir, runsRoot } from '@yantra/core';
+import { DecisionResponse, EmptyParams, generateUlid, NotificationAttempt } from '@yantra/protocol';
+import type { DecisionResponse as DecisionResponseType } from '@yantra/protocol';
+import { z } from 'zod';
 
 import { SILENT_HOST_LOGGER, type HostLogger } from './host.js';
 import type { RpcConnection, RpcMethodRegistry } from './rpc-server.js';
@@ -36,6 +42,11 @@ export interface AttendanceDeps {
   readonly broadcast: (count: number) => void;
   /** Sends the count to one worker that just attached. */
   readonly sendTo: (runId: string, count: number) => void;
+  readonly answerLive?: (
+    runId: string,
+    interventionId: string,
+    decision: 'granted' | 'denied',
+  ) => Promise<DecisionResponseType | null>;
   readonly now?: () => number;
   readonly logger?: HostLogger;
 }
@@ -94,19 +105,73 @@ export class Attendance {
     this.timer = null;
   }
 
-  /** Forwards an intervention event of an attached run to subscribed windows. */
+  /** Forwards an intervention event and records app-channel delivery attempts. */
   public forward(runId: string, seq: number, event: unknown): void {
-    const kind = (event as { kind?: unknown } | null)?.kind;
+    const record = event as { kind?: unknown; intervention_id?: unknown } | null;
+    const kind = record?.kind;
     if (kind !== 'intervention_raised' && kind !== 'intervention_resolved') return;
-    for (const attendee of this.attendees.values()) {
-      if (attendee.open)
-        attendee.connection.notify('intervention.event', { run_id: runId, seq, event });
+    const open = [...this.attendees.values()].filter((attendee) => attendee.open);
+    for (const attendee of open) {
+      attendee.connection.notify('intervention.event', { run_id: runId, seq, event });
+    }
+    if (kind === 'intervention_raised' && typeof record?.intervention_id === 'string') {
+      void this.recordAppAttempt(runId, record.intervention_id, open.length > 0);
     }
   }
 
-  /** Registers `interventions.subscribe` and `attendance.heartbeat`. */
+  private async recordAppAttempt(
+    runId: string,
+    interventionId: string,
+    delivered: boolean,
+  ): Promise<void> {
+    const path = join(dataDir(), 'notifications.jsonl');
+    const at = new Date(this.now()).toISOString();
+    const base = {
+      record: 'attempt' as const,
+      attempt_id: generateUlid(),
+      notification_id: null,
+      intervention_id: interventionId,
+      run_id: runId,
+      channel: 'app' as const,
+      at,
+    };
+    const attempted = NotificationAttempt.parse({
+      ...base,
+      status: 'attempted',
+      detail: null,
+    });
+    const outcome = NotificationAttempt.parse({
+      ...base,
+      attempt_id: generateUlid(),
+      status: delivered ? 'delivered' : 'unsupported',
+      detail: delivered ? null : 'no_window',
+    });
+    await appendFile(path, `${JSON.stringify(attempted)}\n${JSON.stringify(outcome)}\n`, 'utf8');
+  }
+
+  /** Registers `interventions.subscribe`, live answers, and heartbeats. */
   public register(methods: RpcMethodRegistry): void {
     methods
+      .register('intervention.answer', {
+        params: z
+          .object({
+            run_id: z.string().min(1),
+            intervention_id: z.string().min(1),
+            decision: z.enum(['granted', 'denied']),
+          })
+          .strict(),
+        result: DecisionResponse,
+        handler: async ({ run_id: runId, intervention_id: interventionId, decision }) => {
+          const live = await this.deps.answerLive?.(runId, interventionId, decision);
+          if (live !== null && live !== undefined) return live;
+          return new ParkedDecisionService().decideParked({
+            runDir: join(runsRoot(), runId),
+            runId,
+            decision,
+            decidedBy: 'user_app',
+          });
+        },
+      })
       .register('interventions.subscribe', {
         params: EmptyParams,
         result: EmptyParams,

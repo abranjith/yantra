@@ -1,0 +1,128 @@
+{
+  "$ref": "#/definitions/ParkedDecisionClaim",
+  "definitions": {
+    "ParkedDecisionClaim": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "type": "number",
+          "const": 1,
+          "description": "Claim file schema version."
+        },
+        "confirmation_id": {
+          "type": "string",
+          "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
+          "description": "Resolved request ULID."
+        },
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Owning run id."
+        },
+        "decision": {
+          "type": "string",
+          "enum": [
+            "granted",
+            "denied"
+          ],
+          "description": "Human parked decision."
+        },
+        "decided_by": {
+          "type": "string",
+          "enum": [
+            "user_cli_confirm",
+            "user_app"
+          ],
+          "description": "Human surface that claimed the decision."
+        },
+        "decided_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO-8601 UTC timestamp of claim creation."
+        },
+        "binding": {
+          "type": "object",
+          "properties": {
+            "run_id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Bound run id."
+            },
+            "step_id": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Bound step id."
+            },
+            "action_kind": {
+              "type": "string",
+              "enum": [
+                "click",
+                "fill",
+                "navigate"
+              ],
+              "description": "Bound confirmable verb."
+            },
+            "target_host": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Normalized lowercase hostname without port, or null if absent."
+            },
+            "plan_digest": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "SHA-256 of canonical plan JSON, or null for legacy/agentic requests."
+            },
+            "step_digest": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "SHA-256 of canonical step JSON, or null for legacy/agentic requests."
+            }
+          },
+          "required": [
+            "run_id",
+            "step_id",
+            "action_kind",
+            "target_host",
+            "plan_digest",
+            "step_digest"
+          ],
+          "additionalProperties": false,
+          "description": "Action binding copied from the pending request."
+        }
+      },
+      "required": [
+        "schema_version",
+        "confirmation_id",
+        "run_id",
+        "decision",
+        "decided_by",
+        "decided_at",
+        "binding"
+      ],
+      "additionalProperties": false,
+      "description": "Atomic exclusive claim file deciding a parked confirmation request."
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

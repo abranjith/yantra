@@ -120,6 +120,7 @@ export class RunChannelClient {
   private outcomeSeen = false;
   private snapshot: RunChannelClientSnapshot;
   private readonly eventListeners = new Set<Listener<ChannelEventDelivery>>();
+  private readonly messageListeners = new Set<Listener<RunChannelServerMessage>>();
   private readonly snapshotListeners = new Set<() => void>();
   private pendingHello: ((result: ChannelConnectResult) => void) | null = null;
   private pendingCancel: ((ack: CancelAck | null) => void) | null = null;
@@ -148,6 +149,12 @@ export class RunChannelClient {
   public onEvent(listener: Listener<ChannelEventDelivery>): () => void {
     this.eventListeners.add(listener);
     return () => this.eventListeners.delete(listener);
+  }
+
+  /** Receives every parsed server message, including extension messages. */
+  public onServerMessage(listener: Listener<RunChannelServerMessage>): () => void {
+    this.messageListeners.add(listener);
+    return () => this.messageListeners.delete(listener);
   }
 
   /**
@@ -308,6 +315,7 @@ export class RunChannelClient {
     const parsed = RunChannelServerMessage.safeParse(raw);
     if (!parsed.success) return;
     const message = parsed.data;
+    for (const listener of this.messageListeners) listener(message);
     switch (message.type) {
       case 'hello_ok': {
         const ok = message as Extract<RunChannelServerMessage, { type: 'hello_ok' }>;

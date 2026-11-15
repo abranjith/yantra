@@ -123,6 +123,15 @@ export class RunOwnershipSession {
     this.abortRun = abort;
   }
 
+  /** Registers an owner-side handler for an extensible run-channel message. */
+  public registerChannelHandler(
+    type: string,
+    capability: string | null,
+    handler: ChannelHandler,
+  ): void {
+    this.channel.register?.(type, capability, handler);
+  }
+
   /** True once any client asked to cancel. */
   public get cancelled(): boolean {
     return this.cancelRequested;

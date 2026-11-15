@@ -18,7 +18,8 @@ import {
   FileDaemonLock,
   SchedulerDaemon,
   SinkNotifier,
-  PreGrantedConfirmationGateway,
+  BoundResumeConfirmationGateway,
+  ParkedDecisionService,
   createConfirmationStore,
   resolveParkedRun,
   runScheduledFire,
@@ -35,7 +36,7 @@ import {
   exitCodeFor,
   type RunRequest,
 } from '@yantra/core/workflow/replay';
-import { JsonValue, PROTOCOL_VERSION } from '@yantra/protocol';
+import { JsonValue, PROTOCOL_VERSION, type ParkedDecisionClaim } from '@yantra/protocol';
 
 import { replayContent } from '../context/replay-content.js';
 import { openHistory } from '../history.js';
@@ -87,6 +88,10 @@ export async function buildDaemon(
     resumeParked: (schedule: Schedule): Promise<FireResult | null> =>
       resolveParkedRun(schedule.lastRunId, {
         reader: createConfirmationStore(`${runsRoot()}/${schedule.lastRunId}`),
+        claimReader: {
+          readClaim: (runId, confirmationId) =>
+            new ParkedDecisionService().readClaim(`${runsRoot()}/${runId}`, confirmationId),
+        },
         resume: makeResumeDriver(logger, cwd),
         logger,
       }),
@@ -148,18 +153,21 @@ function makeOrchestratorDriver(logger: Logger): FireRunDriver {
 
 /**
  * A resume driver that resumes a parked run through a fresh orchestrator. The
- * confirmation gateway is `null` here: the pending request already has a
- * human-granted decision on disk, so the executor consumes it without asking
- * again (the grant is single-use, step-scoped — FEAT-019).
+ * gateway consumes the authoritative parked claim and verifies the resumed
+ * request's action binding before granting it.
  */
 function makeResumeDriver(
   logger: Logger,
   cwd: string,
 ): {
-  resume(runId: string): Promise<{ status: LastFireStatus; runId: string }>;
+  resume(
+    runId: string,
+    claim?: ParkedDecisionClaim,
+  ): Promise<{ status: LastFireStatus; runId: string }>;
 } {
   return {
-    async resume(runId): Promise<{ status: LastFireStatus; runId: string }> {
+    async resume(runId, claim): Promise<{ status: LastFireStatus; runId: string }> {
+      if (claim === undefined) throw new Error(`No parked decision claim found for run ${runId}`);
       const { manifest } = await loadResumePoint(new LocalRunStore(), runId);
       const receipt = await daemonReceipt(manifest.workflowName, manifest.params, cwd);
       // Replay the human's prior `yantra confirm` grant so the executor's
@@ -171,7 +179,7 @@ function makeResumeDriver(
           installOfferGateway: null,
           resourceLockOptions: { ...receiptLockOptions(receipt), logger },
         },
-        confirmationGateway: new PreGrantedConfirmationGateway({ logger }),
+        confirmationGateway: new BoundResumeConfirmationGateway({ claim, logger }),
         // Hard zero-LLM, as on the fire path: resuming a parked scheduled run is
         // still an unattended surface.
         synthesis: { llm: null, noLlm: true },

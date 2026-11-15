@@ -1131,6 +1131,32 @@ Example:
 "<value>"
 ```
 
+## ConfirmationBinding
+
+Six-field action-binding tuple for parked confirmation replay verification.
+
+| Field       | Description                                                          |
+| ----------- | -------------------------------------------------------------------- |
+| run_id      | Bound run id.                                                        |
+| step_id     | Bound step id.                                                       |
+| action_kind | Bound confirmable verb.                                              |
+| target_host | Normalized lowercase hostname without port, or null if absent.       |
+| plan_digest | SHA-256 of canonical plan JSON, or null for legacy/agentic requests. |
+| step_digest | SHA-256 of canonical step JSON, or null for legacy/agentic requests. |
+
+Example:
+
+```json
+{
+  "run_id": "<run_id>",
+  "step_id": "<step_id>",
+  "action_kind": "<action_kind>",
+  "target_host": "<target_host>",
+  "plan_digest": "<plan_digest>",
+  "step_digest": "<step_digest>"
+}
+```
+
 ## ConfirmationDecidedBy
 
 Who or what resolved the confirmation — no agent variant exists. user_interactive: a person at the terminal prompt; user_cli_confirm: a person running `yantra confirm`; timeout: the bounded wait expired; user_app: a person answered in the Yantra app (FEAT-068; added in FEAT-063, readable by new executables only).
@@ -1145,12 +1171,13 @@ Example:
 
 Terminal resolution of a ConfirmationRequest — always human-originated.
 
-| Field           | Description                                        |
-| --------------- | -------------------------------------------------- |
-| confirmation_id | ULID of the request being resolved.                |
-| decision        | Outcome: granted proceeds, denied/timed_out abort. |
-| decided_at      | ISO-8601 UTC timestamp of the decision.            |
-| decided_by      | Provenance of the decision — never agent.          |
+| Field           | Description                                                                                 |
+| --------------- | ------------------------------------------------------------------------------------------- |
+| confirmation_id | ULID of the request being resolved.                                                         |
+| decision        | Outcome: granted proceeds, denied/timed_out abort.                                          |
+| decided_at      | ISO-8601 UTC timestamp of the decision.                                                     |
+| decided_by      | Provenance of the decision — never agent.                                                   |
+| replayed_at     | ISO-8601 UTC timestamp set only when a resumed run consumes a prior human grant (FEAT-068). |
 
 Example:
 
@@ -1159,7 +1186,8 @@ Example:
   "confirmation_id": "<confirmation_id>",
   "decision": "<decision>",
   "decided_at": "<decided_at>",
-  "decided_by": "<decided_by>"
+  "decided_by": "<decided_by>",
+  "replayed_at": "<replayed_at>"
 }
 ```
 
@@ -1167,18 +1195,21 @@ Example:
 
 Structured consent request emitted before a flagged step executes.
 
-| Field           | Description                                                                |
-| --------------- | -------------------------------------------------------------------------- |
-| confirmation_id | Globally unique ULID for this confirmation request.                        |
-| run_id          | Owning run id.                                                             |
-| step_id         | Step id that triggered the request.                                        |
-| action_kind     | The mutating verb that will execute on grant.                              |
-| host            | Resolved target host for the action (e.g. "bank.example.com").             |
-| description     | Human-readable summary of what will happen — from step name or annotation. |
-| expected_cost   | Best-effort cost estimate, or null if unknown.                             |
-| consequence     | Reversibility classification.                                              |
-| requested_at    | ISO-8601 UTC timestamp when the request was created.                       |
-| timeout_ms      | Timeout in milliseconds, or null to wait indefinitely (interactive mode).  |
+| Field           | Description                                                                                                               |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| confirmation_id | Globally unique ULID for this confirmation request.                                                                       |
+| run_id          | Owning run id.                                                                                                            |
+| step_id         | Step id that triggered the request.                                                                                       |
+| action_kind     | The mutating verb that will execute on grant.                                                                             |
+| host            | Resolved target host for the action (e.g. "bank.example.com").                                                            |
+| description     | Human-readable summary of what will happen — from step name or annotation.                                                |
+| expected_cost   | Best-effort cost estimate, or null if unknown.                                                                            |
+| consequence     | Reversibility classification.                                                                                             |
+| requested_at    | ISO-8601 UTC timestamp when the request was created.                                                                      |
+| timeout_ms      | Timeout in milliseconds, or null to wait indefinitely (interactive mode).                                                 |
+| target_host     | Normalized lowercase hostname without port used for action binding (FEAT-068). The existing host stays the display value. |
+| plan_digest     | SHA-256 hex digest of the canonical JSON of the resolved plan (workflow requests only; FEAT-068).                         |
+| step_digest     | SHA-256 hex digest of the canonical JSON of the flagged step definition (workflow requests only; FEAT-068).               |
 
 Example:
 
@@ -1193,7 +1224,10 @@ Example:
   "expected_cost": "<expected_cost>",
   "consequence": "<consequence>",
   "requested_at": "<requested_at>",
-  "timeout_ms": "<timeout_ms>"
+  "timeout_ms": "<timeout_ms>",
+  "target_host": "<target_host>",
+  "plan_digest": "<plan_digest>",
+  "step_digest": "<step_digest>"
 }
 ```
 
@@ -1268,6 +1302,26 @@ Example:
 ## DangerSpec
 
 Whether a generated surface must ask for explicit confirmation first.
+
+Example:
+
+```json
+"<value>"
+```
+
+## DeadlineBasis
+
+Which deadline bound produced attended_deadline_at while attending.
+
+Example:
+
+```json
+"request_timeout"
+```
+
+## DecisionResponse
+
+Authoritative response returned to every confirmation answer path.
 
 Example:
 
@@ -2115,6 +2169,76 @@ Example:
 }
 ```
 
+## InboxDismissal
+
+App presentation dismissal entry in ui/inbox-dismissed.jsonl.
+
+| Field        | Description                          |
+| ------------ | ------------------------------------ |
+| item_id      | Dismissed Inbox item id.             |
+| dismissed_at | ISO-8601 UTC timestamp of dismissal. |
+
+Example:
+
+```json
+{
+  "item_id": "<item_id>",
+  "dismissed_at": "<dismissed_at>"
+}
+```
+
+## InboxItem
+
+Read-model entry surfaced in the app Inbox.
+
+| Field         | Description                                                                   |
+| ------------- | ----------------------------------------------------------------------------- |
+| item_id       | Stable identifier: intervention:<id>, parked:<run>:<cid>, or invocation:<id>. |
+| kind          | Item classification.                                                          |
+| run_id        | Associated run id, or null.                                                   |
+| invocation_id | Associated invocation id, or null.                                            |
+| title         | Protocol words title without ANSI escapes.                                    |
+| raised_at     | ISO-8601 UTC timestamp used for ordering.                                     |
+| intervention  | Backing intervention record, or null.                                         |
+| recovery      | Recovery action available for this item.                                      |
+| dismissible   | True for informational items; always false for pending consents.              |
+
+Example:
+
+```json
+{
+  "item_id": "<item_id>",
+  "kind": "<kind>",
+  "run_id": "<run_id>",
+  "invocation_id": "<invocation_id>",
+  "title": "<title>",
+  "raised_at": "<raised_at>",
+  "intervention": "<intervention>",
+  "recovery": "<recovery>",
+  "dismissible": "<dismissible>"
+}
+```
+
+## InboxItemKind
+
+Classification of an Inbox item.
+
+Example:
+
+```json
+"consent_live"
+```
+
+## InboxRecovery
+
+Recovery action offered by the Inbox item.
+
+Example:
+
+```json
+"resume"
+```
+
 ## InputKind
 
 How a generated form collects this value.
@@ -2155,6 +2279,132 @@ Example:
   "kind": "<kind>",
   "disabled": "<disabled>"
 }
+```
+
+## Intervention
+
+Human-facing intervention raised during or at the end of a run.
+
+| Field                 | Description                                                                           |
+| --------------------- | ------------------------------------------------------------------------------------- |
+| intervention_id       | ULID identifying the intervention; equals confirmation_id for consent.                |
+| run_id                | Owning run identifier.                                                                |
+| kind                  | Intervention kind.                                                                    |
+| state                 | Current state of the intervention.                                                    |
+| raised_at             | ISO-8601 UTC timestamp when raised.                                                   |
+| request               | ConfirmationRequest payload; required when kind is consent.                           |
+| attended_deadline_at  | Authoritative attended deadline ISO timestamp, or null when unbounded while attended. |
+| deadline_basis        | Which bound produced attended_deadline_at; required when kind is consent.             |
+| unattended_ceiling_ms | Cumulative unattended ceiling in ms (default 900000); required for consent.           |
+| unattended_accrued_ms | Run-level unattended wait accrued at raise time; required for consent.                |
+| handoff               | Blocker and safest next action; required when kind is handoff or takeover.            |
+| missing               | Unmet input items (up to 20); required when kind is input.                            |
+| recovery              | Recovery action offered by the Inbox.                                                 |
+
+Example:
+
+```json
+{
+  "intervention_id": "<intervention_id>",
+  "run_id": "<run_id>",
+  "kind": "<kind>",
+  "state": "<state>",
+  "raised_at": "<raised_at>",
+  "request": "<request>",
+  "attended_deadline_at": "<attended_deadline_at>",
+  "deadline_basis": "<deadline_basis>",
+  "unattended_ceiling_ms": "<unattended_ceiling_ms>",
+  "unattended_accrued_ms": "<unattended_accrued_ms>",
+  "handoff": "<handoff>",
+  "missing": "<missing>",
+  "recovery": "<recovery>"
+}
+```
+
+## InterventionHandoff
+
+Plain sanitized blocker and safest next action for a handoff or takeover.
+
+| Field              | Description                                               |
+| ------------------ | --------------------------------------------------------- |
+| blocker            | Plain sanitized blocker description without ANSI escapes. |
+| safest_next_action | Plain sanitized safest next action without ANSI escapes.  |
+
+Example:
+
+```json
+{
+  "blocker": "<blocker>",
+  "safest_next_action": "<safest_next_action>"
+}
+```
+
+## InterventionKind
+
+Intervention kind: consent (live or parked approval), handoff (terminal blocker), input (missing requirements from partial brief), takeover (Phase 2 schema, resolves as handoff in MVP).
+
+Example:
+
+```json
+"consent"
+```
+
+## InterventionLogEntry
+
+One entry in runs/<id>/interventions.jsonl.
+
+Example:
+
+```json
+"<value>"
+```
+
+## InterventionMissingItem
+
+Missing input requirement item captured from a partial run brief.
+
+| Field  | Description                                           |
+| ------ | ----------------------------------------------------- |
+| label  | Sanitized requirement label.                          |
+| reason | Sanitized reason the requirement went unmet, or null. |
+
+Example:
+
+```json
+{
+  "label": "<label>",
+  "reason": "<reason>"
+}
+```
+
+## InterventionRecovery
+
+Recovery action available for this intervention from core resumability.
+
+Example:
+
+```json
+"resume"
+```
+
+## InterventionResolutionReason
+
+Cause of consent resolution.
+
+Example:
+
+```json
+"answered"
+```
+
+## InterventionState
+
+Lifecycle state: pending -> granted | denied | timed_out for consent; recorded for informational handoff/input/takeover items.
+
+Example:
+
+```json
+"pending"
 ```
 
 ## InvocationFinishReason
@@ -2895,6 +3145,68 @@ Example:
 }
 ```
 
+## NotificationAttempt
+
+Tracked notification delivery attempt record.
+
+| Field           | Description                                                            |
+| --------------- | ---------------------------------------------------------------------- |
+| record          |                                                                        |
+| attempt_id      | ULID of this delivery attempt.                                         |
+| notification_id | Notification line ULID for desktop attempts, or null for app attempts. |
+| intervention_id | Intervention that triggered this notification attempt.                 |
+| run_id          | Owning run id.                                                         |
+| channel         | Channel attempted.                                                     |
+| status          | Outcome of the attempt.                                                |
+| at              | ISO-8601 UTC timestamp of the attempt event.                           |
+| detail          | Closed-enum detail when failed or unsupported, otherwise null.         |
+
+Example:
+
+```json
+{
+  "record": "<record>",
+  "attempt_id": "<attempt_id>",
+  "notification_id": "<notification_id>",
+  "intervention_id": "<intervention_id>",
+  "run_id": "<run_id>",
+  "channel": "<channel>",
+  "status": "<status>",
+  "at": "<at>",
+  "detail": "<detail>"
+}
+```
+
+## NotificationAttemptChannel
+
+Notification delivery channel.
+
+Example:
+
+```json
+"app"
+```
+
+## NotificationAttemptDetail
+
+Closed-enum failure or unsupported reason for a notification attempt.
+
+Example:
+
+```json
+"no_window"
+```
+
+## NotificationAttemptStatus
+
+Tracked notification delivery state.
+
+Example:
+
+```json
+"attempted"
+```
+
 ## OptionGroup
 
 A named, reusable option set.
@@ -3064,6 +3376,34 @@ Example:
 {
   "kind": "<kind>",
   "key": "<key>"
+}
+```
+
+## ParkedDecisionClaim
+
+Atomic exclusive claim file deciding a parked confirmation request.
+
+| Field           | Description                                     |
+| --------------- | ----------------------------------------------- |
+| schema_version  | Claim file schema version.                      |
+| confirmation_id | Resolved request ULID.                          |
+| run_id          | Owning run id.                                  |
+| decision        | Human parked decision.                          |
+| decided_by      | Human surface that claimed the decision.        |
+| decided_at      | ISO-8601 UTC timestamp of claim creation.       |
+| binding         | Action binding copied from the pending request. |
+
+Example:
+
+```json
+{
+  "schema_version": "<schema_version>",
+  "confirmation_id": "<confirmation_id>",
+  "run_id": "<run_id>",
+  "decision": "<decision>",
+  "decided_by": "<decided_by>",
+  "decided_at": "<decided_at>",
+  "binding": "<binding>"
 }
 ```
 

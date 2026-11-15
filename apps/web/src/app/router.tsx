@@ -1,5 +1,6 @@
 import { createRouter, type RouterHistory } from '@tanstack/react-router';
 
+import { inboxRoute } from '../routes/inbox.js';
 import { ledgerRoute } from '../routes/ledger.js';
 import { missionInvocationRoute } from '../routes/mission.invocations.$invocationId.js';
 import { homeRoute, missionRoute } from '../routes/mission.js';
@@ -18,6 +19,7 @@ export const routeTree = rootRoute.addChildren([
   runRoute,
   auditRoute,
   artifactRoute,
+  inboxRoute,
   missionRunRoute,
   missionInvocationRoute,
 ]);
