@@ -1,0 +1,30 @@
+{
+  "vcs": "git",
+  "files": [
+    {
+      "path": "apps/cli/tests/commands/confirm-race.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/scheduler/pregranted-gap.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    }
+  ],
+  "excluded": [
+    ".spec-lite/features/FEAT-068-interventions_notifications/changeset.json",
+    ".spec-lite/features/FEAT-068-interventions_notifications/spec.md",
+    ".spec-lite/plan_ui.md"
+  ],
+  "baseline": {
+    "sha": "06ab4f88b90583fd3cf0670c69b84397d2730cc3",
+    "capturedAt": "2026-11-15T02:08:20.578Z",
+    "dirtyAtBaseline": [],
+    "dirtyBlobHashes": {},
+    "workflow": "ft/feat-068-interventions-notifications@06ab4f88b90583fd3cf0670c69b84397d2730cc3"
+  },
+  "featureId": "FEAT-068"
+}
