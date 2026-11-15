@@ -136,7 +136,8 @@ describe('@no-llm the Yantra app', () => {
       expect(foreign).toEqual([]);
       expect(await watched.csp()).toEqual([]);
       expect(watched.pageErrors).toEqual([]);
-      expect(watched.page.url()).toBe(`${origin}/`);
+      // The code is scrubbed, and `/` lands on Mission, the app's start page (FEAT-067).
+      expect(watched.page.url()).toBe(`${origin}/mission`);
       expect(await watched.page.evaluate(() => window.location.hash)).toBe('');
       await watched.page.waitForFunction(
         () => document.documentElement.dataset.surfaces === 'glass',

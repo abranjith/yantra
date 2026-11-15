@@ -506,6 +506,21 @@
       "task": "TASK-001"
     },
     {
+      "path": "docs/features/app-mission.md",
+      "status": "U",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/safety-and-privacy.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/yantra-app.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
       "path": "docs/protocol-spec.md",
       "status": "M",
       "role": "implement",
@@ -518,8 +533,13 @@
       "task": "TASK-007"
     },
     {
+      "path": "e2e/app-host.spec.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
       "path": "e2e/app-mission.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-016"
     },
@@ -813,6 +833,7 @@
     }
   ],
   "excluded": [
+    ".spec-lite/feature-summary.md",
     ".spec-lite/features/FEAT-067-mission_composer_live_run/changeset.json",
     ".spec-lite/features/FEAT-067-mission_composer_live_run/spec.md",
     ".spec-lite/plan_ui.md"

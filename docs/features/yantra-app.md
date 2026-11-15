@@ -14,8 +14,9 @@ uses the same handler and arguments a terminal would. Each command starts at
 most once. A run keeps going and keeps its data if the window, the host or
 both go away.
 
-The window has a top bar with the Yantra status mark and links to **Home** and
-the **Ledger**, plus a connection banner. Its run screens are the **Ledger**
+The window has a top bar with the Yantra status mark and links to **Mission**
+(the app's start page; see [Mission](app-mission.md)) and the **Ledger**, plus
+a connection banner. Its run screens are the **Ledger**
 (every run), the **Run result** of one run, its **Audit**, and bounded
 **file viewers**. These screens only read: they show any run Yantra recorded,
 whether it came from the terminal, the scheduler daemon or the app. The queue,
@@ -78,7 +79,7 @@ a polite live region, so screen readers announce changes without moving focus.
 | State         | What the window shows                                                                                                                                    |
 | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Connecting    | `Connecting to Yantra…`                                                                                                                                  |
-| Connected     | No banner. The Home page reads `Connected to the Yantra on this computer.`                                                                               |
+| Connected     | No banner.                                                                                                                                               |
 | Disconnected  | `Disconnected from Yantra. Reconnecting in <n> s.` (or `Reconnecting…`). Retries back off from 0.5 to 10 seconds, with jitter.                           |
 | Session ended | ``Session ended — run `yantra ui` to reopen.`` The page is replaced by **Session ended**: "Run `yantra ui` to reopen the Yantra app."                    |
 | Incompatible  | ``This window cannot talk to Yantra <version>. Run `yantra ui` to reopen.`` The page shows **Session ended** with "The running app is Yantra <version>." |
