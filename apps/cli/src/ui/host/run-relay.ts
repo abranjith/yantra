@@ -28,11 +28,13 @@ import {
   type RunChannelClientSnapshot,
 } from '@yantra/core';
 import {
+  DecisionResponse,
   EmptyParams,
   RunSubscribeParams,
   RunSubscribeResult,
   RunUnsubscribeParams,
 } from '@yantra/protocol';
+import type { DecisionResponse as DecisionResponseType } from '@yantra/protocol';
 
 import { SILENT_HOST_LOGGER, type HostLogger } from './host.js';
 import type { RpcConnection, RpcMethodRegistry } from './rpc-server.js';
@@ -42,6 +44,7 @@ export interface RelayClient {
   connect(lease: Parameters<RunChannelClient['connect']>[0]): Promise<ChannelConnectResult>;
   subscribe(fromSeq: number): void;
   onEvent(listener: (delivery: ChannelEventDelivery) => void): () => void;
+  onServerMessage?(listener: (message: unknown) => void): () => void;
   getSnapshot(): RunChannelClientSnapshot;
   subscribeSnapshot(listener: () => void): () => void;
   /** Sends one message to the owner (attendance, FEAT-065 TASK-018). */
@@ -232,6 +235,45 @@ export class RunRelay {
     message: { readonly type: string } & Record<string, unknown>,
   ): void {
     this.runs.get(runId)?.client?.send(message);
+  }
+
+  /** Answers one live intervention and waits for the authority response. */
+  public answerIntervention(
+    runId: string,
+    interventionId: string,
+    decision: 'granted' | 'denied',
+  ): Promise<DecisionResponseType | null> {
+    const client = this.runs.get(runId)?.client;
+    const onServerMessage = client?.onServerMessage?.bind(client);
+    if (client === null || client === undefined || onServerMessage === undefined)
+      return Promise.resolve(null);
+    const liveClient = client;
+    return new Promise((resolve) => {
+      let settled = false;
+      let dispose = (): void => undefined;
+      const finish = (value: DecisionResponseType | null): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        dispose();
+        resolve(value);
+      };
+      dispose = onServerMessage((message) => {
+        if (typeof message !== 'object' || message === null) return;
+        const record = message as Record<string, unknown>;
+        if (record.type !== 'intervention.response' || record.intervention_id !== interventionId)
+          return;
+        const parsed = DecisionResponse.safeParse(record.response);
+        finish(parsed.success ? parsed.data : null);
+      });
+      const timer = setTimeout(() => finish(null), 5_000);
+      liveClient.send({
+        type: 'intervention.answer',
+        intervention_id: interventionId,
+        decision,
+        decided_by: 'user_app',
+      });
+    });
   }
 
   private watchHealth(attachment: Attachment, snapshot: RunChannelClientSnapshot): void {

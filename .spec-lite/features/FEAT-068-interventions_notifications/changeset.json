@@ -26,6 +26,24 @@
       "task": "TASK-005"
     },
     {
+      "path": "apps/cli/src/ui/host/attendance.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/cli/src/ui/host/host-runtime.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/cli/src/ui/host/run-relay.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
       "path": "apps/cli/tests/commands/confirm-race.spec.ts",
       "status": "A",
       "role": "implement",

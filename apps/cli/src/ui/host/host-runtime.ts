@@ -216,6 +216,8 @@ export async function startHostRuntime(deps: HostRuntimeDeps): Promise<RunningHo
       sendTo: (runId, count) => {
         relay.sendToWorker(runId, { type: 'attendance', count });
       },
+      answerLive: (runId, interventionId, decision) =>
+        relay.answerIntervention(runId, interventionId, decision),
       now: () => now().getTime(),
       logger,
     });

@@ -743,6 +743,15 @@ export async function runAgenticTask(
       clock: { now: () => now().toISOString() },
       ceiling: interventionCeiling,
     });
+    ownership?.registerChannelHandler('attendance', 'interventions', (message, connection) => {
+      const count =
+        typeof message.count === 'number' && Number.isInteger(message.count) ? message.count : null;
+      if (count === null || count < 0) {
+        connection.send({ type: 'error', code: 'bad_request', message: 'attendance' });
+        return;
+      }
+      void interventionAuthority.setAttendance(count);
+    });
     ownership?.registerChannelHandler(
       'intervention.answer',
       'interventions',
