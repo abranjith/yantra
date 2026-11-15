@@ -96,7 +96,10 @@ function seedInformational(runId: string): void {
     kind: 'handoff',
     state: 'recorded',
     raised_at: raisedAt,
-    handoff: { blocker: 'The fixture needs a person.', safest_next_action: 'Review and run again.' },
+    handoff: {
+      blocker: 'The fixture needs a person.',
+      safest_next_action: 'Review and run again.',
+    },
     recovery: 'run_again',
   });
   const input = Intervention.parse({
@@ -182,7 +185,8 @@ async function clickCardButton(card: ConsentCard, label: string): Promise<void> 
 }
 
 beforeAll(async () => {
-  if (!existsSync(BIN)) throw new Error('Run `pnpm build` first: the e2e suite uses the built CLI.');
+  if (!existsSync(BIN))
+    throw new Error('Run `pnpm build` first: the e2e suite uses the built CLI.');
   home = mkdtempSync(join(tmpdir(), 'yantra-e2e-m3-'));
   seedConsent('01J00000000000000000000000', '01J00000000000000000000001', 'fixture.example.com');
   seedInformational('01J00000000000000000000004');
@@ -304,11 +308,17 @@ async function expectText(page: Page, text: string): Promise<void> {
   );
 }
 
-async function runConfirm(runId: string): Promise<{ stdout: string; stderr: string; code: number }> {
+async function runConfirm(
+  runId: string,
+): Promise<{ stdout: string; stderr: string; code: number }> {
   try {
-    const result = await execFileAsync(process.execPath, [BIN, 'confirm', runId, 'grant', '--json'], {
-      env: env(),
-    });
+    const result = await execFileAsync(
+      process.execPath,
+      [BIN, 'confirm', runId, 'grant', '--json'],
+      {
+        env: env(),
+      },
+    );
     return { stdout: result.stdout, stderr: result.stderr, code: 0 };
   } catch (error) {
     const failure = error as { stdout?: string; stderr?: string; code?: number };
