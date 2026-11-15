@@ -428,7 +428,7 @@ tests/live-view/focus-guard.chrome.spec.ts` passes alone and in the full core su
 
 ### TASK-005: Frame gate — generations, fresh-capture admission and clear signals
 
-- [ ] **Implementation**: Add `packages/core/src/live-view/frame-gate.ts`, a pure state machine
+- [x] **Implementation**: Add `packages/core/src/live-view/frame-gate.ts`, a pure state machine
       with an injected clock: `FrameGate` with `generation`, `onProtectionChanged(protected)`,
       `onNavigationCommitted(epoch)`, `onTargetChanged()`, `onStreamRestarted()` and
       `admit({capturedAtMs, documentEpoch}) → {kind: 'forward', meta} | {kind: 'drop', reason}`.
@@ -439,16 +439,21 @@ generationStartedAt` (`'stale_capture'`) and its timestamp is present (`'no_time
       Protection start returns a `cleared` signal carrying the new generation; protection clear
       and the other events return a `state` signal. The gate assigns `frame_seq`. It holds no
       bytes. Reason codes are a closed union for tests and debug logs.
-- [ ] **Unit Tests** (stepped clock, memory): a frame captured before a protection start but
+- [x] **Unit Tests** (stepped clock, memory): a frame captured before a protection start but
       admitted after it is dropped; after protection clears, a frame captured before the clear is
       dropped and the first later capture is forwarded with the new generation; navigation and
       target change each bump the generation and void older captures; stream restart bumps;
       generation never decreases; protection set twice emits one `cleared`; a missing timestamp is
       dropped; `frame_seq` is gap-free over forwarded frames only.
-- [ ] **Documentation Update**: Invoke **Document** update mode for the architecture document's
+- [x] **Documentation Update**: Invoke **Document** update mode for the architecture document's
       live-view section (generation rules).
 - **Verify**: `cd packages/core && npx vitest run tests/live-view/frame-gate.spec.ts`.
 - **Depends on**: TASK-002
+- **Outcome (2026-11-15)**: Admission requires `captured_at >= generationStartedAt + 1 ms`
+  (`GENERATION_CLOCK_TICK_MS`). `Date.now()` floors to the millisecond while CDP capture times are
+  fractional, so a capture in the same tick as a change cannot be proven fresh. The start instant
+  never moves backwards when the clock does. Human-facing architecture docs are batched into the
+  Finalize Document update.
 
 ### TASK-006: Task page source and the CDP screencast source
 
@@ -714,7 +719,7 @@ tests/browser/agent-popup-policy.spec.ts tests/browser/agent-controller.spec.ts`
 - [x] TASK-002: Protocol — screencast frame metadata, control messages and payload codec
 - [x] TASK-003: Screen protection — observable latch, fill holds, and the deterministic fill paths
 - [x] TASK-004: Protected-control focus guard in an isolated world
-- [ ] TASK-005: Frame gate — generations, fresh-capture admission and clear signals
+- [x] TASK-005: Frame gate — generations, fresh-capture admission and clear signals
 - [ ] TASK-006: Task page source and the CDP screencast source
 - [ ] TASK-007: Live-view hub — per-client latest-wins delivery, states, and orchestrator wiring
 - [ ] TASK-008: Worker run socket — `frames/1` capability and frame lane

@@ -5,3 +5,4 @@
  */
 export * from './errors.js';
 export * from './focus-guard.js';
+export * from './frame-gate.js';
