@@ -742,6 +742,68 @@ describe('@no-llm AgentBrowserController', () => {
     await controller.teardown();
   }, 45_000);
 
+  it('tells the live view about launch, commits, popup adoption and teardown (FEAT-069)', async () => {
+    const tracked = trackingProvider();
+    const controller = new AgentBrowserController({
+      runId: 'live-view-events-run',
+      browserProvider: tracked.provider,
+      logger,
+    });
+    const source = controller.taskPageSource();
+    const events: string[] = [];
+    const epochs: (number | null)[] = [];
+    source.subscribe((event) => {
+      events.push(event.kind);
+      if (event.kind === 'navigation_committed') epochs.push(event.epoch);
+    });
+    expect(source.current()).toBeNull();
+    expect(source.screenProtection).toBe(controller.screenProtection);
+
+    await controller.navigate(`${baseUrl}/`);
+    expect(events[0]).toBe('page_installed');
+    const launched = source.current();
+    expect(launched?.headless).toBe(true);
+    await controller.navigate(`${baseUrl}/next`);
+    expect(epochs.length).toBeGreaterThanOrEqual(2);
+    expect(epochs.every((epoch, index) => index === 0 || epoch! > epochs[index - 1]!)).toBe(true);
+    expect(source.topLevelEpoch()).toBe(epochs[epochs.length - 1]);
+
+    await controller.navigate(`${baseUrl}/`);
+    const observation = await controller.observe();
+    const target = observation.interactables.find((entry) => entry.name === 'Open target')!;
+    await controller.click(target.ref);
+    const beforeAdoption = events.length;
+    await controller.adoptPopup();
+    expect(events.slice(beforeAdoption)).toContain('target_changed');
+    expect(source.current()?.page).not.toBe(launched?.page);
+
+    await controller.teardown();
+    await controller.teardown();
+    expect(events.filter((kind) => kind === 'torn_down')).toHaveLength(1);
+    expect(source.current()).toBeNull();
+  }, 45_000);
+
+  it('keeps working when a live-view listener throws', async () => {
+    const tracked = trackingProvider();
+    const warn = vi.fn();
+    const controller = new AgentBrowserController({
+      runId: 'live-view-throwing-listener',
+      browserProvider: tracked.provider,
+      logger: { ...logger, warn },
+    });
+    controller.taskPageSource().subscribe(() => {
+      throw new Error('listener bug');
+    });
+    await controller.navigate(`${baseUrl}/`);
+    await controller.navigate(`${baseUrl}/next`);
+    expect(controller.url()).toBe(`${baseUrl}/next`);
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ error: 'Error' }),
+      'live view task-page listener failed',
+    );
+    await controller.teardown();
+  }, 45_000);
+
   it('still adopts the results tab when the site bounces the opener elsewhere', async () => {
     // The failure this whole path exists for: following the returned address
     // would have loaded the partner site, because the tab doing the loading is

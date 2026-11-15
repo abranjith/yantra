@@ -80,6 +80,12 @@
       "task": "TASK-003"
     },
     {
+      "path": "packages/core/src/browser/page-settle.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
       "path": "packages/core/src/browser/screen-protection.ts",
       "status": "A",
       "role": "implement",
@@ -135,7 +141,7 @@
     },
     {
       "path": "packages/core/src/live-view/frame-gate.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
     },
@@ -144,6 +150,30 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/live-view/replay-task-page.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/src/live-view/screencast-source.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/src/live-view/task-page-source.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/tests/browser/agent-controller.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
     },
     {
       "path": "packages/core/tests/browser/screen-protection.spec.ts",
@@ -177,9 +207,27 @@
     },
     {
       "path": "packages/core/tests/live-view/frame-gate.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/tests/live-view/replay-task-page.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/tests/live-view/screencast-source.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/tests/live-view/settler-navigation-listener.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-006"
     },
     {
       "path": "packages/protocol/generated/json-schema/run-channel-message.json",

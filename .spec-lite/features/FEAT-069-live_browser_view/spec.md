@@ -457,7 +457,7 @@ generationStartedAt` (`'stale_capture'`) and its timestamp is present (`'no_time
 
 ### TASK-006: Task page source and the CDP screencast source
 
-- [ ] **Implementation**: (1) `packages/core/src/live-view/task-page-source.ts`: a `TaskPageSource`
+- [x] **Implementation**: (1) `packages/core/src/live-view/task-page-source.ts`: a `TaskPageSource`
       port — `current(): {page, headless} | null`, `topLevelEpoch(): number | null`,
       `screenProtection`, and `subscribe(listener)` delivering `page_installed`,
       `navigation_committed {epoch}`, `target_changed`, `torn_down`. (2)
@@ -475,18 +475,28 @@ maxHeight, everyNthFrame}` with the TASK-001 defaults; on each `Page.screencastF
       delayed by `max(0, minInterval − elapsed)`); drop frames over 4 MiB; `stop()` sends
       `Page.stopScreencast` and detaches. CDP errors become `LiveViewError('CAPTURE_FAILED')`;
       nothing here can throw into the run.
-- [ ] **Unit Tests**: controller emits `page_installed`, `navigation_committed` with increasing
+- [x] **Unit Tests**: controller emits `page_installed`, `navigation_committed` with increasing
       epochs, `target_changed` on popup adoption (existing popup fixtures), `torn_down`; the
       replay adapter emits the same on a fixture workflow; real Chrome: frames arrive with
       timestamps and JPEG bytes; ack pacing keeps the rate at or below the target on a stepped
       clock; an oversize frame is dropped and acked; `stop()` ends frames; a closed target yields
       `CAPTURE_FAILED`, not an exception in the caller; the controller's existing popup-policy and
       ref-stability suites pass unchanged.
-- [ ] **Documentation Update**: Invoke **Document** update mode for Browser Resolution and
+- [x] **Documentation Update**: Invoke **Document** update mode for Browser Resolution and
       Lifecycle (task page versus background pages for the live view).
 - **Verify**: `cd packages/core && npx vitest run tests/live-view/screencast-source.spec.ts
 tests/browser/agent-popup-policy.spec.ts tests/browser/agent-controller.spec.ts`.
 - **Depends on**: TASK-003
+- **Outcome (2026-11-15)**: Events are emitted by `TaskPageEvents`, which isolates each listener
+  (errors are logged at `warn` with the error name only) so the owner's own work never depends on
+  one. `torn_down` is emitted at the start of `teardown()`, before the browser closes, and only
+  once. `PageSettler.addNavigationListener` runs after the epoch bump and after the owner's hook.
+  The replay side is `ReplayTaskPage` on `ctx.taskPage`. It is attached by
+  `createExecutionContext` / `ensureExecutionBrowser`, and a resumed run's fresh page is a
+  `target_changed`. The orchestrator calls `tearDown()` in TASK-007. `ScreencastSource` parses
+  the real JPEG size from the SOF marker, and drops and acks a JPEG over
+  `4 MiB − 2 − 1 KiB` (the largest that still fits a frame payload). Ack pacing uses the S1
+  serial schedule. Human-facing docs are batched into the Finalize Document update.
 
 ### TASK-007: Live-view hub — per-client latest-wins delivery, states, and orchestrator wiring
 
@@ -720,7 +730,7 @@ tests/browser/agent-popup-policy.spec.ts tests/browser/agent-controller.spec.ts`
 - [x] TASK-003: Screen protection — observable latch, fill holds, and the deterministic fill paths
 - [x] TASK-004: Protected-control focus guard in an isolated world
 - [x] TASK-005: Frame gate — generations, fresh-capture admission and clear signals
-- [ ] TASK-006: Task page source and the CDP screencast source
+- [x] TASK-006: Task page source and the CDP screencast source
 - [ ] TASK-007: Live-view hub — per-client latest-wins delivery, states, and orchestrator wiring
 - [ ] TASK-008: Worker run socket — `frames/1` capability and frame lane
 - [ ] TASK-009: Host relay — `frames.subscribe`, per-window slots and the binary WebSocket lane

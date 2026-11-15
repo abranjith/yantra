@@ -17,6 +17,7 @@ import type { PageSettler } from '../browser/page-settle.js';
 import type { ScreenProtection } from '../browser/screen-protection.js';
 import type { SensitiveScreenLatch } from '../browser/sensitive-screen-latch.js';
 import type { BrowserSession, Logger, Page } from '../browser/types.js';
+import type { ReplayTaskPage } from '../live-view/replay-task-page.js';
 import type { EngineLocatorChain, InjectedScriptHost } from '../locator/types.js';
 import type { SanitizedPayload } from '../sanitizer/index.js';
 
@@ -238,6 +239,8 @@ export interface ExecutionContext {
   readonly sensitiveScreenLatch?: SensitiveScreenLatch;
   /** The latch plus fill holds and protected focus; read only by the live view. */
   readonly screenProtection?: ScreenProtection;
+  /** The live view's port onto this run's page (FEAT-069); never model-visible. */
+  readonly taskPage?: ReplayTaskPage;
 }
 
 // ---------------------------------------------------------------------------

@@ -127,6 +127,8 @@ export interface PageSettlerOptions {
    * moment.
    */
   readonly onNavigationCommitted?: () => void;
+  /** Receives an error thrown by a listener added with {@link PageSettler.addNavigationListener}. */
+  readonly onListenerError?: (error: unknown) => void;
 }
 
 /**
@@ -140,6 +142,7 @@ export class PageSettler {
   private navigationEpoch = 0;
   /** Countable in-flight requests → their start time; see `quietInflight`. */
   private readonly inflight = new Map<HTTPRequest, number>();
+  private readonly navigationListeners = new Set<() => void>();
   private readonly detach: () => void;
 
   public constructor(
@@ -159,6 +162,15 @@ export class PageSettler {
       if (frame !== page.mainFrame()) return;
       this.navigationEpoch += 1;
       options.onNavigationCommitted?.();
+      // Additional observers (the live view) run after the owner's own hook,
+      // and can never disturb this bookkeeping.
+      for (const listener of [...this.navigationListeners]) {
+        try {
+          listener();
+        } catch (error) {
+          options.onListenerError?.(error);
+        }
+      }
     };
 
     page.on('request', onRequest);
@@ -209,6 +221,18 @@ export class PageSettler {
         page.off('request', onRequest);
         page.off('requestfailed', onRequestFailed);
       },
+    };
+  }
+
+  /**
+   * Adds an observer of committed main-frame navigations, called after the
+   * epoch is bumped and after the owner's `onNavigationCommitted`. Returns the
+   * removal function. Used by the live view (FEAT-069).
+   */
+  public addNavigationListener(listener: () => void): () => void {
+    this.navigationListeners.add(listener);
+    return () => {
+      this.navigationListeners.delete(listener);
     };
   }
 
@@ -337,6 +361,7 @@ export class PageSettler {
   /** Detach the page listeners and drop the in-flight map. */
   public dispose(): void {
     this.detach();
+    this.navigationListeners.clear();
     this.inflight.clear();
   }
 

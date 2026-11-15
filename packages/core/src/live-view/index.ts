@@ -6,3 +6,6 @@
 export * from './errors.js';
 export * from './focus-guard.js';
 export * from './frame-gate.js';
+export * from './task-page-source.js';
+export * from './replay-task-page.js';
+export * from './screencast-source.js';
