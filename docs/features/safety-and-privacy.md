@@ -335,7 +335,10 @@ attending window is connected. While nobody attends, the authority applies a
 cumulative 15-minute ceiling and ends the run as a handoff rather than
 silently approving the action.
 
-For a parked run, `confirm` creates one exclusive, step-bound decision claim:
+For a live run, `confirm` sends the answer through the authenticated owner
+socket and reports the step, action, and host. If the owner is unreachable or
+channel-incompatible it exits 3 without writing a parked claim. For a parked
+run, `confirm` creates one exclusive, step-bound decision claim:
 
 ```bash
 yantra confirm <run-id> grant
@@ -431,7 +434,7 @@ The focused verification for this document passed 249 tests across 19 files, plu
 - A link the sanitizer would alter, for example one whose path contains a masked user value, is withheld rather than offered, so it cannot be followed even when the page plainly links to it.
 - Heuristic confirmation covers named protected clicks, stored-secret fills, and explicitly flagged workflow steps. It cannot infer every consequential action from arbitrary site wording. Mark critical workflow actions with `requires_confirmation`.
 - Engine-enforced no-submit recognizes native submit controls with a form owner and names in the protected-action lexicon. A control that submits only through page script, such as a `div` with `role="button"` and an unrelated name, is not recognized as submit-class.
-- Non-interactive live agent confirmations fail closed rather than creating a generally resumable pending prompt. `yantra confirm` operates only on a request that was actually parked, and recording a grant is separate from resuming or polling the run.
+- Non-interactive live agent confirmations fail closed rather than creating a generally resumable pending prompt. `yantra confirm` answers live owners through the run socket and uses the parked claim path only after ownership is absent or dead; recording a parked grant is separate from resuming or polling the run.
 - The run directory and raw provider session are sensitive local data. Restrictive permissions are best-effort on Windows. `yantra audit` intentionally avoids the raw session, but anyone with filesystem access can open it. Treat debug/process logs as sensitive too; model-visible error genericization is not a guarantee about every local diagnostic sink.
 - The Yantra app's file allowlist includes the raw provider session (`agent/*.jsonl`), so anyone using the app on this computer can open it in a viewer. The allowlist keeps leases, locks, and browser profiles out of reach. It does not make the raw session less sensitive.
 - A saved capture is never sent to the model, but it is still raw, unmasked pixels of whatever the page showed, written to the run directory. Treat `screenshots/` with the same care as the rest of the run directory. The secret latch covers stored website secrets only. A value typed from a goal marker is not latched, so a capture taken after such a fill can show it if the page displays it.

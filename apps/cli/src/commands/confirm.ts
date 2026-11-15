@@ -12,7 +12,16 @@
  *   yantra confirm 20260701T120000Z-shop-checkout-a7b3 deny --json
  */
 
-import { ParkedDecisionService, createConfirmationStore, runsRoot } from '@yantra/core';
+import {
+  ParkedDecisionService,
+  NodeProcessLivenessProbe,
+  RunChannelClient,
+  createConfirmationStore,
+  ownerVerdict,
+  readLease,
+  runsRoot,
+} from '@yantra/core';
+import { DecisionResponse as DecisionResponseSchema } from '@yantra/protocol';
 import type { ConfirmationDecision, DecisionResponse } from '@yantra/protocol';
 import { type Command } from 'commander';
 
@@ -47,6 +56,57 @@ function decisionForOutput(
   return null;
 }
 
+async function tryLiveDecision(
+  runDir: string,
+  confirmationId: string,
+  decision: 'granted' | 'denied',
+): Promise<DecisionResponse | 'unavailable' | 'unreachable' | null> {
+  const lease = await readLease(runDir).catch(() => ({ kind: 'absent' as const }));
+  if (lease.kind !== 'lease') return null;
+  const verdict = await ownerVerdict(lease.lease, new NodeProcessLivenessProbe());
+  if (verdict === 'dead') return null;
+  if (verdict === 'unknown') return 'unavailable';
+  const client = new RunChannelClient({
+    clientKind: 'cli',
+    runDir,
+    helloTimeoutMs: 750,
+    notRespondingMs: 1_500,
+  });
+  let response: DecisionResponse | null = null;
+  let resolveResponse!: (value: DecisionResponse | null) => void;
+  const waiting = new Promise<DecisionResponse | null>((resolve) => {
+    resolveResponse = resolve;
+  });
+  const dispose = client.onServerMessage((message) => {
+    if (message.type !== 'intervention.response') return;
+    const interventionId =
+      typeof message.intervention_id === 'string' ? message.intervention_id : undefined;
+    const parsed = DecisionResponseSchema.safeParse(message.response);
+    if (interventionId !== confirmationId || !parsed.success) return;
+    response = parsed.data;
+    resolveResponse(response);
+  });
+  try {
+    const connected = await client.connect(lease.lease);
+    if (connected.state === 'live_unavailable') return 'unavailable';
+    if (connected.state !== 'attached') return 'unreachable';
+    client.send({
+      type: 'intervention.answer',
+      intervention_id: confirmationId,
+      decision,
+      decided_by: 'user_cli_confirm',
+    });
+    const result = await Promise.race([
+      waiting,
+      new Promise<'unreachable'>((resolve) => setTimeout(() => resolve('unreachable'), 1_500)),
+    ]);
+    return result;
+  } finally {
+    dispose();
+    client.close();
+  }
+}
+
 export function confirmHandlers(context: CommandContext = createTerminalContext()) {
   return {
     confirm: fromAction(async (runId: string, decisionArg: string, options: ConfirmOptions) => {
@@ -63,13 +123,28 @@ export function confirmHandlers(context: CommandContext = createTerminalContext(
 
         const pendingRequest = await store.findPending(runId);
         const request = pendingRequest ?? (await store.latestRequest(runId));
+        const requestedDecision = decisionArg === 'grant' ? 'granted' : 'denied';
+        const liveAttempt =
+          request === null
+            ? null
+            : await tryLiveDecision(runDir, request.confirmation_id, requestedDecision);
+        if (liveAttempt === 'unavailable' || liveAttempt === 'unreachable') {
+          context.output.stderr.write(
+            'The live run owner could not be reached or its channel is incompatible; no parked claim was written.\n',
+          );
+          return { exitCode: 3 as ExitCode };
+        }
+        const liveResponse = liveAttempt;
         const service = new ParkedDecisionService();
-        const response = await service.decideParked({
-          runDir,
-          runId,
-          decision: decisionArg === 'grant' ? 'granted' : 'denied',
-          decidedBy: 'user_cli_confirm',
-        });
+        const response =
+          liveResponse ??
+          (await service.decideParked({
+            runDir,
+            runId,
+            decision: requestedDecision,
+            decidedBy: 'user_cli_confirm',
+          }));
+        const responseCase = liveResponse === null ? 'parked' : 'live';
 
         if (response.status === 'stale' && request === null) {
           const message = `No pending confirmation found for run "${runId}".`;
@@ -84,11 +159,17 @@ export function confirmHandlers(context: CommandContext = createTerminalContext(
         const decision = decisionForOutput(response, request?.confirmation_id);
         if (options.json === true) {
           context.output.json(
-            { runId, decision, request, case: 'parked', response },
+            { runId, decision, request, case: responseCase, response },
             { indent: 2 },
           );
         } else if (response.status === 'accepted') {
-          context.output.stdout.write(`Decided (parked run): ${response.decision.decision}\n`);
+          const location =
+            responseCase === 'live' && request !== null
+              ? `, step ${request.step_id}, ${request.action_kind} on ${request.host}`
+              : '';
+          context.output.stdout.write(
+            `Decided (${responseCase} run${location}): ${response.decision.decision}\n`,
+          );
         } else if (response.status === 'already_decided') {
           context.output.stdout.write(
             `Already decided by ${response.decided_by} at ${response.decided_at}\n`,

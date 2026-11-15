@@ -707,7 +707,7 @@ Sequencing (plan §8): FEAT-068 starts after FEAT-067. TASK-001 to TASK-007 are 
 - [x] TASK-006: Attended deadlines and the cumulative unattended ceiling on absolute instants
 - [x] TASK-007: The live run owner is the sole decision authority with one atomic transition and defined responses
 - [x] TASK-008: Terminal and worker owners route consent through the authority; unattended expiry is a clean handoff
-- [ ] TASK-009: `yantra confirm` answers a live run through its owner and says which case applied
+- [x] TASK-009: `yantra confirm` answers a live run through its owner and says which case applied
 - [ ] TASK-010: The host counts attending windows, relays answers with `user_app`, records app-channel delivery
 - [ ] TASK-011: Best-effort desktop "needs you" toast while unattended, tracked per attempt
 - [ ] TASK-012: Runs record `handoff`, `input` and `takeover` items with their recovery

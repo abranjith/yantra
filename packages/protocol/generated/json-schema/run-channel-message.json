@@ -97,6 +97,41 @@
                     "type"
                   ],
                   "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "intervention.answer"
+                    },
+                    "intervention_id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "decision": {
+                      "type": "string",
+                      "enum": [
+                        "granted",
+                        "denied"
+                      ]
+                    },
+                    "decided_by": {
+                      "type": "string",
+                      "enum": [
+                        "user_cli_confirm",
+                        "user_app"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "intervention_id",
+                    "decision",
+                    "decided_by"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Answer a live intervention through the authenticated run socket."
                 }
               ]
             },
@@ -4449,6 +4484,178 @@
                     "honored"
                   ],
                   "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "intervention.response"
+                    },
+                    "intervention_id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "response": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "const": "accepted"
+                            },
+                            "decision": {
+                              "type": "object",
+                              "properties": {
+                                "confirmation_id": {
+                                  "type": "string",
+                                  "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
+                                  "description": "ULID of the request being resolved."
+                                },
+                                "decision": {
+                                  "type": "string",
+                                  "enum": [
+                                    "granted",
+                                    "denied",
+                                    "timed_out"
+                                  ],
+                                  "description": "Outcome: granted proceeds, denied/timed_out abort."
+                                },
+                                "decided_at": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "description": "ISO-8601 UTC timestamp of the decision."
+                                },
+                                "decided_by": {
+                                  "type": "string",
+                                  "enum": [
+                                    "user_interactive",
+                                    "user_cli_confirm",
+                                    "timeout",
+                                    "user_app"
+                                  ],
+                                  "description": "Provenance of the decision — never agent."
+                                },
+                                "replayed_at": {
+                                  "type": "string",
+                                  "format": "date-time",
+                                  "description": "ISO-8601 UTC timestamp set only when a resumed run consumes a prior human grant (FEAT-068)."
+                                }
+                              },
+                              "required": [
+                                "confirmation_id",
+                                "decision",
+                                "decided_at",
+                                "decided_by"
+                              ],
+                              "additionalProperties": false,
+                              "description": "The accepted decision."
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "decision"
+                          ],
+                          "additionalProperties": false,
+                          "description": "This caller won the atomic decision transition."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "const": "already_decided"
+                            },
+                            "decision": {
+                              "type": "string",
+                              "enum": [
+                                "granted",
+                                "denied",
+                                "timed_out"
+                              ],
+                              "description": "Prior decision value."
+                            },
+                            "decided_by": {
+                              "type": "string",
+                              "enum": [
+                                "user_interactive",
+                                "user_cli_confirm",
+                                "timeout",
+                                "user_app"
+                              ],
+                              "description": "Provenance of the winning decision."
+                            },
+                            "decided_at": {
+                              "type": "string",
+                              "format": "date-time",
+                              "description": "ISO-8601 UTC timestamp of the winning answer."
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "decision",
+                            "decided_by",
+                            "decided_at"
+                          ],
+                          "additionalProperties": false,
+                          "description": "The request was already resolved by another caller or a prior delivery."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "const": "expired"
+                            },
+                            "decided_at": {
+                              "type": "string",
+                              "format": "date-time",
+                              "description": "ISO-8601 UTC timestamp when it expired."
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "decided_at"
+                          ],
+                          "additionalProperties": false,
+                          "description": "The deadline had already passed when the answer arrived."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "const": "stale"
+                            },
+                            "reason": {
+                              "type": "string",
+                              "enum": [
+                                "unknown_id",
+                                "earlier_attempt",
+                                "not_waiting"
+                              ],
+                              "description": "Why the run is no longer waiting for this id."
+                            }
+                          },
+                          "required": [
+                            "status",
+                            "reason"
+                          ],
+                          "additionalProperties": false,
+                          "description": "The run is not waiting for this intervention id."
+                        }
+                      ],
+                      "description": "Authoritative response returned to every confirmation answer path."
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "intervention_id",
+                    "response"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Authoritative response to a live intervention answer."
                 },
                 {
                   "type": "object",

@@ -111,7 +111,7 @@
     },
     {
       "path": "packages/core/src/interventions/authority-connector-gateway.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
@@ -168,6 +168,18 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/run-channel/client.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/core/src/run-ownership/ownership-session.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
     },
     {
       "path": "packages/core/src/scheduler/index.ts",
@@ -330,6 +342,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/src/schemas/run-channel.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
     },
     {
       "path": "packages/protocol/tests/confirmation-binding.spec.ts",

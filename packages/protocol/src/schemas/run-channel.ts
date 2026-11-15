@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { CommandInvocation, isAbsoluteCwd } from '../commands/invocation.js';
 
 import { CommandResultMessageSchema } from './command-result.js';
+import { DecisionResponse } from './intervention.js';
 import { RunEvent, isRunEventKind } from './run-event.js';
 
 /**
@@ -68,7 +69,7 @@ export const RunChannelEventPayload = z
   .describe('A RunEvent, or an event of a kind this executable does not know.');
 export type RunChannelEventPayload = z.infer<typeof RunChannelEventPayload>;
 
-const CLIENT_TYPES = ['hello', 'subscribe', 'cancel', 'ping'] as const;
+const CLIENT_TYPES = ['hello', 'subscribe', 'cancel', 'ping', 'intervention.answer'] as const;
 const SERVER_TYPES = [
   'hello_ok',
   'hello_incompatible',
@@ -76,6 +77,7 @@ const SERVER_TYPES = [
   'event_oversize',
   'heartbeat',
   'cancel_ack',
+  'intervention.response',
   'error',
 ] as const;
 
@@ -121,6 +123,15 @@ const KnownClientMessage = z.discriminatedUnion('type', [
     .strict()
     .describe('Ask the owner to stop the run.'),
   z.object({ type: z.literal('ping') }).strict(),
+  z
+    .object({
+      type: z.literal('intervention.answer'),
+      intervention_id: z.string().min(1),
+      decision: z.enum(['granted', 'denied']),
+      decided_by: z.enum(['user_cli_confirm', 'user_app']),
+    })
+    .strict()
+    .describe('Answer a live intervention through the authenticated run socket.'),
 ]);
 
 /** A message a client sends to a run owner. */
@@ -170,6 +181,14 @@ const KnownServerMessage = z.discriminatedUnion('type', [
         ),
     })
     .strict(),
+  z
+    .object({
+      type: z.literal('intervention.response'),
+      intervention_id: z.string().min(1),
+      response: DecisionResponse,
+    })
+    .strict()
+    .describe('Authoritative response to a live intervention answer.'),
   z
     .object({
       type: z.literal('error'),
