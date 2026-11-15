@@ -39,3 +39,9 @@ export {
   type NeedsYouNotifierOptions,
   type NeedsYouNotifierSink,
 } from './needs-you-notifier.js';
+export {
+  recordRunEndInterventions,
+  type RecordRunEndInterventionsOptions,
+  type RunEndBrief,
+  type RunEndHandoff,
+} from './run-end-interventions.js';
