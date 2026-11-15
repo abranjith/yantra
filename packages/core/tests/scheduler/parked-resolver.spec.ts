@@ -1,10 +1,8 @@
 import type { ConfirmationDecision } from '@yantra/protocol';
 import { describe, expect, it, vi } from 'vitest';
 
-import { isParked } from '../../src/executor/confirmation-gateway.js';
 import type { LastFireStatus } from '../../src/index-db/schedule-store.js';
 import { resolveParkedRun } from '../../src/scheduler/parked-resolver.js';
-import { PreGrantedConfirmationGateway } from '../../src/scheduler/pregranted-confirmation-gateway.js';
 
 const silentLogger = {
   info: () => undefined,
@@ -65,40 +63,5 @@ describe('@no-llm resolveParkedRun', () => {
     });
     expect(resumeSpy).not.toHaveBeenCalled();
     expect(result).toEqual({ runId: 'run-1', status: 'handoff' });
-  });
-});
-
-describe('@no-llm PreGrantedConfirmationGateway', () => {
-  const request = {
-    confirmation_id: 'C1',
-    run_id: 'run-1',
-    step_id: 's2',
-    action_kind: 'click' as const,
-    host: 'shop.example',
-    description: 'Buy',
-    expected_cost: null,
-    consequence: 'unknown' as const,
-    requested_at: '2026-07-05T00:05:00.000Z',
-    timeout_ms: null,
-  };
-
-  it('grants the first request (replaying the human grant)', async () => {
-    const gateway = new PreGrantedConfirmationGateway({ logger: silentLogger });
-    const outcome = await gateway.request(request);
-    expect(isParked(outcome)).toBe(false);
-    if (!isParked(outcome)) {
-      expect(outcome.decision).toBe('granted');
-      expect(outcome.decided_by).toBe('user_cli_confirm');
-    }
-  });
-
-  it('denies a SECOND request in the same run (only one prior grant to replay)', async () => {
-    const gateway = new PreGrantedConfirmationGateway({ logger: silentLogger });
-    await gateway.request(request);
-    const second = await gateway.request({ ...request, confirmation_id: 'C2', step_id: 's5' });
-    expect(isParked(second)).toBe(false);
-    if (!isParked(second)) {
-      expect(second.decision).toBe('denied');
-    }
   });
 });

@@ -43,7 +43,12 @@ export interface ConfirmationParked {
  * {@link ConfirmationParked} signal (unattended surfaces only). The CLI's
  * interactive gateway never returns `parked`; the daemon's gateway always does.
  */
-export type ConfirmationOutcome = ConfirmationDecision | ConfirmationParked;
+export type GatewayDecision = ConfirmationDecision & {
+  readonly blocker?: string;
+  readonly expiryReason?: 'request_timeout' | 'agent_confirm_timeout' | 'wall_clock' | 'unattended';
+};
+
+export type ConfirmationOutcome = GatewayDecision | ConfirmationParked;
 
 /** Type guard: is this gateway outcome a park signal (vs. a terminal decision)? */
 export function isParked(outcome: ConfirmationOutcome): outcome is ConfirmationParked {

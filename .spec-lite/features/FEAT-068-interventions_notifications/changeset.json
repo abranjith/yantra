@@ -8,6 +8,18 @@
       "task": "TASK-004"
     },
     {
+      "path": "apps/cli/src/commands/daemon-runtime.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/cli/src/commands/resume.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
       "path": "apps/cli/tests/commands/confirm-race.spec.ts",
       "status": "A",
       "role": "implement",
@@ -15,7 +27,7 @@
     },
     {
       "path": "apps/cli/tests/commands/confirm.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
@@ -80,6 +92,12 @@
       "task": "TASK-003"
     },
     {
+      "path": "packages/core/src/interventions/bound-resume-gateway.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
       "path": "packages/core/src/interventions/canonical-digest.ts",
       "status": "A",
       "role": "implement",
@@ -93,9 +111,27 @@
     },
     {
       "path": "packages/core/src/interventions/parked-decision.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/scheduler/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/scheduler/parked-resolver.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/scheduler/pregranted-confirmation-gateway.ts",
+      "status": "D",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "packages/core/tests/interventions/binding.spec.ts",
@@ -104,10 +140,22 @@
       "task": "TASK-003"
     },
     {
-      "path": "packages/core/tests/interventions/parked-decision.spec.ts",
+      "path": "packages/core/tests/interventions/bound-resume-gateway.spec.ts",
       "status": "U",
       "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/tests/interventions/parked-decision.spec.ts",
+      "status": "A",
+      "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/scheduler/parked-resolver.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "packages/core/tests/scheduler/pregranted-gap.spec.ts",

@@ -486,7 +486,8 @@ export class Executor {
       ctx,
       step,
       completedStepIds,
-      `Confirmation ${decision.decision} by ${decision.decided_by} for step "${step.id}".`,
+      decision.blocker ??
+        `Confirmation ${decision.decision} by ${decision.decided_by} for step "${step.id}".`,
     );
 
     ctx.events.publish({

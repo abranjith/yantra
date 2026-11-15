@@ -1,86 +1,80 @@
 // @no-llm
-/**
- * Characterization suite for the §15 PreGrantedConfirmationGateway binding gap
- * (FEAT-068 TASK-001).
- *
- * Documents two facts against pre-FEAT-068 source:
- * 1. (Gap, `it.fails`) PreGrantedConfirmationGateway blindly grants the first
- *    request it sees even when step_id, action_kind, and host differ from the
- *    parked request the human approved.
- * 2. (Pinned baseline, `it`) Today's daemon resume gateway already denies a
- *    second flagged step encountered after resume.
- */
+/** Regression coverage for the FEAT-068 parked-resume binding gap. */
 
-import type { ConfirmationRequest } from '@yantra/protocol';
+import type { ParkedDecisionClaim, ConfirmationRequest } from '@yantra/protocol';
 import { describe, expect, it } from 'vitest';
 
-import { isParked } from '../../src/executor/confirmation-gateway.js';
-import { PreGrantedConfirmationGateway } from '../../src/scheduler/pregranted-confirmation-gateway.js';
+import { BoundResumeConfirmationGateway } from '../../src/interventions/bound-resume-gateway.js';
 
-const silentLogger = {
-  info: () => undefined,
-  warn: () => undefined,
-  error: () => undefined,
-  debug: () => undefined,
+const binding = {
+  run_id: '20261103T120000Z-shop-a1b2',
+  step_id: 'step_review_order',
+  action_kind: 'click' as const,
+  target_host: 'shop.example',
+  plan_digest: 'a'.repeat(64),
+  step_digest: 'b'.repeat(64),
 };
 
 function makeRequest(overrides: Partial<ConfirmationRequest> = {}): ConfirmationRequest {
   return {
     confirmation_id: '01J00000000000000000000001',
-    run_id: '20261103T120000Z-shop-a1b2',
-    step_id: 'step_review_order',
-    action_kind: 'click',
+    run_id: binding.run_id,
+    step_id: binding.step_id,
+    action_kind: binding.action_kind,
     host: 'shop.example',
     description: 'Click place order button',
     expected_cost: null,
     consequence: 'unknown',
     requested_at: '2026-11-03T12:00:00.000Z',
     timeout_ms: null,
+    target_host: binding.target_host,
+    plan_digest: binding.plan_digest,
+    step_digest: binding.step_digest,
     ...overrides,
   };
 }
 
-describe('@no-llm PreGrantedConfirmationGateway characterization (FEAT-068 TASK-001)', () => {
-  it.fails(
-    'denies a resumed request whose step_id, action_kind, and host differ from the parked request',
-    async () => {
-      // The human approved `step_review_order` (`click` on `shop.example`),
-      // yet on resume the gateway receives a completely different step.
-      const gateway = new PreGrantedConfirmationGateway({ logger: silentLogger });
-      const differentRequest = makeRequest({
+const claim: ParkedDecisionClaim = {
+  schema_version: 1,
+  confirmation_id: '01J00000000000000000000000',
+  run_id: binding.run_id,
+  decision: 'granted',
+  decided_by: 'user_cli_confirm',
+  decided_at: '2026-11-03T12:01:00.000Z',
+  binding,
+};
+
+describe('@no-llm bound parked resume gateway', () => {
+  it('denies a resumed request whose step binding differs from the parked approval', async () => {
+    const gateway = new BoundResumeConfirmationGateway({ claim });
+    const outcome = await gateway.request(
+      makeRequest({
         confirmation_id: '01J00000000000000000000002',
         step_id: 'step_wire_transfer',
-        action_kind: 'submit',
         host: 'bank.evil.example',
+        target_host: 'bank.evil.example',
         description: 'Submit wire transfer',
-      });
-
-      const outcome = await gateway.request(differentRequest);
-      expect(isParked(outcome)).toBe(false);
-      if (!isParked(outcome)) {
-        expect(outcome.decision).toBe('denied');
-      }
-    },
-  );
-
-  it('already denies a second flagged step encountered after resume (§15)', async () => {
-    const gateway = new PreGrantedConfirmationGateway({ logger: silentLogger });
-    const first = await gateway.request(makeRequest());
-    expect(isParked(first)).toBe(false);
-    if (!isParked(first)) {
-      expect(first.decision).toBe('granted');
-    }
-
-    const second = await gateway.request(
-      makeRequest({
-        confirmation_id: '01J00000000000000000000003',
-        step_id: 'step_second_flagged',
-        description: 'Second flagged action',
       }),
     );
-    expect(isParked(second)).toBe(false);
-    if (!isParked(second)) {
-      expect(second.decision).toBe('denied');
-    }
+    expect(outcome).toMatchObject({
+      decision: 'denied',
+      blocker: 'The step changed since you approved it.',
+    });
+  });
+
+  it('denies a second flagged step after a bound grant', async () => {
+    const gateway = new BoundResumeConfirmationGateway({ claim });
+    await expect(gateway.request(makeRequest())).resolves.toMatchObject({ decision: 'granted' });
+    await expect(
+      gateway.request(
+        makeRequest({
+          confirmation_id: '01J00000000000000000000003',
+          step_id: 'step_second_flagged',
+        }),
+      ),
+    ).resolves.toMatchObject({
+      decision: 'denied',
+      blocker: 'A second step needs approval; approve it in a new run.',
+    });
   });
 });

@@ -7,3 +7,7 @@ export {
   type ComputedConfirmationBinding,
 } from './binding.js';
 export { ParkedDecisionService, type DecideParkedInput } from './parked-decision.js';
+export {
+  BoundResumeConfirmationGateway,
+  type BoundResumeConfirmationGatewayOptions,
+} from './bound-resume-gateway.js';
