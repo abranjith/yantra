@@ -186,6 +186,7 @@ beforeAll(async () => {
   home = mkdtempSync(join(tmpdir(), 'yantra-e2e-m3-'));
   seedConsent('01J00000000000000000000000', '01J00000000000000000000001', 'fixture.example.com');
   seedInformational('01J00000000000000000000004');
+  seedConsent('01J00000000000000000000007', '01J00000000000000000000008', 'reload.example.com');
   const opened = openUi();
   hostPid = opened.hostPid;
   browser = await launchGalleryBrowser();
@@ -220,6 +221,12 @@ describe('@no-llm FEAT-068 M3 consent', () => {
     );
     expect(confirmations).toContain('"decision":"granted"');
     expect(confirmations).toContain('"decided_by":"user_app"');
+    expect(
+      readFileSync(
+        join(home, 'data', 'runs', '01J00000000000000000000000', 'interventions.jsonl'),
+        'utf8',
+      ),
+    ).toContain('"entry":"resolved"');
     await page.close();
   }, 90_000);
 
@@ -251,11 +258,18 @@ describe('@no-llm FEAT-068 M3 consent', () => {
     const page = await browser.newPage();
     await page.goto(openUi().url, { waitUntil: 'load' });
     await waitForInbox(page);
-    const card = await openConsent(page, 'fixture.example.com');
+    const card = await openConsent(page, 'reload.example.com');
     await answerByKeyboard(card);
+    await expectText(page, 'Approved');
+    expect(
+      readFileSync(
+        join(home, 'data', 'runs', '01J00000000000000000000007', 'confirmations.jsonl'),
+        'utf8',
+      ),
+    ).toContain('"decision"');
     await page.reload({ waitUntil: 'load' });
     await waitForInbox(page);
-    const reloaded = await openConsent(page, 'fixture.example.com');
+    const reloaded = await openConsent(page, 'reload.example.com');
     await clickCardButton(reloaded, 'Deny');
     await expectText(page, 'Already granted');
 
@@ -273,6 +287,7 @@ describe('@no-llm FEAT-068 M3 consent', () => {
       join(home, 'data', 'runs', '01J00000000000000000000000', 'confirmations.jsonl'),
       join(home, 'data', 'runs', '01J00000000000000000000000', 'interventions.jsonl'),
       join(home, 'data', 'runs', '01J00000000000000000000005', 'confirmations.jsonl'),
+      join(home, 'data', 'runs', '01J00000000000000000000007', 'interventions.jsonl'),
     ];
     for (const file of files) {
       const text = readFileSync(file, 'utf8');

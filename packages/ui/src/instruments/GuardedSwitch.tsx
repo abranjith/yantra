@@ -71,7 +71,7 @@ export function GuardedSwitch({
   }
 
   return (
-    <section className="flex flex-col gap-3" aria-label="Confirmation">
+    <section className="flex flex-col gap-3" aria-label={`Confirmation: ${actionLabel}`}>
       <p className="text-sm text-ink-2">{actionLabel}</p>
       <p className="text-sm text-ink-2">{consequence}</p>
       <p className="text-xs text-ink-3" aria-live="polite">

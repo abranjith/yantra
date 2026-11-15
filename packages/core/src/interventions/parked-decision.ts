@@ -13,6 +13,7 @@ import lockfile from 'proper-lockfile';
 import { ConfirmationStore } from '../executor/confirmation-gateway.js';
 
 import { bindingOf } from './binding.js';
+import { InterventionLog } from './intervention-log.js';
 
 export interface DecideParkedInput {
   readonly runDir: string;
@@ -73,6 +74,14 @@ export class ParkedDecisionService {
       decided_at: claim.decided_at,
       decided_by: claim.decided_by,
     };
+    await new InterventionLog(join(input.runDir, 'interventions.jsonl')).append({
+      entry: 'resolved',
+      intervention_id: claim.confirmation_id,
+      decision,
+      reason: 'answered',
+      waited_ms: waitedMs(pending.requested_at, claim.decided_at),
+      unattended_accrued_ms: 0,
+    });
     await appendProjectionIfMissing(input.runDir, decision);
     return { status: 'accepted', decision };
   }
@@ -234,6 +243,11 @@ async function publishExclusive(path: string, data: string): Promise<void> {
   } finally {
     if (staged) await rm(temporary, { force: true });
   }
+}
+
+function waitedMs(startedAt: string, endedAt: string): number {
+  const elapsed = Date.parse(endedAt) - Date.parse(startedAt);
+  return Number.isFinite(elapsed) ? Math.max(0, elapsed) : 0;
 }
 
 function isAlreadyExists(error: unknown): boolean {
