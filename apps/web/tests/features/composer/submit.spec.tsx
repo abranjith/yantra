@@ -1,6 +1,11 @@
 import { screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { isAbsoluteCwd, type EffectiveOptions, type InvocationSummary } from '@yantra/protocol';
+import {
+  CommandInvocation,
+  isAbsoluteCwd,
+  type EffectiveOptions,
+  type InvocationSummary,
+} from '@yantra/protocol';
 import { describe, expect, it } from 'vitest';
 
 import { buildComposerModel } from '../../../src/features/composer/composer-model.js';
@@ -9,8 +14,10 @@ import {
   SubmitLostError,
   SubmitRefusedError,
   displayedEffective,
+  forgetLaunched,
   submitBackoffMs,
   submitInvocation,
+  wasLaunchedHere,
 } from '../../../src/features/composer/submit.js';
 import { RpcCallError, RpcDisconnectedError } from '../../../src/host/rpc-client.js';
 import { FakeRpc, renderAt } from '../../support/fake-rpc.js';
@@ -137,6 +144,20 @@ describe('@no-llm submitInvocation', () => {
       remediation: 'Wait for it to finish.',
     });
     expect(host.paramsOf('command.invoke')).toHaveLength(1);
+    const sent = host.paramsOf('command.invoke')[0] as { invocation: { invocation_id: string } };
+    expect(wasLaunchedHere(sent.invocation.invocation_id)).toBe(false);
+  });
+
+  it('remembers an accepted invocation as launched here until its finish forgets it', async () => {
+    const { invocation } = await submitInvocation(
+      new IdempotentHost(),
+      { model: model(), effective: EFFECTIVE, cwd: HOME },
+      instant,
+    );
+
+    expect(wasLaunchedHere(invocation.invocation_id)).toBe(true);
+    forgetLaunched(invocation.invocation_id);
+    expect(wasLaunchedHere(invocation.invocation_id)).toBe(false);
   });
 
   it('sends what the composer showed as the drift baseline', async () => {
@@ -172,7 +193,8 @@ describe('@no-llm submitInvocation', () => {
     );
 
     expect(first.invocation.invocation_id).not.toBe(second.invocation.invocation_id);
-    expect(first.invocation.invocation_id).toMatch(/^[A-Za-z0-9_-]{16,64}$/u);
+    // The host validates the whole invocation with the protocol schema.
+    expect(CommandInvocation.safeParse(first.invocation).success).toBe(true);
   });
 });
 

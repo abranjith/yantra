@@ -25,12 +25,16 @@ export const FORCE_STOP_TEXT =
   'This command cannot stop cleanly yet. Yantra will end it after 10 seconds and record the run as interrupted.';
 
 /**
- * Whether a Stop of this run is graceful. The invocation's options decide,
- * refined by what the run has shown: deterministic phases mean no model.
+ * Whether a Stop of this run is graceful. The invocation's options and the
+ * host-resolved mode decide (`LLM_PROVIDER=none` makes a run deterministic
+ * with no flag), refined by what the run has shown: deterministic phases mean
+ * no model.
  */
 export function stopIsGraceful(
   invocation: CommandInvocation,
   cockpit: CockpitState | null,
+  /** The mode the host resolved for this invocation (flags, environment, preferences). */
+  resolvedMode?: 'llm' | 'deterministic',
 ): boolean {
   const parsed = parseInvocation([...invocation.path, ...invocation.argv], {
     cwd: invocation.cwd,
@@ -48,7 +52,11 @@ export function stopIsGraceful(
     options: parsed.value.options,
     arguments: parsed.value.arguments,
     explicit: parsed.value.explicit,
-    ...(deterministic ? { mode: 'deterministic' as const } : {}),
+    ...(deterministic
+      ? { mode: 'deterministic' as const }
+      : resolvedMode === undefined
+        ? {}
+        : { mode: resolvedMode }),
   };
   return honorsAbort(parsed.value.entry.id, facts);
 }

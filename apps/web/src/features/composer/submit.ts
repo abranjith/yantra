@@ -18,6 +18,7 @@ import type {
   EffectiveOptions,
   InvocationSummary,
 } from '@yantra/protocol';
+import { createInvocationId } from '@yantra/protocol/commands';
 
 import type { AppRpc } from '../../host/app-rpc.js';
 import { RpcCallError } from '../../host/rpc-client.js';
@@ -35,7 +36,7 @@ export function submitBackoffMs(retry: number): number {
 
 /** What submitting needs besides the RPC handle. */
 export interface SubmitDeps {
-  /** A fresh invocation ID (default `crypto.randomUUID()`). */
+  /** A fresh invocation ID (default: the protocol's own generator, which the host validates). */
   readonly createId?: () => string;
   readonly sleep?: (ms: number) => Promise<void>;
   /** Races one attempt against the timeout (tests inject an instant one). */
@@ -104,6 +105,23 @@ export interface Submitted {
   readonly summary: InvocationSummary;
 }
 
+/**
+ * Invocations this window submitted, in memory only: a cockpit finishes into
+ * the result for these even when the run ended before it attached. A reload
+ * forgets them, so a finished run opened again stays on its cockpit.
+ */
+const launchedHere = new Set<string>();
+
+/** Whether this window submitted `invocationId` (and has not yet finished it). */
+export function wasLaunchedHere(invocationId: string): boolean {
+  return launchedHere.has(invocationId);
+}
+
+/** The finish has run for `invocationId`; going back to it later stays. */
+export function forgetLaunched(invocationId: string): void {
+  launchedHere.delete(invocationId);
+}
+
 /** See the module comment. */
 export async function submitInvocation(
   rpc: AppRpc,
@@ -114,7 +132,7 @@ export async function submitInvocation(
   },
   deps: SubmitDeps = {},
 ): Promise<Submitted> {
-  const invocationId = (deps.createId ?? (() => crypto.randomUUID()))();
+  const invocationId = (deps.createId ?? createInvocationId)();
   const invocation = toInvocation(submission.model, { invocationId, cwd: submission.cwd });
   const params = {
     invocation,
@@ -130,6 +148,7 @@ export async function submitInvocation(
         rpc.request<InvocationSummary>('command.invoke', params),
         SUBMIT_TIMEOUT_MS,
       );
+      launchedHere.add(invocationId);
       return { invocation, summary };
     } catch (error) {
       if (error instanceof RpcCallError) {

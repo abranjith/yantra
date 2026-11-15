@@ -12,7 +12,7 @@
  *   dangerous option is in use.
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { EffectiveOptions, MissionContext } from '@yantra/protocol';
 import {
   Button,
@@ -26,7 +26,7 @@ import {
   Tabs,
   TextField,
 } from '@yantra/ui';
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { useRpc } from '../../host/app-rpc.js';
 import { InvocationTwin } from '../cockpit/cli-twin.js';
@@ -100,13 +100,25 @@ export function useMissionContext() {
   });
 }
 
+function effectiveQuery(
+  rpc: ReturnType<typeof useRpc>,
+  path: ComposerPath,
+  argv: readonly string[],
+  cwd: string | null,
+) {
+  return {
+    queryKey: ['effective-options', path, argv, cwd],
+    queryFn: () =>
+      rpc.request<EffectiveOptions>('read.effective_options', { path: [path], argv, cwd }),
+  };
+}
+
 function useEffectiveOptions(path: ComposerPath, argv: readonly string[], cwd: string | null) {
   const rpc = useRpc();
   return useQuery({
-    queryKey: ['effective-options', path, argv, cwd],
+    ...effectiveQuery(rpc, path, argv, cwd),
     enabled: cwd !== null,
-    queryFn: () =>
-      rpc.request<EffectiveOptions>('read.effective_options', { path: [path], argv, cwd }),
+    // Shown while the next values load; never submitted (see `submit`).
     placeholderData: (previous) => previous,
   });
 }
@@ -144,18 +156,27 @@ function ComposerBody({
   const [confirming, setConfirming] = useState(false);
   const templates = useTemplates();
   // Options resolve independently of the operand, so typing the goal reads nothing.
+  // The probe is the submitted command with a stand-in operand. It is built
+  // with the last resolved values, because which options apply depends on the
+  // resolved mode (an option hidden in one mode is not in the argv).
+  const [known, setKnown] = useState<EffectiveOptions | null>(null);
   const probe = useMemo(
     () =>
       composerArgv(
         buildComposerModel({
           path,
           values: { ...values, positional: PROBE_OPERAND },
-          effective: null,
+          effective: known,
         }),
       ),
-    [path, values],
+    [path, values, known],
   );
   const effective = useEffectiveOptions(path, probe, cwd);
+  useEffect(() => {
+    if (effective.data !== undefined && !effective.isPlaceholderData) setKnown(effective.data);
+  }, [effective.data, effective.isPlaceholderData]);
+  const rpc = useRpc();
+  const queryClient = useQueryClient();
   const model = buildComposerModel({ path, values, effective: effective.data ?? null });
   const errorFor = (field: string): string | undefined =>
     submitted || field !== 'positional'
@@ -193,7 +214,16 @@ function ComposerBody({
     inFlight.current = true;
     setBusy(true);
     try {
-      await props.onSubmit?.({ model, effective: effective.data ?? null, cwd });
+      // The drift baseline must be resolved for exactly these options, never a
+      // placeholder from a previous keystroke (D13).
+      const submitted = composerArgv({
+        ...model,
+        positional: { ...model.positional, value: PROBE_OPERAND },
+      });
+      const exact = await queryClient
+        .fetchQuery(effectiveQuery(rpc, path, submitted, cwd))
+        .catch(() => null);
+      await props.onSubmit?.({ model, effective: exact, cwd });
     } finally {
       inFlight.current = false;
       setBusy(false);

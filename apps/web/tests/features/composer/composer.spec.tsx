@@ -5,6 +5,7 @@ import type { EffectiveOptions } from '@yantra/protocol';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { composerArgv } from '../../../src/features/composer/composer-model.js';
 import {
   Composer,
   type ComposerProps,
@@ -190,6 +191,84 @@ describe('@no-llm composer', () => {
     });
 
     await expectNoAxeViolations(container);
+  });
+});
+
+describe('@no-llm composer drift baseline', () => {
+  it('submits effective values resolved for exactly the options set, never a stale placeholder', async () => {
+    // A slow host: each resolution answers after a delay, so a stale one is still on screen at Start.
+    const rpc = composerHost().answer('read.effective_options', async (params) => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 50);
+      });
+      const argv = params.argv as string[];
+      const at = argv.indexOf('--max-sources');
+      return {
+        path: params.path,
+        mode: 'llm',
+        options: [
+          {
+            option: 'maxSources',
+            flag: '--max-sources',
+            value: at === -1 ? null : argv[at + 1],
+            source: at === -1 ? { kind: 'default' } : { kind: 'flag' },
+          },
+        ],
+      };
+    });
+    const onSubmit = vi.fn((_: ComposerSubmission) => Promise.resolve());
+    renderComposer(rpc, { onSubmit });
+    await userEvent.type(screen.getByRole('textbox', { name: /Question/u }), 'q');
+    await openOptions();
+
+    await userEvent.type(screen.getByRole('textbox', { name: /^Max sources/u }), '12');
+    await userEvent.click(screen.getByRole('button', { name: 'Start' }));
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+    });
+    expect(onSubmit.mock.calls[0]![0].effective?.options).toEqual([
+      { option: 'maxSources', flag: '--max-sources', value: '12', source: { kind: 'flag' } },
+    ]);
+  });
+});
+
+describe('@no-llm composer baseline in the resolved mode', () => {
+  it('includes options that apply only in the host-resolved mode', async () => {
+    // LLM_PROVIDER=none on the host: deterministic, so --pipeline-timeout applies.
+    const rpc = composerHost().answer('read.effective_options', (params) => {
+      const argv = params.argv as string[];
+      const at = argv.indexOf('--pipeline-timeout');
+      return {
+        path: params.path,
+        mode: 'deterministic',
+        options: [
+          {
+            option: 'pipelineTimeout',
+            flag: '--pipeline-timeout',
+            value: at === -1 ? '100s' : argv[at + 1],
+            source: at === -1 ? { kind: 'default' } : { kind: 'flag' },
+          },
+        ],
+      };
+    });
+    const onSubmit = vi.fn((_: ComposerSubmission) => Promise.resolve());
+    renderComposer(rpc, { onSubmit });
+    await userEvent.type(screen.getByRole('textbox', { name: /Question/u }), 'q');
+    await openOptions();
+
+    await userEvent.type(await screen.findByRole('textbox', { name: /^Pipeline timeout/u }), '20s');
+    await userEvent.click(screen.getByRole('button', { name: 'Start' }));
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+    });
+    expect(onSubmit.mock.calls[0]![0].effective?.options[0]?.value).toBe('20s');
+    expect(composerArgv(onSubmit.mock.calls[0]![0].model)).toEqual([
+      'q',
+      '--pipeline-timeout',
+      '20s',
+    ]);
   });
 });
 

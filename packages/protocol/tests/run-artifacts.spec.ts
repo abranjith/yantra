@@ -24,6 +24,8 @@ describe('RunId', () => {
     '20260511T091234Z-bank-statement-a7b3',
     '20261022T011858Z-research-371284a7',
     '20260101T000000Z-a',
+    // The ask/research pipelines' run ids (FEAT-067).
+    '05564bd9-c5d8-4cf7-add1-5ada776dee87',
   ])('accepts %s', (id) => {
     expect(RunId.safeParse(id).success).toBe(true);
     expect(isRunId(id)).toBe(true);
@@ -40,6 +42,9 @@ describe('RunId', () => {
     ['underscore', '20260511T091234Z-a_b'],
     ['agent smoke (not formatRunId)', 'agent-smoke-2026-11-12T00-00-00-000Z'],
     ['too long', `20260511T091234Z-${'a'.repeat(80)}`],
+    ['upper-case uuid', '05564BD9-C5D8-4CF7-ADD1-5ADA776DEE87'],
+    ['uuid with traversal', '05564bd9-c5d8-4cf7-add1-5ada776dee87/..'],
+    ['short uuid', '05564bd9-c5d8-4cf7-add1-5ada776dee8'],
   ])('rejects %s', (_label, id) => {
     expect(RunId.safeParse(id).success).toBe(false);
     expect(isRunId(id)).toBe(false);

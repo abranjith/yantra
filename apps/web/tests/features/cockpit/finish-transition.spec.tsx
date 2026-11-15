@@ -7,6 +7,8 @@ import {
   shouldHoldFinish,
   type FinishDocument,
 } from '../../../src/features/cockpit/finish-transition.js';
+import { buildComposerModel } from '../../../src/features/composer/composer-model.js';
+import { submitInvocation, wasLaunchedHere } from '../../../src/features/composer/submit.js';
 import { FakeRpc, renderAt } from '../../support/fake-rpc.js';
 import { ev, numbered } from '../../support/run-events.js';
 
@@ -205,5 +207,94 @@ describe('@no-llm the cockpit finish', () => {
     expect(router.state.location.pathname).toBe('/mission/runs/run-1');
     expect(screen.getByRole('button', { name: 'View result' })).toBeDefined();
     expect(document.activeElement).toBe(focusable);
+  });
+
+  /** A run the app launched, already ended in its file, with the invocation in a given state. */
+  function launched(state: 'running' | 'finished') {
+    const rpc = new FakeRpc()
+      .answer('read.invocation', {
+        invocation_id: '01JD2X7Q8R9S0T1V2W3X000041',
+        state,
+        execution_class: 'run',
+        path: ['research'],
+        run_id: 'run-1',
+        queued_at: '2026-11-14T10:00:00.000Z',
+        review: null,
+        result: null,
+      })
+      .answer('run.subscribe', (params) => {
+        for (const { seq, event } of numbered([ev('goal_echo'), ev('run_outcome')])) {
+          rpc.notify('run.event', { run_id: params.run_id, seq, event });
+        }
+        return { channel: 'replay_only' };
+      })
+      .answer('run.unsubscribe', {});
+    return rpc;
+  }
+
+  it('finishes a run launched here even when it ended before the cockpit attached', async () => {
+    const { router } = await renderAt(
+      '/mission/runs/run-1?invocation=01JD2X7Q8R9S0T1V2W3X000041',
+      launched('running'),
+    );
+
+    await waitFor(
+      () => {
+        expect(router.state.location.pathname).toBe('/runs/run-1');
+      },
+      { timeout: 5_000 },
+    );
+  });
+
+  it('finishes a run this window launched even when its invocation already reads finished', async () => {
+    const rpc = launched('finished').answer('command.invoke', (params) => ({
+      ...(params.invocation as object),
+      state: 'spawning',
+      execution_class: 'run',
+      run_id: null,
+      queued_at: '2026-11-14T10:00:00.000Z',
+      review: null,
+      result: null,
+    }));
+    await submitInvocation(
+      rpc,
+      {
+        model: buildComposerModel({
+          path: 'research',
+          values: { positional: 'q', options: {} },
+          effective: null,
+        }),
+        effective: null,
+        cwd: process.platform === 'win32' ? 'C:\\w' : '/w',
+      },
+      { createId: () => '01JD2X7Q8R9S0T1V2W3X000041' },
+    );
+
+    const { router } = await renderAt(
+      '/mission/runs/run-1?invocation=01JD2X7Q8R9S0T1V2W3X000041',
+      rpc,
+    );
+
+    await waitFor(
+      () => {
+        expect(router.state.location.pathname).toBe('/runs/run-1');
+      },
+      { timeout: 5_000 },
+    );
+    expect(wasLaunchedHere('01JD2X7Q8R9S0T1V2W3X000041')).toBe(false);
+  });
+
+  it('stays when a finished app-launched run is opened again', async () => {
+    const { router } = await renderAt(
+      '/mission/runs/run-1?invocation=01JD2X7Q8R9S0T1V2W3X000041',
+      launched('finished'),
+    );
+
+    await screen.findByRole('region', { name: 'Run status: finished' });
+    await new Promise((resolve) => {
+      setTimeout(resolve, 300);
+    });
+
+    expect(router.state.location.pathname).toBe('/mission/runs/run-1');
   });
 });

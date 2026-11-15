@@ -183,7 +183,7 @@
     },
     {
       "path": "apps/web/src/features/cockpit/finish-transition.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-015"
     },
@@ -375,7 +375,7 @@
     },
     {
       "path": "apps/web/tests/features/cockpit/finish-transition.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-015"
     },
@@ -518,6 +518,12 @@
       "task": "TASK-007"
     },
     {
+      "path": "e2e/app-mission.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-016"
+    },
+    {
       "path": "e2e/command-format-shells.spec.ts",
       "status": "M",
       "role": "implement",
@@ -602,6 +608,12 @@
       "task": "TASK-013"
     },
     {
+      "path": "packages/protocol/generated/json-schema/run-result.schema.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-016"
+    },
+    {
       "path": "packages/protocol/src/commands/abort.ts",
       "status": "A",
       "role": "implement",
@@ -644,6 +656,12 @@
       "task": "TASK-007"
     },
     {
+      "path": "packages/protocol/src/schemas/run-artifacts.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-016"
+    },
+    {
       "path": "packages/protocol/src/schemas/ui-mission.ts",
       "status": "A",
       "role": "implement",
@@ -660,6 +678,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-010"
+    },
+    {
+      "path": "packages/protocol/tests/run-artifacts.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-016"
     },
     {
       "path": "packages/protocol/tests/schemas/ui-mission.spec.ts",

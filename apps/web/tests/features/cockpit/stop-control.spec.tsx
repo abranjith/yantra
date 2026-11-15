@@ -76,6 +76,12 @@ describe('@no-llm Stop wording', () => {
     expect(stopIsGraceful(requested(['resume', 'run-0']), null)).toBe(false);
   });
 
+  it('follows the host-resolved mode when no flag says it (LLM_PROVIDER=none)', () => {
+    expect(stopIsGraceful(requested(['research', 'q']), null, 'deterministic')).toBe(false);
+    expect(stopIsGraceful(requested(['research', 'q']), null, 'llm')).toBe(true);
+    expect(stopIsGraceful(requested(['do', 'x']), null, 'deterministic')).toBe(true);
+  });
+
   it('turns to force when the run shows deterministic phases', () => {
     const deterministic = reduceRunEvents(
       initialCockpitState('run-1', 'research'),
@@ -179,6 +185,21 @@ describe('@no-llm Stop in the cockpit', () => {
           'The run ended interrupted · partial: its process was lost and the run was reconciled.',
         ),
       ).toBeDefined();
+    });
+  });
+
+  it('reads Stop (force) for a research run the host resolves deterministic', async () => {
+    const { rpc } = host(['research', 'q']);
+    rpc.answer('read.effective_options', {
+      path: ['research'],
+      mode: 'deterministic',
+      options: [],
+    });
+
+    await renderAt(`/mission/runs/run-1?invocation=${ID}`, rpc);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /^Stop/u }).textContent).toBe('Stop (force)');
     });
   });
 

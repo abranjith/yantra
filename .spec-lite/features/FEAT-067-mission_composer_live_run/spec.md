@@ -748,6 +748,6 @@ Task order follows plan §8. TASK-001 to TASK-008 are the **M2 cockpit subset**,
 - [x] TASK-013: Run recovery assessment in core (resumability, prior invocation, prior effects)
 - [x] TASK-014: Resume and Run again actions with the external-effects warning
 - [x] TASK-015: Finish — View Transition from the cockpit to the run result
-- [ ] TASK-016: Milestone acceptance — M2 research run, scripted `do`, reload and accessibility
+- [x] TASK-016: Milestone acceptance — M2 research run, scripted `do`, reload and accessibility
 
 Legend: [ ] Not started | [/] In progress | [x] Completed
