@@ -50,6 +50,9 @@ import {
   redactRunInput,
   createAskEthicsAdapter,
   createConfirmationStore,
+  InterventionAuthority,
+  InterventionLog,
+  UnattendedCeilingClock,
   createKeychainProvider,
   loadEthicsConfig,
   loadSearchConfig,
@@ -728,33 +731,48 @@ export async function runAgenticTask(
     budgetTracker = new BudgetTracker(budgetsConfig, dependencies.budgetNow);
     const runBudget = budgetTracker;
     const actionPhase = new ActionPhase();
+    const interventionCeiling = new UnattendedCeilingClock({ now: () => Date.now() });
+    interventionCeiling.setAttendance(request.connector.interactive ? 1 : 0);
+    const interventionAuthority = new InterventionAuthority({
+      runId: created.runId,
+      log: new InterventionLog(join(created.runDir, 'interventions.jsonl')),
+      events: {
+        publish: (event) => runEvents.emit(event),
+        flush: () => Promise.resolve(runEvents.flush()),
+      },
+      clock: { now: () => now().toISOString() },
+      ceiling: interventionCeiling,
+    });
     const confirmationBridge = new ConfirmationBridge({
       connector: request.connector,
       timeoutMs: budgetsConfig.confirmationWaitMs,
       runSignal: runAbort.signal,
       remainingWallClockMs: () => runBudget.remainingWallClockMs(),
       store: createConfirmationStore(created.runDir),
+      authority: interventionAuthority,
       nowIso: () => now().toISOString(),
     });
     // FEAT-063: every consent wait is recorded as intervention_raised /
     // intervention_resolved. The deadline is the bridge's effective wait: the
     // shorter of its timeout and the wall clock left (the D5 ceiling arrives
     // with FEAT-068).
-    const recordedConfirmations = new RecordingConfirmationGateway(confirmationBridge, runEvents, {
-      now: () => now().toISOString(),
-      deadlineFor: (confirmation) =>
-        new Date(
-          now().getTime() +
-            Math.max(
-              0,
-              Math.min(
-                budgetsConfig.confirmationWaitMs,
-                confirmation.timeout_ms ?? budgetsConfig.confirmationWaitMs,
-                runBudget.remainingWallClockMs(),
-              ),
-            ),
-        ).toISOString(),
-    });
+    const recordedConfirmations = interventionAuthority
+      ? confirmationBridge
+      : new RecordingConfirmationGateway(confirmationBridge, runEvents, {
+          now: () => now().toISOString(),
+          deadlineFor: (confirmation) =>
+            new Date(
+              now().getTime() +
+                Math.max(
+                  0,
+                  Math.min(
+                    budgetsConfig.confirmationWaitMs,
+                    confirmation.timeout_ms ?? budgetsConfig.confirmationWaitMs,
+                    runBudget.remainingWallClockMs(),
+                  ),
+                ),
+            ).toISOString(),
+        });
     // The ingress vault owns the redacted placeholders for this entire run;
     // tool middleware resolves them only at the execution boundary.
     // The other half of the same contract: values the MODEL supplies in tool

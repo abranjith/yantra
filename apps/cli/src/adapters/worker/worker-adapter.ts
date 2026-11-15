@@ -1,16 +1,23 @@
+import { join } from 'node:path';
 import { Writable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 
 import {
+  AuthorityConnectorConfirmationGateway,
   collectInitProviderAnswers,
   collectInitContextGrants,
+  InterventionAuthority,
+  InterventionLog,
   NodeDaemonProcessControl,
+  UnattendedCeilingClock,
+  runsRoot,
 } from '@yantra/core';
 import {
   CommandResultMessageSchema,
   parseInvocation,
   type CommandInvocation,
   type CommandResultMessage,
+  type ConfirmationRequest,
   type JsonValue,
 } from '@yantra/protocol';
 
@@ -96,6 +103,20 @@ export async function runWorkerInvocation(
     const value = await input({ kind, message, ...(choices === undefined ? {} : { choices }) });
     return typeof value === 'string' ? value : null;
   };
+  let interventionAuthority: InterventionAuthority | null = null;
+  const authorityFor = (request: ConfirmationRequest): InterventionAuthority => {
+    if (interventionAuthority !== null) return interventionAuthority;
+    const ceiling = new UnattendedCeilingClock({ now: Date.now });
+    ceiling.setAttendance(channel.attended() ? 1 : 0);
+    interventionAuthority = new InterventionAuthority({
+      runId: request.run_id,
+      log: new InterventionLog(join(runsRoot(), request.run_id, 'interventions.jsonl')),
+      events: { publish: () => undefined, flush: () => Promise.resolve() },
+      clock: { now: () => new Date().toISOString() },
+      ceiling,
+    });
+    return interventionAuthority;
+  };
   const context: CommandContext = {
     initAnswers: {
       providerAnswers: () =>
@@ -119,7 +140,7 @@ export async function runWorkerInvocation(
     cwd: invocation.cwd,
     invocationId: invocation.invocation_id,
     signal: controller.signal,
-    isInteractive: () => channel.attended(),
+    isInteractive: () => true,
     settings: new SettingsResolver(env, undefined, {
       cwd: invocation.cwd,
       surface: 'worker',
@@ -150,15 +171,14 @@ export async function runWorkerInvocation(
     },
     gateways: {
       confirmation: (interactive) =>
-        interactive && channel.attended()
-          ? {
-              request: async (request) => ({
-                confirmation_id: request.confirmation_id,
-                decision: await channel.requestConfirmation(request, controller.signal),
-                decided_at: new Date().toISOString(),
-                decided_by: 'user_interactive',
-              }),
-            }
+        interactive
+          ? new AuthorityConnectorConfirmationGateway({
+              authority: authorityFor,
+              answer: async (request, signal) => {
+                if (!channel.attended()) return new Promise<'denied'>(() => undefined);
+                return channel.requestConfirmation(request, signal);
+              },
+            })
           : null,
       installOffer: (interactive) =>
         interactive && channel.attended()

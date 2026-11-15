@@ -28,4 +28,9 @@ export {
   type AnswerInput,
 } from './authority.js';
 export { InterventionGateway } from './intervention-gateway.js';
+export {
+  AuthorityConnectorConfirmationGateway,
+  type AuthorityConnectorGatewayOptions,
+  type ConfirmationAnswer,
+} from './authority-connector-gateway.js';
 export { InterventionLog, appendInterventionLogEntry } from './intervention-log.js';

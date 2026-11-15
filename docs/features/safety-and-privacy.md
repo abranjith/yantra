@@ -329,8 +329,13 @@ An allowlisted host grants navigation within that user-named host; it does not w
 
 ### Resolve and inspect consent
 
-Interactive consent happens inline. For a parked run, `confirm` creates one
-exclusive, step-bound decision claim:
+Interactive consent happens inline through the run's decision authority. A
+controlling terminal counts as attending; an app worker counts only while an
+attending window is connected. While nobody attends, the authority applies a
+cumulative 15-minute ceiling and ends the run as a handoff rather than
+silently approving the action.
+
+For a parked run, `confirm` creates one exclusive, step-bound decision claim:
 
 ```bash
 yantra confirm <run-id> grant

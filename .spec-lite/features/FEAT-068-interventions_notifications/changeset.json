@@ -2,6 +2,12 @@
   "vcs": "git",
   "files": [
     {
+      "path": "apps/cli/src/adapters/worker/worker-adapter.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "apps/cli/src/commands/confirm.ts",
       "status": "M",
       "role": "implement",
@@ -62,10 +68,28 @@
       "task": "TASK-003"
     },
     {
+      "path": "packages/agent/src/runtime/confirmation-bridge.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "packages/agent/src/runtime/middleware.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/runtime/orchestrator.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/core/src/discovery/interactive-confirmation-gateway.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "packages/core/src/executor/confirmation-gateway.ts",
@@ -86,8 +110,14 @@
       "task": "TASK-003"
     },
     {
-      "path": "packages/core/src/interventions/authority.ts",
+      "path": "packages/core/src/interventions/authority-connector-gateway.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/core/src/interventions/authority.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
@@ -123,13 +153,13 @@
     },
     {
       "path": "packages/core/src/interventions/intervention-gateway.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
     {
       "path": "packages/core/src/interventions/intervention-log.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
@@ -159,7 +189,7 @@
     },
     {
       "path": "packages/core/tests/interventions/authority.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
