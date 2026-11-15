@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import type { ConfirmationRequest, FailureClass, Step, TaskEvent } from '@yantra/protocol';
 import { SCHEMA_VERSION, generateUlid } from '@yantra/protocol';
 
+import { computeConfirmationBinding } from '../interventions/binding.js';
+
 import { isParked } from './confirmation-gateway.js';
 import type { ScopeViolationError } from './errors.js';
 import { ensureExecutionBrowser } from './execution-context.js';
@@ -363,7 +365,9 @@ export class Executor {
       return { kind: 'denied', reportPath };
     }
 
-    const host = resolveHostForStep(step, ctx);
+    const resolvedUrl = resolveUrlForStep(step, ctx);
+    const host = resolveHostForStep(step, ctx, resolvedUrl);
+    const binding = computeConfirmationBinding(ctx.plan, step, resolvedUrl);
     const description =
       (step as { confirmation_description?: string | null }).confirmation_description ??
       `Execute ${step.type} on ${host}`;
@@ -383,6 +387,9 @@ export class Executor {
       consequence: consequence as 'reversible' | 'hard_to_reverse' | 'irreversible' | 'unknown',
       requested_at: now(),
       timeout_ms: null,
+      ...(binding.target_host !== null ? { target_host: binding.target_host } : {}),
+      plan_digest: binding.plan_digest,
+      step_digest: binding.step_digest,
     };
 
     // Persist the request
@@ -576,29 +583,45 @@ function buildScopeViolationEvent(taskId: string, violation: ScopeViolationError
 }
 
 /**
+ * Resolves the raw URL for a step when known before execution (used for both
+ * display host and action binding).
+ */
+function resolveUrlForStep(step: Step, ctx: ExecutionContext): string | null {
+  if (step.type === 'navigate') {
+    const url = step.url;
+    if (url.kind === 'literal' && typeof url.value === 'string') {
+      return url.value;
+    }
+    if (url.kind === 'param') {
+      const paramValue = ctx.params?.[url.key];
+      if (typeof paramValue === 'string') {
+        return paramValue;
+      }
+    }
+  }
+  const pageUrl = ctx.page?.url();
+  return pageUrl && pageUrl.length > 0 ? pageUrl : null;
+}
+
+/**
  * Resolves the target host for a step — used to populate the
  * `ConfirmationRequest.host` field. For navigate steps, extracts from
  * the URL ValueRef. For click/fill, falls back to the current page URL
  * or a placeholder.
  */
-function resolveHostForStep(step: Step, ctx: ExecutionContext): string {
-  if (step.type === 'navigate') {
-    const url = step.url;
-    if (url.kind === 'literal' && typeof url.value === 'string') {
-      try {
-        return new URL(url.value).host;
-      } catch {
-        return url.value;
-      }
-    }
-  }
-  // Fall back to current page URL or a generic placeholder
-  const pageUrl = ctx.page?.url();
-  if (pageUrl) {
+function resolveHostForStep(
+  step: Step,
+  ctx: ExecutionContext,
+  resolvedUrl: string | null = resolveUrlForStep(step, ctx),
+): string {
+  if (resolvedUrl !== null) {
     try {
-      return new URL(pageUrl).host;
+      const parsed = new URL(resolvedUrl);
+      if (parsed.host.length > 0) {
+        return parsed.host;
+      }
     } catch {
-      return pageUrl;
+      return resolvedUrl;
     }
   }
   return 'unknown';
