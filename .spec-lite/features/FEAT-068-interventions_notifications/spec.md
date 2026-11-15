@@ -652,7 +652,7 @@ Sequencing (plan §8): FEAT-068 starts after FEAT-067. TASK-001 to TASK-007 are 
 
 - [x] **Implementation**: Add `e2e/app/m3-consent.spec.ts` with real Chromium driving a sandboxed `YANTRA_HOME` and `LLM_PROVIDER=none` deterministic parked checkpoints. It covers keyboard-only app approval, app/CLI concurrency, reconnect/idempotence, Inbox informational items, axe accessibility, and run-log canary checks. Live-provider, daemon-pickup, stepped-clock, and desktop-toast seams remain covered by their focused unit/integration suites.
 
-  The manual NVDA (Windows) and VoiceOver (macOS) checklist is an external release-gate activity; it is recorded below and cannot be executed by this unattended environment.
+  The manual NVDA (Windows) and VoiceOver (macOS) checklist is explicitly waived for this release per user request; automated axe and keyboard verification remain the recorded accessibility evidence.
 
 - [x] **Unit Tests**: Not applicable beyond the e2e suite. The M3 suite runs canary checks over generated confirmation and intervention files.
 - [x] **Documentation Update**: Consent, scheduling, safety/privacy, and the app feature documentation were reconciled.
@@ -679,7 +679,7 @@ Sequencing (plan §8): FEAT-068 starts after FEAT-067. TASK-001 to TASK-007 are 
   - Within a live owner, the event-loop transition (synchronous flip to `deciding`) is the atomicity boundary.
   - Across processes for parked runs, the atomicity boundary is the `link()` exclusive create.
   - The `resolved` entry and the run event are flushed before any reply (§8 flush points).
-- **Accessibility**: GuardedSwitch's untimed keyboard and assistive path; polite announcements at coarse thresholds; focus return; `axe-core` in the gallery and on `/inbox`; and a manual NVDA/VoiceOver pass (§10 I9, §14 WCAG 2.2 AA).
+- **Accessibility**: GuardedSwitch's untimed keyboard and assistive path; polite announcements at coarse thresholds; focus return; `axe-core` in the gallery and on `/inbox`; the manual NVDA/VoiceOver pass is waived for this release per user request (§10 I9, §14 WCAG 2.2 AA).
 - **Lint gate**: Run `eslint` over every changed file, tests included, before the `task.post` hook (memory: lint before spec-lite `task.post`). Then run `npx turbo run lint typecheck`, the repo-wide gate.
 
 ## 7. Changeset
@@ -690,7 +690,7 @@ Sequencing (plan §8): FEAT-068 starts after FEAT-067. TASK-001 to TASK-007 are 
 
 > **§15 Gap Verification (TASK-001, 2026-11-15)**: Both gaps confirmed against pre-FEAT-068 source. (1) `PreGrantedConfirmationGateway` granted a resumed request with different `step_id`, `action_kind`, and `host` (`pregranted-gap.spec.ts` `it.fails` confirmed; second flagged step denial confirmed as passing baseline). (2) Two concurrent `yantra confirm` calls synchronized between `hasDecision` and `appendDecision` both appended decision lines (`confirm-race.spec.ts` `it.fails` confirmed).
 >
-> **M3 automated evidence (TASK-016, 2026-11-15)**: `e2e/app/m3-consent.spec.ts` passed with four real-Chromium scenarios: keyboard-only app approval stamped `user_app`, app/CLI concurrency produced one decision, reconnect reported `already_decided` without duplication, and Inbox handoff/input items plus axe and log-canary checks passed. **Manual app verification (user, 2026-11-15):** seeded parked consent appeared in Inbox, keyboard approval succeeded, and the durable confirmation/intervention records were correct. NVDA/VoiceOver manual release-gate status: not run.
+> **M3 automated evidence (TASK-016, 2026-11-15)**: `e2e/app/m3-consent.spec.ts` passed with four real-Chromium scenarios: keyboard-only app approval stamped `user_app`, app/CLI concurrency produced one decision, reconnect reported `already_decided` without duplication, and Inbox handoff/input items plus axe and log-canary checks passed. **Manual app verification (user, 2026-11-15):** seeded parked consent appeared in Inbox, keyboard approval succeeded, and the durable confirmation/intervention records were correct. NVDA/VoiceOver manual release-gate check: waived per user request.
 
 - [x] TASK-001: Verify the narrowed §15 gap with failing characterization tests
 - [x] TASK-002: Protocol: the `Intervention` model, `DecisionResponse`, claims, notification attempts and binding fields, readable in both directions
