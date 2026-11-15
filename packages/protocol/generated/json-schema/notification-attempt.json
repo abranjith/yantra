@@ -1,0 +1,97 @@
+{
+  "$ref": "#/definitions/NotificationAttempt",
+  "definitions": {
+    "NotificationAttempt": {
+      "type": "object",
+      "properties": {
+        "record": {
+          "type": "string",
+          "const": "attempt"
+        },
+        "attempt_id": {
+          "type": "string",
+          "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
+          "description": "ULID of this delivery attempt."
+        },
+        "notification_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Notification line ULID for desktop attempts, or null for app attempts."
+        },
+        "intervention_id": {
+          "type": "string",
+          "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
+          "description": "Intervention that triggered this notification attempt."
+        },
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Owning run id."
+        },
+        "channel": {
+          "type": "string",
+          "enum": [
+            "app",
+            "desktop"
+          ],
+          "description": "Channel attempted."
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "attempted",
+            "delivered",
+            "failed",
+            "unsupported"
+          ],
+          "description": "Outcome of the attempt."
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO-8601 UTC timestamp of the attempt event."
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "no_window",
+                "send_error",
+                "spawn_error",
+                "nonzero_exit",
+                "platform_unsupported"
+              ],
+              "description": "Closed-enum failure or unsupported reason for a notification attempt."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Closed-enum detail when failed or unsupported, otherwise null."
+        }
+      },
+      "required": [
+        "record",
+        "attempt_id",
+        "notification_id",
+        "intervention_id",
+        "run_id",
+        "channel",
+        "status",
+        "at",
+        "detail"
+      ],
+      "additionalProperties": false,
+      "description": "Tracked notification delivery attempt record."
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

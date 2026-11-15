@@ -1,0 +1,324 @@
+{
+  "$ref": "#/definitions/Intervention",
+  "definitions": {
+    "Intervention": {
+      "type": "object",
+      "properties": {
+        "intervention_id": {
+          "type": "string",
+          "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
+          "description": "ULID identifying the intervention; equals confirmation_id for consent."
+        },
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Owning run identifier."
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "consent",
+            "handoff",
+            "input",
+            "takeover"
+          ],
+          "description": "Intervention kind."
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "granted",
+            "denied",
+            "timed_out",
+            "recorded"
+          ],
+          "description": "Current state of the intervention."
+        },
+        "raised_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO-8601 UTC timestamp when raised."
+        },
+        "request": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "confirmation_id": {
+                  "type": "string",
+                  "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
+                  "description": "Globally unique ULID for this confirmation request."
+                },
+                "run_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Owning run id."
+                },
+                "step_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Step id that triggered the request."
+                },
+                "action_kind": {
+                  "type": "string",
+                  "enum": [
+                    "click",
+                    "fill",
+                    "navigate"
+                  ],
+                  "description": "The mutating verb that will execute on grant."
+                },
+                "host": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Resolved target host for the action (e.g. \"bank.example.com\")."
+                },
+                "description": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Human-readable summary of what will happen — from step name or annotation."
+                },
+                "expected_cost": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "amount": {
+                          "type": "number",
+                          "description": "Numeric cost amount."
+                        },
+                        "currency": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "ISO 4217 currency code or descriptive label (e.g. \"USD\", \"credits\")."
+                        }
+                      },
+                      "required": [
+                        "amount",
+                        "currency"
+                      ],
+                      "additionalProperties": false,
+                      "description": "Best-effort cost estimate for the action being confirmed."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Best-effort cost estimate, or null if unknown."
+                },
+                "consequence": {
+                  "type": "string",
+                  "enum": [
+                    "reversible",
+                    "hard_to_reverse",
+                    "irreversible",
+                    "unknown"
+                  ],
+                  "description": "Reversibility classification.",
+                  "default": "unknown"
+                },
+                "requested_at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "ISO-8601 UTC timestamp when the request was created."
+                },
+                "timeout_ms": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "exclusiveMinimum": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Timeout in milliseconds, or null to wait indefinitely (interactive mode)."
+                },
+                "target_host": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Normalized lowercase hostname without port used for action binding (FEAT-068). The existing host stays the display value."
+                },
+                "plan_digest": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$",
+                  "description": "SHA-256 hex digest of the canonical JSON of the resolved plan (workflow requests only; FEAT-068)."
+                },
+                "step_digest": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$",
+                  "description": "SHA-256 hex digest of the canonical JSON of the flagged step definition (workflow requests only; FEAT-068)."
+                }
+              },
+              "required": [
+                "confirmation_id",
+                "run_id",
+                "step_id",
+                "action_kind",
+                "host",
+                "description",
+                "expected_cost",
+                "requested_at",
+                "timeout_ms"
+              ],
+              "additionalProperties": false,
+              "description": "Structured consent request emitted before a flagged step executes."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ConfirmationRequest payload; required when kind is consent."
+        },
+        "attended_deadline_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Authoritative attended deadline ISO timestamp, or null when unbounded while attended."
+        },
+        "deadline_basis": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "request_timeout",
+                "agent_confirm_timeout",
+                "wall_clock",
+                "none"
+              ],
+              "description": "Which deadline bound produced attended_deadline_at while attending."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Which bound produced attended_deadline_at; required when kind is consent."
+        },
+        "unattended_ceiling_ms": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Cumulative unattended ceiling in ms (default 900000); required for consent."
+        },
+        "unattended_accrued_ms": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Run-level unattended wait accrued at raise time; required for consent."
+        },
+        "handoff": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "blocker": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 300,
+                  "description": "Plain sanitized blocker description without ANSI escapes."
+                },
+                "safest_next_action": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 300,
+                  "description": "Plain sanitized safest next action without ANSI escapes."
+                }
+              },
+              "required": [
+                "blocker",
+                "safest_next_action"
+              ],
+              "additionalProperties": false,
+              "description": "Plain sanitized blocker and safest next action for a handoff or takeover."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Blocker and safest next action; required when kind is handoff or takeover."
+        },
+        "missing": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120,
+                    "description": "Sanitized requirement label."
+                  },
+                  "reason": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Sanitized reason the requirement went unmet, or null."
+                  }
+                },
+                "required": [
+                  "label",
+                  "reason"
+                ],
+                "additionalProperties": false,
+                "description": "Missing input requirement item captured from a partial run brief."
+              },
+              "maxItems": 20
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Unmet input items (up to 20); required when kind is input."
+        },
+        "recovery": {
+          "type": "string",
+          "enum": [
+            "resume",
+            "run_again",
+            "none"
+          ],
+          "description": "Recovery action offered by the Inbox."
+        }
+      },
+      "required": [
+        "intervention_id",
+        "run_id",
+        "kind",
+        "state",
+        "raised_at",
+        "recovery"
+      ],
+      "additionalProperties": false,
+      "description": "Human-facing intervention raised during or at the end of a run."
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

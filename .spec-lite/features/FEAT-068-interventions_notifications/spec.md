@@ -700,7 +700,7 @@ Sequencing (plan §8): FEAT-068 starts after FEAT-067. TASK-001 to TASK-007 are 
 > **§15 Gap Verification (TASK-001, 2026-11-15)**: Both gaps confirmed against pre-FEAT-068 source. (1) `PreGrantedConfirmationGateway` granted a resumed request with different `step_id`, `action_kind`, and `host` (`pregranted-gap.spec.ts` `it.fails` confirmed; second flagged step denial confirmed as passing baseline). (2) Two concurrent `yantra confirm` calls synchronized between `hasDecision` and `appendDecision` both appended decision lines (`confirm-race.spec.ts` `it.fails` confirmed).
 
 - [x] TASK-001: Verify the narrowed §15 gap with failing characterization tests
-- [ ] TASK-002: Protocol: the `Intervention` model, `DecisionResponse`, claims, notification attempts and binding fields, readable in both directions
+- [x] TASK-002: Protocol: the `Intervention` model, `DecisionResponse`, claims, notification attempts and binding fields, readable in both directions
 - [ ] TASK-003: Every workflow consent request carries its action binding; one canonical-digest implementation
 - [ ] TASK-004: Parked decisions are claimed atomically; `yantra confirm` on a parked run reports `already_decided`
 - [ ] TASK-005: A resumed run consumes a grant only for the exact approved action; the daemon pickup stays zero-LLM
