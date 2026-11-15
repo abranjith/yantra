@@ -1,6 +1,8 @@
+import { basename, join } from 'node:path';
+
 import { generateUlid } from '@yantra/protocol';
 
-import type { InterventionLog } from './intervention-log.js';
+import { InterventionLog } from './intervention-log.js';
 
 export interface RunEndHandoff {
   readonly blocker: string;
@@ -12,9 +14,10 @@ export interface RunEndBrief {
 }
 
 export interface RecordRunEndInterventionsOptions {
-  readonly runId: string;
-  readonly log: InterventionLog;
-  readonly outcome: string;
+  readonly runDir: string;
+  readonly runId?: string;
+  readonly log?: InterventionLog;
+  readonly outcome: string | { readonly kind?: string };
   readonly handoff?: RunEndHandoff | null;
   readonly brief?: RunEndBrief | null;
   readonly resumable?: boolean;
@@ -27,19 +30,24 @@ export async function recordRunEndInterventions(
   options: RecordRunEndInterventionsOptions,
 ): Promise<void> {
   const now = options.now ?? (() => new Date().toISOString());
-  const existing = await options.log.readAll();
+  const runId = options.runId ?? basename(options.runDir);
+  const log = options.log ?? new InterventionLog(join(options.runDir, 'interventions.jsonl'));
+  const outcome =
+    typeof options.outcome === 'string' ? options.outcome : (options.outcome.kind ?? '');
+  const existing = await log.readAll();
   const consentDenied = existing.some(
     (entry) =>
       entry.entry === 'resolved' &&
       (entry.decision.decision === 'denied' || entry.decision.decision === 'timed_out'),
   );
-  if (options.outcome === 'handoff' && options.handoff !== null && options.handoff !== undefined) {
+
+  if (outcome === 'handoff' && options.handoff !== null && options.handoff !== undefined) {
     if (!consentDenied) {
-      await options.log.append({
+      await log.append({
         entry: 'raised',
         intervention: {
           intervention_id: generateUlid(),
-          run_id: options.runId,
+          run_id: runId,
           kind: 'handoff',
           state: 'recorded',
           raised_at: now(),
@@ -53,13 +61,14 @@ export async function recordRunEndInterventions(
       });
     }
   }
+
   const unmet = options.brief?.unmet ?? [];
-  if (options.outcome === 'partial' && unmet.length > 0) {
-    await options.log.append({
+  if (outcome === 'partial' && unmet.length > 0) {
+    await log.append({
       entry: 'raised',
       intervention: {
         intervention_id: generateUlid(),
-        run_id: options.runId,
+        run_id: runId,
         kind: 'input',
         state: 'recorded',
         raised_at: now(),
@@ -69,12 +78,13 @@ export async function recordRunEndInterventions(
       },
     });
   }
+
   if (options.takeover !== null && options.takeover !== undefined) {
-    await options.log.append({
+    await log.append({
       entry: 'raised',
       intervention: {
         intervention_id: generateUlid(),
-        run_id: options.runId,
+        run_id: runId,
         kind: 'takeover',
         state: 'recorded',
         raised_at: now(),

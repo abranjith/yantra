@@ -53,6 +53,7 @@ import {
   InterventionAuthority,
   InterventionLog,
   UnattendedCeilingClock,
+  recordRunEndInterventions,
   createKeychainProvider,
   loadEthicsConfig,
   loadSearchConfig,
@@ -1144,6 +1145,17 @@ export async function runAgenticTask(
       if (budgetTracker !== undefined) {
         runEvents.emit(budgetSnapshotEvent(budgetTracker.snapshot(), budgetsConfig, now()));
       }
+      const finalTerminal = terminal;
+      await captureTeardown(
+        () =>
+          recordRunEndInterventions({
+            runDir: created.runDir,
+            outcome: finalTerminal.kind,
+            ...(executionState?.handoff === undefined ? {} : { handoff: executionState.handoff }),
+            resumable: finalTerminal.kind === 'failed',
+          }),
+        teardownErrors,
+      );
       await finalizeRun({
         outcome: terminal,
         taskId,

@@ -50,6 +50,7 @@ import {
 import { HostStartError } from './errors.js';
 import { AppHost, SILENT_HOST_LOGGER, type HostLogger, type HostRoute } from './host.js';
 import { IdleExit } from './idle-exit.js';
+import { registerInbox } from './inbox-rpc.js';
 import { hostActiveRuns } from './ledger-reads.js';
 import { registerMissionReads } from './mission-reads.js';
 import { registerReads } from './reads.js';
@@ -222,6 +223,7 @@ export async function startHostRuntime(deps: HostRuntimeDeps): Promise<RunningHo
       logger,
     });
     attendance.register(methods);
+    registerInbox(methods);
     attendance.start();
     const attendanceRef = attendance;
     cleanups.push(() => {

@@ -15,12 +15,21 @@ most once. A run keeps going and keeps its data if the window, the host or
 both go away.
 
 The window has a top bar with the Yantra status mark and links to **Mission**
-(the app's start page; see [Mission](app-mission.md)) and the **Ledger**, plus
-a connection banner. Its run screens are the **Ledger**
+(the app's start page; see [Mission](app-mission.md)), the **Ledger**, and the
+**Inbox**, plus a connection banner. Its run screens are the **Ledger**
 (every run), the **Run result** of one run, its **Audit**, and bounded
 **file viewers**. These screens only read: they show any run Yantra recorded,
 whether it came from the terminal, the scheduler daemon or the app. The queue,
 run-following and attendance behavior described below belongs to the host.
+
+### Inbox and consent
+
+The Inbox combines live and parked consent requests with handoff, missing-input,
+and expired items. A consent card shows the action, host, consequence, and
+authoritative deadline. Pointer approval requires a short hold; keyboard and
+assistive approval opens an untimed review with **Deny** focused by default.
+Answers are relayed through the authenticated host and recorded as `user_app`.
+Pending consent items cannot be dismissed; informational handoffs can be.
 
 ## What It Does
 

@@ -710,10 +710,10 @@ Sequencing (plan §8): FEAT-068 starts after FEAT-067. TASK-001 to TASK-007 are 
 - [x] TASK-009: `yantra confirm` answers a live run through its owner and says which case applied
 - [x] TASK-010: The host counts attending windows, relays answers with `user_app`, records app-channel delivery
 - [x] TASK-011: Best-effort desktop "needs you" toast while unattended, tracked per attempt
-- [ ] TASK-012: Runs record `handoff`, `input` and `takeover` items with their recovery
-- [ ] TASK-013: The Inbox read model, bounded and resilient
-- [ ] TASK-014: Drshya `GuardedSwitch`
-- [ ] TASK-015: The Inbox route and consent card in the app
+- [x] TASK-012: Runs record `handoff`, `input` and `takeover` items with their recovery
+- [x] TASK-013: The Inbox read model, bounded and resilient
+- [x] TASK-014: Drshya `GuardedSwitch`
+- [x] TASK-015: The Inbox route and consent card in the app
 - [ ] TASK-016: M3 end to end: §10 consent evidence and accessibility checks
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

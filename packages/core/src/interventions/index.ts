@@ -45,3 +45,4 @@ export {
   type RunEndBrief,
   type RunEndHandoff,
 } from './run-end-interventions.js';
+export { buildInbox, type InboxOptions, type InboxPage } from './inbox.js';
