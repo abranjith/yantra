@@ -1,0 +1,58 @@
+# TEMPORARY — FEAT-069 TASK-001 spike S1 (glass and readability over a live screencast).
+# Removed by FEAT-069 TASK-012 once the Linux numbers are in the S1 report. Runs on pushes to
+# the feature branch because GitHub only dispatches workflows whose default-branch copy
+# declares `workflow_dispatch`. GitHub-hosted runners ship Google Chrome stable, which the
+# harness finds through @yantra/core detectChrome.
+name: spike-s1
+
+on:
+  push:
+    branches: [ft/feat-069-live-browser-view]
+    paths:
+      - 'e2e/spikes/live-view-s1/**'
+      - '.github/workflows/spike-s1.yml'
+  workflow_dispatch:
+
+jobs:
+  spike-s1:
+    name: spike-s1 / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build ui and core
+        run: pnpm exec turbo run build --filter=@yantra/ui --filter=@yantra/core
+
+      - name: Run spike S1
+        shell: bash
+        working-directory: e2e
+        run: >-
+          pnpm exec tsx spikes/live-view-s1/run-spike.ts --duration 30
+          --out "../spike-s1-${{ runner.os }}.json" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload spike results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spike-s1-${{ runner.os }}
+          path: spike-s1-${{ runner.os }}.json
+          if-no-files-found: warn

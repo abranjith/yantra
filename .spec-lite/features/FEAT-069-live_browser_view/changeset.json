@@ -1,0 +1,50 @@
+{
+  "vcs": "git",
+  "files": [
+    {
+      "path": ".github/workflows/spike-s1.yml",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/spikes/live-view-s1/metrics.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/spikes/live-view-s1/metrics.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/spikes/live-view-s1/run-spike.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/spikes/live-view-s1/viewer.html",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    }
+  ],
+  "excluded": [
+    ".spec-lite/features/FEAT-069-live_browser_view/changeset.json",
+    ".spec-lite/features/FEAT-069-live_browser_view/spec.md",
+    ".spec-lite/features/FEAT-069-live_browser_view/spike-s1-report.md",
+    ".spec-lite/features/FEAT-069-live_browser_view/spike-s1-results-windows.json",
+    ".spec-lite/plan_ui.md"
+  ],
+  "baseline": {
+    "sha": "06e14f86c894e355767c104e06a8dd3f622afed8",
+    "capturedAt": "2026-11-15T17:00:53.682Z",
+    "dirtyAtBaseline": [],
+    "dirtyBlobHashes": {},
+    "workflow": "ft/feat-069-live-browser-view@06e14f86c894e355767c104e06a8dd3f622afed8"
+  },
+  "featureId": "FEAT-069"
+}

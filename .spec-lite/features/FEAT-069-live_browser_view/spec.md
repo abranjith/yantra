@@ -253,7 +253,7 @@ specs' final locations)
 
 ### TASK-001: Spike S1 — glass and readability over a live screencast, with a report
 
-- [ ] **Implementation**: Build `e2e/spikes/live-view-s1/` as a Vitest-free `tsx` script driven by
+- [x] **Implementation**: Build `e2e/spikes/live-view-s1/` as a Vitest-free `tsx` script driven by
       the existing `puppeteer-core` (no new dependency). A **source** headless Chrome loads a fixture
       page with continuous motion and dense text and runs CDP `Page.startScreencast` (JPEG). The
       harness relays frames to a **viewer** Chrome page (`viewer.html`) that paints them on a
@@ -272,16 +272,25 @@ specs' final locations)
       even with Solid, or that the §6 frame-queue design cannot hold 5 fps, record
       `DEVIATION: …` in the report and in this spec and stop for confirmation before TASK-002
       (plan §8: S1 "can force an architecture change").
-- [ ] **Unit Tests**: `metrics.ts`: percentile over an interval list (empty, single, even and odd
+- [x] **Unit Tests**: `metrics.ts`: percentile over an interval list (empty, single, even and odd
       counts); main-thread share from two `TaskDuration` readings (zero wall time rejected,
       counter reset rejected); contrast ratio for known pairs (black/white = 21, equal colors = 1)
       and for the scrim-floor tint over both extremes; report-table renderer output is stable.
-- [ ] **Documentation Update**: Invoke **Document** update mode for the task-fidelity / harness
+- [x] **Documentation Update**: Invoke **Document** update mode for the task-fidelity / harness
       area only if the spike script is kept as a runnable tool; otherwise none (the report lives
       under the feature directory).
 - **Verify**: `spike-s1-report.md` exists with measured numbers from at least Windows (the
   developer machine) and Linux CI, names the chosen defaults and thresholds, and states go / no-go;
   `cd e2e && npx vitest run tests/spikes/live-view-s1-metrics.spec.ts` passes.
+- **Outcome (2026-11-15)**: **GO**, no DEVIATION. Windows numbers are in `spike-s1-report.md`
+  (5 and 10 fps met at every setting; viewer main thread 2.8–4.3 % of one core). Defaults: 10 fps,
+  q70, 1280×800, `everyNthFrame` 1, serial ack schedule. Solid thresholds stay at the plan §10
+  values. **Linux numbers are pending**: the temporary `.github/workflows/spike-s1.yml` runs the
+  harness on `ubuntu-latest` on push. TASK-001 stays `[/]` until those numbers are copied into the
+  report. The metrics tests live at `e2e/spikes/live-view-s1/metrics.spec.ts`, beside the harness,
+  because the e2e workspace has no `tests/` directory (verify with
+  `cd e2e && npx vitest run spikes/live-view-s1/metrics.spec.ts`). Documentation: none, because the
+  spike is a throwaway tool and its report lives in the feature directory.
 
 ### TASK-002: Protocol — screencast frame metadata, control messages and payload codec
 
@@ -667,7 +676,7 @@ tests/browser/agent-popup-policy.spec.ts tests/browser/agent-controller.spec.ts`
 
 ## 8. State Tracking
 
-- [ ] TASK-001: Spike S1 — glass and readability over a live screencast, with a report
+- [/] TASK-001: Spike S1 — glass and readability over a live screencast, with a report
 - [ ] TASK-002: Protocol — screencast frame metadata, control messages and payload codec
 - [ ] TASK-003: Screen protection — observable latch, fill holds, and the deterministic fill paths
 - [ ] TASK-004: Protected-control focus guard in an isolated world
