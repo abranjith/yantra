@@ -21,3 +21,11 @@ export {
   type DeadlineBasis,
   type UnattendedCeilingClockOptions,
 } from './deadline.js';
+export {
+  InterventionAuthority,
+  type InterventionAuthorityOptions,
+  type RaiseOptions,
+  type AnswerInput,
+} from './authority.js';
+export { InterventionGateway } from './intervention-gateway.js';
+export { InterventionLog, appendInterventionLogEntry } from './intervention-log.js';

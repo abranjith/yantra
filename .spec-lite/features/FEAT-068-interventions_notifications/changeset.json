@@ -86,6 +86,12 @@
       "task": "TASK-003"
     },
     {
+      "path": "packages/core/src/interventions/authority.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
       "path": "packages/core/src/interventions/binding.ts",
       "status": "A",
       "role": "implement",
@@ -105,7 +111,7 @@
     },
     {
       "path": "packages/core/src/interventions/deadline.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
@@ -114,6 +120,18 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/interventions/intervention-gateway.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/core/src/interventions/intervention-log.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "packages/core/src/interventions/parked-decision.ts",
@@ -140,6 +158,12 @@
       "task": "TASK-005"
     },
     {
+      "path": "packages/core/tests/interventions/authority.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
       "path": "packages/core/tests/interventions/binding.spec.ts",
       "status": "A",
       "role": "implement",
@@ -153,7 +177,7 @@
     },
     {
       "path": "packages/core/tests/interventions/deadline.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
