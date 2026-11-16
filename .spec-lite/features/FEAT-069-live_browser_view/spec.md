@@ -830,6 +830,6 @@ frame_seq}` (schema `FramesWindowAck` in protocol). The app has to ack windows s
 - [x] TASK-009: Host relay — `frames.subscribe`, per-window slots and the binary WebSocket lane
 - [x] TASK-010: BrowserViewport, the live-view store and the text alternative in the cockpit
 - [x] TASK-011: Automatic Solid when the live view is over budget
-- [C:/Program Files/Git/] TASK-012: End-to-end screencast evidence, privacy scans, performance and safety docs
+- [/] TASK-012: End-to-end screencast evidence, privacy scans, performance and safety docs
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

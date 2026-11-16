@@ -18,6 +18,7 @@ Yantra keeps browser automation inside explicit boundaries: model-visible data i
 | Recorded action evidence (`A<n>`)               | Action ID, sanitized identity, and verification verdict                         | The verified action and its originating tool call                    | Cited metadata in `brief.json.actions`; no committed field value                            |
 | Protected click or stored-secret fill           | A confirmation result and opaque confirmation id                                | The operation only after a human grant                               | Request, decision, provenance, and linkage to the tool call                                 |
 | Saved screenshot (`browser_capture`)            | Its path, dimensions, byte size, and labels; never pixels or a hash             | The page's pixels, refused while a stored secret is latched          | Owner-only PNG under `screenshots/`; metadata-only reference with `sent_to_model: false`    |
+| Live browser view frames (the app)              | Nothing                                                                         | The task page's pixels, hidden while the screen is protected         | Never persisted; frames live only in memory and on local connections                        |
 
 Marked input and keychain secrets solve different problems. A marker is a run-scoped privacy boundary; it is not a credential store, trusted-host binding, or request for confirmation. A keychain-backed website secret adds durable storage, trusted-host checking, and mandatory confirmation.
 
@@ -217,6 +218,43 @@ A local capture keeps the protections a capture needs:
 - **Audit.** Every file is recorded in `tool-calls.jsonl` as a metadata-only artifact reference with `sent_to_model: false`. `yantra audit` lists it under `Saved captures (kept on this computer, never sent to the model):`, separately from `The model saw these images:`. The raw-session warning appears only for images the model saw; see [Audit and report views](diagnostics-and-audit.md#audit-and-report-views).
 
 `--no-screenshots` works only downward. It removes both capture tools for one run and can never add one. A model-authored task contract grants nothing either: declaring a screenshot in `artifacts` cannot register `browser_screenshot`, change the Vision Assist gate, or bypass the latch. Both capture decisions are recorded before the first tool call, with the reasons any tool is off, in `manifest.json` (`agent.capture`) and `run-health.json` (`capture`). `browser_capture` exists only in agentic sessions. Replay, scheduled runs, and nested workflows never register it.
+
+### Live browser view
+
+While an app-started run drives a browser, the app's cockpit can show that run's page live (see
+[Mission](app-mission.md#watches-the-task-page-live)). The live view is built so that it cannot
+leak what the run types:
+
+- **Never saved, never sent to the model.** Frames exist only in memory and on the local run
+  socket and app connection. No frame is written to the run directory, `host.log`, `runtime.jsonl`,
+  or a provider session. No tool or prompt path can reach a frame. So the `context.screenshots`
+  grant and the Vision Assist rules do not apply: nothing is sent anywhere.
+- **Only the task page.** The view shows the page the run itself drives: the agent's active page
+  (after it adopts a popup, the adopted tab) or a replayed workflow's single page. Background pages
+  that `ask` and `research` read are never shown; those runs say there is no live page to show.
+  A run in a visible browser window shows "Running in a visible window" instead of frames.
+- **A protected screen is hidden.** The view switches to "Protected screen — hidden", and the image
+  is discarded at once, whenever any of these is true:
+  - a stored secret was filled into the page, by the agent or by a saved workflow's secret `fill`
+    step, and the page has not loaded a new document since;
+  - a value you masked, or a value typed into a password-style field, is being filled right now;
+  - a password field, a credential, one-time-code or card-number `autocomplete` field, or a
+    `data-yantra-secret` field has focus;
+  - Yantra cannot tell where focus is (inside a cross-origin frame or a closed component), or
+    cannot confirm the page is safe to show. Uncertainty always counts as protected.
+
+  A single-page site that never loads a new document after a secret fill stays hidden until it
+  does, or until the run ends.
+
+- **Late frames are dropped.** Every frame carries a generation number. Protection starting or
+  ending, a new document, a new tab and a restarted stream each start a new generation. The run's
+  process, the app host and the app window each drop any frame from an older generation, and after
+  protection ends only a picture taken after it ended is shown. A frame that was already on its way
+  when protection began therefore never appears, however late it arrives, in any window.
+
+The live view never changes a run: its outcome, artifacts and exit code are the same whether anyone
+watches or not, and a live-view failure only shows "The live view stopped. The run itself is not
+affected."
 
 ### Starting runs from the app
 

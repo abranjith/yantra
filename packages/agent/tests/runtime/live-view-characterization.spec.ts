@@ -259,7 +259,7 @@ describe('@no-llm live view characterization (real Chrome)', () => {
           createBrowserProvider: (options) =>
             new LocalBrowserProvider({
               profileStore: new LocalProfileStore(),
-              logger: options.logger,
+              ...(options.logger === undefined ? {} : { logger: options.logger }),
             }),
         },
         createProvider: (services) =>

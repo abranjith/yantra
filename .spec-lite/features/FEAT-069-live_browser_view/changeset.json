@@ -188,6 +188,21 @@
       "task": "TASK-011"
     },
     {
+      "path": "docs/architecture.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/app-mission.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/safety-and-privacy.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
       "path": "docs/protocol-spec.md",
       "status": "M",
       "role": "implement",
@@ -195,49 +210,49 @@
     },
     {
       "path": "e2e/app-live-view.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
     {
       "path": "e2e/fixtures/site/live-view/login.html",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
     {
       "path": "e2e/fixtures/site/live-view/motion.html",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
     {
       "path": "e2e/fixtures/site/live-view/opener.html",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
     {
       "path": "e2e/fixtures/site/live-view/second.html",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
     {
       "path": "e2e/live-view/privacy-scan.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
     {
       "path": "e2e/live-view/privacy-scan.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
     {
       "path": "e2e/live-view/rig.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
@@ -297,7 +312,7 @@
     },
     {
       "path": "packages/agent/tests/boundaries/live-view-boundary.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-012"
     },
@@ -639,10 +654,12 @@
     }
   ],
   "excluded": [
+    ".spec-lite/feature-summary.md",
     ".spec-lite/features/FEAT-069-live_browser_view/changeset.json",
     ".spec-lite/features/FEAT-069-live_browser_view/spec.md",
     ".spec-lite/features/FEAT-069-live_browser_view/spike-s1-report.md",
     ".spec-lite/features/FEAT-069-live_browser_view/spike-s1-results-windows.json",
+    ".spec-lite/memory.md",
     ".spec-lite/plan_ui.md"
   ],
   "baseline": {

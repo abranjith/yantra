@@ -50,11 +50,27 @@ function workflow(baseUrl: string): WorkflowFile {
     params: {},
     secrets: [],
     cookies: 'none',
-    steps: [navigate('first', `${baseUrl}/`), navigate('second', `${baseUrl}/second`)],
+    steps: [
+      navigate('first', `${baseUrl}/`),
+      navigate('second', `${baseUrl}/second`),
+      // Paces the run so capture has started even on a loaded machine.
+      {
+        id: 'ready',
+        verb: 'wait_for' as const,
+        scope: null,
+        requires_confirmation: false,
+        confirmation_description: null,
+        expected_cost: null,
+        consequence: null,
+        locator: 'Ready',
+        state: 'visible' as const,
+        timeout_ms: 15_000,
+      },
+    ],
     outputs: [],
     outputs_unredacted: false,
     _unrecorded_frames: [],
-    _locators: {},
+    _locators: { Ready: [{ kind: 'css' as const, value: '#ready' }] },
   } as WorkflowFile;
 }
 
@@ -127,7 +143,8 @@ describe('@no-llm replay live view characterization (real Chrome)', () => {
         .writeHead(200, { 'content-type': 'text/html' })
         .end(
           `<!doctype html><title>${request.url === '/second' ? 'Second' : 'First'}</title>` +
-            '<style>@keyframes s{to{opacity:.2}}h1{animation:s .2s infinite alternate}</style><h1>Fixture</h1>',
+            '<style>@keyframes s{to{opacity:.2}}h1{animation:s .2s infinite alternate}</style><h1>Fixture</h1>' +
+            "<script>setTimeout(()=>{const p=document.createElement('p');p.id='ready';p.textContent='ready';document.body.appendChild(p)},1500)</script>",
         );
     });
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));

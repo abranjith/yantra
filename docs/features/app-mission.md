@@ -75,6 +75,37 @@ including runs started in a terminal or by the scheduler.
   button. For a run the app did not start, the command is rebuilt from the
   run's records and labeled as such.
 
+### Watches the task page live
+
+Behind the panels, the cockpit shows the page the run is driving, live, at
+up to about 10 frames per second. The glass panels stay readable over any
+page. Under the timeline, **Live view** gives the same information as text:
+the site, the page title, and a link to the step-by-step timeline. Use it
+when you cannot or would rather not watch the pixels.
+
+| What the view shows                                                   | When                                                                                                                                                                    |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The page, live                                                        | A headless run with a page to show.                                                                                                                                     |
+| Protected screen — hidden                                             | A secret was just filled, a masked or password value is being typed, or a protected field has focus. See [Safety and Privacy](safety-and-privacy.md#live-browser-view). |
+| Running in a visible window                                           | The run uses a visible browser window, so there is nothing to stream.                                                                                                   |
+| This run reads pages in the background; there is no live page to show | `ask` and `research` without browsing, and any run before its page opens.                                                                                               |
+| Reconnecting to the live view…                                        | The app lost its connection; the old picture is removed until a fresh one arrives.                                                                                      |
+| The live view stopped. The run itself is not affected.                | Capturing the page failed; the run continues.                                                                                                                           |
+| This run was started by a different Yantra version…                   | The run's process does not support the live view.                                                                                                                       |
+
+The status region announces when the view becomes hidden, shows again, uses
+a visible window, or becomes unavailable, once per change; frames are never
+announced, and focus never moves.
+
+If the live view makes the app slow (fewer than 5 frames per second, or more
+than 15% of one CPU core, for 10 seconds), the cockpit switches itself to
+**Solid** surfaces for the rest of that run view and says so once. Your
+`ui.surfaces` preference is not changed. With a Solid preference, or when
+your system asks for reduced transparency, nothing switches.
+
+Watching costs the run nothing: the page is captured only while an app
+window shows it, and the run's results are the same either way.
+
 ### Says what state the run is in, and what you can do
 
 A status line names the state in words and offers next actions:
