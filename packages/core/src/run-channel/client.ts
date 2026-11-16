@@ -122,6 +122,7 @@ export class RunChannelClient {
   private readonly eventListeners = new Set<Listener<ChannelEventDelivery>>();
   private readonly messageListeners = new Set<Listener<RunChannelServerMessage>>();
   private readonly snapshotListeners = new Set<() => void>();
+  private readonly screencastListeners = new Set<(meta: unknown, jpeg: Buffer) => void>();
   private pendingHello: ((result: ChannelConnectResult) => void) | null = null;
   private pendingCancel: ((ack: CancelAck | null) => void) | null = null;
   private silenceTimer: unknown = null;
@@ -152,6 +153,18 @@ export class RunChannelClient {
   }
 
   /** Receives every parsed server message, including extension messages. */
+  /**
+   * Follows screencast frames (type `0x02`, FEAT-069). `jpeg` is a copy the
+   * listener may keep. Frames arrive only after `frames.start` on a
+   * connection that negotiated `frames/1`.
+   */
+  public onScreencastFrame(listener: (meta: unknown, jpeg: Buffer) => void): () => void {
+    this.screencastListeners.add(listener);
+    return () => {
+      this.screencastListeners.delete(listener);
+    };
+  }
+
   public onServerMessage(listener: Listener<RunChannelServerMessage>): () => void {
     this.messageListeners.add(listener);
     return () => this.messageListeners.delete(listener);
@@ -308,6 +321,10 @@ export class RunChannelClient {
       }
       this.onFrameReceived();
       if (frame.kind === 'json') this.onMessage(frame.message);
+      else if (frame.kind === 'screencast' && this.screencastListeners.size > 0) {
+        const jpeg = Buffer.from(frame.jpeg);
+        for (const listener of this.screencastListeners) listener(frame.meta, jpeg);
+      }
     }
   }
 

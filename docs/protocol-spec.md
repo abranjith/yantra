@@ -2189,6 +2189,26 @@ Example:
 }
 ```
 
+## FramesWindowAck
+
+A window drew or dropped one frame of a run and can take the next one.
+
+| Field      | Description                                                                     |
+| ---------- | ------------------------------------------------------------------------------- |
+| generation | Frame generation; monotonic per run stream, never reset while the worker lives. |
+| frame_seq  | Monotonic per run stream over forwarded frames; used for acks.                  |
+| run_id     | The run whose live view is wanted.                                              |
+
+Example:
+
+```json
+{
+  "generation": "<generation>",
+  "frame_seq": "<frame_seq>",
+  "run_id": "<run_id>"
+}
+```
+
 ## GroupEntry
 
 A command with subcommands and no action.

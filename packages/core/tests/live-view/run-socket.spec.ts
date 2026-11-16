@@ -13,9 +13,10 @@ import { LiveViewHub } from '../../src/live-view/live-view-hub.js';
 import { serveLiveViewOnRunSocket } from '../../src/live-view/run-socket.js';
 import type { ScreencastSourceOptions } from '../../src/live-view/screencast-source.js';
 import { TaskPageEvents, type TaskPageSource } from '../../src/live-view/task-page-source.js';
+import { RunChannelClient } from '../../src/run-channel/client.js';
 import { OutboundQueues } from '../../src/run-channel/outbound-queues.js';
 import { RunChannelServer } from '../../src/run-channel/server.js';
-import { RawPeer, TOKEN, silentLogger } from '../run-channel/support.js';
+import { RawPeer, TOKEN, leaseFor, makeRunDir, silentLogger } from '../run-channel/support.js';
 
 const servers: RunChannelServer[] = [];
 const peers: RawPeer[] = [];
@@ -274,5 +275,37 @@ describe('@no-llm OutboundQueues.dropFrame', () => {
     accept = true;
     listeners.get('drain')?.();
     expect(written.map((chunk) => chunk.toString())).toEqual(['event-1', 'event-2']);
+  });
+});
+
+describe('@no-llm RunChannelClient screencast frames', () => {
+  it('hands the host each frame after negotiating frames/1 and sending frames.start', async () => {
+    const { server, hub, emit } = await setup();
+    const runDir = makeRunDir();
+    const client = new RunChannelClient({
+      clientKind: 'host',
+      runDir,
+      capabilities: ['events', FRAMES_CAPABILITY],
+    });
+    try {
+      const attached = await client.connect(leaseFor('r1', server.address));
+      expect(attached).toMatchObject({
+        state: 'attached',
+        capabilities: expect.arrayContaining([FRAMES_CAPABILITY]) as unknown,
+      });
+      const frames: { meta: unknown; jpeg: Buffer }[] = [];
+      client.onScreencastFrame((meta, jpeg) => frames.push({ meta, jpeg }));
+      client.send({ type: 'frames.start', max_width: 1280, max_height: 800 });
+      await until(() => hub.capturing);
+      emit(48);
+      await until(() => frames.length === 1);
+      expect(frames[0]!.meta).toMatchObject({
+        generation: expect.any(Number) as unknown,
+        frame_seq: 0,
+      });
+      expect(frames[0]!.jpeg.subarray(0, 2)).toEqual(Buffer.from([0xff, 0xd8]));
+    } finally {
+      client.close();
+    }
   });
 });

@@ -62,6 +62,36 @@
       "task": "TASK-008"
     },
     {
+      "path": "apps/cli/src/ui/host/host-runtime.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "apps/cli/src/ui/host/live-view-relay.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "apps/cli/src/ui/host/rpc-server.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "apps/cli/src/ui/host/run-relay.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/live-view-relay.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
       "path": "docs/protocol-spec.md",
       "status": "M",
       "role": "implement",
@@ -231,7 +261,7 @@
     },
     {
       "path": "packages/core/src/live-view/run-socket.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
@@ -252,6 +282,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-008"
+    },
+    {
+      "path": "packages/core/src/run-channel/client.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
     },
     {
       "path": "packages/core/src/run-channel/outbound-queues.ts",
@@ -333,7 +369,7 @@
     },
     {
       "path": "packages/core/tests/live-view/run-socket.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },

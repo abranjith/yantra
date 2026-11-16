@@ -28,8 +28,11 @@ import {
   type RunChannelClientSnapshot,
 } from '@yantra/core';
 import {
+  CHANNEL_CAPABILITY_CANCEL,
+  CHANNEL_CAPABILITY_EVENTS,
   DecisionResponse,
   EmptyParams,
+  FRAMES_CAPABILITY,
   RunSubscribeParams,
   RunSubscribeResult,
   RunUnsubscribeParams,
@@ -45,6 +48,8 @@ export interface RelayClient {
   subscribe(fromSeq: number): void;
   onEvent(listener: (delivery: ChannelEventDelivery) => void): () => void;
   onServerMessage?(listener: (message: unknown) => void): () => void;
+  /** Screencast frames from the owner (FEAT-069). */
+  onScreencastFrame?(listener: (meta: unknown, jpeg: Uint8Array) => void): () => void;
   getSnapshot(): RunChannelClientSnapshot;
   subscribeSnapshot(listener: () => void): () => void;
   /** Sends one message to the owner (attendance, FEAT-065 TASK-018). */
@@ -62,6 +67,23 @@ export interface RunRelayDeps {
   readonly onAttach?: (runId: string) => void;
   /** Called with every live event of an attached run (intervention forwarding). */
   readonly onLiveEvent?: (runId: string, seq: number, event: unknown) => void;
+  /** Called when a run's last follower leaves and its owner connection closes. */
+  readonly onDetach?: (runId: string) => void;
+}
+
+/** Capabilities the host asks a run owner for. */
+export const HOST_CHANNEL_CAPABILITIES = [
+  CHANNEL_CAPABILITY_EVENTS,
+  CHANNEL_CAPABILITY_CANCEL,
+  'interventions',
+  FRAMES_CAPABILITY,
+] as const;
+
+/** A run's live owner connection, as other host modules see it. */
+export interface LiveOwner {
+  readonly client: RelayClient;
+  /** Capabilities the owner granted in `hello_ok`. */
+  readonly capabilities: readonly string[];
 }
 
 /** How a followed run is served. */
@@ -80,6 +102,7 @@ interface Attachment {
   readonly runDir: string;
   readonly followers: Map<number, Follower>;
   client: RelayClient | null;
+  capabilities: readonly string[];
   channel: RelayChannel;
   notResponding: boolean;
   dispose: (() => void)[];
@@ -133,6 +156,7 @@ export class RunRelay {
         runDir: join(this.deps.runsRoot, runId),
         followers: new Map(),
         client: null,
+        capabilities: [],
         channel: 'replay_only',
         notResponding: false,
         dispose: [],
@@ -166,6 +190,7 @@ export class RunRelay {
     for (const dispose of attachment.dispose) dispose();
     attachment.client?.close();
     this.runs.delete(runId);
+    this.deps.onDetach?.(runId);
     this.logger.info({ run_id: runId }, 'run detached');
   }
 
@@ -181,7 +206,12 @@ export class RunRelay {
     if (lease?.kind !== 'lease') return;
     const client = (
       this.deps.createClient ??
-      ((runDir: string) => new RunChannelClient({ clientKind: 'host', runDir }))
+      ((runDir: string) =>
+        new RunChannelClient({
+          clientKind: 'host',
+          runDir,
+          capabilities: HOST_CHANNEL_CAPABILITIES,
+        }))
     )(attachment.runDir);
     const result = await client
       .connect(lease.lease)
@@ -202,6 +232,7 @@ export class RunRelay {
       return;
     }
     attachment.client = client;
+    attachment.capabilities = result.capabilities;
     attachment.channel = 'live';
     attachment.dispose.push(
       client.onEvent((delivery) => {
@@ -216,6 +247,21 @@ export class RunRelay {
     );
     client.subscribe(fromSeq);
     this.deps.onAttach?.(attachment.runId);
+  }
+
+  /** How a run is served right now, and its live owner when it has one. */
+  public owner(
+    runId: string,
+  ): { readonly channel: RelayChannel; readonly live: LiveOwner | null } | null {
+    const attachment = this.runs.get(runId);
+    if (attachment === undefined) return null;
+    return {
+      channel: attachment.channel,
+      live:
+        attachment.client === null
+          ? null
+          : { client: attachment.client, capabilities: attachment.capabilities },
+    };
   }
 
   /** Sends `message` to every attached live owner; returns how many got it. */

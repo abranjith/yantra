@@ -67,6 +67,13 @@ export interface RpcConnection {
   notify(method: string, params: Record<string, unknown>): void;
   /** Called once when the socket closes. */
   onClose(listener: () => void): void;
+  /**
+   * Sends one binary message (a FEAT-069 frame payload). False when the
+   * socket is not open. Optional so test connections may omit it.
+   */
+  sendBinary?(bytes: Uint8Array): boolean;
+  /** Bytes queued on the socket and not yet written (`ws.bufferedAmount`). */
+  bufferedAmount?(): number;
 }
 
 /** What a handler is called with besides its params. */
@@ -271,6 +278,12 @@ export class RpcServer {
       onClose: (listener) => {
         closeListeners.push(listener);
       },
+      sendBinary: (bytes) => {
+        if (ws.readyState !== WebSocket.OPEN) return false;
+        ws.send(bytes, { binary: true });
+        return true;
+      },
+      bufferedAmount: () => ws.bufferedAmount,
     };
     const state: ConnectionState = { connection, socket: ws, missedPongs: 0 };
     this.connections.set(id, state);

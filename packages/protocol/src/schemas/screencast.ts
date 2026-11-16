@@ -178,6 +178,12 @@ export const FramesUnsubscribe = z
   .describe('Stop watching the live view of one run in this window.');
 export type FramesUnsubscribe = z.infer<typeof FramesUnsubscribe>;
 
+/** `frames.ack {run_id, generation, frame_seq}` (app → host notification). */
+export const FramesWindowAck = FrameAck.extend({ run_id: RunId })
+  .strict()
+  .describe('A window drew or dropped one frame of a run and can take the next one.');
+export type FramesWindowAck = z.infer<typeof FramesWindowAck>;
+
 /** `frames.subscribe` result: the current state, so the window can draw it at once. */
 export const FramesSubscribeResult = FramesState.describe(
   'The current live view state of the run.',

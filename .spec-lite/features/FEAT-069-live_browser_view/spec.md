@@ -594,7 +594,7 @@ tests/browser/agent-popup-policy.spec.ts tests/browser/agent-controller.spec.ts`
 
 ### TASK-009: Host relay — `frames.subscribe`, per-window slots and the binary WebSocket lane
 
-- [ ] **Implementation**: In the FEAT-065 host add `live-view-relay.ts`. RPC `frames.subscribe
+- [x] **Implementation**: In the FEAT-065 host add `live-view-relay.ts`. RPC `frames.subscribe
 {run_id}` (authenticated window capability required, run must be attached) registers the window
       and returns the current `frames.state`; `frames.unsubscribe` and window close unregister.
       The host sends `frames.start` to the worker when the first window subscribes to that run and
@@ -608,17 +608,27 @@ tests/browser/agent-popup-policy.spec.ts tests/browser/agent-controller.spec.ts`
       never wait behind a frame. A worker without `frames/1` (D17) yields
       `frames.state unavailable/incompatible_worker`. Frames are never written to `host.log`;
       the log records subscribe/unsubscribe and counts only.
-- [ ] **Unit Tests**: with a fake worker channel and fake WebSockets: a delayed frame of an older
+- [x] **Unit Tests**: with a fake worker channel and fake WebSockets: a delayed frame of an older
       generation arriving after `frames.cleared` is dropped for every window; multiple windows
       each receive `frames.cleared`; a stalled window keeps receiving JSON-RPC responses promptly
       and does not slow a second window; a window without a valid capability cannot subscribe;
       first subscriber starts, last unsubscribe stops; a host log after a session contains no JPEG
       SOI bytes and no page titles; an incompatible worker fixture yields `unavailable`.
-- [ ] **Documentation Update**: Invoke **Document** update mode for the architecture document (host
+- [x] **Documentation Update**: Invoke **Document** update mode for the architecture document (host
       relay and backpressure).
 - **Verify**: the FEAT-065 host suite plus the relay suite pass; the FEAT-065 security suite still
   passes with the new RPC methods.
 - **Depends on**: TASK-008, FEAT-065
+- **Outcome (2026-11-15)**: `apps/cli/src/ui/host/live-view-relay.ts` registers
+  `frames.subscribe` / `frames.unsubscribe` and an additive `frames.ack {run_id, generation,
+frame_seq}` (schema `FramesWindowAck` in protocol). The app has to ack windows somehow, and §6
+  names no method for it. The host's run client now asks for `frames/1` (and `interventions`), and
+  `RunChannelClient.onScreencastFrame` hands it type-`0x02` frames. `RunRelay.owner(runId)` exposes
+  the live client and its granted capabilities. `onDetach` lets the live view drop a run whose
+  owner connection closed. A run with no live owner answers `no_page`, and an owner without
+  `frames/1` or on another channel version answers `unavailable/incompatible_worker`. Held frames
+  retry every 20 ms while `bufferedAmount ≥ 64 KiB`. The FEAT-065 host and security suites pass
+  with the new methods (24 files).
 
 ### TASK-010: BrowserViewport, the live-view store and the text alternative in the cockpit
 
@@ -766,7 +776,7 @@ tests/browser/agent-popup-policy.spec.ts tests/browser/agent-controller.spec.ts`
 - [x] TASK-006: Task page source and the CDP screencast source
 - [x] TASK-007: Live-view hub — per-client latest-wins delivery, states, and orchestrator wiring
 - [x] TASK-008: Worker run socket — `frames/1` capability and frame lane
-- [ ] TASK-009: Host relay — `frames.subscribe`, per-window slots and the binary WebSocket lane
+- [x] TASK-009: Host relay — `frames.subscribe`, per-window slots and the binary WebSocket lane
 - [ ] TASK-010: BrowserViewport, the live-view store and the text alternative in the cockpit
 - [ ] TASK-011: Automatic Solid when the live view is over budget
 - [ ] TASK-012: End-to-end screencast evidence, privacy scans, performance and safety docs
