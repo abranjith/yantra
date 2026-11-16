@@ -173,7 +173,7 @@ describe('@no-llm live-view relay: generation floor', () => {
     worker.message({ type: 'frames.cleared', generation: 2, reason: 'protection' });
     host.subscribe(a.connection, RUN);
     // a acks frame 0: its queued frame 1 (generation 1) was purged, nothing follows.
-    (host as unknown as { ack(c: number, r: string, s: number): void }).ack(1, RUN, 0);
+    host.windowAck(1, RUN, 0);
     expect(a.seqs()).toEqual([0]);
     for (const w of [a, b]) {
       expect(w.notes.filter(([method]) => method === 'frames.cleared')).toEqual([
@@ -237,7 +237,7 @@ describe('@no-llm live-view relay: delivery', () => {
     worker.frame(1, 1);
     worker.frame(1, 2);
     expect(a.seqs()).toEqual([0]);
-    (host as unknown as { ack(c: number, r: string, s: number): void }).ack(1, RUN, 0);
+    host.windowAck(1, RUN, 0);
     expect(a.seqs()).toEqual([0, 2]);
   });
 
@@ -250,7 +250,7 @@ describe('@no-llm live-view relay: delivery', () => {
     host.subscribe(fast.connection, RUN);
     for (let seq = 0; seq < 5; seq += 1) {
       worker.frame(1, seq);
-      (host as unknown as { ack(c: number, r: string, s: number): void }).ack(2, RUN, seq);
+      host.windowAck(2, RUN, seq);
     }
     expect(fast.seqs()).toEqual([0, 1, 2, 3, 4]);
     expect(stalled.seqs()).toEqual([0]);

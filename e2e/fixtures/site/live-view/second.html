@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Live view second fixture</title>
+    <style>
+      .pulse {
+        width: 120px;
+        height: 120px;
+        background: #36c;
+        animation: pulse 0.4s ease-in-out infinite alternate;
+      }
+      @keyframes pulse {
+        to {
+          opacity: 0.2;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Second page</h1>
+    <div class="pulse"></div>
+    <script>
+      setTimeout(() => {
+        const node = document.createElement('p');
+        node.id = 'ready2';
+        node.textContent = 'ready';
+        document.body.appendChild(node);
+      }, 1500);
+    </script>
+  </body>
+</html>

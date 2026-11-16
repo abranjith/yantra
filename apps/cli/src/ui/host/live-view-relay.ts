@@ -120,7 +120,7 @@ export class LiveViewRelay {
         params: FramesWindowAck,
         result: EmptyParams,
         handler: ({ run_id: runId, frame_seq: frameSeq }, { connection }) => {
-          this.ack(connection.id, runId, frameSeq);
+          this.windowAck(connection.id, runId, frameSeq);
           return {};
         },
       });
@@ -267,7 +267,8 @@ export class LiveViewRelay {
     }
   }
 
-  private ack(connectionId: number, runId: string, frameSeq: number): void {
+  /** A window drew or dropped a frame (the `frames.ack` RPC). */
+  public windowAck(connectionId: number, runId: string, frameSeq: number): void {
     const watched = this.runs.get(runId);
     const window = watched?.windows.get(connectionId);
     if (watched === undefined || window === undefined) return;

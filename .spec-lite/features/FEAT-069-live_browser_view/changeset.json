@@ -56,6 +56,12 @@
       "task": "TASK-008"
     },
     {
+      "path": "apps/cli/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
       "path": "apps/cli/src/runtime.ts",
       "status": "M",
       "role": "implement",
@@ -129,7 +135,7 @@
     },
     {
       "path": "apps/web/src/live-view/budget-monitor.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
@@ -147,7 +153,7 @@
     },
     {
       "path": "apps/web/src/live-view/use-budget-monitor.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
@@ -159,7 +165,7 @@
     },
     {
       "path": "apps/web/tests/live-view/budget-monitor.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
@@ -177,7 +183,7 @@
     },
     {
       "path": "apps/web/tests/live-view/use-budget-monitor.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-011"
     },
@@ -186,6 +192,54 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "e2e/app-live-view.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/fixtures/site/live-view/login.html",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/fixtures/site/live-view/motion.html",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/fixtures/site/live-view/opener.html",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/fixtures/site/live-view/second.html",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/live-view/privacy-scan.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/live-view/privacy-scan.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/live-view/rig.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
     },
     {
       "path": "e2e/spikes/live-view-s1/metrics.spec.ts",
@@ -240,6 +294,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/boundaries/live-view-boundary.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-012"
     },
     {
       "path": "packages/agent/tests/runtime/live-view-characterization.spec.ts",

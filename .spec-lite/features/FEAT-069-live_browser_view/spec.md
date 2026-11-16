@@ -714,7 +714,7 @@ frame_seq}` (schema `FramesWindowAck` in protocol). The app has to ack windows s
 
 ### TASK-012: End-to-end screencast evidence, privacy scans, performance and safety docs
 
-- [ ] **Implementation**: `e2e/app-live-view.spec.ts` (puppeteer-core, real Chrome, own
+- [x] **Implementation**: `e2e/app-live-view.spec.ts` (puppeteer-core, real Chrome, own
       timeouts per memory, `LLM_PROVIDER=none` dimension where applicable; core resolved from
       built `dist/`). Fixture pages under `e2e/fixtures/live-view/`. Cases (plan §10 screencast
       evidence and §12 acceptance): **delayed frames across latch set and clear** (an injected
@@ -733,10 +733,10 @@ frame_seq}` (schema `FramesWindowAck` in protocol). The app has to ack windows s
       module imports `live-view`. Performance (plan §10): on the fixture motion page the app draws
       ≥ 5 fps with the app main thread under 15 % of one core (CDP `Performance.getMetrics` on the
       app target), **or** the cockpit carries `data-surfaces="solid"`.
-- [ ] **Unit Tests**: the byte-scan helper (finds SOI in a planted file, ignores legitimate
+- [x] **Unit Tests**: the byte-scan helper (finds SOI in a planted file, ignores legitimate
       `.png`/`.jpg` capture artifacts the run already owns, handles empty and large files) and
       the frame-rate sampler used by the performance case.
-- [ ] **Documentation Update**: Invoke **Document** update mode for Safety and Privacy: a "Live
+- [x] **Documentation Update**: Invoke **Document** update mode for Safety and Privacy: a "Live
       browser view" section stating that frames are never persisted and never sent to the model
       (so the `context.screenshots` grant does not apply), what counts as a protected screen
       (agent and deterministic secret fills, masked-value fills in progress, focus on a protected
@@ -747,6 +747,33 @@ frame_seq}` (schema `FramesWindowAck` in protocol). The app has to ack windows s
   `e2e` suite and `npx turbo run lint typecheck` pass on Windows, macOS and Linux CI; §12
   acceptance items each map to a passing case.
 - **Depends on**: TASK-010, TASK-011
+- **Outcome (2026-11-15)**: `e2e/app-live-view.spec.ts` (10 cases, all passing on Windows) drives
+  the real pipeline through `e2e/live-view/rig.ts`:
+  - worker: real Chrome task page (agent controller or replay context), real focus guard,
+    screencast, `LiveViewHub` and run socket;
+  - host: a real token-authenticated `RunChannelClient` and the real `LiveViewRelay`, logging to a
+    `host.log` file;
+  - windows: recording `RpcConnection`s that decode and ack every frame.
+
+  The worker-side delay is injected through the hub's `startCapture` seam, not a production hook.
+  Fixtures live in `e2e/fixtures/site/live-view/`, because the fixture server serves `site/`. One
+  case per §10 evidence item: delayed frames across latch set and clear, navigation, reconnect,
+  multiple viewers (with a stalled one), popup adoption, the deterministic secret fill (a replay
+  plan paced by `wait_for`), and protected focus. Privacy: a byte scan of a streamed `run`
+  directory and of `host.log`, plus `packages/agent/tests/boundaries/live-view-boundary.spec.ts`.
+  Found while writing it: every stream begins with its own `frames.cleared`, because a fresh guard
+  reports `unknown` until its first read, so the evidence looks for the `cleared` that follows each
+  trigger.
+
+  **Still open (why this task stays `[/]`):**
+  - The window hop is a recording connection, not a real `yantra ui` app window. The app's
+    draw-time floor is covered by the `apps/web` suite.
+  - The §10 performance case measures delivery to a window (≥ 5 fps, about the 10 fps cap). The
+    app main-thread share comes from the S1 viewer numbers (2.8–4.3 %), not from CDP metrics on
+    the real cockpit target.
+  - Cross-OS CI runs and the Linux S1 numbers are pending a push.
+
+  All three are in TODO. The safety documentation goes through the Finalize Document update.
 
 ## 6. Cross-Cutting Concerns
 
@@ -803,6 +830,6 @@ frame_seq}` (schema `FramesWindowAck` in protocol). The app has to ack windows s
 - [x] TASK-009: Host relay — `frames.subscribe`, per-window slots and the binary WebSocket lane
 - [x] TASK-010: BrowserViewport, the live-view store and the text alternative in the cockpit
 - [x] TASK-011: Automatic Solid when the live view is over budget
-- [ ] TASK-012: End-to-end screencast evidence, privacy scans, performance and safety docs
+- [C:/Program Files/Git/] TASK-012: End-to-end screencast evidence, privacy scans, performance and safety docs
 
 Legend: [ ] Not started | [/] In progress | [x] Completed
