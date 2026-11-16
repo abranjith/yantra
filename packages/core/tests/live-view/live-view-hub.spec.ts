@@ -514,6 +514,21 @@ describe('@no-llm LiveViewHub', () => {
     expect(late.log).toEqual([]);
   });
 
+  it('gives up, rather than spinning, on a source that hands out a new page every time', async () => {
+    const h = harness();
+    const source = new FakeTaskPage();
+    Object.defineProperty(source, 'page', {
+      get: () => ({ page: fakePage('unstable'), headless: true }),
+      set: () => undefined,
+    });
+    const sink = recordingSink();
+    h.hub.attach(source);
+    h.hub.addClient(sink).start();
+    for (let index = 0; index < 20; index += 1) await h.settle();
+    expect(lastState(sink.log)).toMatchObject({ state: 'unavailable', reason: 'capture_failed' });
+    expect(h.captures.length).toBeLessThan(20);
+  });
+
   it('starts protected when the latch is already set at attach', async () => {
     const h = harness();
     const source = new FakeTaskPage();

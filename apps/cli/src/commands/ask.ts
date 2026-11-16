@@ -36,6 +36,7 @@ import {
   type AskRunResult,
   type ExecutionReceiptDraft,
   type EffectivePreferences,
+  type LiveViewHub,
   type Logger,
   type Sanitized,
   type SearchProviderName,
@@ -383,6 +384,7 @@ export async function createDefaultAskPipeline(
   query: AskQuery,
   browser: BrowserRuntimeOptions = {},
   env: Readonly<NodeJS.ProcessEnv> = {},
+  liveView?: LiveViewHub,
 ): Promise<AskPipeline> {
   const logger = noopLogger;
 
@@ -452,6 +454,7 @@ export async function createDefaultAskPipeline(
 
   return new AskPipeline({
     ownershipRecorder,
+    ...(liveView === undefined ? {} : { liveView }),
     searchProvider,
     fetcher,
     extractor: new ReadabilityExtractor(),
@@ -467,7 +470,8 @@ function runtimeWithDefaults(context: CommandContext, runtime?: Partial<AskRunti
   return {
     createPipeline:
       runtime?.createPipeline ??
-      ((query, browser) => createDefaultAskPipeline(query, browser, context.settings.env())),
+      ((query, browser) =>
+        createDefaultAskPipeline(query, browser, context.settings.env(), context.liveView)),
     resolveDefaults: runtime?.resolveDefaults ?? (() => context.settings.preferences()),
     recordHistory: runtime?.recordHistory ?? recordTaskHistory,
     runTask: runtime?.runTask ?? runAgenticTaskWithRankSink,
@@ -514,6 +518,7 @@ async function runAgenticAsk(
       goal: question,
       receipt,
       signal: context.signal,
+      ...(context.liveView === undefined ? {} : { liveView: context.liveView }),
       model: agent.model,
       ...(agent.thinkingSource === undefined ? {} : { thinkingSource: agent.thinkingSource }),
       auth: agent.auth,

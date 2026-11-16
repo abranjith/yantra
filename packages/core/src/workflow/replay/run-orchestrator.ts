@@ -41,6 +41,7 @@ import type {
 import { writeFileAtomic } from '../../fs/atomic-write.js';
 import type { LiveViewHub } from '../../live-view/live-view-hub.js';
 import type { ReplayTaskPage } from '../../live-view/replay-task-page.js';
+import { serveLiveViewOnRunSocket } from '../../live-view/run-socket.js';
 import { ResourceBusyError } from '../../locks/resource-lock.js';
 import {
   writeExecutionReceipt,
@@ -276,6 +277,7 @@ export class RunOrchestrator {
     try {
       await this.openRunEvents(runEvents, runId, runDir, manifest);
       this.opts.runStore.ownership?.(runId)?.attachEvents(runEvents);
+      this.serveLiveView(runId);
       try {
         return await this.runAfterOpen({
           request,
@@ -537,6 +539,7 @@ export class RunOrchestrator {
       // execution, and `task_resumed` opens the new segment.
       await this.openRunEvents(runEvents, runId, runDir, manifest);
       this.opts.runStore.ownership?.(runId)?.attachEvents(runEvents);
+      this.serveLiveView(runId);
       try {
         return await this.resumeAfterOpen(runId, point, runEvents);
       } catch (error) {
@@ -670,6 +673,14 @@ export class RunOrchestrator {
 
   // -------------------------------------------------------------------------
   // Private helpers
+
+  /** Serves the live view's frames on this run's socket (FEAT-069), when both exist. */
+  private serveLiveView(runId: string): void {
+    const ownership = this.opts.runStore.ownership?.(runId);
+    if (ownership !== undefined && this.opts.liveView) {
+      serveLiveViewOnRunSocket(ownership, this.opts.liveView);
+    }
+  }
 
   /** Attaches the executor's page to the live view, when the caller passed one. */
   private attachLiveView(ctx: ExecutionContext): ReplayTaskPage | undefined {

@@ -10,3 +10,4 @@ export * from './task-page-source.js';
 export * from './replay-task-page.js';
 export * from './screencast-source.js';
 export * from './live-view-hub.js';
+export * from './run-socket.js';

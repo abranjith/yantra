@@ -553,7 +553,7 @@ tests/browser/agent-popup-policy.spec.ts tests/browser/agent-controller.spec.ts`
 
 ### TASK-008: Worker run socket — `frames/1` capability and frame lane
 
-- [ ] **Implementation**: In FEAT-064's run-socket server: advertise `frames/1` in `hello`
+- [x] **Implementation**: In FEAT-064's run-socket server: advertise `frames/1` in `hello`
       capabilities when a hub is attached; route an authenticated client's `frames.start`,
       `frames.stop` and `frame.ack` to `hub.addClient(...)`; write `frames.cleared` and
       `frames.state` to the **control/event queue** and frames (encoded by TASK-002's codec as type
@@ -562,17 +562,35 @@ tests/browser/agent-popup-policy.spec.ts tests/browser/agent-controller.spec.ts`
       the FEAT-072 worker adapter, create the `LiveViewHub` per run and pass it through the
       handler dependencies to the orchestrators; the terminal adapter passes one too, idle until a
       client sends `frames.start`.
-- [ ] **Unit Tests**: over a real local socket with a fake hub: frames only after `frames.start`;
+- [x] **Unit Tests**: over a real local socket with a fake hub: frames only after `frames.start`;
       `frames.cleared` written before any later frame even when a frame is queued; stalled
       `frame.ack` does not delay event, heartbeat or intervention messages (§10 "stalled frame
       acknowledgements not delaying control traffic"); a frame payload over 4 MiB is never written;
       a client without `frames/1` negotiation receives no frames; two clients each get their own
       slot; disconnect mid-frame stops capture when it was the last client.
-- [ ] **Documentation Update**: Invoke **Document** update mode for the architecture document (run
+- [x] **Documentation Update**: Invoke **Document** update mode for the architecture document (run
       socket frame lane).
 - **Verify**: the FEAT-064 run-socket test file plus the new cases pass on Windows, macOS and Linux
   CI (named pipes and Unix sockets).
 - **Depends on**: TASK-007, FEAT-064, FEAT-072
+- **Outcome (2026-11-15)**: `serveLiveViewOnRunSocket(session, hub)` registers the three frame
+  messages on the ownership session, advertising `frames/1`. The server's `ChannelConnection` gains
+  optional `capabilities`, `sendFrame`, `clearFrame` and `whenClosed` (fakes stay valid).
+  `frames.cleared` first drops the connection's unsent frame (`OutboundQueues.dropFrame`), so
+  nothing of an older generation can follow it. A frame that cannot be framed (over 4 MiB) is never
+  written and is acked internally, so the next one is offered. Wiring:
+  - `CommandContext.liveView`: one `LiveViewHub` per worker invocation, closed in `finally`. The
+    terminal adapter creates an idle one.
+  - `do` / `ask` / `research` pass it in the agentic request. Non-agentic `ask` / `research` pass
+    it to `AskPipeline` / `ResearchLoop`, which serve it with no task page, so the app sees
+    `no_page` and not `incompatible_worker`.
+  - `run` / `resume` pass it through `buildOrchestratorRuntime`.
+
+  The hub bounds self-requeued reconciles (8). A source that hands out a new page every time makes
+  it `unavailable/capture_failed` instead of spinning the event loop. A test fake did exactly that.
+  Two `apps/cli` characterization cases (`registry-parity`, `terminal-baseline` `template.save`)
+  fail with or without these changes, so they are pre-existing and noted in TODO. The cross-OS
+  `Verify` (macOS and Linux sockets) runs in CI.
 
 ### TASK-009: Host relay — `frames.subscribe`, per-window slots and the binary WebSocket lane
 
@@ -747,7 +765,7 @@ tests/browser/agent-popup-policy.spec.ts tests/browser/agent-controller.spec.ts`
 - [x] TASK-005: Frame gate — generations, fresh-capture admission and clear signals
 - [x] TASK-006: Task page source and the CDP screencast source
 - [x] TASK-007: Live-view hub — per-client latest-wins delivery, states, and orchestrator wiring
-- [ ] TASK-008: Worker run socket — `frames/1` capability and frame lane
+- [x] TASK-008: Worker run socket — `frames/1` capability and frame lane
 - [ ] TASK-009: Host relay — `frames.subscribe`, per-window slots and the binary WebSocket lane
 - [ ] TASK-010: BrowserViewport, the live-view store and the text alternative in the cockpit
 - [ ] TASK-011: Automatic Solid when the live view is over budget

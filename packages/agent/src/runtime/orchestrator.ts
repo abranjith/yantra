@@ -63,6 +63,7 @@ import {
   workflowsRoot,
   type AgentBrowserController as AgentBrowserControllerType,
   type LiveViewHub,
+  serveLiveViewOnRunSocket,
   type TaskPageSource,
   type AmbientGrants,
   type PayloadSanitizer,
@@ -760,6 +761,11 @@ export async function runAgenticTask(
       clock: { now: () => now().toISOString() },
       ceiling: interventionCeiling,
     });
+    // FEAT-069: frames/1 on the run socket. A run whose task page never
+    // exists still answers, with `frames.state no_page`.
+    if (ownership !== undefined && request.liveView !== undefined) {
+      serveLiveViewOnRunSocket(ownership, request.liveView);
+    }
     ownership?.registerChannelHandler('attendance', 'interventions', (message, connection) => {
       const count =
         typeof message.count === 'number' && Number.isInteger(message.count) ? message.count : null;

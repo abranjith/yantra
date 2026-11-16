@@ -35,6 +35,7 @@ import {
   loadSearchConfig,
   resolveSearchProvider,
   type EffectivePreferences,
+  type LiveViewHub,
   type Logger,
   type ResearchOptions,
   type ResearchRunResult,
@@ -416,6 +417,7 @@ export async function createDefaultResearchLoop(
   invocation: ResearchInvocation,
   browser: BrowserRuntimeOptions = {},
   env: Readonly<NodeJS.ProcessEnv> = {},
+  liveView?: LiveViewHub,
 ): Promise<ResearchLoop> {
   const logger = noopLogger;
 
@@ -480,6 +482,7 @@ export async function createDefaultResearchLoop(
 
   return new ResearchLoop({
     ownershipRecorder,
+    ...(liveView === undefined ? {} : { liveView }),
     searchProvider: resolved.value,
     fetcher,
     extractor: new ReadabilityExtractor(),
@@ -499,7 +502,7 @@ function runtimeWithDefaults(
     createLoop:
       runtime?.createLoop ??
       ((invocation, browser) =>
-        createDefaultResearchLoop(invocation, browser, context.settings.env())),
+        createDefaultResearchLoop(invocation, browser, context.settings.env(), context.liveView)),
     resolveDefaults: runtime?.resolveDefaults ?? (() => context.settings.preferences()),
     runTask: runtime?.runTask ?? runAgenticTaskWithRankSink,
     resolveAgent: runtime?.resolveAgent ?? resolveAgentInvocation,
@@ -567,6 +570,7 @@ async function runAgenticResearch(
       goal: topic,
       receipt,
       signal: context.signal,
+      ...(context.liveView === undefined ? {} : { liveView: context.liveView }),
       model: agent.model,
       ...(agent.thinkingSource === undefined ? {} : { thinkingSource: agent.thinkingSource }),
       auth: agent.auth,

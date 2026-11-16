@@ -8,6 +8,60 @@
       "task": "TASK-001"
     },
     {
+      "path": "apps/cli/src/adapters/terminal/terminal-adapter.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/cli/src/adapters/worker/worker-adapter.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/cli/src/commands/ask.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/cli/src/commands/do.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/cli/src/commands/research.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/cli/src/commands/resume.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/cli/src/commands/run.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/cli/src/context/command-context.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/cli/src/runtime.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "docs/protocol-spec.md",
       "status": "M",
       "role": "implement",
@@ -69,7 +123,7 @@
     },
     {
       "path": "packages/agent/tests/runtime/live-view-characterization.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
@@ -128,6 +182,12 @@
       "task": "TASK-003"
     },
     {
+      "path": "packages/core/src/extraction/ask-pipeline.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "packages/core/src/index.ts",
       "status": "M",
       "role": "implement",
@@ -159,7 +219,7 @@
     },
     {
       "path": "packages/core/src/live-view/live-view-hub.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
@@ -168,6 +228,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/src/live-view/run-socket.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "packages/core/src/live-view/screencast-source.ts",
@@ -180,6 +246,24 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/src/research/research-loop.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/core/src/run-channel/outbound-queues.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/core/src/run-channel/server.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "packages/core/src/workflow/replay/run-orchestrator.ts",
@@ -231,13 +315,13 @@
     },
     {
       "path": "packages/core/tests/live-view/live-view-hub.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
     {
       "path": "packages/core/tests/live-view/replay-characterization.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
@@ -246,6 +330,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/tests/live-view/run-socket.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
     },
     {
       "path": "packages/core/tests/live-view/screencast-source.spec.ts",

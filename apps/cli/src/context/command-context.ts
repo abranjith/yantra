@@ -3,6 +3,7 @@ import type {
   InitAnswerCollector,
   ConfirmationGateway,
   InstallOfferGateway,
+  LiveViewHub,
   Logger,
 } from '@yantra/core';
 
@@ -68,4 +69,9 @@ export interface CommandContext {
     installOffer(interactive: boolean): InstallOfferGateway | null;
   };
   openExternal(path: string): void;
+  /**
+   * The invocation's live browser view (FEAT-069). One per run; idle (no
+   * capture, no cost) until an app window starts it over the run socket.
+   */
+  readonly liveView?: LiveViewHub;
 }

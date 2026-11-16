@@ -50,6 +50,9 @@ import {
 } from './screencast-source.js';
 import type { TaskPage, TaskPageEvent, TaskPageSource } from './task-page-source.js';
 
+/** Self-triggered reconcile passes allowed in a row before the hub gives up. */
+const MAX_SELF_REQUEUES = 8;
+
 /** Longest page title sent for the text alternative. */
 export const LIVE_VIEW_TITLE_MAX_CHARS = 200;
 /** Longest host sent for the text alternative. */
@@ -160,6 +163,8 @@ export class LiveViewHub {
   private captureSize: { width: number; height: number } | null = null;
   private reconciling: Promise<void> = Promise.resolve();
   private reconcileQueued = false;
+  /** Reconciles in a row that re-queued themselves with no outside event. */
+  private selfRequeues = 0;
   private closed = false;
 
   public constructor(private readonly options: LiveViewHubOptions = {}) {
@@ -459,7 +464,15 @@ export class LiveViewHub {
     };
   }
 
-  private scheduleReconcile(): void {
+  private scheduleReconcile(fromReconcile = false): void {
+    this.selfRequeues = fromReconcile ? this.selfRequeues + 1 : 0;
+    if (this.selfRequeues > MAX_SELF_REQUEUES) {
+      // The source keeps changing under every pass (it should hand out one
+      // stable page): stop rather than spin the event loop.
+      this.fail('CAPTURE_FAILED', new Error('The task page source never settled.'));
+      this.selfRequeues = 0;
+      return;
+    }
     if (this.reconcileQueued) return;
     this.reconcileQueued = true;
     this.reconciling = this.reconciling.then(async () => {
@@ -507,7 +520,7 @@ export class LiveViewHub {
       after.guard !== (this.guard !== null) ||
       (this.capture !== null && this.capturePage !== (after.page?.page ?? null))
     ) {
-      this.scheduleReconcile();
+      this.scheduleReconcile(true);
     }
   }
 

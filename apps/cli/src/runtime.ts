@@ -27,6 +27,7 @@ import {
   type BrowserRuntimeOptions,
   type ConfirmationGateway,
   type KeychainProvider,
+  type LiveViewHub,
   type Logger,
   type RankSignalSink,
   type RateLimitStore,
@@ -185,6 +186,8 @@ export async function buildOrchestratorRuntime(
      * composition with no configured choice, which resolves as `auto`.
      */
     readonly browser?: BrowserRuntimeOptions;
+    /** The run's live browser view (FEAT-069); the orchestrator attaches its page. */
+    readonly liveView?: LiveViewHub;
   } = {},
 ): Promise<OrchestratorRuntime> {
   const logger = opts.logger ?? noopLogger;
@@ -235,6 +238,7 @@ export async function buildOrchestratorRuntime(
     ethicsGate,
     logger,
     confirmationGateway: opts.confirmationGateway ?? null,
+    liveView: opts.liveView ?? null,
     synthesis:
       opts.synthesis === undefined ? null : buildSynthesisStrategies(opts.synthesis, logger),
   });

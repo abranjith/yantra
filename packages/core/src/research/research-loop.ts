@@ -44,6 +44,8 @@ import type { SearchProvider } from '../extraction/search/registry.js';
 import { processSource } from '../extraction/source-processor.js';
 import type { SearchResult } from '../extraction/types.js';
 import { writeFileAtomic } from '../fs/atomic-write.js';
+import type { LiveViewHub } from '../live-view/live-view-hub.js';
+import { serveLiveViewOnRunSocket } from '../live-view/run-socket.js';
 import {
   domainFromUrl,
   rankReasonForFailureStage,
@@ -128,6 +130,11 @@ export interface ResearchLoopDependencies {
    * it to its ownership session, so every browser it launches is recorded.
    */
   readonly ownershipRecorder?: DeferredBrowserOwnershipRecorder;
+  /**
+   * The run's live browser view (FEAT-069). Research reads only background
+   * pool pages, never streamed, so the run socket answers `no_page`.
+   */
+  readonly liveView?: LiveViewHub;
   /** Wall-clock timestamp source for artifacts/freshness; defaults to `Date`. */
   readonly clock?: () => Date;
   /** Monotonic ms clock for the budget tracker; defaults to `Date.now`. */
@@ -219,6 +226,9 @@ export class ResearchLoop {
     try {
       runEvents.open({ runDir, runId, logger: this.deps.logger });
       ownership.attachEvents(runEvents);
+      if (this.deps.liveView !== undefined) {
+        serveLiveViewOnRunSocket(ownership, this.deps.liveView);
+      }
     } catch (error) {
       // An unopenable log is an environment failure before the run proceeds.
       await this.writeManifest(runDir, taskId, options, startedAt, 'failed');
