@@ -21,6 +21,8 @@ export interface AppRpc {
   subscribe(method: string, params?: Record<string, unknown>): void;
   /** Reconnects now instead of waiting out the backoff, when disconnected. */
   reconnectNow?(): void;
+  /** Handles binary messages (live-view frames, FEAT-069); returns the unsubscribe function. */
+  onBinary?(handler: (bytes: ArrayBuffer) => void): () => void;
 }
 
 /** An {@link AppRpc} over a client that is attached once the session opens. */
@@ -32,6 +34,10 @@ export class DeferredRpc implements AppRpc {
     off: (() => void) | null;
   }[] = [];
   private readonly pendingSubscriptions: { method: string; params: Record<string, unknown> }[] = [];
+  private readonly pendingBinary: {
+    handler: (bytes: ArrayBuffer) => void;
+    off: (() => void) | null;
+  }[] = [];
   private readonly waiters: (() => void)[] = [];
 
   public constructor(private readonly store: ConnectionStore) {
@@ -44,6 +50,7 @@ export class DeferredRpc implements AppRpc {
   public attach(client: RpcClient): void {
     this.client = client;
     for (const entry of this.pendingHandlers) entry.off = client.on(entry.method, entry.handler);
+    for (const entry of this.pendingBinary) entry.off = client.onBinary(entry.handler);
     for (const { method, params } of this.pendingSubscriptions.splice(0)) {
       client.subscribe(method, params);
     }
@@ -63,6 +70,17 @@ export class DeferredRpc implements AppRpc {
       entry.off?.();
       const index = this.pendingHandlers.indexOf(entry);
       if (index >= 0) this.pendingHandlers.splice(index, 1);
+    };
+  }
+
+  public onBinary(handler: (bytes: ArrayBuffer) => void): () => void {
+    if (this.client !== null) return this.client.onBinary(handler);
+    const entry = { handler, off: null as (() => void) | null };
+    this.pendingBinary.push(entry);
+    return () => {
+      entry.off?.();
+      const index = this.pendingBinary.indexOf(entry);
+      if (index >= 0) this.pendingBinary.splice(index, 1);
     };
   }
 

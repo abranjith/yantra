@@ -41,6 +41,7 @@ import { SEMANTIC_COLOR_NAMES } from '../tokens/semantic.js';
 import { BG_CLASS, TEXT_CLASS } from './classes.js';
 import { fixtureRuns, type FixtureOutcome, type FixtureRun } from './fixtures.js';
 import { INSTRUMENT_ENTRIES } from './instrument-entries.js';
+import { LIVE_VIEW_ENTRIES } from './live-view-entries.js';
 import { MISSION_ENTRIES } from './mission-entries.js';
 
 declare global {
@@ -887,4 +888,5 @@ export const GALLERY_ENTRIES: readonly GalleryEntry[] = [
   },
   ...INSTRUMENT_ENTRIES,
   ...MISSION_ENTRIES,
+  ...LIVE_VIEW_ENTRIES,
 ];

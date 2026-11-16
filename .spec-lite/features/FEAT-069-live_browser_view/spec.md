@@ -632,7 +632,7 @@ frame_seq}` (schema `FramesWindowAck` in protocol). The app has to ack windows s
 
 ### TASK-010: BrowserViewport, the live-view store and the text alternative in the cockpit
 
-- [ ] **Implementation**: (1) Drshya instrument `packages/ui/src/instruments/browser-viewport.tsx`:
+- [x] **Implementation**: (1) Drshya instrument `packages/ui/src/instruments/browser-viewport.tsx`:
       presentational, props `{state, page, draw: (canvas) => void}`; renders a `<canvas>` with
       `role="img"` and an accessible name ("Live view of <host>" or the state's message) and state
       overlays with Drshya tokens and registry icons only: `protected` → "Protected screen —
@@ -652,18 +652,33 @@ frame_seq}` (schema `FramesWindowAck` in protocol). The app has to ack windows s
       behind the HUD. State changes (`protected`, back to `live`, `headed`, `unavailable`) are
       announced once through the cockpit's polite live region; individual frames never are, and
       focus never moves. (5) Gallery entries for every state in light, dark, Glass and Solid.
-- [ ] **Unit Tests** (Testing Library, jsdom): `frames.cleared` clears the canvas and shows the
+- [x] **Unit Tests** (Testing Library, jsdom): `frames.cleared` clears the canvas and shows the
       protected message in the same tick; a pending decode of the older generation resolving after
       `cleared` is not drawn and its bitmap is closed; a frame below the floor is dropped and acked;
       disconnect removes the image and shows `reconnecting`; each state renders its message and
       accessible name; text alternative renders host and title as text (a title containing markup
       renders literally); live-region announcements fire once per state change and not per frame;
       `axe-core` reports no violations for every gallery state.
-- [ ] **Documentation Update**: Invoke **Document** update mode for the app usage docs (live view
+- [x] **Documentation Update**: Invoke **Document** update mode for the app usage docs (live view
       states and the text alternative).
 - **Verify**: `pnpm --filter @yantra/ui test` and `pnpm --filter <apps/web package> test`; manual
   check in `/gallery` in both themes; visual baselines added for each state.
 - **Depends on**: TASK-009, FEAT-061, FEAT-067
+- **Outcome (2026-11-15)**: The instrument file is `BrowserViewport.tsx`, following the repo's
+  PascalCase instrument names. It takes `{state, reason, page, draw}`. Every non-live state covers
+  the canvas, and the canvas is always a named `img`. New registry icons are `liveView.headed`,
+  `liveView.noPage` and `liveView.unavailable`, and the protected state reuses `glyph.protected`.
+  The web RPC client gained a binary lane (`onBinary`, `binaryType = 'arraybuffer'`). The store
+  acks frames with the TASK-009 `frames.ack` request and imports the codec from
+  `@yantra/protocol/screencast`. The cockpit puts the viewport in the existing aria-hidden backdrop
+  slot. The text alternative sits at the top of the Engine panel and links to `#cockpit-engine`.
+  Announcements use a new `live_view` category, keyed per state change, so a redrawn frame never
+  re-announces. The gallery entry `instrument-browser-viewport` passes the real-Chrome harness
+  (axe, light/dark × Glass/Solid) and was checked by eye. **Visual baselines:** none are committed
+  for any gallery entry. The harness compares pixels only on Linux CI, so a Linux baseline for this
+  entry must be recorded there (`UPDATE_DRSHYA_BASELINES=1`). That is noted in TODO. Five
+  `@typescript-eslint/unbound-method` errors in `apps/web/tests/host/app-rpc.spec.tsx` fail on
+  `development` without these changes, so they are pre-existing and noted in TODO.
 
 ### TASK-011: Automatic Solid when the live view is over budget
 
@@ -777,7 +792,7 @@ frame_seq}` (schema `FramesWindowAck` in protocol). The app has to ack windows s
 - [x] TASK-007: Live-view hub — per-client latest-wins delivery, states, and orchestrator wiring
 - [x] TASK-008: Worker run socket — `frames/1` capability and frame lane
 - [x] TASK-009: Host relay — `frames.subscribe`, per-window slots and the binary WebSocket lane
-- [ ] TASK-010: BrowserViewport, the live-view store and the text alternative in the cockpit
+- [x] TASK-010: BrowserViewport, the live-view store and the text alternative in the cockpit
 - [ ] TASK-011: Automatic Solid when the live view is over budget
 - [ ] TASK-012: End-to-end screencast evidence, privacy scans, performance and safety docs
 

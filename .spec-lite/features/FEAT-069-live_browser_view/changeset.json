@@ -69,7 +69,7 @@
     },
     {
       "path": "apps/cli/src/ui/host/live-view-relay.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
@@ -87,9 +87,69 @@
     },
     {
       "path": "apps/cli/tests/ui/host/live-view-relay.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
+    },
+    {
+      "path": "apps/web/src/features/cockpit/Cockpit.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/src/features/cockpit/CockpitAnnouncer.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/src/features/live/announcer.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/src/host/app-rpc.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/src/host/rpc-client.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/src/live-view/live-view-store.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/src/live-view/live-view-text-alternative.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/src/live-view/use-live-view.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/tests/live-view/live-view-store.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/tests/live-view/text-alternative.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
     },
     {
       "path": "docs/protocol-spec.md",
@@ -446,10 +506,46 @@
       "task": "TASK-002"
     },
     {
+      "path": "packages/ui/src/gallery/entries.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "packages/ui/src/gallery/live-view-entries.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "packages/ui/src/icons/registry.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "packages/ui/src/instruments/BrowserViewport.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "packages/ui/src/instruments/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
       "path": "packages/ui/tests/boundary-rules.spec.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/tests/instruments/browser-viewport.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
     }
   ],
   "excluded": [

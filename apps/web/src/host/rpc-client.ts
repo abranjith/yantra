@@ -31,6 +31,8 @@ export interface SocketLike {
   onmessage: ((event: { readonly data: unknown }) => void) | null;
   onclose: ((event: { readonly code: number }) => void) | null;
   onerror: ((event: unknown) => void) | null;
+  /** Set to `arraybuffer` so binary frames (FEAT-069) arrive as ArrayBuffers. */
+  binaryType?: string;
 }
 
 /** Timer functions, injected for tests. */
@@ -107,6 +109,7 @@ export class RpcClient {
   private readonly pending = new Map<number, Pending>();
   private readonly subscriptions = new Map<string, Subscription>();
   private readonly handlers = new Map<string, Set<(params: Record<string, unknown>) => void>>();
+  private readonly binaryHandlers = new Set<(bytes: ArrayBuffer) => void>();
   private readonly timers: ClientTimers;
   private readonly random: () => number;
   private readonly now: () => number;
@@ -144,6 +147,7 @@ export class RpcClient {
       this.deps.createSocket ?? ((url) => new WebSocket(url) as unknown as SocketLike)
     )(this.deps.url);
     this.socket = socket;
+    socket.binaryType = 'arraybuffer';
     socket.onopen = () => {
       socket.send(
         JSON.stringify({
@@ -200,6 +204,15 @@ export class RpcClient {
   }
 
   /**
+   * Handles binary messages (live-view frames, FEAT-069); returns the
+   * unsubscribe function.
+   */
+  public onBinary(handler: (bytes: ArrayBuffer) => void): () => void {
+    this.binaryHandlers.add(handler);
+    return () => this.binaryHandlers.delete(handler);
+  }
+
+  /**
    * Reconnects now instead of waiting out the backoff (the cockpit's "Retry
    * now", FEAT-067). Does nothing while connected, connecting, or ended.
    */
@@ -244,6 +257,10 @@ export class RpcClient {
   }
 
   private receive(data: unknown): void {
+    if (data instanceof ArrayBuffer) {
+      for (const handler of [...this.binaryHandlers]) handler(data);
+      return;
+    }
     if (typeof data !== 'string') return;
     let message: unknown;
     try {
