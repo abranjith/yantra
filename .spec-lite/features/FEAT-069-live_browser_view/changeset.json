@@ -104,6 +104,12 @@
       "task": "TASK-010"
     },
     {
+      "path": "apps/web/src/features/cockpit/CockpitLayout.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
       "path": "apps/web/src/features/live/announcer.ts",
       "status": "M",
       "role": "implement",
@@ -122,34 +128,58 @@
       "task": "TASK-010"
     },
     {
-      "path": "apps/web/src/live-view/live-view-store.ts",
+      "path": "apps/web/src/live-view/budget-monitor.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/src/live-view/live-view-store.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
     {
       "path": "apps/web/src/live-view/live-view-text-alternative.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/src/live-view/use-budget-monitor.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-011"
     },
     {
       "path": "apps/web/src/live-view/use-live-view.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
     {
-      "path": "apps/web/tests/live-view/live-view-store.spec.ts",
+      "path": "apps/web/tests/live-view/budget-monitor.spec.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/tests/live-view/live-view-store.spec.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
     {
       "path": "apps/web/tests/live-view/text-alternative.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/tests/live-view/use-budget-monitor.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-011"
     },
     {
       "path": "docs/protocol-spec.md",
@@ -513,7 +543,7 @@
     },
     {
       "path": "packages/ui/src/gallery/live-view-entries.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
@@ -525,7 +555,7 @@
     },
     {
       "path": "packages/ui/src/instruments/BrowserViewport.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
@@ -543,7 +573,7 @@
     },
     {
       "path": "packages/ui/tests/instruments/browser-viewport.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     }

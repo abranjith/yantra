@@ -3,7 +3,7 @@
  * started while mounted, stopped (and the host told) on unmount.
  */
 
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import { useRpc } from '../host/app-rpc.js';
 import { connectionStore } from '../host/connection-store.js';
@@ -25,13 +25,16 @@ export function useLiveView(
   onSample?: (sample: LiveViewFrameSample) => void,
 ): UseLiveView {
   const rpc = useRpc();
+  // The store is created once; it must call the latest sample handler.
+  const sampleRef = useRef(onSample);
+  sampleRef.current = onSample;
   const [store] = useState(
     () =>
       new LiveViewStore({
         rpc,
         runId,
         connection: connectionStore,
-        ...(onSample === undefined ? {} : { onSample }),
+        onSample: (sample) => sampleRef.current?.(sample),
       }),
   );
   useEffect(() => {

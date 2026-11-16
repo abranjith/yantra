@@ -16,6 +16,7 @@ import {
   LiveViewTextAlternative,
   liveViewAnnouncement,
 } from '../../live-view/live-view-text-alternative.js';
+import { useBudgetMonitor } from '../../live-view/use-budget-monitor.js';
 import { useLiveView } from '../../live-view/use-live-view.js';
 import { forgetLaunched, wasLaunchedHere } from '../composer/submit.js';
 import type { CockpitMode } from '../live/cockpit-state.js';
@@ -118,7 +119,8 @@ export function Cockpit({ stream, mode, invocation = null }: CockpitProps): Reac
   const view = useMemo(() => announceView(state, displayed.kind), [state, displayed.kind]);
 
   // FEAT-069: the task page, live, behind the HUD; announced once per state change.
-  const live = useLiveView(state.runId);
+  const budget = useBudgetMonitor();
+  const live = useLiveView(state.runId, budget.onSample);
   const liveState = live.snapshot.state;
   const previousLiveState = useRef<typeof liveState | null>(null);
   const [liveAnnouncement, setLiveAnnouncement] = useState<{
@@ -167,6 +169,7 @@ export function Cockpit({ stream, mode, invocation = null }: CockpitProps): Reac
   }, [outcomeSpoken, navigate, reducedMotion, runId, invocation]);
   return (
     <CockpitLayout
+      {...(budget.surfaces === undefined ? {} : { surfaces: budget.surfaces })}
       topBar={
         <CockpitTopBar
           state={state}
@@ -180,19 +183,22 @@ export function Cockpit({ stream, mode, invocation = null }: CockpitProps): Reac
         />
       }
       status={
-        <CockpitStatus
-          displayed={displayed}
-          cockpit={state}
-          error={stopError}
-          onAction={(action) => {
-            if (action.id !== 'cancel' || invocation === null) return false;
-            requestStop();
-            return true;
-          }}
-          onKeepWaiting={() => {
-            setAcknowledgedStall(state.stalledAt);
-          }}
-        />
+        <>
+          {budget.surfaces === 'solid' ? <SolidNotice /> : null}
+          <CockpitStatus
+            displayed={displayed}
+            cockpit={state}
+            error={stopError}
+            onAction={(action) => {
+              if (action.id !== 'cancel' || invocation === null) return false;
+              requestStop();
+              return true;
+            }}
+            onKeepWaiting={() => {
+              setAcknowledgedStall(state.stalledAt);
+            }}
+          />
+        </>
       }
       backdrop={
         <BrowserViewport
@@ -227,5 +233,19 @@ export function Cockpit({ stream, mode, invocation = null }: CockpitProps): Reac
         />
       }
     />
+  );
+}
+
+/**
+ * Said once, when the live view went over budget and the cockpit switched
+ * itself to Solid (FEAT-069). The preference is unchanged; it says how to
+ * keep Glass.
+ */
+function SolidNotice(): ReactNode {
+  return (
+    <p data-part="solid-notice" className="type-body rounded-control bg-surface p-3 text-ink-2">
+      Switched to Solid to keep the live view smooth. Your <code>ui.surfaces</code> preference is
+      unchanged: <code>yantra prefs set ui.surfaces glass</code> keeps Glass for later runs.
+    </p>
   );
 }

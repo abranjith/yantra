@@ -24,6 +24,8 @@ export interface CockpitLayoutProps {
   readonly backdrop?: ReactNode;
   /** The polite live region (TASK-006). */
   readonly announcer?: ReactNode;
+  /** `solid` once the live view went over budget (FEAT-069): a runtime override. */
+  readonly surfaces?: 'solid';
 }
 
 function Panel({
@@ -60,9 +62,14 @@ export function CockpitLayout({
   command,
   backdrop,
   announcer,
+  surfaces,
 }: CockpitLayoutProps): ReactNode {
   return (
-    <div data-part="cockpit" className="relative isolate overflow-hidden rounded-frame bg-sunken">
+    <div
+      data-part="cockpit"
+      {...(surfaces === undefined ? {} : { 'data-surfaces': surfaces })}
+      className="relative isolate overflow-hidden rounded-frame bg-sunken"
+    >
       <div aria-hidden="true" data-slot="backdrop" className="absolute inset-0 -z-10">
         {backdrop}
       </div>

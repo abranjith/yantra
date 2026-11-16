@@ -682,7 +682,7 @@ frame_seq}` (schema `FramesWindowAck` in protocol). The app has to ack windows s
 
 ### TASK-011: Automatic Solid when the live view is over budget
 
-- [ ] **Implementation**: `apps/web/src/live-view/budget-monitor.ts`: a pure monitor over a sliding
+- [x] **Implementation**: `apps/web/src/live-view/budget-monitor.ts`: a pure monitor over a sliding
       5-second window with an injected clock, fed by the store (frames offered, frames drawn, time
       spent in decode-and-draw handlers) and by a `PerformanceObserver` for
       `long-animation-frame` entries where supported. It reports `over_budget` when, for two
@@ -693,15 +693,24 @@ frame_seq}` (schema `FramesWindowAck` in protocol). The app has to ack windows s
       shows a one-time notice "Switched to Solid to keep the live view smooth." with a link to the
       preference. When the preference is already `solid` or `prefers-reduced-transparency` is
       set, the monitor does nothing.
-- [ ] **Unit Tests** (stepped clock): a single slow window does not switch; two consecutive slow
+- [x] **Unit Tests** (stepped clock): a single slow window does not switch; two consecutive slow
       windows switch once; a low offered rate (worker idle, page static) never switches; CPU-share
       breach alone switches; the preference value is unchanged after a switch; an explicit Solid
       preference disables the monitor; the notice appears once.
-- [ ] **Documentation Update**: Invoke **Document** update mode for the app usage docs (automatic
+- [x] **Documentation Update**: Invoke **Document** update mode for the app usage docs (automatic
       Solid).
 - **Verify**: `pnpm --filter <apps/web package> test`; TASK-012's performance case observes either
   ≥ 5 fps within budget or Solid engaged.
 - **Depends on**: TASK-010, TASK-001
+- **Outcome (2026-11-15)**: `BudgetMonitor` closes fixed 5 s windows. A window is over budget when
+  the worker offered at least 5 fps and the window drew fewer than 5 fps or spent more than 15 % of
+  one core. Two such windows in a row switch the view once. The thresholds are the S1 values (plan
+  §10). Busy time is the store's handler time, plus long-animation-frame script time whose invoker
+  is a WebSocket or message event listener, where Chrome supports the observer.
+  `CockpitLayout.surfaces` sets `data-surfaces="solid"` on the cockpit subtree only, so
+  `ui.surfaces` is never written. The one-time notice is text, not a link. The app has no
+  Preferences route yet (FEAT-071 adds Settings), so the notice names the preference and the
+  command that keeps Glass instead.
 
 ### TASK-012: End-to-end screencast evidence, privacy scans, performance and safety docs
 
@@ -793,7 +802,7 @@ frame_seq}` (schema `FramesWindowAck` in protocol). The app has to ack windows s
 - [x] TASK-008: Worker run socket — `frames/1` capability and frame lane
 - [x] TASK-009: Host relay — `frames.subscribe`, per-window slots and the binary WebSocket lane
 - [x] TASK-010: BrowserViewport, the live-view store and the text alternative in the cockpit
-- [ ] TASK-011: Automatic Solid when the live view is over budget
+- [x] TASK-011: Automatic Solid when the live view is over budget
 - [ ] TASK-012: End-to-end screencast evidence, privacy scans, performance and safety docs
 
 Legend: [ ] Not started | [/] In progress | [x] Completed
