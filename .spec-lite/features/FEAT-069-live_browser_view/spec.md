@@ -500,7 +500,7 @@ tests/browser/agent-popup-policy.spec.ts tests/browser/agent-controller.spec.ts`
 
 ### TASK-007: Live-view hub — per-client latest-wins delivery, states, and orchestrator wiring
 
-- [ ] **Implementation**: Add `packages/core/src/live-view/live-view-hub.ts`. One `LiveViewHub` per
+- [x] **Implementation**: Add `packages/core/src/live-view/live-view-hub.ts`. One `LiveViewHub` per
       run, created by whoever runs the handler and passed down as an optional dependency
       (`liveView?: LiveViewHub`) to the agent orchestrator and `RunOrchestrator`, which call
       `hub.attach(taskPageSource)` once the source exists. Clients (`hub.addClient(sink)`) call
@@ -520,7 +520,7 @@ tests/browser/agent-popup-policy.spec.ts tests/browser/agent-controller.spec.ts`
       failures are caught, logged once at `warn` with the reason code, and turn into
       `frames.state unavailable`; the run continues unaffected. Logging records lifecycle and
       counts only, never frame bytes or titles.
-- [ ] **Unit Tests**: with a fake source and fake sinks on a stepped clock: no capture without a
+- [x] **Unit Tests**: with a fake source and fake sinks on a stepped clock: no capture without a
       started client; a late frame arriving after protection start is never offered to any
       client (two clients); `frames.cleared` reaches every client before any later frame; slow
       client A does not delay client B's frames; un-acked client receives at most one frame;
@@ -530,11 +530,26 @@ tests/browser/agent-popup-policy.spec.ts tests/browser/agent-controller.spec.ts`
       outcome is unchanged. **Characterization:** a fixture `do` (scripted fake provider) and a
       fixture `run` workflow produce identical run artifacts with and without a started client
       (ignoring timestamps).
-- [ ] **Documentation Update**: Invoke **Document** update mode for the architecture document
+- [x] **Documentation Update**: Invoke **Document** update mode for the architecture document
       (live-view hub and its zero-cost-when-idle rule).
 - **Verify**: `cd packages/core && npx vitest run tests/live-view/live-view-hub.spec.ts`; rebuild
   core, then the agent orchestrator suite that covers the fixture `do`.
 - **Depends on**: TASK-004, TASK-005, TASK-006
+- **Outcome (2026-11-15)**: The hub reconciles the stream serially toward a desired state (guard
+  and capture only while a started client sees a headless task page). A failed guard is not
+  retried on that page. Any failure clears on a new page, a capture failure also clears on a new
+  document, and both clear when nobody is watching. A fresh guard reports `unknown` until its first
+  read, so a stream begins with a brief `protected` state (fail closed, by design). The client
+  start size is the largest any started client asked for. Agent: `AgenticTaskRequest.liveView`
+  plus `AgenticRunEnvironment.taskPageSource`. Replay: `RunOrchestratorOptions.liveView`, and
+  `ReplayTaskPage.tearDown()` runs before `browser.close()` in both `run` and `resume`. The
+  characterization tests are `packages/agent/tests/runtime/live-view-characterization.spec.ts`
+  (scripted `do`, real Chrome) and `packages/core/tests/live-view/replay-characterization.spec.ts`
+  (fixture `run`). Both compare every run-directory file after normalizing timestamps, durations,
+  ids and paths, and both assert frames really streamed. The agent test excludes `runtime.jsonl`,
+  which differs by environment alone (a one-time compat probe and random session ids). A
+  `server.spec.ts` case used `intervention.answer` as its "unregistered type" and had been failing
+  on `development` (see TASK-002). It now uses a real unknown type.
 
 ### TASK-008: Worker run socket — `frames/1` capability and frame lane
 
@@ -731,7 +746,7 @@ tests/browser/agent-popup-policy.spec.ts tests/browser/agent-controller.spec.ts`
 - [x] TASK-004: Protected-control focus guard in an isolated world
 - [x] TASK-005: Frame gate — generations, fresh-capture admission and clear signals
 - [x] TASK-006: Task page source and the CDP screencast source
-- [ ] TASK-007: Live-view hub — per-client latest-wins delivery, states, and orchestrator wiring
+- [x] TASK-007: Live-view hub — per-client latest-wins delivery, states, and orchestrator wiring
 - [ ] TASK-008: Worker run socket — `frames/1` capability and frame lane
 - [ ] TASK-009: Host relay — `frames.subscribe`, per-window slots and the binary WebSocket lane
 - [ ] TASK-010: BrowserViewport, the live-view store and the text alternative in the cockpit

@@ -68,6 +68,12 @@
       "task": "TASK-003"
     },
     {
+      "path": "packages/agent/tests/runtime/live-view-characterization.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
       "path": "packages/core/src/browser/agent-controller.ts",
       "status": "M",
       "role": "implement",
@@ -152,22 +158,34 @@
       "task": "TASK-004"
     },
     {
-      "path": "packages/core/src/live-view/replay-task-page.ts",
+      "path": "packages/core/src/live-view/live-view-hub.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/core/src/live-view/replay-task-page.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
     {
       "path": "packages/core/src/live-view/screencast-source.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
     {
       "path": "packages/core/src/live-view/task-page-source.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/src/workflow/replay/run-orchestrator.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "packages/core/tests/browser/agent-controller.spec.ts",
@@ -212,22 +230,40 @@
       "task": "TASK-005"
     },
     {
-      "path": "packages/core/tests/live-view/replay-task-page.spec.ts",
+      "path": "packages/core/tests/live-view/live-view-hub.spec.ts",
       "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/core/tests/live-view/replay-characterization.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/core/tests/live-view/replay-task-page.spec.ts",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
     {
       "path": "packages/core/tests/live-view/screencast-source.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
     {
       "path": "packages/core/tests/live-view/settler-navigation-listener.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/tests/run-channel/server.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "packages/protocol/generated/json-schema/run-channel-message.json",
