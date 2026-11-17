@@ -360,6 +360,24 @@ describe('queue.*', () => {
 });
 
 describe('results', () => {
+  it('announces a worker claim and run ID before a result exists, once per transition', async () => {
+    const started = await supervisor.invoke(invocation(['research'], ['q']), DISPLAYED);
+    notices.length = 0;
+    await store.claim(started.invocation_id, { pid: 1, startToken: 'w' });
+    await supervisor.dequeue();
+    expect(
+      notices.filter(([method]) => method === 'invocation.changed').map(([, value]) => value.state),
+    ).toEqual(['claimed']);
+
+    await store.markRunning(started.invocation_id, 'run-abc');
+    await supervisor.dequeue();
+    await supervisor.dequeue();
+    const changes = notices.filter(([method]) => method === 'invocation.changed');
+    expect(changes.map(([, value]) => value.state)).toEqual(['claimed', 'running']);
+    expect(changes.at(-1)?.[1].run_id).toBe('run-abc');
+    expect(notices.some(([method]) => method === 'invocation.result')).toBe(false);
+  });
+
   it('turns a written result into one invocation.result notice', async () => {
     const started = await supervisor.invoke(invocation(['research'], ['q']), DISPLAYED);
     await store.claim(started.invocation_id, { pid: 1, startToken: 'w' });

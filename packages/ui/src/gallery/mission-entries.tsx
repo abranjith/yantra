@@ -227,8 +227,18 @@ function StatusSheet(): ReactNode {
         ]}
       />
       <RunStatusBanner word="stopping" detail="Stopping…" />
-      <RunStatusBanner word="finished" detail="The run ended fulfilled." tone="fulfilled" />
-      <RunStatusBanner word="finished" detail="The run ended failed." tone="failed" />
+      <RunStatusBanner
+        word="finished"
+        detail="The run ended fulfilled."
+        tone="fulfilled"
+        aria-label="Run status: finished fulfilled"
+      />
+      <RunStatusBanner
+        word="finished"
+        detail="The run ended failed."
+        tone="failed"
+        aria-label="Run status: finished failed"
+      />
     </div>
   );
 }

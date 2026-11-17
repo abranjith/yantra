@@ -39,6 +39,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
+import type { ProcessIdentity } from '@yantra/core';
 import {
   APP_OPTION_EXEMPTIONS,
   COMMAND_REGISTRY,
@@ -63,6 +64,7 @@ import {
   readEcho,
   writeLaunchers,
 } from './fixtures/argv-echo/shells.js';
+import { identifyTestHost, stopTestHost } from './fixtures/host-process.js';
 
 const BIN = resolve(import.meta.dirname, '..', 'apps', 'cli', 'dist', 'bin.js');
 const RUN_TIMEOUT = 180_000;
@@ -77,6 +79,7 @@ let home: string;
 let browser: Browser;
 let page: Page;
 let opened: UiOpenResult;
+let hostIdentity: ProcessIdentity | undefined;
 let origin: string;
 let runId = '';
 /** What the page did that a failure message should show. */
@@ -223,6 +226,7 @@ beforeAll(async () => {
     throw new Error('Run `pnpm build` first: the e2e suite runs the built CLI.');
   home = mkdtempSync(join(tmpdir(), 'yantra-e2e-mission-'));
   opened = openUrl();
+  hostIdentity = await identifyTestHost(opened.hostPid);
   origin = `http://127.0.0.1:${opened.port}`;
   browser = await launchGalleryBrowser();
   page = await browser.newPage();
@@ -241,12 +245,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await browser?.close();
-  try {
-    process.kill(opened.hostPid);
-  } catch {
-    // Already gone.
-  }
-  await new Promise((done) => setTimeout(done, 1_500));
+  if (hostIdentity !== undefined) await stopTestHost(hostIdentity);
   rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
 });
 
@@ -414,7 +413,7 @@ describe('@no-llm Mission, end to end', () => {
 
     // Twin: the copied command, run in the OS default shell, starts the identical command.
     const twin = await page.$eval(
-      '[data-instrument="command"] [data-part="command"]',
+      '[data-instrument="cli-twin"] [data-part="command"]',
       (node) => node.textContent ?? '',
     );
     const record = invocationFor(runId);

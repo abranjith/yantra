@@ -122,6 +122,15 @@ export class RunRelay {
     return [...this.runs.keys()];
   }
 
+  /** Delivers records appended by reconciliation after a live owner has exited. */
+  public refresh(runId: string): void {
+    const attachment = this.runs.get(runId);
+    if (attachment === undefined) return;
+    for (const follower of attachment.followers.values()) {
+      this.catchUp(attachment, follower, Number.POSITIVE_INFINITY);
+    }
+  }
+
   /** Registers `run.subscribe` and `run.unsubscribe`. */
   public register(methods: RpcMethodRegistry): void {
     methods

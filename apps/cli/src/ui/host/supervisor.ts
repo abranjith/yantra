@@ -119,6 +119,7 @@ export class Supervisor {
   private dequeuing: Promise<void> | null = null;
   private again = false;
   private readonly announcedResults = new Set<string>();
+  private readonly announcedStates = new Map<string, string>();
 
   public constructor(private readonly deps: SupervisorDeps) {
     this.logger = deps.logger ?? SILENT_HOST_LOGGER;
@@ -308,7 +309,14 @@ export class Supervisor {
 
   private async dequeueOnce(): Promise<void> {
     const records = await this.deps.store.list();
-    for (const record of records) this.pickUpResult(record);
+    for (const record of records) {
+      // Workers write their own claim/run ID outside this process. Relay those
+      // transitions too, so a window can leave the starting view before exit.
+      if (this.announcedStates.get(record.invocation_id) !== this.stateKey(record)) {
+        this.announce(record);
+      }
+      this.pickUpResult(record);
+    }
     for (const record of records.filter((item) => item.state === 'queued')) {
       const differences = (await this.deps.drift?.(record)) ?? [];
       if (differences.length > 0) {
@@ -403,6 +411,7 @@ export class Supervisor {
   }
 
   private announce(record: InvocationRecord): InvokeResult {
+    this.announcedStates.set(record.invocation_id, this.stateKey(record));
     const summary = this.summary(record);
     this.deps.notify('invocation.changed', summary);
     this.logger.info(
@@ -410,6 +419,10 @@ export class Supervisor {
       'invocation changed',
     );
     return summary;
+  }
+
+  private stateKey(record: InvocationRecord): string {
+    return JSON.stringify([record.state, record.run_id]);
   }
 
   private summary(record: InvocationRecord, position?: number): InvokeResult {

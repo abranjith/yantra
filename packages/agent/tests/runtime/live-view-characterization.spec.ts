@@ -67,6 +67,7 @@ class ScriptedProvider implements AgentProvider {
   public constructor(
     private readonly services: RunServices,
     private readonly plan: readonly Step[],
+    private readonly now: () => string,
   ) {}
 
   public open(options: { readonly runDir: string }): Promise<AgentSession> {
@@ -111,7 +112,7 @@ class ScriptedProvider implements AgentProvider {
             callId,
             tool: step.tool,
             input: step.params,
-            at: new Date().toISOString(),
+            at: this.now(),
           });
           const result = await tool.execute(step.params, undefined);
           emit({
@@ -120,7 +121,7 @@ class ScriptedProvider implements AgentProvider {
             tool: step.tool,
             output: auditProjectionOf(result),
             isError: result.status !== 'ok',
-            at: new Date().toISOString(),
+            at: this.now(),
           });
         }
         return { outcome: 'completed', stopReason: 'stop', usage: { turns: 1 } };
@@ -237,6 +238,9 @@ describe('@no-llm live view characterization (real Chrome)', () => {
   });
 
   async function run(liveView: LiveViewHub | undefined, wait: () => Promise<void>) {
+    // Sampling cadence is part of this comparison: frame waits must not move
+    // a budget snapshot to a different tool boundary on a faster/slower host.
+    let clock = Date.parse('2026-11-01T12:00:00.000Z');
     // Equal-length roots: run paths reach a model-visible result, and its byte count.
     const runsRoot = join(root, liveView === undefined ? 'runs-a' : 'runs-b');
     const outcome = await runAgenticTask(
@@ -249,6 +253,8 @@ describe('@no-llm live view characterization (real Chrome)', () => {
         ...(liveView === undefined ? {} : { liveView }),
       },
       {
+        now: () => new Date(clock),
+        budgetNow: () => clock,
         runStore: new LocalRunStore(runsRoot),
         urlPolicyConfig: { maxUrlLength: 2048, requireHttps: false },
         environmentLeaves: {
@@ -263,13 +269,17 @@ describe('@no-llm live view characterization (real Chrome)', () => {
             }),
         },
         createProvider: (services) =>
-          new ScriptedProvider(services, [
-            { tool: 'task_contract', params: { deliverable: 'report', subject: 'Two pages' } },
-            { tool: 'browser_navigate', params: { url: `${baseUrl}/` } },
-            { wait },
-            { tool: 'browser_navigate', params: { url: `${baseUrl}/second` } },
-            { wait },
-          ]),
+          new ScriptedProvider(
+            services,
+            [
+              { tool: 'task_contract', params: { deliverable: 'report', subject: 'Two pages' } },
+              { tool: 'browser_navigate', params: { url: `${baseUrl}/` } },
+              { wait },
+              { tool: 'browser_navigate', params: { url: `${baseUrl}/second` } },
+              { wait },
+            ],
+            () => new Date((clock += 100)).toISOString(),
+          ),
       },
     );
     return outcome;

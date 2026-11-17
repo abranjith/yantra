@@ -252,6 +252,11 @@ export async function startHostRuntime(deps: HostRuntimeDeps): Promise<RunningHo
         }),
       notify: (method, params) => {
         rpc.notify(method, params);
+        // Forced-stop reconciliation writes after the worker socket disappears.
+        // A state transition is a hint to replay its committed tail as well.
+        if (method === 'invocation.changed' && typeof params.run_id === 'string') {
+          relay.refresh(params.run_id);
+        }
       },
       logger,
       now,

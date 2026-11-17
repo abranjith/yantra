@@ -76,6 +76,19 @@ describe('RunStatusBanner', () => {
     expect(container.querySelector('[aria-live]')).toBeNull();
   });
 
+  it('distinguishes repeated state landmarks without changing the visible state word', async () => {
+    const { container } = render(
+      <>
+        <RunStatusBanner word="finished" detail="Fulfilled." aria-label="Finished fulfilled run" />
+        <RunStatusBanner word="finished" detail="Failed." aria-label="Finished failed run" />
+      </>,
+    );
+    expect(screen.getByRole('region', { name: 'Finished fulfilled run' })).toBeDefined();
+    expect(screen.getByRole('region', { name: 'Finished failed run' })).toBeDefined();
+    expect(screen.getAllByText('finished')).toHaveLength(2);
+    await expectNoAxeViolations(container);
+  });
+
   it('has no axe violations', async () => {
     const { container } = render(
       <RunStatusBanner

@@ -1,21 +1,23 @@
-import { readFile, readdir } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
+import { promisify } from 'node:util';
 
 import { describe, expect, it } from 'vitest';
 
 const CORRUPT_PREFIX = Buffer.from([0xc3, 0xa2, 0xe2, 0x82, 0xac]);
-const SKIP = new Set(['node_modules', 'dist', '.turbo', 'coverage', '.git', '.worktrees']);
 async function corruptFiles(root: string): Promise<string[]> {
   const hits: string[] = [];
-  for (const entry of await readdir(root, { withFileTypes: true })) {
-    if (SKIP.has(entry.name)) continue;
-    const path = join(root, entry.name);
-    if (entry.isDirectory()) hits.push(...(await corruptFiles(path)));
-    else if (
-      /\.(?:ts|md|json|yaml)$/u.test(entry.name) &&
-      (await readFile(path)).includes(CORRUPT_PREFIX)
-    )
-      hits.push(path);
+  // Include new source files, while excluding ignored reports and stale worktrees.
+  const { stdout } = await promisify(execFile)(
+    'git',
+    ['ls-files', '--cached', '--others', '--exclude-standard', '-z'],
+    { cwd: root, maxBuffer: 8 * 1024 * 1024 },
+  );
+  for (const name of new Set(stdout.split('\0').filter(Boolean))) {
+    if (!/\.(?:ts|tsx|md|json|ya?ml)$/u.test(name)) continue;
+    const path = join(root, name);
+    if ((await readFile(path)).includes(CORRUPT_PREFIX)) hits.push(path);
   }
   return hits;
 }

@@ -61,6 +61,8 @@ export interface RunStatusBannerProps {
   /** Extra content under the actions (e.g. a CLI twin to copy). */
   readonly children?: ReactNode;
   readonly className?: string;
+  /** Distinguishes repeated states when several run banners share a page. */
+  readonly 'aria-label'?: string;
 }
 
 /** See the module comment. */
@@ -71,10 +73,11 @@ export function RunStatusBanner({
   actions = [],
   children,
   className,
+  'aria-label': label,
 }: RunStatusBannerProps): ReactNode {
   return (
     <section
-      aria-label={`Run status: ${word}`}
+      aria-label={label ?? `Run status: ${word}`}
       data-instrument="status"
       data-tone={tone}
       className={cn(

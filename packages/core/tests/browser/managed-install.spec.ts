@@ -1,4 +1,15 @@
-import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  realpath,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -6,7 +17,10 @@ import { Browser, computeExecutablePath } from '@puppeteer/browsers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CompatibilityResult, ManagedPlatform } from '../../src/browser/installation-types.js';
-import { LocalManagedCoordinator } from '../../src/browser/managed-coordination.js';
+import {
+  assertCandidateProbePermit,
+  LocalManagedCoordinator,
+} from '../../src/browser/managed-coordination.js';
 import type { HelperRequest } from '../../src/browser/managed-install-types.js';
 import {
   LocalManagedInstallService,
@@ -155,6 +169,27 @@ describe('@no-llm managed install transaction', () => {
       instance.install({ trigger: 'explicit-command', consent: consent() }),
     ).resolves.toMatchObject({ status: 'installed' });
     await expect(stat(join(root, 'installation-old'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('authorizes the canonical executable when the candidate parent is a directory link', async () => {
+    const alias = join(root, 'alias');
+    await symlink(root, alias, process.platform === 'win32' ? 'junction' : 'dir');
+    const { instance } = service({
+      candidateRoot: (id) => join(alias, `installation-${id}`),
+      candidateProbe: {
+        probeManagedCandidate: async (permit) => {
+          const canonical = await realpath(permit.executablePath);
+          await assertCandidateProbePermit(permit, {
+            candidateRootRelative: permit.candidateRootRelative,
+            executablePath: canonical,
+          });
+          return compatibility(canonical);
+        },
+      },
+    });
+    await expect(
+      instance.install({ trigger: 'explicit-command', consent: consent() }),
+    ).resolves.toMatchObject({ status: 'installed' });
   });
 
   it('is an idempotent local success and makes no second helper call', async () => {

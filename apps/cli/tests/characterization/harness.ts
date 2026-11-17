@@ -17,6 +17,10 @@ export interface ScenarioResult {
 /** Remove invocation identities while preserving the actual output and file structure. */
 export function normalize(value: string, home: string): string {
   return value
+    .replaceAll(JSON.stringify(process.cwd()).slice(1, -1), '<cwd>')
+    .replaceAll(process.cwd(), '<cwd>')
+    .replaceAll(process.cwd().replaceAll('\\', '/'), '<cwd>')
+    .replace(/<cwd>(?:\\\\|\\|\/)/gu, '<cwd>/')
     .replaceAll(JSON.stringify(home).slice(1, -1), '<home>')
     .replaceAll(home, '<home>')
     .replaceAll(home.replaceAll('\\', '/'), '<home>')

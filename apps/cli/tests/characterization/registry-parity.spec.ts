@@ -71,6 +71,9 @@ const options: CliRunOptions = {
     },
   },
   browserRuntime: {
+    // Compare the same unattended refusal on both surfaces. Attended workers
+    // intentionally support app-mediated consent, including JSON commands.
+    isTty: () => false,
     services: {
       resolver: {
         resolve: async () => ({

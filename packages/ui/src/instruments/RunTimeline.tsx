@@ -243,7 +243,7 @@ export function RunTimeline({
                 No engine activity yet.
               </p>
             )}
-            className="h-full w-full overflow-auto"
+            className={focusRing({ className: 'h-full w-full overflow-auto -outline-offset-2' })}
           >
             {entries.map((entry) => {
               const current = entry.type === 'tool' && entry.seq === currentSeq;

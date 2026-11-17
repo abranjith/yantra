@@ -18,12 +18,14 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
+import type { ProcessIdentity } from '@yantra/core';
 import { UiOpenResult } from '@yantra/protocol';
 import type { Browser, Page } from 'puppeteer-core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { launchGalleryBrowser } from './drshya/browser.js';
 import { runAxe } from './drshya/capture.js';
+import { identifyTestHost, stopTestHost } from './fixtures/host-process.js';
 
 const BIN = resolve(import.meta.dirname, '..', 'apps', 'cli', 'dist', 'bin.js');
 const TIMEOUT = 60_000;
@@ -38,6 +40,7 @@ declare global {
 let home: string;
 let browser: Browser;
 let opened: UiOpenResult;
+let hostIdentity: ProcessIdentity | undefined;
 let origin: string;
 
 function openUrl(): UiOpenResult {
@@ -92,31 +95,14 @@ beforeAll(async () => {
     throw new Error('Run `pnpm build` first: the e2e suite runs the built CLI.');
   home = mkdtempSync(join(tmpdir(), 'yantra-e2e-app-'));
   opened = openUrl();
+  hostIdentity = await identifyTestHost(opened.hostPid);
   origin = `http://127.0.0.1:${opened.port}`;
   browser = await launchGalleryBrowser();
 }, TIMEOUT);
 
-/** True while `pid` exists. */
-function alive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 afterAll(async () => {
   await browser?.close();
-  try {
-    process.kill(opened.hostPid);
-  } catch {
-    // Already gone.
-  }
-  // Windows releases a killed process's files only once it has exited.
-  for (let i = 0; i < 50 && alive(opened.hostPid); i++) {
-    await new Promise((done) => setTimeout(done, 100));
-  }
+  if (hostIdentity !== undefined) await stopTestHost(hostIdentity);
   rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 });
 

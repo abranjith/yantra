@@ -214,11 +214,13 @@ export async function runWorkerInvocation(
           : {
               ...connectorOptions,
               output: context.output,
-              interactive: channel.attended(),
+              // A window may attach after launch; the authority bounds any
+              // unattended wait. Attendance gates prompting, not capability.
+              interactive: true,
               confirmationPrompt: (request, signal) =>
                 channel.attended()
                   ? channel.requestConfirmation(request, signal)
-                  : Promise.resolve('denied'),
+                  : new Promise<'denied'>(() => undefined),
             },
       ),
     openExternal: (path) => channel.diagnostic(`open: ${path}`),

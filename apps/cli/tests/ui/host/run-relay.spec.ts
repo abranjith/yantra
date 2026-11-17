@@ -126,6 +126,26 @@ async function settle(): Promise<void> {
 }
 
 describe('delivery', () => {
+  it('delivers a reconciler-written tail after the owner disconnects, without duplicates', async () => {
+    const log = new FakeLog();
+    log.append(1);
+    const client = new FakeClient();
+    const relay = makeRelay(log, client);
+    const a = connection(1);
+    await relay.follow(a.value, RUN, 1);
+    await settle();
+    client.setState('disconnected');
+    log.append(2); // Reconciliation writes the terminal event without a live publisher.
+    relay.refresh(RUN);
+    relay.refresh(RUN);
+    await settle();
+    expect(a.seqs()).toEqual([1, 2]);
+    a.close();
+    relay.refresh(RUN);
+    await settle();
+    expect(a.seqs()).toEqual([1, 2]);
+  });
+
   it('gives two windows with different from_seq each a gap-free sequence without duplicates', async () => {
     // Arrange: five events are already in the log.
     const log = new FakeLog();

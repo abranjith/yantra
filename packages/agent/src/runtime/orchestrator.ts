@@ -828,7 +828,10 @@ export async function runAgenticTask(
     // intervention_resolved. The deadline is the bridge's effective wait: the
     // shorter of its timeout and the wall clock left (the D5 ceiling arrives
     // with FEAT-068).
-    const recordedConfirmations = interventionAuthority
+    // Attended waits publish through the authority. Non-interactive terminal
+    // refusals return immediately without raising there, but still need both
+    // run-event records around the fail-closed decision.
+    const recordedConfirmations = request.connector.interactive
       ? confirmationBridge
       : new RecordingConfirmationGateway(confirmationBridge, runEvents, {
           now: () => now().toISOString(),

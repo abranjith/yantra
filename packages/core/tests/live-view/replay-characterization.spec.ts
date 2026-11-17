@@ -89,9 +89,15 @@ function normalize(text: string, runId: string, runDir: string): string {
   const scrub = (value: unknown): unknown => {
     if (Array.isArray(value)) return value.map(scrub);
     if (value !== null && typeof value === 'object') {
+      const record = value as Record<string, unknown>;
+      // Report text includes elapsed times, which are normalized separately.
+      // Their decimal width can change the raw byte count across equal runs.
+      const timedReport =
+        record.kind === 'artifact_saved' &&
+        (record.path === 'report.md' || record.path === 'report.json');
       return Object.fromEntries(
-        Object.entries(value as Record<string, unknown>)
-          .filter(([key]) => !VOLATILE_KEY.test(key))
+        Object.entries(record)
+          .filter(([key]) => !VOLATILE_KEY.test(key) && !(timedReport && key === 'bytes'))
           .map(([key, inner]) => [key, scrub(inner)]),
       );
     }
@@ -126,6 +132,21 @@ function snapshot(runDir: string, runId: string): Record<string, string> {
   }
   return out;
 }
+
+it('@no-llm compares report metadata independently of elapsed-time text width, but preserves other sizes', () => {
+  const saved = (path: string, bytes: number) =>
+    JSON.stringify({
+      kind: 'artifact_saved',
+      path,
+      bytes,
+    });
+  expect(normalize(saved('report.md', 373), 'run', '/run')).toBe(
+    normalize(saved('report.md', 372), 'run', '/run'),
+  );
+  expect(normalize(saved('screenshots/frame.png', 373), 'run', '/run')).not.toBe(
+    normalize(saved('screenshots/frame.png', 372), 'run', '/run'),
+  );
+});
 
 describe('@no-llm replay live view characterization (real Chrome)', () => {
   let root: string;

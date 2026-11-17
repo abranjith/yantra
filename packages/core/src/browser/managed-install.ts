@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
-import { access, mkdir, rename, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import { relative } from 'node:path';
 
 import { Browser, computeExecutablePath } from '@puppeteer/browsers';
@@ -371,7 +371,9 @@ export class LocalManagedInstallService
       };
       const permit = issueCandidateProbePermit(lease, {
         candidateRootRelative: candidate,
-        executablePath,
+        // The launcher consumes the resolver's canonical path. Bind the permit
+        // to that same identity even when TEMP or an installation parent is a link.
+        executablePath: await realpath(executablePath),
       });
       let compatibility: CompatibilityResult;
       try {

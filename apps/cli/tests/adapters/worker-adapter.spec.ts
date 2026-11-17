@@ -5,6 +5,7 @@ import { InMemoryChannel } from '../../src/adapters/worker/in-memory-channel.js'
 import { runWorkerInvocation } from '../../src/adapters/worker/worker-adapter.js';
 import { CommandFailure } from '../../src/context/command-context.js';
 import type { Handler } from '../../src/registry/handler.js';
+import { JSONRenderer } from '../../src/render/json.js';
 
 const invocation = (path = ['research'], argv = ['x']): CommandInvocation => ({
   invocation_id: createInvocationId(),
@@ -75,14 +76,25 @@ describe('@no-llm worker adapter', () => {
         installs: [true],
         inputs: ['fixture answer'],
       });
-      await runWorkerInvocation(
+      const result = await runWorkerInvocation(
         invocation(),
         channel,
         {},
         {
           handlers: {
             research: async (_a, _o, _c, context) => {
-              expect(context!.isInteractive({ json: true })).toBe(attended);
+              expect(context!.isInteractive({ json: true })).toBe(true);
+              const connector = context!.connector(new JSONRenderer(), {
+                interactive: false,
+                renderOpts: {
+                  json: true,
+                  debug: false,
+                  noColor: true,
+                  stream: context!.output.stdout,
+                  errStream: context!.output.stderr,
+                },
+              });
+              expect(connector.interactive).toBe(true);
               expect(context!.gateways.confirmation(attended) !== null).toBe(attended);
               const offer = context!.gateways.installOffer(attended);
               if (offer)
@@ -96,6 +108,9 @@ describe('@no-llm worker adapter', () => {
           },
         },
       );
+      // executeCommand converts thrown assertions to error results; assert the
+      // result too so an assertion inside the injected handler cannot disappear.
+      expect(result).toMatchObject({ type: 'result', exit_code: 0 });
       expect(channel.inputs).toHaveLength(attended ? 1 : 0);
       expect(channel.installs).toHaveLength(attended ? 1 : 0);
     },

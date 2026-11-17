@@ -69,6 +69,12 @@ describe('@no-llm pre-migration terminal characterization', () => {
     }
   });
 
+  it('normalizes the checkout path in plain and JSON-escaped diagnostics', () => {
+    const missing = join(process.cwd(), 'missing.md');
+    expect(normalize(missing, '/fixture-home')).toBe('<cwd>/missing.md');
+    expect(normalize(JSON.stringify(missing), '/fixture-home')).toBe('"<cwd>/missing.md"');
+  });
+
   it.concurrent.each(actionScenarios)(
     '%s retains its action baseline',
     async (id, argv) => {
