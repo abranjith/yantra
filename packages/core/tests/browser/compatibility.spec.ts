@@ -20,6 +20,7 @@ import {
   pairingFor,
   requiredCapabilities,
 } from '../../src/browser/driver-compatibility.js';
+import { BrowserLaunchError } from '../../src/browser/errors.js';
 import type {
   CapabilityId,
   ProbeProfile,
@@ -307,6 +308,24 @@ describe('@no-llm compatibility probe verdicts', () => {
 });
 
 describe('@no-llm compatibility probe launch failures', () => {
+  it('classifies the loader stderr carried by the real launch error wrapper', async () => {
+    const { service } = makeHarness({
+      launchError: new BrowserLaunchError({
+        phase: 'connect',
+        args: ['<redacted>'],
+        lastStderr:
+          'error while loading shared libraries: libnss3.so: cannot open shared object file',
+      }),
+      debDeps: 'libnss3 (>= 2:3.31)',
+    });
+    const result = await service.check(installation(), { profile: 'automation', fresh: true });
+    expect(result.verdict).toMatchObject({
+      status: 'failed',
+      failureClass: 'missing-runtime-libraries',
+    });
+    if (result.verdict.status === 'failed') expect(result.verdict.remediation).toContain('libnss3');
+  });
+
   it('classifies an ordinary startup failure as a launch-environment problem', async () => {
     const { service } = makeHarness({ launchError: new Error('Failed to connect to the browser') });
 

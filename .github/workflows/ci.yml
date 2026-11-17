@@ -164,14 +164,19 @@ jobs:
         run: pnpm exec tsx tests/helpers/provision-test-browser.ts
 
       # Ubuntu's AppArmor allowlist covers system Chrome, not downloaded CfT.
-      # Chromium recommends reusing the installed setuid sandbox for such builds:
+      # Allow user namespaces only for these ephemeral test browser paths:
       # https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md
       - name: Configure Chrome for Testing sandbox
         if: runner.os == 'Linux'
         run: |
-          sandbox=/opt/google/chrome/chrome-sandbox
-          test -u "$sandbox"
-          echo "CHROME_DEVEL_SANDBOX=$sandbox" >> "$GITHUB_ENV"
+          sudo tee /etc/apparmor.d/yantra-ci-chrome > /dev/null <<'EOF'
+          abi <abi/4.0>,
+          include <tunables/global>
+          profile yantra-ci-chrome /tmp/{yantra-managed-live-*/data/browsers/installation-*,yantra-cft-cache}/chrome/linux-*/chrome-linux64/chrome flags=(unconfined) {
+            userns,
+          }
+          EOF
+          sudo apparmor_parser -r /etc/apparmor.d/yantra-ci-chrome
 
       - name: Run managed Stable installation smoke
         working-directory: packages/core

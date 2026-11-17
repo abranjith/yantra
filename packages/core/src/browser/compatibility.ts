@@ -27,7 +27,7 @@ import {
   pairingFor,
   requiredCapabilities,
 } from './driver-compatibility.js';
-import { ManagedCoordinationError } from './errors.js';
+import { BrowserLaunchError, ManagedCoordinationError } from './errors.js';
 import type {
   BrowserCompatibilityService,
   CapabilityEvidence,
@@ -556,7 +556,12 @@ export class LocalBrowserCompatibilityService implements BrowserCompatibilitySer
     installation: ResolvedBrowserInstallation,
     cause: unknown,
   ): Promise<{ failureClass: ProbeFailureClass; remediation: string }> {
-    const detail = cause instanceof Error ? cause.message : String(cause);
+    const detail =
+      cause instanceof BrowserLaunchError
+        ? `${cause.message}: ${cause.context.lastStderr}`
+        : cause instanceof Error
+          ? cause.message
+          : String(cause);
     if (!looksLikeMissingLibraries(detail)) {
       return {
         failureClass: 'launch-environment',
