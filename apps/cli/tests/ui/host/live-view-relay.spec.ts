@@ -335,6 +335,44 @@ describe('@no-llm live-view relay: lifecycle', () => {
     expect(host.subscribe(window(1).connection, RUN)).toMatchObject({ state: 'no_page' });
   });
 
+  it('upgrades a watch that began while the worker was still attaching', () => {
+    const worker = new FakeWorker();
+    let attached = false;
+    const source: LiveViewRunSource = {
+      owner: (runId) =>
+        runId !== RUN
+          ? null
+          : attached
+            ? {
+                channel: 'live',
+                live: { client: worker.client, capabilities: [FRAMES_CAPABILITY] },
+              }
+            : { channel: 'replay_only', live: null },
+    };
+    const { relay: host } = relay(source);
+    const a = window(1);
+    expect(host.subscribe(a.connection, RUN)).toMatchObject({ state: 'no_page' });
+    expect(worker.sent).toEqual([]);
+    attached = true;
+    host.runAttached(RUN);
+    expect(worker.types()).toEqual(['frames.start']);
+    expect(a.notes.at(-1)?.[0]).toBe('frames.state');
+    worker.frame(1, 0);
+    expect(a.seqs()).toEqual([0]);
+    host.runAttached(RUN);
+    const lifecycle = () => worker.types().filter((type) => type !== 'frame.ack');
+    expect(lifecycle()).toEqual(['frames.start']);
+    a.close();
+    expect(lifecycle()).toEqual(['frames.start', 'frames.stop']);
+  });
+
+  it('ignores an attach for a run nobody watches', () => {
+    const worker = new FakeWorker();
+    const { relay: host } = relay(runs(worker));
+    host.runAttached(RUN);
+    expect(worker.sent).toEqual([]);
+  });
+
   it('drops the run when the run relay detaches it', () => {
     const worker = new FakeWorker();
     const { relay: host } = relay(runs(worker));

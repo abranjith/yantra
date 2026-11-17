@@ -163,6 +163,26 @@ export class LiveViewRelay {
     this.stopWatching(watched);
   }
 
+  /**
+   * The run relay attached the run's live owner. A window may have subscribed
+   * while that attach was still in flight and been told `no_page`; upgrade its
+   * watch to the live owner now, keeping its windows.
+   */
+  public runAttached(runId: string): void {
+    const watched = this.runs.get(runId);
+    if (watched?.owner !== null) return;
+    const owner = this.deps.runs.owner(runId);
+    if (owner?.live == null) return;
+    for (const dispose of watched.dispose) dispose();
+    const fresh = this.watch(runId, owner.channel, owner.live);
+    for (const [id, window] of watched.windows) fresh.windows.set(id, window);
+    this.runs.set(runId, fresh);
+    for (const window of fresh.windows.values()) {
+      window.connection.notify('frames.state', { run_id: runId, ...fresh.state });
+    }
+    this.logger.info({ run_id: runId, windows: fresh.windows.size }, 'live view owner attached');
+  }
+
   /** The run was detached by the run relay: its worker connection is gone. */
   public runDetached(runId: string): void {
     const watched = this.runs.get(runId);

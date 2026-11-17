@@ -42,6 +42,13 @@
     <a id="next" href="/live-view/second.html">Next page</a>
     <script>
       let n = 0;
+      // Paces a replay plan: #late appears long enough after load to measure the live view.
+      setTimeout(() => {
+        const late = document.createElement('p');
+        late.id = 'late';
+        late.textContent = 'late';
+        document.body.appendChild(late);
+      }, 9000);
       setInterval(() => {
         document.getElementById('tick').textContent = String(n++);
       }, 50);

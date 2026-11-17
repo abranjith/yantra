@@ -29,10 +29,9 @@
 
 ## Environment
 
-| Machine                    | OS                         | CPU                                             | Chrome        | Node     |
-| -------------------------- | -------------------------- | ----------------------------------------------- | ------------- | -------- |
-| Developer (Windows)        | Windows 11 (NT 10.0.26300) | AMD Ryzen 9 6900HS, 16 logical cores            | 157.0.8103.78 | v24.15.0 |
-| Linux CI (`ubuntu-latest`) | _pending_                  | _pending — see [Linux numbers](#linux-numbers)_ |               |          |
+| Machine             | OS                         | CPU                                  | Chrome        | Node     |
+| ------------------- | -------------------------- | ------------------------------------ | ------------- | -------- |
+| Developer (Windows) | Windows 11 (NT 10.0.26300) | AMD Ryzen 9 6900HS, 16 logical cores | 157.0.8103.78 | v24.15.0 |
 
 ## Results — Windows (developer machine)
 
@@ -124,11 +123,11 @@ The plan §10 starting points stand. Measured headroom gives no reason to tighte
 
 ## Linux numbers
 
-There is no Linux machine with Node and Chrome locally (WSL has neither, and installing them was out
-of scope). The temporary workflow `.github/workflows/spike-s1.yml` runs this harness on
-`ubuntu-latest` and `windows-latest` on every push to `ft/feat-069-live-browser-view` and uploads
-`spike-s1-<OS>.json`. Its numbers are to be copied into the Environment and Results sections above
-before TASK-012 removes the workflow. **Status: pending the first CI run on the feature branch.**
+**Waived by the user (2026-11-17).** The go decision, defaults and thresholds rest on the Windows
+measurements above. A Linux run was planned through a temporary CI workflow, but the repository's CI
+cannot install dependencies (`pnpm-lock.yaml` is gitignored), and the user chose not to wait for it.
+The workflow has been removed. The automatic-Solid monitor (TASK-011) is the safety net for any
+machine, Linux included, where glass over the live view runs over budget.
 
 ## Reproduce
 

@@ -54,7 +54,12 @@ export interface LiveViewSnapshot {
   readonly page: LiveViewPage | null;
   /** The highest generation announced by `frames.cleared` or `frames.state`. */
   readonly generationFloor: number;
-  readonly lastDrawn: { readonly generation: number; readonly frame_seq: number } | null;
+}
+
+/** The last frame drawn; per-frame, so it never notifies React subscribers. */
+export interface LiveViewDrawn {
+  readonly generation: number;
+  readonly frame_seq: number;
 }
 
 /** Per-frame measurements for the budget monitor (TASK-011). */
@@ -79,7 +84,18 @@ export interface LiveViewStoreDeps {
   /** Monotonic ms for handler timing (default `performance.now`). */
   readonly now?: () => number;
   readonly onSample?: (sample: LiveViewFrameSample) => void;
+  /** Timer seam for subscribe retries (default `setTimeout`). */
+  readonly schedule?: (run: () => void, ms: number) => void;
 }
+
+/**
+ * How often, and how many times, a refused `frames.subscribe` is retried. The
+ * cockpit subscribes as it mounts, while the host may still be attaching the
+ * run's worker (`run.subscribe` is in flight), and the host refuses a run it
+ * has not attached yet.
+ */
+export const SUBSCRIBE_RETRY_MS = 500;
+export const SUBSCRIBE_RETRIES = 10;
 
 const defaultDecode = (jpeg: Uint8Array): Promise<DrawableImage> =>
   createImageBitmap(new Blob([jpeg as BlobPart], { type: 'image/jpeg' }));
@@ -90,8 +106,13 @@ export class LiveViewStore {
     reason: 'none',
     page: null,
     generationFloor: 0,
-    lastDrawn: null,
   };
+  /**
+   * Kept out of the snapshot on purpose: a snapshot change re-renders every
+   * subscriber, and a per-frame change re-rendered the whole cockpit 10 times
+   * a second (measured in a real app window: about 15% of one core).
+   */
+  private drawn: LiveViewDrawn | null = null;
   private readonly listeners = new Set<() => void>();
   private readonly dispose: (() => void)[] = [];
   private canvas: LiveViewCanvas | null = null;
@@ -106,6 +127,11 @@ export class LiveViewStore {
   }
 
   public readonly getSnapshot = (): LiveViewSnapshot => this.snapshot;
+
+  /** The last frame drawn, or null after a clear (for diagnostics and tests). */
+  public get lastDrawn(): LiveViewDrawn | null {
+    return this.drawn;
+  }
 
   public readonly subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
@@ -163,7 +189,7 @@ export class LiveViewStore {
 
   // ---------------------------------------------------------------------------
 
-  private subscribeToFrames(): void {
+  private subscribeToFrames(attempt = 0): void {
     const ticket = ++this.subscription;
     this.deps.rpc
       .request<FramesState>('frames.subscribe', { run_id: this.deps.runId })
@@ -174,6 +200,12 @@ export class LiveViewStore {
       })
       .catch(() => {
         if (ticket !== this.subscription) return;
+        if (attempt < SUBSCRIBE_RETRIES) {
+          (this.deps.schedule ?? ((run, ms) => void setTimeout(run, ms)))(() => {
+            if (this.started && ticket === this.subscription) this.subscribeToFrames(attempt + 1);
+          }, SUBSCRIBE_RETRY_MS);
+          return;
+        }
         this.set({ state: 'unavailable', reason: 'none', page: null });
       });
   }
@@ -183,7 +215,8 @@ export class LiveViewStore {
     if (!connected && this.wasConnected) {
       // The image may be stale by the time the socket returns: drop it now.
       this.clearCanvas();
-      this.set({ state: 'reconnecting', page: null, lastDrawn: null });
+      this.drawn = null;
+      this.set({ state: 'reconnecting', page: null });
     } else if (connected && !this.wasConnected && this.started) {
       this.subscribeToFrames();
     }
@@ -202,8 +235,8 @@ export class LiveViewStore {
       reason: 'none',
       page: null,
       generationFloor: Math.max(this.snapshot.generationFloor, parsed.data.generation),
-      lastDrawn: null,
     });
+    this.drawn = null;
   }
 
   private onState(params: Record<string, unknown>): void {
@@ -265,7 +298,7 @@ export class LiveViewStore {
     }
     canvas.getContext('2d')?.drawImage(image as never, 0, 0);
     image.close();
-    this.set({ lastDrawn: { generation: meta.generation, frame_seq: meta.frame_seq } });
+    this.drawn = { generation: meta.generation, frame_seq: meta.frame_seq };
     this.deps.onSample?.({ kind: 'drawn', busyMs: this.now() - drawStarted });
     ack();
   }

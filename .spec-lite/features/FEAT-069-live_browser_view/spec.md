@@ -285,9 +285,9 @@ specs' final locations)
 - **Outcome (2026-11-15)**: **GO**, no DEVIATION. Windows numbers are in `spike-s1-report.md`
   (5 and 10 fps met at every setting; viewer main thread 2.8–4.3 % of one core). Defaults: 10 fps,
   q70, 1280×800, `everyNthFrame` 1, serial ack schedule. Solid thresholds stay at the plan §10
-  values. **Linux numbers are pending**: the temporary `.github/workflows/spike-s1.yml` runs the
-  harness on `ubuntu-latest` on push. TASK-001 stays `[/]` until those numbers are copied into the
-  report. The metrics tests live at `e2e/spikes/live-view-s1/metrics.spec.ts`, beside the harness,
+  values. **DEVIATION (user decision, 2026-11-17):** the Linux CI measurement was waived; the
+  Verify's "and Linux CI" clause is not met by design, and the temporary `spike-s1.yml` workflow is
+  removed. The metrics tests live at `e2e/spikes/live-view-s1/metrics.spec.ts`, beside the harness,
   because the e2e workspace has no `tests/` directory (verify with
   `cd e2e && npx vitest run spikes/live-view-s1/metrics.spec.ts`). Documentation: none, because the
   spike is a throwaway tool and its report lives in the feature directory.
@@ -765,15 +765,28 @@ frame_seq}` (schema `FramesWindowAck` in protocol). The app has to ack windows s
   reports `unknown` until its first read, so the evidence looks for the `cleared` that follows each
   trigger.
 
-  **Still open (why this task stays `[/]`):**
-  - The window hop is a recording connection, not a real `yantra ui` app window. The app's
-    draw-time floor is covered by the `apps/web` suite.
-  - The §10 performance case measures delivery to a window (≥ 5 fps, about the 10 fps cap). The
-    app main-thread share comes from the S1 viewer numbers (2.8–4.3 %), not from CDP metrics on
-    the real cockpit target.
-  - Cross-OS CI runs and the Linux S1 numbers are pending a push.
+  **Real app window (2026-11-17):** `e2e/app-live-view-window.spec.ts` closes the remaining gap.
+  It starts the real host with `yantra ui`, launches a `run` with `command.invoke`, and opens the
+  run's cockpit in a Chrome app page. The detached worker streams into the real BrowserViewport
+  canvas, and the test only instruments the page (`drawImage`, `clearRect`, and the viewport's
+  `data-state`). The workflow fills a password field with a literal. The view goes `protected`, the
+  canvas is cleared no later than that change, nothing is drawn while protected, and the view
+  returns to `live` on the next page. On the motion page the app drew about 10 fps with its main
+  thread at 2.0–2.7 % of one core, measured with CDP `Performance.getMetrics` on the app target
+  over three consecutive runs. The run directory and `host.log` hold no frame bytes.
 
-  All three are in TODO. The safety documentation goes through the Finalize Document update.
+  Writing this test found and fixed two defects:
+  1. **Per-frame re-renders.** The store's per-frame `lastDrawn` was part of its React snapshot, so
+     every frame re-rendered the whole cockpit, at about 15 % of one core. It is now outside the
+     snapshot (`store.lastDrawn`).
+  2. **A subscribe race.** The cockpit's `frames.subscribe` can reach the host while
+     `run.subscribe` is still attaching the worker. The host now upgrades such a watch when the
+     attach completes (`LiveViewRelay.runAttached`), and the app retries a refused subscribe for up
+     to 10 × 500 ms.
+
+  The budget monitor counts only live-view handler time, so on its own it would not have caught
+  the re-render cost. The real-window test is what guards the whole-page budget. Cross-OS CI is
+  blocked repo-wide, because `pnpm-lock.yaml` is gitignored (see TODO).
 
 ## 6. Cross-Cutting Concerns
 
@@ -819,7 +832,7 @@ frame_seq}` (schema `FramesWindowAck` in protocol). The app has to ack windows s
 
 ## 8. State Tracking
 
-- [/] TASK-001: Spike S1 — glass and readability over a live screencast, with a report
+- [x] TASK-001: Spike S1 — glass and readability over a live screencast, with a report
 - [x] TASK-002: Protocol — screencast frame metadata, control messages and payload codec
 - [x] TASK-003: Screen protection — observable latch, fill holds, and the deterministic fill paths
 - [x] TASK-004: Protected-control focus guard in an isolated world
@@ -830,6 +843,6 @@ frame_seq}` (schema `FramesWindowAck` in protocol). The app has to ack windows s
 - [x] TASK-009: Host relay — `frames.subscribe`, per-window slots and the binary WebSocket lane
 - [x] TASK-010: BrowserViewport, the live-view store and the text alternative in the cockpit
 - [x] TASK-011: Automatic Solid when the live view is over budget
-- [/] TASK-012: End-to-end screencast evidence, privacy scans, performance and safety docs
+- [x] TASK-012: End-to-end screencast evidence, privacy scans, performance and safety docs
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

@@ -210,7 +210,10 @@ export async function startHostRuntime(deps: HostRuntimeDeps): Promise<RunningHo
     const relay = new RunRelay({
       runsRoot: runsRoot(),
       logger,
-      onAttach: (runId) => attendance?.attached(runId),
+      onAttach: (runId) => {
+        attendance?.attached(runId);
+        liveView?.runAttached(runId);
+      },
       onLiveEvent: (runId, seq, event) => attendance?.forward(runId, seq, event),
       onDetach: (runId) => liveView?.runDetached(runId),
     });

@@ -11,6 +11,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ConnectionState } from '../../src/host/connection-store.js';
 import {
   LiveViewStore,
+  SUBSCRIBE_RETRIES,
   type DrawableImage,
   type LiveViewCanvas,
   type LiveViewConnection,
@@ -152,7 +153,7 @@ describe('LiveViewStore', () => {
     await flush();
     expect(canvas.ops).toContain('draw');
     expect([canvas.width, canvas.height]).toEqual([4, 3]);
-    expect(store.getSnapshot().lastDrawn).toEqual({ generation: 1, frame_seq: 3 });
+    expect(store.lastDrawn).toEqual({ generation: 1, frame_seq: 3 });
     expect(rpc.paramsOf('frames.ack')).toEqual([{ run_id: RUN, generation: 1, frame_seq: 3 }]);
     expect(samples).toEqual(['offered', 'drawn']);
   });
@@ -232,11 +233,8 @@ describe('LiveViewStore', () => {
     canvas.ops.length = 0;
     connection.set({ status: 'disconnected', retryAt: 0 });
     expect(canvas.ops).toEqual(['clear']);
-    expect(store.getSnapshot()).toMatchObject({
-      state: 'reconnecting',
-      page: null,
-      lastDrawn: null,
-    });
+    expect(store.getSnapshot()).toMatchObject({ state: 'reconnecting', page: null });
+    expect(store.lastDrawn).toBeNull();
     rpc.answer('frames.subscribe', {
       ...LIVE_STATE,
       state: 'protected',
@@ -249,12 +247,48 @@ describe('LiveViewStore', () => {
     expect(store.getSnapshot()).toMatchObject({ state: 'protected', generationFloor: 3 });
   });
 
-  it('shows unavailable when the host refuses the subscription', async () => {
+  it('retries a refused subscription (the host is still attaching the run), then goes live', async () => {
     const rpc = new BinaryRpc();
-    const store = new LiveViewStore({ rpc, runId: RUN });
+    let refusals = 2;
+    rpc.answer('frames.subscribe', () => {
+      if (refusals > 0) {
+        refusals -= 1;
+        throw new Error('not attached');
+      }
+      return LIVE_STATE;
+    });
+    const retries: (() => void)[] = [];
+    const store = new LiveViewStore({ rpc, runId: RUN, schedule: (run) => retries.push(run) });
     store.start();
     await flush();
+    expect(store.getSnapshot().state).toBe('connecting');
+    retries.shift()!();
+    await flush();
+    retries.shift()!();
+    await flush();
+    expect(rpc.paramsOf('frames.subscribe')).toHaveLength(3);
+    expect(store.getSnapshot().state).toBe('live');
+  });
+
+  it('shows unavailable once the retries are spent', async () => {
+    const rpc = new BinaryRpc();
+    const store = new LiveViewStore({ rpc, runId: RUN, schedule: (run) => queueMicrotask(run) });
+    store.start();
+    for (let index = 0; index < 30; index += 1) await flush();
+    expect(rpc.paramsOf('frames.subscribe')).toHaveLength(SUBSCRIBE_RETRIES + 1);
     expect(store.getSnapshot().state).toBe('unavailable');
+  });
+
+  it('stops retrying once stopped', async () => {
+    const rpc = new BinaryRpc().answer('frames.unsubscribe', {});
+    const retries: (() => void)[] = [];
+    const store = new LiveViewStore({ rpc, runId: RUN, schedule: (run) => retries.push(run) });
+    store.start();
+    await flush();
+    store.stop();
+    retries.shift()!();
+    await flush();
+    expect(rpc.paramsOf('frames.subscribe')).toHaveLength(1);
   });
 
   it('notifies subscribers on each change', async () => {
@@ -273,5 +307,21 @@ describe('LiveViewStore', () => {
     expect(store.getSnapshot().generationFloor).toBe(1);
     expect(canvas.ops).toContain('clear');
     expect(rpc.paramsOf('frames.unsubscribe')).toEqual([{ run_id: RUN }]);
+  });
+});
+
+describe('LiveViewStore rendering cost', () => {
+  it('does not notify subscribers for a drawn frame, only for state changes', async () => {
+    const { rpc, store, decoder } = await started();
+    const listener = vi.fn();
+    store.subscribe(listener);
+    for (let seq = 0; seq < 5; seq += 1) {
+      rpc.frame({ frame_seq: seq });
+      await flush();
+      decoder.release(seq);
+      await flush();
+    }
+    expect(store.lastDrawn).toEqual({ generation: 1, frame_seq: 4 });
+    expect(listener).not.toHaveBeenCalled();
   });
 });
