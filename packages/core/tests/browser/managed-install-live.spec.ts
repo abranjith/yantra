@@ -69,7 +69,6 @@ describe.runIf(runLiveInstall)('@no-llm live managed Stable installation', () =>
       });
       return;
     }
-    expect(outcome?.status).toBe('installed');
     if (outcome?.status !== 'installed') {
       throw new Error(`Managed Stable install failed: ${JSON.stringify(outcome)}`);
     }

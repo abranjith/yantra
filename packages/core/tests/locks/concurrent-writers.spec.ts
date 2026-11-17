@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { parse, stringify } from 'yaml';
+import { parseDocument, stringify } from 'yaml';
 
 import { defaultConfig } from '../../src/config/load.js';
 import { redactConfigRefs } from '../../src/config/refs.js';
@@ -137,10 +137,14 @@ describe('@no-llm real process config/profile writer coordination', () => {
     await Promise.all(workers.map((worker) => worker.ready));
     for (const worker of workers) worker.child.send('write');
     const outcomes = await Promise.all(workers.map((worker) => worker.done));
-    const document: unknown = parse(await readFile(join(home, filename), 'utf8'));
+    const document = parseDocument(await readFile(join(home, filename), 'utf8'));
+    // Shared temporary files can corrupt YAML as well as lose whole updates.
+    // The locked writer must always leave a valid document.
+    if (mode === 'locked') expect(document.errors).toEqual([]);
+    const value: unknown = document.errors.length === 0 ? document.toJS() : null;
     return {
       outcomes,
-      retained: fields.filter(([key, value]) => valueAt(document, key) === value).length,
+      retained: fields.filter(([key, expected]) => valueAt(value, key) === expected).length,
     };
   }
 

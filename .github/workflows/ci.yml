@@ -53,6 +53,8 @@ jobs:
         run: pnpm build
 
       - name: Lint
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
         run: pnpm lint
 
       - name: Typecheck
