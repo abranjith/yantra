@@ -14,6 +14,8 @@ allowBuilds:
 # 2026-10-20). Each pins a patched release in the same major line; remove an
 # entry once the named parent resolves a patched version on its own.
 overrides:
+  # Match the Pi AI API used by pi-coding-agent@0.80.6.
+  '@earendil-works/pi-ai': 0.80.6
   # REV-006: undici below 7.29.1 / 8.10.2 carries TLS-bypass, cache-disclosure,
   # and DoS advisories. The Pi SDK pins 8.5.0 and cheerio's ^7.19.0 can stay on
   # an old 7.x in an existing lockfile. Remove the 8.x entry when
