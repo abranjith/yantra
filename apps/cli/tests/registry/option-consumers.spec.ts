@@ -97,9 +97,10 @@ describe('@no-llm every registered option has a consumer', () => {
 });
 
 describe('@no-llm option consumer analysis', () => {
-  const json = expandOptions(leaves.find((leaf) => leaf.id === 'config.path')!, []).find(
-    (option) => option.long === '--json',
-  )!;
+  const json = expandOptions(
+    leaves.find((leaf) => leaf.id === 'config.path')!,
+    [],
+  ).find((option) => option.long === '--json')!;
   const budget = expandOptions(
     leaves.find((leaf) => leaf.id === 'do')!,
     COMMAND_REGISTRY.option_groups,

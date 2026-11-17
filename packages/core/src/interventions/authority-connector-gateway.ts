@@ -12,8 +12,7 @@ export type ConfirmationAnswer = 'granted' | 'denied' | GatewayDecision;
 
 export interface AuthorityConnectorGatewayOptions {
   readonly authority:
-    | InterventionAuthority
-    | ((request: ConfirmationRequest) => InterventionAuthority);
+    InterventionAuthority | ((request: ConfirmationRequest) => InterventionAuthority);
   readonly answer: (
     request: ConfirmationRequest,
     signal: AbortSignal,

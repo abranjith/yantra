@@ -29,9 +29,8 @@ import { SEMANTIC_COLORS } from '../../src/tokens/semantic.js';
 function withPrimitive(name: string, theme: 'light' | 'dark', value: Oklch): TokenSet {
   return {
     ...DRSHYA_TOKENS,
-    primitives: DRSHYA_TOKENS.primitives.map(
-      (primitive): PrimitiveToken =>
-        primitive.name === name ? { ...primitive, [theme]: value } : primitive,
+    primitives: DRSHYA_TOKENS.primitives.map((primitive): PrimitiveToken =>
+      primitive.name === name ? { ...primitive, [theme]: value } : primitive,
     ),
   };
 }

@@ -19,11 +19,7 @@ export class RunNotFoundError extends RunViewError {
 
 /** Why a run artifact could not be reached. */
 export type ArtifactAccessCode =
-  | 'invalid_run_id'
-  | 'not_public'
-  | 'outside_run'
-  | 'not_found'
-  | 'too_large';
+  'invalid_run_id' | 'not_public' | 'outside_run' | 'not_found' | 'too_large';
 
 /** A run artifact was refused or is absent; see {@link ArtifactAccessCode}. */
 export class ArtifactAccessError extends RunViewError {

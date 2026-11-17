@@ -379,7 +379,7 @@ async function scanFiles(
   };
 
   // Names in any other form carry no start time, so every one is a candidate.
-  for (let start = 0; start < untimed.length; ) {
+  for (let start = 0; start < untimed.length;) {
     const granted = allowance(Math.min(MANIFEST_CHUNK, untimed.length - start));
     if (granted === 0) return { rows: found, truncated };
     await readChunk(untimed.slice(start, start + granted));

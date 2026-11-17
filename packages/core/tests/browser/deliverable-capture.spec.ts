@@ -69,7 +69,7 @@ function pixelAt(png: Uint8Array, x: number, y: number): readonly [number, numbe
   }
   const channels = colorType === 6 ? 4 : 3;
   const idat: Buffer[] = [];
-  for (let offset = 8; offset < bytes.length; ) {
+  for (let offset = 8; offset < bytes.length;) {
     const length = bytes.readUInt32BE(offset);
     const type = bytes.toString('latin1', offset + 4, offset + 8);
     if (type === 'IDAT') idat.push(bytes.subarray(offset + 8, offset + 8 + length));

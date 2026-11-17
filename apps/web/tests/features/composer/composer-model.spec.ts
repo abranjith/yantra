@@ -359,8 +359,11 @@ describe('@no-llm composer model: words', () => {
     expect(valueText(noLlm, true)).toBe('off');
     expect(valueText(noLlm, false)).toBe('on');
     expect(valueText(browse, true)).toBe('off');
-    expect(valueText(model.fields.find((field) => field.flag === '--model')!, null)).toBe(
-      'not set',
-    );
+    expect(
+      valueText(
+        model.fields.find((field) => field.flag === '--model')!,
+        null,
+      ),
+    ).toBe('not set');
   });
 });

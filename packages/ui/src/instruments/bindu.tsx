@@ -24,13 +24,7 @@ import { usePrefersReducedMotion } from '../lib/motion.js';
  * animation class is not applied at all.
  */
 export type BinduState =
-  | 'idle'
-  | 'live'
-  | 'attention'
-  | 'thinking'
-  | 'acting'
-  | 'needs_you'
-  | 'fulfilled';
+  'idle' | 'live' | 'attention' | 'thinking' | 'acting' | 'needs_you' | 'fulfilled';
 
 export const BINDU_STATES: readonly BinduState[] = [
   'idle',

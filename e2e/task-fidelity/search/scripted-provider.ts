@@ -51,13 +51,7 @@ export type SearchFault =
 
 /** How one call ended. */
 export type SearchCallOutcome =
-  | 'ok'
-  | 'unmatched'
-  | 'discovery'
-  | 'challenge'
-  | 'empty'
-  | 'timeout'
-  | 'aborted';
+  'ok' | 'unmatched' | 'discovery' | 'challenge' | 'empty' | 'timeout' | 'aborted';
 
 /** One provider call, as the harness observed it. */
 export interface SearchCallRecord {

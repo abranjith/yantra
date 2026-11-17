@@ -53,10 +53,7 @@ export class RunChannelFrameError extends Error {
 
 /** Why a decoder stopped. The caller closes the connection on any of them. */
 export type FrameFatalReason =
-  | 'unknown_type'
-  | 'over_limit'
-  | 'malformed_json'
-  | 'malformed_screencast';
+  'unknown_type' | 'over_limit' | 'malformed_json' | 'malformed_screencast';
 
 export type DecodedFrame =
   | { readonly kind: 'json'; readonly message: unknown }

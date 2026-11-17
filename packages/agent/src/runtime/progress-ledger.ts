@@ -20,11 +20,7 @@ import {
 import { artifactLabel, type EffectiveActionTerms } from './task-contract.js';
 
 export type ProgressSignal =
-  | 'new_document'
-  | 'new_page'
-  | 'action_verified'
-  | 'artifact_saved'
-  | 'item_advanced';
+  'new_document' | 'new_page' | 'action_verified' | 'artifact_saved' | 'item_advanced';
 /** One requirement's live state; the shape is protocol data (FEAT-063). */
 export type { LiveItem };
 export interface ProgressSources {

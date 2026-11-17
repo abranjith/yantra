@@ -223,11 +223,7 @@ export const validBriefArb = (constraints: ValidBriefArbConstraints = {}): fc.Ar
 };
 
 export type BriefCorruption =
-  | 'dangling_citation'
-  | 'duplicate_url'
-  | 'numbering_gap'
-  | 'ansi_injection'
-  | 'uncited_finding';
+  'dangling_citation' | 'duplicate_url' | 'numbering_gap' | 'ansi_injection' | 'uncited_finding';
 
 export const BRIEF_CORRUPTIONS: readonly BriefCorruption[] = [
   'dangling_citation',

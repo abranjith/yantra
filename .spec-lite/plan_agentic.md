@@ -124,8 +124,7 @@ export interface AgentModelSelection {
 }
 
 export type AgentAuthSelection =
-  | { readonly mode: 'managed' }
-  | { readonly mode: 'runtime-key'; readonly secretRef: string };
+  { readonly mode: 'managed' } | { readonly mode: 'runtime-key'; readonly secretRef: string };
 
 export type AgentEvent =
   | {

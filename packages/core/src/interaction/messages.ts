@@ -9,11 +9,7 @@ import {
 import type { InteractionFamily } from './escalation.js';
 
 export type InteractionMessageSurface =
-  | 'fill'
-  | 'actionability'
-  | 'success-note'
-  | 'tool'
-  | 'middleware';
+  'fill' | 'actionability' | 'success-note' | 'tool' | 'middleware';
 export type MessageCapabilityKind = 'engine' | 'tool' | null;
 
 /** One catalog-owned model-visible interaction message. */

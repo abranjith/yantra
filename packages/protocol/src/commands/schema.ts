@@ -18,12 +18,7 @@ import { z } from 'zod';
 
 /** A JSON value: what an option default or a condition comparison may hold. */
 export type JsonValue =
-  | string
-  | number
-  | boolean
-  | null
-  | readonly JsonValue[]
-  | { readonly [key: string]: JsonValue };
+  string | number | boolean | null | readonly JsonValue[] | { readonly [key: string]: JsonValue };
 
 export const JsonValue: z.ZodType<JsonValue> = z
   .lazy(() =>

@@ -69,17 +69,22 @@ describe('@no-llm action gate census', () => {
     );
     expect(submitted.pass).toBe(false);
     expect(submitted.message).toContain('1');
-    expect(evaluateExpectation(run, gates.find((gate) => gate.id === 'gate.agreement')!).pass).toBe(
-      false,
-    );
+    expect(
+      evaluateExpectation(
+        run,
+        gates.find((gate) => gate.id === 'gate.agreement')!,
+      ).pass,
+    ).toBe(false);
   });
   it('treats absent Brief requirements as not applicable only for declared failures', () => {
     const scenario = scenarioNamed('do-progress-stall-ignored');
     const run = { ...syntheticRun({}), scenario };
     expect(run.artifacts.brief).toBeNull();
     expect(
-      evaluateExpectation(run, gateExpectations(scenario).find((gate) => gate.id === 'gate.items')!)
-        .pass,
+      evaluateExpectation(
+        run,
+        gateExpectations(scenario).find((gate) => gate.id === 'gate.items')!,
+      ).pass,
     ).toBe(true);
     const fulfilled = scenarioNamed('do-gate-css-order');
     expect(

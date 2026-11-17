@@ -33,12 +33,7 @@ export const NOT_A_WORKFLOW_RUN = 'Only saved workflow runs can be resumed. Use 
 
 /** Why a run cannot be resumed. */
 export type NotResumableCode =
-  | 'missing'
-  | 'unreadable'
-  | 'agentic'
-  | 'status'
-  | 'ephemeral'
-  | 'plan';
+  'missing' | 'unreadable' | 'agentic' | 'status' | 'ephemeral' | 'plan';
 
 /** The full verdict, with what resuming needs (internal to core). */
 export type ResumeCheck =

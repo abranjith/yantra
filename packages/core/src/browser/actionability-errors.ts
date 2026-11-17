@@ -20,10 +20,7 @@ export class StaleElementRefError extends Error {
 
 /** Stable codes an actionability pre-flight can answer with. */
 export type BrowserActionabilityCode =
-  | 'ELEMENT_HIDDEN'
-  | 'ELEMENT_DISABLED'
-  | 'OPTION_NOT_FOUND'
-  | 'ELEMENT_OBSTRUCTED';
+  'ELEMENT_HIDDEN' | 'ELEMENT_DISABLED' | 'OPTION_NOT_FOUND' | 'ELEMENT_OBSTRUCTED';
 
 /**
  * Expected hidden/disabled/unmatched-option/obstructed actionability failure.

@@ -56,9 +56,7 @@ The **AskCache** lives outside the run directory at `~/.cache/yantra/ask/<sha256
   "utc_day": "2026-05-11",
   "created_at": "2026-05-11T10:14:00.000Z",
   "ttl_seconds": 86400,
-  "cards": [
-    /* AskCard[] */
-  ],
+  "cards": [/* AskCard[] */],
 }
 ```
 

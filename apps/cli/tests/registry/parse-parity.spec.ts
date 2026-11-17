@@ -29,8 +29,7 @@ interface Recorded {
 }
 
 type CommanderOutcome =
-  | { readonly ok: true; readonly call: Recorded }
-  | { readonly ok: false; readonly code: string };
+  { readonly ok: true; readonly call: Recorded } | { readonly ok: false; readonly code: string };
 
 async function commanderParse(argv: readonly string[]): Promise<CommanderOutcome> {
   let call: Recorded | undefined;

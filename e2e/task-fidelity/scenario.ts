@@ -18,13 +18,7 @@ export type Tier = 'deterministic' | 'agentic';
 export type ValueRule =
   | {
       readonly kind:
-        | 'nonempty'
-        | 'letters'
-        | 'email'
-        | 'date'
-        | 'choice'
-        | 'protected'
-        | 'untouched';
+        'nonempty' | 'letters' | 'email' | 'date' | 'choice' | 'protected' | 'untouched';
     }
   | { readonly kind: 'digits' | 'number'; readonly min: number; readonly max: number }
   | { readonly kind: 'checked-any'; readonly group: string };

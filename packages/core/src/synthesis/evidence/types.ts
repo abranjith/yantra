@@ -19,12 +19,7 @@ import type { ClaimKind } from '../types.js';
  * how strict the relevance floor is.
  */
 export type QueryIntent =
-  | 'price_lookup'
-  | 'comparison'
-  | 'rate_or_trend'
-  | 'factual_lookup'
-  | 'entity_profile'
-  | 'general';
+  'price_lookup' | 'comparison' | 'rate_or_trend' | 'factual_lookup' | 'entity_profile' | 'general';
 
 /**
  * The evidence categories a claim can carry, in the pipeline's own vocabulary

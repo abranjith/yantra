@@ -151,21 +151,19 @@ function Comparison({ brief }: { readonly brief: Brief }): ReactNode {
   const comparison = brief.facets?.comparison ?? null;
   if (comparison === null) return null;
   const columns: TableColumn<ComparisonRow>[] = [
-    ...comparison.columns.map(
-      (header, column): TableColumn<ComparisonRow> => ({
-        id: `c${String(column)}`,
-        header,
-        ...(column === 0 ? { isRowHeader: true } : {}),
-        cell: (row) => {
-          const value = row.cells[column];
-          return (
-            <span {...(column === 0 ? { id: claimId.row(row.index) } : {})}>
-              {value === null || value === undefined ? '—' : String(value)}
-            </span>
-          );
-        },
-      }),
-    ),
+    ...comparison.columns.map((header, column): TableColumn<ComparisonRow> => ({
+      id: `c${String(column)}`,
+      header,
+      ...(column === 0 ? { isRowHeader: true } : {}),
+      cell: (row) => {
+        const value = row.cells[column];
+        return (
+          <span {...(column === 0 ? { id: claimId.row(row.index) } : {})}>
+            {value === null || value === undefined ? '—' : String(value)}
+          </span>
+        );
+      },
+    })),
     {
       id: 'evidence',
       header: 'Evidence',

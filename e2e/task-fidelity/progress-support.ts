@@ -171,8 +171,7 @@ export function clickObserved(name: string): ScriptStep {
     tool: 'browser_click',
     params: (ctx: ScriptContext) => {
       const model = ctx.last('browser_observe')?.model as
-        | { interactables?: { name?: string; ref?: string }[] }
-        | undefined;
+        { interactables?: { name?: string; ref?: string }[] } | undefined;
       const ref = model?.interactables?.find((c) => c.name === name)?.ref;
       return ref === undefined ? null : { ref };
     },

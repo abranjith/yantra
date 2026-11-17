@@ -70,9 +70,7 @@ Precedence is **fixed and tested**: `busy-indicator` → `modal-dialog` → `fix
     { "ref": "e41", "role": "button", "name": "Close", "protected": false, "auto_clearable": true },
   ],
   "candidates_truncated": false,
-  "attempted": [
-    /* AttemptRecord[] — existing shape, unchanged */
-  ],
+  "attempted": [/* AttemptRecord[] — existing shape, unchanged */],
 }
 ```
 

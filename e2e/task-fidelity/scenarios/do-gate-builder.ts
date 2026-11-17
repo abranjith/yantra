@@ -363,8 +363,7 @@ export function makeGateScenario(id: string, page: string): Scenario {
       note: 'A fulfilled structural fill promotes without the screenshot and replays the same controls with zero LLM.',
       measure: (run) => {
         const workflow = run.replay?.workflow as
-          | { steps?: { verb: string; field_label_origin?: string }[] }
-          | undefined;
+          { steps?: { verb: string; field_label_origin?: string }[] } | undefined;
         const steps = workflow?.steps?.filter((step) => step.verb === 'fill_element') ?? [];
         return {
           saved: run.outcome.kind === 'published' ? run.outcome.promotion : null,

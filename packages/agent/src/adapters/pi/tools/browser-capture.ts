@@ -257,11 +257,7 @@ function captureFailure(error: unknown): DomainFailure {
 }
 
 type UnavailableCause =
-  | 'no-browser'
-  | 'capture-failed'
-  | 'epoch-changed'
-  | 'overlay-present'
-  | 'bounds-exceeded';
+  'no-browser' | 'capture-failed' | 'epoch-changed' | 'overlay-present' | 'bounds-exceeded';
 
 function unavailable(cause: UnavailableCause): DomainFailure {
   return {

@@ -47,12 +47,12 @@ The user's brief for this session:
 
 Decisions taken in this session (user-confirmed, 2026-11-02):
 
-| Decision                | Choice                                                                                 |
-| ----------------------- | -------------------------------------------------------------------------------------- |
-| Accent direction        | **Ion** — the cold cyan of a heads-up display                                          |
-| App shell               | **Chrome app window** opened by `yantra ui`, served by the `yantra daemon`             |
-| Headless component base | **React Aria Components**                                                              |
-| Where this lives        | This companion doc plus a Session 5 entry in `brainstorm.md`                           |
+| Decision                | Choice                                                                               |
+| ----------------------- | ------------------------------------------------------------------------------------ |
+| Accent direction        | **Ion** — the cold cyan of a heads-up display                                        |
+| App shell               | **Chrome app window** opened by `yantra ui`, served by the `yantra daemon`           |
+| Headless component base | **React Aria Components**                                                            |
+| Where this lives        | This companion doc plus a Session 5 entry in `brainstorm.md`                         |
 | Design system name      | **Drshya** (दृश्य, _dṛśya_: "that which is seen" — paired with _yantra_, "instrument") |
 
 ---

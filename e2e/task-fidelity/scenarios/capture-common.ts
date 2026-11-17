@@ -97,8 +97,7 @@ export const CAPTURE_PANEL_STEP: ScriptStep = {
   label: 'capture',
   params: (ctx: ScriptContext) => {
     const observation = ctx.last('browser_observe')?.model as
-      | { interactables?: { ref?: unknown; name?: unknown }[] }
-      | undefined;
+      { interactables?: { ref?: unknown; name?: unknown }[] } | undefined;
     const ref = observation?.interactables?.find(
       (entry) => entry.name === TALL_PAGE_PANEL_NAME,
     )?.ref;

@@ -30,8 +30,8 @@ function context(sources: number[], actions: string[] = []): CitationContext {
 }
 
 function chips(container: HTMLElement): string[] {
-  return [...container.querySelectorAll('[data-chip]')].map(
-    (node) => node.getAttribute('data-chip')!,
+  return [...container.querySelectorAll('[data-chip]')].map((node) =>
+    node.getAttribute('data-chip')!,
   );
 }
 
