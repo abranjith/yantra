@@ -1,0 +1,36 @@
+{
+  "vcs": "git",
+  "files": [
+    {
+      "path": "packages/protocol/src/commands/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/protocol/src/commands/tokenize.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/protocol/tests/commands/tokenize.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-001"
+    }
+  ],
+  "excluded": [
+    ".spec-lite/features/FEAT-070-parity_palette_generated_surfaces/changeset.json",
+    ".spec-lite/features/FEAT-070-parity_palette_generated_surfaces/spec.md",
+    ".spec-lite/plan_ui.md"
+  ],
+  "baseline": {
+    "sha": "6dae28d0575db71f17f7286102d7dc8a61ba3c50",
+    "capturedAt": "2026-11-17T05:13:19.202Z",
+    "dirtyAtBaseline": [],
+    "dirtyBlobHashes": {},
+    "workflow": "ft/feat-070-parity-palette-generated-surfaces@6dae28d0575db71f17f7286102d7dc8a61ba3c50"
+  },
+  "featureId": "FEAT-070"
+}
