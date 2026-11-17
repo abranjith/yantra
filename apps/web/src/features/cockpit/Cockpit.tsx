@@ -7,11 +7,17 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import type { CommandInvocation, EffectiveOptions, InvocationSummary } from '@yantra/protocol';
-import { usePrefersReducedMotion } from '@yantra/ui';
+import { BrowserViewport, usePrefersReducedMotion } from '@yantra/ui';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { useRpc } from '../../host/app-rpc.js';
 import { useConnection } from '../../host/connection-store.js';
+import {
+  LiveViewTextAlternative,
+  liveViewAnnouncement,
+} from '../../live-view/live-view-text-alternative.js';
+import { useBudgetMonitor } from '../../live-view/use-budget-monitor.js';
+import { useLiveView } from '../../live-view/use-live-view.js';
 import { forgetLaunched, wasLaunchedHere } from '../composer/submit.js';
 import type { CockpitMode } from '../live/cockpit-state.js';
 import { deriveDisplayedState } from '../live/displayed-state.js';
@@ -112,6 +118,21 @@ export function Cockpit({ stream, mode, invocation = null }: CockpitProps): Reac
       : null;
   const view = useMemo(() => announceView(state, displayed.kind), [state, displayed.kind]);
 
+  // FEAT-069: the task page, live, behind the HUD; announced once per state change.
+  const budget = useBudgetMonitor();
+  const live = useLiveView(state.runId, budget.onSample);
+  const liveState = live.snapshot.state;
+  const previousLiveState = useRef<typeof liveState | null>(null);
+  const [liveAnnouncement, setLiveAnnouncement] = useState<{
+    readonly id: number;
+    readonly text: string;
+  } | null>(null);
+  useEffect(() => {
+    const text = liveViewAnnouncement(previousLiveState.current, liveState);
+    previousLiveState.current = liveState;
+    if (text !== null) setLiveAnnouncement((prior) => ({ id: (prior?.id ?? 0) + 1, text }));
+  }, [liveState]);
+
   // The finish (TASK-015): only for a run this window launched (it may end before
   // the cockpit attaches) or watched while it ran; a run opened after it ended stays.
   const navigate = useNavigate();
@@ -148,6 +169,7 @@ export function Cockpit({ stream, mode, invocation = null }: CockpitProps): Reac
   }, [outcomeSpoken, navigate, reducedMotion, runId, invocation]);
   return (
     <CockpitLayout
+      {...(budget.surfaces === undefined ? {} : { surfaces: budget.surfaces })}
       topBar={
         <CockpitTopBar
           state={state}
@@ -161,22 +183,38 @@ export function Cockpit({ stream, mode, invocation = null }: CockpitProps): Reac
         />
       }
       status={
-        <CockpitStatus
-          displayed={displayed}
-          cockpit={state}
-          error={stopError}
-          onAction={(action) => {
-            if (action.id !== 'cancel' || invocation === null) return false;
-            requestStop();
-            return true;
-          }}
-          onKeepWaiting={() => {
-            setAcknowledgedStall(state.stalledAt);
-          }}
+        <>
+          {budget.surfaces === 'solid' ? <SolidNotice /> : null}
+          <CockpitStatus
+            displayed={displayed}
+            cockpit={state}
+            error={stopError}
+            onAction={(action) => {
+              if (action.id !== 'cancel' || invocation === null) return false;
+              requestStop();
+              return true;
+            }}
+            onKeepWaiting={() => {
+              setAcknowledgedStall(state.stalledAt);
+            }}
+          />
+        </>
+      }
+      backdrop={
+        <BrowserViewport
+          state={live.snapshot.state}
+          reason={live.snapshot.reason}
+          page={live.snapshot.page}
+          draw={live.attachCanvas}
         />
       }
       understood={<UnderstoodPanel state={state} />}
-      engine={<EnginePanel state={state} />}
+      engine={
+        <>
+          <LiveViewTextAlternative snapshot={live.snapshot} />
+          <EnginePanel state={state} />
+        </>
+      }
       command={
         <CommandPanel
           invocation={invocation?.invocation ?? null}
@@ -188,11 +226,26 @@ export function Cockpit({ stream, mode, invocation = null }: CockpitProps): Reac
         <CockpitAnnouncer
           view={view}
           notice={held ? 'The result is ready. View result opens it.' : null}
+          liveView={liveAnnouncement}
           onSpoken={(text) => {
             if (text.includes('Run finished:')) setOutcomeSpoken(true);
           }}
         />
       }
     />
+  );
+}
+
+/**
+ * Said once, when the live view went over budget and the cockpit switched
+ * itself to Solid (FEAT-069). The preference is unchanged; it says how to
+ * keep Glass.
+ */
+function SolidNotice(): ReactNode {
+  return (
+    <p data-part="solid-notice" className="type-body rounded-control bg-surface p-3 text-ink-2">
+      Switched to Solid to keep the live view smooth. Your <code>ui.surfaces</code> preference is
+      unchanged: <code>yantra prefs set ui.surfaces glass</code> keeps Glass for later runs.
+    </p>
   );
 }

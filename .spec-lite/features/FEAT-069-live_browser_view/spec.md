@@ -253,7 +253,7 @@ specs' final locations)
 
 ### TASK-001: Spike S1 — glass and readability over a live screencast, with a report
 
-- [ ] **Implementation**: Build `e2e/spikes/live-view-s1/` as a Vitest-free `tsx` script driven by
+- [x] **Implementation**: Build `e2e/spikes/live-view-s1/` as a Vitest-free `tsx` script driven by
       the existing `puppeteer-core` (no new dependency). A **source** headless Chrome loads a fixture
       page with continuous motion and dense text and runs CDP `Page.startScreencast` (JPEG). The
       harness relays frames to a **viewer** Chrome page (`viewer.html`) that paints them on a
@@ -272,20 +272,29 @@ specs' final locations)
       even with Solid, or that the §6 frame-queue design cannot hold 5 fps, record
       `DEVIATION: …` in the report and in this spec and stop for confirmation before TASK-002
       (plan §8: S1 "can force an architecture change").
-- [ ] **Unit Tests**: `metrics.ts`: percentile over an interval list (empty, single, even and odd
+- [x] **Unit Tests**: `metrics.ts`: percentile over an interval list (empty, single, even and odd
       counts); main-thread share from two `TaskDuration` readings (zero wall time rejected,
       counter reset rejected); contrast ratio for known pairs (black/white = 21, equal colors = 1)
       and for the scrim-floor tint over both extremes; report-table renderer output is stable.
-- [ ] **Documentation Update**: Invoke **Document** update mode for the task-fidelity / harness
+- [x] **Documentation Update**: Invoke **Document** update mode for the task-fidelity / harness
       area only if the spike script is kept as a runnable tool; otherwise none (the report lives
       under the feature directory).
 - **Verify**: `spike-s1-report.md` exists with measured numbers from at least Windows (the
   developer machine) and Linux CI, names the chosen defaults and thresholds, and states go / no-go;
   `cd e2e && npx vitest run tests/spikes/live-view-s1-metrics.spec.ts` passes.
+- **Outcome (2026-11-15)**: **GO**, no DEVIATION. Windows numbers are in `spike-s1-report.md`
+  (5 and 10 fps met at every setting; viewer main thread 2.8–4.3 % of one core). Defaults: 10 fps,
+  q70, 1280×800, `everyNthFrame` 1, serial ack schedule. Solid thresholds stay at the plan §10
+  values. **DEVIATION (user decision, 2026-11-17):** the Linux CI measurement was waived; the
+  Verify's "and Linux CI" clause is not met by design, and the temporary `spike-s1.yml` workflow is
+  removed. The metrics tests live at `e2e/spikes/live-view-s1/metrics.spec.ts`, beside the harness,
+  because the e2e workspace has no `tests/` directory (verify with
+  `cd e2e && npx vitest run spikes/live-view-s1/metrics.spec.ts`). Documentation: none, because the
+  spike is a throwaway tool and its report lives in the feature directory.
 
 ### TASK-002: Protocol — screencast frame metadata, control messages and payload codec
 
-- [ ] **Implementation**: Add `packages/protocol/src/schemas/screencast.ts` with Zod schemas (every
+- [x] **Implementation**: Add `packages/protocol/src/schemas/screencast.ts` with Zod schemas (every
       field `.describe()`d, every object `.strict()`) for `ScreencastFrameMeta`, `FramesStart`,
       `FramesStop`, `FrameAck`, `FramesCleared`, `FramesState`, `FramesSubscribe`,
       `FramesUnsubscribe` (§2), `FRAMES_CAPABILITY = 'frames/1'`, and limits as named constants
@@ -296,22 +305,31 @@ specs' final locations)
       message kinds in FEAT-064's run-socket message union and the RPC methods in FEAT-065's
       method table (additive). Export from `packages/protocol/src/index.ts`; generated JSON Schema
       follows the existing `zod-to-json-schema` path.
-- [ ] **Unit Tests**: encode/decode round trip; `meta_len` larger than the buffer, zero, or beyond
+- [x] **Unit Tests**: encode/decode round trip; `meta_len` larger than the buffer, zero, or beyond
       1 KiB rejected; payload over 4 MiB rejected; non-JPEG bytes rejected; unknown `state`,
       `reason` or extra field rejected (strict); `document_epoch: null` accepted; negative
       generation rejected; a property test (existing protocol property-test style) that any valid
       meta plus any SOI-prefixed byte array round-trips; no Node `Buffer` import (boundary test
       over the module source).
-- [ ] **Documentation Update**: Invoke **Document** update mode for the protocol spec
+- [x] **Documentation Update**: Invoke **Document** update mode for the protocol spec
       (`docs/protocol-spec.md`, screencast messages).
 - **Verify**: `pnpm --filter @yantra/protocol test` and `npx turbo run lint typecheck` pass;
   `packages/ui` can import the codec types without pulling Node built-ins (import-boundary lint).
 - **Depends on**: TASK-001 (go decision); FEAT-064 and FEAT-065 message tables for registration
   (the schemas themselves can land first).
+- **Outcome (2026-11-15)**: All schemas live in `screencast.ts`. The run-channel union carries them
+  as `{type, ...fields}` variants. `@yantra/protocol/screencast` is a new browser-safe subpath
+  export, and the web boundary rule now allows value imports from it, as it already did for
+  `/commands`, because the app decodes frames. Drshya stays type-only, and both rules are pinned in
+  `packages/ui/tests/boundary-rules.spec.ts`. The FEAT-065 RPC methods are registered in TASK-009,
+  where the host method table lives. `docs/protocol-spec.md` and the JSON Schemas were regenerated
+  (`screencast-frame-meta.json`). One fix unrelated to this feature: a `run-channel.spec.ts` case
+  had been failing on `development` because it used `intervention.answer` as its "unknown type"
+  example, and that type is now known. It and the server-side twin now use real unknown types.
 
 ### TASK-003: Screen protection — observable latch, fill holds, and the deterministic fill paths
 
-- [ ] **Implementation**: (1) Add `subscribe(listener: (latched: boolean) => void): () => void` to
+- [x] **Implementation**: (1) Add `subscribe(listener: (latched: boolean) => void): () => void` to
       `SensitiveScreenLatch`: notify `true` synchronously inside `latch()`, `false` when
       `isLatched()` clears on an epoch change and in `clearOnTeardown()`. Existing semantics
       (fail-closed on unreadable epoch, clear only by epoch change or teardown) stay byte-for-byte.
@@ -331,7 +349,7 @@ specs' final locations)
       `finally`. (6) Agent path: in `applyBrowserFill`, hold `masked_fill` for the literal path when
       the target carries `withheld` or `services.userInput?.mask(literal) !== literal`; the secret
       path's existing latch is unchanged. No new artifact, log line, or tool-result field.
-- [ ] **Unit Tests**: latch `subscribe` fires `true` on latch, `false` on epoch change and teardown,
+- [x] **Unit Tests**: latch `subscribe` fires `true` on latch, `false` on epoch change and teardown,
       never fires on a repeated `isLatched` with the same epoch, unsubscribe stops delivery;
       existing `sensitive-screen-latch.spec.ts` cases pass unchanged. `ScreenProtection`: holds nest
       and a double release is a no-op; `unknown` focus is protected; listener fires once per
@@ -342,16 +360,26 @@ specs' final locations)
       a literal fill whose value came from a user-input placeholder holds during the fill; a plain
       literal does not; the model-visible secret-fill result stays byte-identical (existing
       snapshot).
-- [ ] **Documentation Update**: Invoke **Document** update mode for Safety and Privacy
+- [x] **Documentation Update**: Invoke **Document** update mode for Safety and Privacy
       (protected screens now include deterministic secret fills).
 - **Verify**: `cd packages/core && npx vitest run tests/browser/sensitive-screen-latch.spec.ts
 tests/browser/screen-protection.spec.ts tests/executor/fill-protection.spec.ts`; rebuild core
   (`npx turbo run build --filter=@yantra/core`) then
   `cd packages/agent && npx vitest run tests/adapters/pi/tools/browser-fill-tools.spec.ts`.
+- **Outcome (2026-11-15)**: `SensitiveScreenLatch.subscribe` pushes transitions only. A throwing
+  listener does not stop the others, and the first error is rethrown after the state has changed.
+  Inside `latch()` that fails the fill closed. The legacy `fill` step and `fill_element` latch
+  inside the dispatch `try`, so the secret is still zeroed. The masked-value hold covers
+  `fill_element` only: the legacy `fill` step has no target descriptor, and classifying the element
+  would add a page read to every fill (memory: diagnostic work only on the path that needs it). Its
+  protected-control case is covered by the TASK-004 focus guard. On the agent path the masked check
+  reads only the controller's in-memory ref registry (`describeRef(...).withheld`) and the vault's
+  `mask()`. `BrowserToolDeps.screenProtection` is optional, so fakes are unaffected. Human-facing
+  docs are batched into the Finalize Document update (Safety and Privacy).
 
 ### TASK-004: Protected-control focus guard in an isolated world
 
-- [ ] **Implementation**: Add `packages/core/src/live-view/focus-guard.ts`:
+- [x] **Implementation**: Add `packages/core/src/live-view/focus-guard.ts`:
       `installFocusGuard(page, onFocus): Promise<FocusGuardHandle>`. Over a CDP session on the task
       page: `Runtime.addBinding({name, executionContextName: 'yantra-live-view'})`,
       `Page.addScriptToEvaluateOnNewDocument({source, worldName: 'yantra-live-view',
@@ -367,7 +395,7 @@ runImmediately: true})`, and `Page.createIsolatedWorld` for the current document
       see the binding. If any install step fails, report `unknown` (fail closed) and surface
       `LiveViewError('FOCUS_GUARD_UNAVAILABLE')` to the hub. The guard is installed only while a
       screencast stream is active and is re-installed on target change.
-- [ ] **Unit Tests**: jsdom parity table: the in-page classifier and `classifyWithheld` agree on
+- [x] **Unit Tests**: jsdom parity table: the in-page classifier and `classifyWithheld` agree on
       password, each sensitive autocomplete token, `section-pay cc-number`, `cc-name` (not
       protected), `data-yantra-secret`, plain text. Real Chrome (memory: an in-page function needs
       one real-Chrome test): focusing a password field reports `protected`, blurring reports
@@ -376,16 +404,31 @@ runImmediately: true})`, and `Page.createIsolatedWorld` for the current document
       `typeof` check finds no binding; a main-world `MutationObserver` records zero mutations
       across a focus cycle; the guard survives a real navigation (`page.goto('about:blank')`, not
       `setContent`, per memory).
-- [ ] **Documentation Update**: Invoke **Document** update mode for Safety and Privacy (focus on a
+- [x] **Documentation Update**: Invoke **Document** update mode for Safety and Privacy (focus on a
       protected field hides the live view).
 - **Verify**: `cd packages/core && npx vitest run tests/live-view/focus-guard.spec.ts
 tests/live-view/focus-guard.chrome.spec.ts` passes alone and in the full core suite (own
   timeout for the real-Chrome cases).
 - **Depends on**: TASK-003
+- **Outcome (2026-11-15)**: Behavior verified against real Chrome, with three changes from the plan
+  above:
+  1. The guard's own CDP session must call `Page.enable`, or its new-document script never runs
+     after a navigation.
+  2. `runImmediately: true` already creates the world in, and runs the guard on, the current
+     documents, so `Page.createIsolatedWorld` is not needed.
+  3. A tab without focus (a background or adopted page) moves `activeElement` but fires no focus
+     events, so the guard also polls every 100 ms (`FOCUS_GUARD_POLL_MS`).
+
+  The guard also listens for window `blur`, because focus entering an iframe from nothing fires no
+  `focusin`. A second install on the same document rebinds the existing guard to the new binding
+  name. After `dispose()`, the guard in already-loaded documents keeps polling, but nothing hears it
+  (session detached) until the next navigation. Closed shadow roots are detected heuristically: a
+  focused custom element with no open shadow root, `tabindex` or `contenteditable` reports
+  `unknown`.
 
 ### TASK-005: Frame gate — generations, fresh-capture admission and clear signals
 
-- [ ] **Implementation**: Add `packages/core/src/live-view/frame-gate.ts`, a pure state machine
+- [x] **Implementation**: Add `packages/core/src/live-view/frame-gate.ts`, a pure state machine
       with an injected clock: `FrameGate` with `generation`, `onProtectionChanged(protected)`,
       `onNavigationCommitted(epoch)`, `onTargetChanged()`, `onStreamRestarted()` and
       `admit({capturedAtMs, documentEpoch}) → {kind: 'forward', meta} | {kind: 'drop', reason}`.
@@ -396,20 +439,25 @@ generationStartedAt` (`'stale_capture'`) and its timestamp is present (`'no_time
       Protection start returns a `cleared` signal carrying the new generation; protection clear
       and the other events return a `state` signal. The gate assigns `frame_seq`. It holds no
       bytes. Reason codes are a closed union for tests and debug logs.
-- [ ] **Unit Tests** (stepped clock, memory): a frame captured before a protection start but
+- [x] **Unit Tests** (stepped clock, memory): a frame captured before a protection start but
       admitted after it is dropped; after protection clears, a frame captured before the clear is
       dropped and the first later capture is forwarded with the new generation; navigation and
       target change each bump the generation and void older captures; stream restart bumps;
       generation never decreases; protection set twice emits one `cleared`; a missing timestamp is
       dropped; `frame_seq` is gap-free over forwarded frames only.
-- [ ] **Documentation Update**: Invoke **Document** update mode for the architecture document's
+- [x] **Documentation Update**: Invoke **Document** update mode for the architecture document's
       live-view section (generation rules).
 - **Verify**: `cd packages/core && npx vitest run tests/live-view/frame-gate.spec.ts`.
 - **Depends on**: TASK-002
+- **Outcome (2026-11-15)**: Admission requires `captured_at >= generationStartedAt + 1 ms`
+  (`GENERATION_CLOCK_TICK_MS`). `Date.now()` floors to the millisecond while CDP capture times are
+  fractional, so a capture in the same tick as a change cannot be proven fresh. The start instant
+  never moves backwards when the clock does. Human-facing architecture docs are batched into the
+  Finalize Document update.
 
 ### TASK-006: Task page source and the CDP screencast source
 
-- [ ] **Implementation**: (1) `packages/core/src/live-view/task-page-source.ts`: a `TaskPageSource`
+- [x] **Implementation**: (1) `packages/core/src/live-view/task-page-source.ts`: a `TaskPageSource`
       port — `current(): {page, headless} | null`, `topLevelEpoch(): number | null`,
       `screenProtection`, and `subscribe(listener)` delivering `page_installed`,
       `navigation_committed {epoch}`, `target_changed`, `torn_down`. (2)
@@ -427,22 +475,32 @@ maxHeight, everyNthFrame}` with the TASK-001 defaults; on each `Page.screencastF
       delayed by `max(0, minInterval − elapsed)`); drop frames over 4 MiB; `stop()` sends
       `Page.stopScreencast` and detaches. CDP errors become `LiveViewError('CAPTURE_FAILED')`;
       nothing here can throw into the run.
-- [ ] **Unit Tests**: controller emits `page_installed`, `navigation_committed` with increasing
+- [x] **Unit Tests**: controller emits `page_installed`, `navigation_committed` with increasing
       epochs, `target_changed` on popup adoption (existing popup fixtures), `torn_down`; the
       replay adapter emits the same on a fixture workflow; real Chrome: frames arrive with
       timestamps and JPEG bytes; ack pacing keeps the rate at or below the target on a stepped
       clock; an oversize frame is dropped and acked; `stop()` ends frames; a closed target yields
       `CAPTURE_FAILED`, not an exception in the caller; the controller's existing popup-policy and
       ref-stability suites pass unchanged.
-- [ ] **Documentation Update**: Invoke **Document** update mode for Browser Resolution and
+- [x] **Documentation Update**: Invoke **Document** update mode for Browser Resolution and
       Lifecycle (task page versus background pages for the live view).
 - **Verify**: `cd packages/core && npx vitest run tests/live-view/screencast-source.spec.ts
 tests/browser/agent-popup-policy.spec.ts tests/browser/agent-controller.spec.ts`.
 - **Depends on**: TASK-003
+- **Outcome (2026-11-15)**: Events are emitted by `TaskPageEvents`, which isolates each listener
+  (errors are logged at `warn` with the error name only) so the owner's own work never depends on
+  one. `torn_down` is emitted at the start of `teardown()`, before the browser closes, and only
+  once. `PageSettler.addNavigationListener` runs after the epoch bump and after the owner's hook.
+  The replay side is `ReplayTaskPage` on `ctx.taskPage`. It is attached by
+  `createExecutionContext` / `ensureExecutionBrowser`, and a resumed run's fresh page is a
+  `target_changed`. The orchestrator calls `tearDown()` in TASK-007. `ScreencastSource` parses
+  the real JPEG size from the SOF marker, and drops and acks a JPEG over
+  `4 MiB − 2 − 1 KiB` (the largest that still fits a frame payload). Ack pacing uses the S1
+  serial schedule. Human-facing docs are batched into the Finalize Document update.
 
 ### TASK-007: Live-view hub — per-client latest-wins delivery, states, and orchestrator wiring
 
-- [ ] **Implementation**: Add `packages/core/src/live-view/live-view-hub.ts`. One `LiveViewHub` per
+- [x] **Implementation**: Add `packages/core/src/live-view/live-view-hub.ts`. One `LiveViewHub` per
       run, created by whoever runs the handler and passed down as an optional dependency
       (`liveView?: LiveViewHub`) to the agent orchestrator and `RunOrchestrator`, which call
       `hub.attach(taskPageSource)` once the source exists. Clients (`hub.addClient(sink)`) call
@@ -462,7 +520,7 @@ tests/browser/agent-popup-policy.spec.ts tests/browser/agent-controller.spec.ts`
       failures are caught, logged once at `warn` with the reason code, and turn into
       `frames.state unavailable`; the run continues unaffected. Logging records lifecycle and
       counts only, never frame bytes or titles.
-- [ ] **Unit Tests**: with a fake source and fake sinks on a stepped clock: no capture without a
+- [x] **Unit Tests**: with a fake source and fake sinks on a stepped clock: no capture without a
       started client; a late frame arriving after protection start is never offered to any
       client (two clients); `frames.cleared` reaches every client before any later frame; slow
       client A does not delay client B's frames; un-acked client receives at most one frame;
@@ -472,15 +530,30 @@ tests/browser/agent-popup-policy.spec.ts tests/browser/agent-controller.spec.ts`
       outcome is unchanged. **Characterization:** a fixture `do` (scripted fake provider) and a
       fixture `run` workflow produce identical run artifacts with and without a started client
       (ignoring timestamps).
-- [ ] **Documentation Update**: Invoke **Document** update mode for the architecture document
+- [x] **Documentation Update**: Invoke **Document** update mode for the architecture document
       (live-view hub and its zero-cost-when-idle rule).
 - **Verify**: `cd packages/core && npx vitest run tests/live-view/live-view-hub.spec.ts`; rebuild
   core, then the agent orchestrator suite that covers the fixture `do`.
 - **Depends on**: TASK-004, TASK-005, TASK-006
+- **Outcome (2026-11-15)**: The hub reconciles the stream serially toward a desired state (guard
+  and capture only while a started client sees a headless task page). A failed guard is not
+  retried on that page. Any failure clears on a new page, a capture failure also clears on a new
+  document, and both clear when nobody is watching. A fresh guard reports `unknown` until its first
+  read, so a stream begins with a brief `protected` state (fail closed, by design). The client
+  start size is the largest any started client asked for. Agent: `AgenticTaskRequest.liveView`
+  plus `AgenticRunEnvironment.taskPageSource`. Replay: `RunOrchestratorOptions.liveView`, and
+  `ReplayTaskPage.tearDown()` runs before `browser.close()` in both `run` and `resume`. The
+  characterization tests are `packages/agent/tests/runtime/live-view-characterization.spec.ts`
+  (scripted `do`, real Chrome) and `packages/core/tests/live-view/replay-characterization.spec.ts`
+  (fixture `run`). Both compare every run-directory file after normalizing timestamps, durations,
+  ids and paths, and both assert frames really streamed. The agent test excludes `runtime.jsonl`,
+  which differs by environment alone (a one-time compat probe and random session ids). A
+  `server.spec.ts` case used `intervention.answer` as its "unregistered type" and had been failing
+  on `development` (see TASK-002). It now uses a real unknown type.
 
 ### TASK-008: Worker run socket — `frames/1` capability and frame lane
 
-- [ ] **Implementation**: In FEAT-064's run-socket server: advertise `frames/1` in `hello`
+- [x] **Implementation**: In FEAT-064's run-socket server: advertise `frames/1` in `hello`
       capabilities when a hub is attached; route an authenticated client's `frames.start`,
       `frames.stop` and `frame.ack` to `hub.addClient(...)`; write `frames.cleared` and
       `frames.state` to the **control/event queue** and frames (encoded by TASK-002's codec as type
@@ -489,21 +562,39 @@ tests/browser/agent-popup-policy.spec.ts tests/browser/agent-controller.spec.ts`
       the FEAT-072 worker adapter, create the `LiveViewHub` per run and pass it through the
       handler dependencies to the orchestrators; the terminal adapter passes one too, idle until a
       client sends `frames.start`.
-- [ ] **Unit Tests**: over a real local socket with a fake hub: frames only after `frames.start`;
+- [x] **Unit Tests**: over a real local socket with a fake hub: frames only after `frames.start`;
       `frames.cleared` written before any later frame even when a frame is queued; stalled
       `frame.ack` does not delay event, heartbeat or intervention messages (§10 "stalled frame
       acknowledgements not delaying control traffic"); a frame payload over 4 MiB is never written;
       a client without `frames/1` negotiation receives no frames; two clients each get their own
       slot; disconnect mid-frame stops capture when it was the last client.
-- [ ] **Documentation Update**: Invoke **Document** update mode for the architecture document (run
+- [x] **Documentation Update**: Invoke **Document** update mode for the architecture document (run
       socket frame lane).
 - **Verify**: the FEAT-064 run-socket test file plus the new cases pass on Windows, macOS and Linux
   CI (named pipes and Unix sockets).
 - **Depends on**: TASK-007, FEAT-064, FEAT-072
+- **Outcome (2026-11-15)**: `serveLiveViewOnRunSocket(session, hub)` registers the three frame
+  messages on the ownership session, advertising `frames/1`. The server's `ChannelConnection` gains
+  optional `capabilities`, `sendFrame`, `clearFrame` and `whenClosed` (fakes stay valid).
+  `frames.cleared` first drops the connection's unsent frame (`OutboundQueues.dropFrame`), so
+  nothing of an older generation can follow it. A frame that cannot be framed (over 4 MiB) is never
+  written and is acked internally, so the next one is offered. Wiring:
+  - `CommandContext.liveView`: one `LiveViewHub` per worker invocation, closed in `finally`. The
+    terminal adapter creates an idle one.
+  - `do` / `ask` / `research` pass it in the agentic request. Non-agentic `ask` / `research` pass
+    it to `AskPipeline` / `ResearchLoop`, which serve it with no task page, so the app sees
+    `no_page` and not `incompatible_worker`.
+  - `run` / `resume` pass it through `buildOrchestratorRuntime`.
+
+  The hub bounds self-requeued reconciles (8). A source that hands out a new page every time makes
+  it `unavailable/capture_failed` instead of spinning the event loop. A test fake did exactly that.
+  Two `apps/cli` characterization cases (`registry-parity`, `terminal-baseline` `template.save`)
+  fail with or without these changes, so they are pre-existing and noted in TODO. The cross-OS
+  `Verify` (macOS and Linux sockets) runs in CI.
 
 ### TASK-009: Host relay — `frames.subscribe`, per-window slots and the binary WebSocket lane
 
-- [ ] **Implementation**: In the FEAT-065 host add `live-view-relay.ts`. RPC `frames.subscribe
+- [x] **Implementation**: In the FEAT-065 host add `live-view-relay.ts`. RPC `frames.subscribe
 {run_id}` (authenticated window capability required, run must be attached) registers the window
       and returns the current `frames.state`; `frames.unsubscribe` and window close unregister.
       The host sends `frames.start` to the worker when the first window subscribes to that run and
@@ -517,21 +608,31 @@ tests/browser/agent-popup-policy.spec.ts tests/browser/agent-controller.spec.ts`
       never wait behind a frame. A worker without `frames/1` (D17) yields
       `frames.state unavailable/incompatible_worker`. Frames are never written to `host.log`;
       the log records subscribe/unsubscribe and counts only.
-- [ ] **Unit Tests**: with a fake worker channel and fake WebSockets: a delayed frame of an older
+- [x] **Unit Tests**: with a fake worker channel and fake WebSockets: a delayed frame of an older
       generation arriving after `frames.cleared` is dropped for every window; multiple windows
       each receive `frames.cleared`; a stalled window keeps receiving JSON-RPC responses promptly
       and does not slow a second window; a window without a valid capability cannot subscribe;
       first subscriber starts, last unsubscribe stops; a host log after a session contains no JPEG
       SOI bytes and no page titles; an incompatible worker fixture yields `unavailable`.
-- [ ] **Documentation Update**: Invoke **Document** update mode for the architecture document (host
+- [x] **Documentation Update**: Invoke **Document** update mode for the architecture document (host
       relay and backpressure).
 - **Verify**: the FEAT-065 host suite plus the relay suite pass; the FEAT-065 security suite still
   passes with the new RPC methods.
 - **Depends on**: TASK-008, FEAT-065
+- **Outcome (2026-11-15)**: `apps/cli/src/ui/host/live-view-relay.ts` registers
+  `frames.subscribe` / `frames.unsubscribe` and an additive `frames.ack {run_id, generation,
+frame_seq}` (schema `FramesWindowAck` in protocol). The app has to ack windows somehow, and §6
+  names no method for it. The host's run client now asks for `frames/1` (and `interventions`), and
+  `RunChannelClient.onScreencastFrame` hands it type-`0x02` frames. `RunRelay.owner(runId)` exposes
+  the live client and its granted capabilities. `onDetach` lets the live view drop a run whose
+  owner connection closed. A run with no live owner answers `no_page`, and an owner without
+  `frames/1` or on another channel version answers `unavailable/incompatible_worker`. Held frames
+  retry every 20 ms while `bufferedAmount ≥ 64 KiB`. The FEAT-065 host and security suites pass
+  with the new methods (24 files).
 
 ### TASK-010: BrowserViewport, the live-view store and the text alternative in the cockpit
 
-- [ ] **Implementation**: (1) Drshya instrument `packages/ui/src/instruments/browser-viewport.tsx`:
+- [x] **Implementation**: (1) Drshya instrument `packages/ui/src/instruments/browser-viewport.tsx`:
       presentational, props `{state, page, draw: (canvas) => void}`; renders a `<canvas>` with
       `role="img"` and an accessible name ("Live view of <host>" or the state's message) and state
       overlays with Drshya tokens and registry icons only: `protected` → "Protected screen —
@@ -551,22 +652,37 @@ tests/browser/agent-popup-policy.spec.ts tests/browser/agent-controller.spec.ts`
       behind the HUD. State changes (`protected`, back to `live`, `headed`, `unavailable`) are
       announced once through the cockpit's polite live region; individual frames never are, and
       focus never moves. (5) Gallery entries for every state in light, dark, Glass and Solid.
-- [ ] **Unit Tests** (Testing Library, jsdom): `frames.cleared` clears the canvas and shows the
+- [x] **Unit Tests** (Testing Library, jsdom): `frames.cleared` clears the canvas and shows the
       protected message in the same tick; a pending decode of the older generation resolving after
       `cleared` is not drawn and its bitmap is closed; a frame below the floor is dropped and acked;
       disconnect removes the image and shows `reconnecting`; each state renders its message and
       accessible name; text alternative renders host and title as text (a title containing markup
       renders literally); live-region announcements fire once per state change and not per frame;
       `axe-core` reports no violations for every gallery state.
-- [ ] **Documentation Update**: Invoke **Document** update mode for the app usage docs (live view
+- [x] **Documentation Update**: Invoke **Document** update mode for the app usage docs (live view
       states and the text alternative).
 - **Verify**: `pnpm --filter @yantra/ui test` and `pnpm --filter <apps/web package> test`; manual
   check in `/gallery` in both themes; visual baselines added for each state.
 - **Depends on**: TASK-009, FEAT-061, FEAT-067
+- **Outcome (2026-11-15)**: The instrument file is `BrowserViewport.tsx`, following the repo's
+  PascalCase instrument names. It takes `{state, reason, page, draw}`. Every non-live state covers
+  the canvas, and the canvas is always a named `img`. New registry icons are `liveView.headed`,
+  `liveView.noPage` and `liveView.unavailable`, and the protected state reuses `glyph.protected`.
+  The web RPC client gained a binary lane (`onBinary`, `binaryType = 'arraybuffer'`). The store
+  acks frames with the TASK-009 `frames.ack` request and imports the codec from
+  `@yantra/protocol/screencast`. The cockpit puts the viewport in the existing aria-hidden backdrop
+  slot. The text alternative sits at the top of the Engine panel and links to `#cockpit-engine`.
+  Announcements use a new `live_view` category, keyed per state change, so a redrawn frame never
+  re-announces. The gallery entry `instrument-browser-viewport` passes the real-Chrome harness
+  (axe, light/dark × Glass/Solid) and was checked by eye. **Visual baselines:** none are committed
+  for any gallery entry. The harness compares pixels only on Linux CI, so a Linux baseline for this
+  entry must be recorded there (`UPDATE_DRSHYA_BASELINES=1`). That is noted in TODO. Five
+  `@typescript-eslint/unbound-method` errors in `apps/web/tests/host/app-rpc.spec.tsx` fail on
+  `development` without these changes, so they are pre-existing and noted in TODO.
 
 ### TASK-011: Automatic Solid when the live view is over budget
 
-- [ ] **Implementation**: `apps/web/src/live-view/budget-monitor.ts`: a pure monitor over a sliding
+- [x] **Implementation**: `apps/web/src/live-view/budget-monitor.ts`: a pure monitor over a sliding
       5-second window with an injected clock, fed by the store (frames offered, frames drawn, time
       spent in decode-and-draw handlers) and by a `PerformanceObserver` for
       `long-animation-frame` entries where supported. It reports `over_budget` when, for two
@@ -577,19 +693,28 @@ tests/browser/agent-popup-policy.spec.ts tests/browser/agent-controller.spec.ts`
       shows a one-time notice "Switched to Solid to keep the live view smooth." with a link to the
       preference. When the preference is already `solid` or `prefers-reduced-transparency` is
       set, the monitor does nothing.
-- [ ] **Unit Tests** (stepped clock): a single slow window does not switch; two consecutive slow
+- [x] **Unit Tests** (stepped clock): a single slow window does not switch; two consecutive slow
       windows switch once; a low offered rate (worker idle, page static) never switches; CPU-share
       breach alone switches; the preference value is unchanged after a switch; an explicit Solid
       preference disables the monitor; the notice appears once.
-- [ ] **Documentation Update**: Invoke **Document** update mode for the app usage docs (automatic
+- [x] **Documentation Update**: Invoke **Document** update mode for the app usage docs (automatic
       Solid).
 - **Verify**: `pnpm --filter <apps/web package> test`; TASK-012's performance case observes either
   ≥ 5 fps within budget or Solid engaged.
 - **Depends on**: TASK-010, TASK-001
+- **Outcome (2026-11-15)**: `BudgetMonitor` closes fixed 5 s windows. A window is over budget when
+  the worker offered at least 5 fps and the window drew fewer than 5 fps or spent more than 15 % of
+  one core. Two such windows in a row switch the view once. The thresholds are the S1 values (plan
+  §10). Busy time is the store's handler time, plus long-animation-frame script time whose invoker
+  is a WebSocket or message event listener, where Chrome supports the observer.
+  `CockpitLayout.surfaces` sets `data-surfaces="solid"` on the cockpit subtree only, so
+  `ui.surfaces` is never written. The one-time notice is text, not a link. The app has no
+  Preferences route yet (FEAT-071 adds Settings), so the notice names the preference and the
+  command that keeps Glass instead.
 
 ### TASK-012: End-to-end screencast evidence, privacy scans, performance and safety docs
 
-- [ ] **Implementation**: `e2e/app-live-view.spec.ts` (puppeteer-core, real Chrome, own
+- [x] **Implementation**: `e2e/app-live-view.spec.ts` (puppeteer-core, real Chrome, own
       timeouts per memory, `LLM_PROVIDER=none` dimension where applicable; core resolved from
       built `dist/`). Fixture pages under `e2e/fixtures/live-view/`. Cases (plan §10 screencast
       evidence and §12 acceptance): **delayed frames across latch set and clear** (an injected
@@ -608,10 +733,10 @@ tests/browser/agent-popup-policy.spec.ts tests/browser/agent-controller.spec.ts`
       module imports `live-view`. Performance (plan §10): on the fixture motion page the app draws
       ≥ 5 fps with the app main thread under 15 % of one core (CDP `Performance.getMetrics` on the
       app target), **or** the cockpit carries `data-surfaces="solid"`.
-- [ ] **Unit Tests**: the byte-scan helper (finds SOI in a planted file, ignores legitimate
+- [x] **Unit Tests**: the byte-scan helper (finds SOI in a planted file, ignores legitimate
       `.png`/`.jpg` capture artifacts the run already owns, handles empty and large files) and
       the frame-rate sampler used by the performance case.
-- [ ] **Documentation Update**: Invoke **Document** update mode for Safety and Privacy: a "Live
+- [x] **Documentation Update**: Invoke **Document** update mode for Safety and Privacy: a "Live
       browser view" section stating that frames are never persisted and never sent to the model
       (so the `context.screenshots` grant does not apply), what counts as a protected screen
       (agent and deterministic secret fills, masked-value fills in progress, focus on a protected
@@ -622,6 +747,46 @@ tests/browser/agent-popup-policy.spec.ts tests/browser/agent-controller.spec.ts`
   `e2e` suite and `npx turbo run lint typecheck` pass on Windows, macOS and Linux CI; §12
   acceptance items each map to a passing case.
 - **Depends on**: TASK-010, TASK-011
+- **Outcome (2026-11-15)**: `e2e/app-live-view.spec.ts` (10 cases, all passing on Windows) drives
+  the real pipeline through `e2e/live-view/rig.ts`:
+  - worker: real Chrome task page (agent controller or replay context), real focus guard,
+    screencast, `LiveViewHub` and run socket;
+  - host: a real token-authenticated `RunChannelClient` and the real `LiveViewRelay`, logging to a
+    `host.log` file;
+  - windows: recording `RpcConnection`s that decode and ack every frame.
+
+  The worker-side delay is injected through the hub's `startCapture` seam, not a production hook.
+  Fixtures live in `e2e/fixtures/site/live-view/`, because the fixture server serves `site/`. One
+  case per §10 evidence item: delayed frames across latch set and clear, navigation, reconnect,
+  multiple viewers (with a stalled one), popup adoption, the deterministic secret fill (a replay
+  plan paced by `wait_for`), and protected focus. Privacy: a byte scan of a streamed `run`
+  directory and of `host.log`, plus `packages/agent/tests/boundaries/live-view-boundary.spec.ts`.
+  Found while writing it: every stream begins with its own `frames.cleared`, because a fresh guard
+  reports `unknown` until its first read, so the evidence looks for the `cleared` that follows each
+  trigger.
+
+  **Real app window (2026-11-17):** `e2e/app-live-view-window.spec.ts` closes the remaining gap.
+  It starts the real host with `yantra ui`, launches a `run` with `command.invoke`, and opens the
+  run's cockpit in a Chrome app page. The detached worker streams into the real BrowserViewport
+  canvas, and the test only instruments the page (`drawImage`, `clearRect`, and the viewport's
+  `data-state`). The workflow fills a password field with a literal. The view goes `protected`, the
+  canvas is cleared no later than that change, nothing is drawn while protected, and the view
+  returns to `live` on the next page. On the motion page the app drew about 10 fps with its main
+  thread at 2.0–2.7 % of one core, measured with CDP `Performance.getMetrics` on the app target
+  over three consecutive runs. The run directory and `host.log` hold no frame bytes.
+
+  Writing this test found and fixed two defects:
+  1. **Per-frame re-renders.** The store's per-frame `lastDrawn` was part of its React snapshot, so
+     every frame re-rendered the whole cockpit, at about 15 % of one core. It is now outside the
+     snapshot (`store.lastDrawn`).
+  2. **A subscribe race.** The cockpit's `frames.subscribe` can reach the host while
+     `run.subscribe` is still attaching the worker. The host now upgrades such a watch when the
+     attach completes (`LiveViewRelay.runAttached`), and the app retries a refused subscribe for up
+     to 10 × 500 ms.
+
+  The budget monitor counts only live-view handler time, so on its own it would not have caught
+  the re-render cost. The real-window test is what guards the whole-page budget. Cross-OS CI is
+  blocked repo-wide, because `pnpm-lock.yaml` is gitignored (see TODO).
 
 ## 6. Cross-Cutting Concerns
 
@@ -667,17 +832,17 @@ tests/browser/agent-popup-policy.spec.ts tests/browser/agent-controller.spec.ts`
 
 ## 8. State Tracking
 
-- [ ] TASK-001: Spike S1 — glass and readability over a live screencast, with a report
-- [ ] TASK-002: Protocol — screencast frame metadata, control messages and payload codec
-- [ ] TASK-003: Screen protection — observable latch, fill holds, and the deterministic fill paths
-- [ ] TASK-004: Protected-control focus guard in an isolated world
-- [ ] TASK-005: Frame gate — generations, fresh-capture admission and clear signals
-- [ ] TASK-006: Task page source and the CDP screencast source
-- [ ] TASK-007: Live-view hub — per-client latest-wins delivery, states, and orchestrator wiring
-- [ ] TASK-008: Worker run socket — `frames/1` capability and frame lane
-- [ ] TASK-009: Host relay — `frames.subscribe`, per-window slots and the binary WebSocket lane
-- [ ] TASK-010: BrowserViewport, the live-view store and the text alternative in the cockpit
-- [ ] TASK-011: Automatic Solid when the live view is over budget
-- [ ] TASK-012: End-to-end screencast evidence, privacy scans, performance and safety docs
+- [x] TASK-001: Spike S1 — glass and readability over a live screencast, with a report
+- [x] TASK-002: Protocol — screencast frame metadata, control messages and payload codec
+- [x] TASK-003: Screen protection — observable latch, fill holds, and the deterministic fill paths
+- [x] TASK-004: Protected-control focus guard in an isolated world
+- [x] TASK-005: Frame gate — generations, fresh-capture admission and clear signals
+- [x] TASK-006: Task page source and the CDP screencast source
+- [x] TASK-007: Live-view hub — per-client latest-wins delivery, states, and orchestrator wiring
+- [x] TASK-008: Worker run socket — `frames/1` capability and frame lane
+- [x] TASK-009: Host relay — `frames.subscribe`, per-window slots and the binary WebSocket lane
+- [x] TASK-010: BrowserViewport, the live-view store and the text alternative in the cockpit
+- [x] TASK-011: Automatic Solid when the live view is over budget
+- [x] TASK-012: End-to-end screencast evidence, privacy scans, performance and safety docs
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

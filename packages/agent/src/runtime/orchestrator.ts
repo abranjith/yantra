@@ -62,6 +62,9 @@ import {
   FileWorkflowStore,
   workflowsRoot,
   type AgentBrowserController as AgentBrowserControllerType,
+  type LiveViewHub,
+  serveLiveViewOnRunSocket,
+  type TaskPageSource,
   type AmbientGrants,
   type PayloadSanitizer,
   type RankSignalSink,
@@ -385,6 +388,12 @@ export interface AgenticTaskRequest {
    * receiving exactly what it always did.
    */
   readonly runEvents?: RunEventStream;
+  /**
+   * The run's live browser view (FEAT-069), created by whoever runs the
+   * handler. The run attaches its task page to it; the hub captures nothing
+   * until a client starts, and nothing about the run depends on it.
+   */
+  readonly liveView?: LiveViewHub;
 }
 
 /** Resolved template content and non-secret reference provenance for one run. */
@@ -417,6 +426,11 @@ export interface AgenticRunStore extends AgentRunStore {
 export interface AgenticRunEnvironment {
   readonly domain: ToolDomainDeps;
   readonly browserController: Pick<AgentBrowserControllerType, 'teardown'>;
+  /**
+   * The task page for the live view (FEAT-069): the controller's active page,
+   * never a pool page. Optional: an injected test environment may have none.
+   */
+  readonly taskPageSource?: () => TaskPageSource;
   readonly resolveModelSecret?: (secretRef: string) => Promise<string>;
   /** Workflow store used by `--save-as` promotion; omit to disable promotion. */
   readonly workflowStore?: WorkflowStore;
@@ -728,6 +742,9 @@ export async function runAgenticTask(
         ...(ownership === undefined ? {} : { ownershipRecorder: ownership.recorder }),
       },
     });
+    if (request.liveView !== undefined && environment.taskPageSource !== undefined) {
+      request.liveView.attach(environment.taskPageSource());
+    }
     const runAbort = new AbortController();
     budgetTracker = new BudgetTracker(budgetsConfig, dependencies.budgetNow);
     const runBudget = budgetTracker;
@@ -744,6 +761,11 @@ export async function runAgenticTask(
       clock: { now: () => now().toISOString() },
       ceiling: interventionCeiling,
     });
+    // FEAT-069: frames/1 on the run socket. A run whose task page never
+    // exists still answers, with `frames.state no_page`.
+    if (ownership !== undefined && request.liveView !== undefined) {
+      serveLiveViewOnRunSocket(ownership, request.liveView);
+    }
     ownership?.registerChannelHandler('attendance', 'interventions', (message, connection) => {
       const count =
         typeof message.count === 'number' && Number.isInteger(message.count) ? message.count : null;
@@ -2476,6 +2498,7 @@ function composeDefaultEnvironment(
 
   return {
     browserController,
+    taskPageSource: () => browserController.taskPageSource(),
     pagePool,
     workflowStore,
     runtimeLogger: logger,
@@ -2582,6 +2605,7 @@ function composeDefaultEnvironment(
         ethics,
         secretResolver,
         sensitiveScreenLatch: browserController.sensitiveScreenLatch,
+        screenProtection: browserController.screenProtection,
         // Host bindings are trusted metadata and are intentionally not inferred
         // from model input. A future config store can inject them here.
         secretHosts: () => Promise.resolve([]),

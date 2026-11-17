@@ -4,7 +4,10 @@ import { join } from 'node:path';
 import type { Plan } from '@yantra/protocol';
 
 import { PageSettler } from '../browser/page-settle.js';
+import { ScreenProtection } from '../browser/screen-protection.js';
+import { SensitiveScreenLatch } from '../browser/sensitive-screen-latch.js';
 import type { BrowserSession, Logger, Page } from '../browser/types.js';
+import { ReplayTaskPage } from '../live-view/replay-task-page.js';
 import { openTaskEventBus } from '../run-events/mirroring-event-bus.js';
 import { RecordingConfirmationGateway } from '../run-events/recording-confirmation-gateway.js';
 import type { RunEventStream } from '../run-events/stream.js';
@@ -95,6 +98,21 @@ export function createExecutionContext(opts: ExecutionContextOptions): Execution
     taskId: opts.taskId,
     runId,
   });
+  // FEAT-069: run-local, in memory, never persisted; the live view's only input.
+  const sensitiveScreenLatch = new SensitiveScreenLatch();
+  const screenProtection = new ScreenProtection(sensitiveScreenLatch);
+  const taskPage = new ReplayTaskPage(screenProtection, {
+    headless: true,
+    onListenerError: (error) => {
+      opts.logger.warn(
+        { runId, error: error instanceof Error ? error.name : 'unknown' },
+        'live view task-page listener failed',
+      );
+    },
+  });
+  const settler = makeSettler(opts.page ?? null);
+  const puppeteerPage = opts.page?.puppeteerPage;
+  if (puppeteerPage) taskPage.attach(puppeteerPage, settler);
 
   return {
     runId,
@@ -110,7 +128,7 @@ export function createExecutionContext(opts: ExecutionContextOptions): Execution
     browser: opts.browser ?? null,
     page: opts.page ?? null,
     locatorHost: opts.page?.locatorHost ?? null,
-    settler: makeSettler(opts.page ?? null),
+    settler,
     events,
     budgets,
     ethics: opts.ethics,
@@ -127,6 +145,9 @@ export function createExecutionContext(opts: ExecutionContextOptions): Execution
         : (opts.confirmationGateway ?? null),
     confirmationStore: createConfirmationStore(opts.runDir),
     evidence: opts.evidence === undefined ? new ReplayEvidenceLedger() : opts.evidence,
+    sensitiveScreenLatch,
+    screenProtection,
+    taskPage,
   };
 }
 
@@ -155,6 +176,7 @@ export async function ensureExecutionBrowser(ctx: ExecutionContext): Promise<voi
   if (ctx.page !== null) {
     ctx.locatorHost ??= ctx.page.locatorHost ?? null;
     ctx.settler ??= makeSettler(ctx.page);
+    attachTaskPage(ctx);
     return;
   }
   if (ctx.browser === null) return;
@@ -162,6 +184,13 @@ export async function ensureExecutionBrowser(ctx: ExecutionContext): Promise<voi
   ctx.page = page;
   ctx.locatorHost = page.locatorHost ?? null;
   ctx.settler = makeSettler(page);
+  attachTaskPage(ctx);
+}
+
+/** Tells the live view which page this run drives (FEAT-069); a no-op without one. */
+function attachTaskPage(ctx: ExecutionContext): void {
+  const puppeteerPage = ctx.page?.puppeteerPage;
+  if (puppeteerPage) ctx.taskPage?.attach(puppeteerPage, ctx.settler);
 }
 
 /**

@@ -27,7 +27,9 @@ export type AnnouncementCategory =
   | 'intervention'
   | 'state'
   | 'contract'
-  | 'requirements';
+  | 'requirements'
+  /** Live browser view state changes (FEAT-069). */
+  | 'live_view';
 
 /** One thing to say. */
 export interface Announcement {
@@ -68,6 +70,7 @@ const ORDER: readonly AnnouncementCategory[] = [
   'state',
   'contract',
   'requirements',
+  'live_view',
 ];
 
 /** The announcements for the change from `prev` to `next`; pure. */

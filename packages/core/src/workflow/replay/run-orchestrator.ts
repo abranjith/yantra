@@ -39,6 +39,9 @@ import type {
   Sanitizer,
 } from '../../executor/types.js';
 import { writeFileAtomic } from '../../fs/atomic-write.js';
+import type { LiveViewHub } from '../../live-view/live-view-hub.js';
+import type { ReplayTaskPage } from '../../live-view/replay-task-page.js';
+import { serveLiveViewOnRunSocket } from '../../live-view/run-socket.js';
 import { ResourceBusyError } from '../../locks/resource-lock.js';
 import {
   writeExecutionReceipt,
@@ -109,6 +112,12 @@ export interface RunOrchestratorOptions {
    * opened. Scheduled runs and nested `workflow_run` calls use exactly that.
    */
   readonly synthesis?: SynthesisStrategies | null;
+  /**
+   * The run's live browser view (FEAT-069). The executor's page is attached
+   * to it and torn down before the browser closes; the hub captures nothing
+   * until a client starts, and the run never depends on it.
+   */
+  readonly liveView?: LiveViewHub | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -268,6 +277,7 @@ export class RunOrchestrator {
     try {
       await this.openRunEvents(runEvents, runId, runDir, manifest);
       this.opts.runStore.ownership?.(runId)?.attachEvents(runEvents);
+      this.serveLiveView(runId);
       try {
         return await this.runAfterOpen({
           request,
@@ -332,6 +342,7 @@ export class RunOrchestrator {
         throw error;
       });
 
+    let liveTaskPage: ReplayTaskPage | undefined;
     try {
       // Update manifest with profile path
       if (profileSpec.kind === 'workflow') {
@@ -390,6 +401,7 @@ export class RunOrchestrator {
         logger,
         runEvents,
       });
+      liveTaskPage = this.attachLiveView(ctx);
 
       // 13. Execute
       const executorOutcome = await this.executor.run(ctx);
@@ -477,6 +489,8 @@ export class RunOrchestrator {
       this.recordOutcome(runEvents, outcome, clock.now().toISOString());
       return outcome;
     } finally {
+      // Before the browser closes, so the live view stops capturing first.
+      liveTaskPage?.tearDown();
       await browser.close().catch(() => undefined);
     }
   }
@@ -525,6 +539,7 @@ export class RunOrchestrator {
       // execution, and `task_resumed` opens the new segment.
       await this.openRunEvents(runEvents, runId, runDir, manifest);
       this.opts.runStore.ownership?.(runId)?.attachEvents(runEvents);
+      this.serveLiveView(runId);
       try {
         return await this.resumeAfterOpen(runId, point, runEvents);
       } catch (error) {
@@ -561,6 +576,7 @@ export class RunOrchestrator {
         throw error;
       });
 
+    let liveTaskPage: ReplayTaskPage | undefined;
     try {
       const secretResolver = new DefaultOpaqueRefResolver({ keychain: this.opts.keychain });
 
@@ -593,6 +609,7 @@ export class RunOrchestrator {
         logger,
         runEvents,
       });
+      liveTaskPage = this.attachLiveView(ctx);
 
       // Emit task_resumed event
       ctx.events.publish({
@@ -648,12 +665,29 @@ export class RunOrchestrator {
       this.recordOutcome(runEvents, outcome, new Date().toISOString());
       return outcome;
     } finally {
+      // Before the browser closes, so the live view stops capturing first.
+      liveTaskPage?.tearDown();
       await browser.close().catch(() => undefined);
     }
   }
 
   // -------------------------------------------------------------------------
   // Private helpers
+
+  /** Serves the live view's frames on this run's socket (FEAT-069), when both exist. */
+  private serveLiveView(runId: string): void {
+    const ownership = this.opts.runStore.ownership?.(runId);
+    if (ownership !== undefined && this.opts.liveView) {
+      serveLiveViewOnRunSocket(ownership, this.opts.liveView);
+    }
+  }
+
+  /** Attaches the executor's page to the live view, when the caller passed one. */
+  private attachLiveView(ctx: ExecutionContext): ReplayTaskPage | undefined {
+    const taskPage = ctx.taskPage;
+    if (taskPage !== undefined) this.opts.liveView?.attach(taskPage);
+    return taskPage;
+  }
 
   /**
    * Opens the run's event log. A log that cannot be opened is an environment

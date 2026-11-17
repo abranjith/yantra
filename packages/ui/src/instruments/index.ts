@@ -104,3 +104,12 @@ export {
   type TwinFormat,
   type TwinShell,
 } from './CliTwin.js';
+export {
+  BROWSER_VIEWPORT_MESSAGES,
+  BROWSER_VIEWPORT_UNAVAILABLE,
+  BrowserViewport,
+  browserViewportMessage,
+  type BrowserViewportProps,
+  type BrowserViewportReason,
+  type BrowserViewportState,
+} from './BrowserViewport.js';

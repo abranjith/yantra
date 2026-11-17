@@ -43,6 +43,8 @@ export interface CockpitAnnouncerProps {
   readonly onSpoken?: (text: string) => void;
   /** A one-off message to say, kept through coalescing (e.g. the result is ready). */
   readonly notice?: string | null;
+  /** The live view's latest state change to say once (FEAT-069); `id` makes each one new. */
+  readonly liveView?: { readonly id: number; readonly text: string } | null;
 }
 
 /** See the module comment. */
@@ -51,6 +53,7 @@ export function CockpitAnnouncer({
   clock,
   onSpoken,
   notice = null,
+  liveView = null,
 }: CockpitAnnouncerProps): ReactNode {
   const [text, setText] = useState('');
   const spoken = useRef(onSpoken);
@@ -74,6 +77,13 @@ export function CockpitAnnouncer({
   useEffect(() => {
     if (notice !== null) queue.push([{ category: 'outcome', text: notice, keep: true }]);
   }, [queue, notice]);
+
+  const liveViewId = liveView?.id ?? null;
+  const liveViewText = liveView?.text ?? null;
+  useEffect(() => {
+    if (liveViewId === null || liveViewText === null) return;
+    queue.push([{ category: 'live_view', text: liveViewText, keep: false }]);
+  }, [queue, liveViewId, liveViewText]);
 
   useEffect(
     () => () => {

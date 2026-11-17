@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Live view login fixture</title>
+    <style>
+      .pulse {
+        width: 60px;
+        height: 60px;
+        background: #3a6;
+        animation: pulse 0.3s infinite alternate;
+      }
+      @keyframes pulse {
+        to {
+          opacity: 0.3;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <form>
+      <label>User <input id="user" name="user" autocomplete="username" /></label>
+      <label>Password <input id="password" name="password" type="password" /></label>
+    </form>
+    <div class="pulse"></div>
+    <script>
+      // Paces a replay plan: #ready appears after load, #after once the
+      // password field has been typed into, each after a delay.
+      const add = (id) => {
+        const node = document.createElement('p');
+        node.id = id;
+        node.textContent = id;
+        document.body.appendChild(node);
+      };
+      setTimeout(() => add('ready'), 1200);
+      let typed = false;
+      document.getElementById('password').addEventListener('input', () => {
+        if (typed) return;
+        typed = true;
+        setTimeout(() => add('after'), 1500);
+      });
+    </script>
+  </body>
+</html>

@@ -106,6 +106,11 @@ export class OutboundQueues {
     this.pump();
   }
 
+  /** Drops the unsent screencast frame, if any (a newer generation voided it). */
+  public dropFrame(): void {
+    this.slot = null;
+  }
+
   /**
    * Calls `callback` once every queued event has been handed to the socket
    * (an unsent screencast frame is dropped), for a graceful end.

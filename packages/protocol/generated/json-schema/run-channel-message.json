@@ -132,6 +132,74 @@
                   ],
                   "additionalProperties": false,
                   "description": "Answer a live intervention through the authenticated run socket."
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "max_width": {
+                      "type": "integer",
+                      "minimum": 320,
+                      "maximum": 1920,
+                      "default": 1280,
+                      "description": "Largest frame width the client wants (320–1920, default 1280)."
+                    },
+                    "max_height": {
+                      "type": "integer",
+                      "minimum": 240,
+                      "maximum": 1200,
+                      "default": 800,
+                      "description": "Largest frame height the client wants (240–1200, default 800)."
+                    },
+                    "type": {
+                      "type": "string",
+                      "const": "frames.start"
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Start the live view for this connection (needs the frames/1 capability; FEAT-069)."
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "const": "frames.stop"
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Stop the live view for this connection (FEAT-069)."
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "generation": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Frame generation; monotonic per run stream, never reset while the worker lives."
+                    },
+                    "frame_seq": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Monotonic per run stream over forwarded frames; used for acks."
+                    },
+                    "type": {
+                      "type": "string",
+                      "const": "frame.ack"
+                    }
+                  },
+                  "required": [
+                    "generation",
+                    "frame_seq",
+                    "type"
+                  ],
+                  "additionalProperties": false,
+                  "description": "The client took one frame; the owner sends the next only after it (FEAT-069)."
                 }
               ]
             },
@@ -4656,6 +4724,105 @@
                   ],
                   "additionalProperties": false,
                   "description": "Authoritative response to a live intervention answer."
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "generation": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "The generation that began with protection; every frame below it is void."
+                    },
+                    "reason": {
+                      "type": "string",
+                      "enum": [
+                        "protection"
+                      ],
+                      "description": "`protection`: a protected screen began."
+                    },
+                    "type": {
+                      "type": "string",
+                      "const": "frames.cleared"
+                    }
+                  },
+                  "required": [
+                    "generation",
+                    "reason",
+                    "type"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Protection started: discard the displayed frame; sent on the control queue (FEAT-069)."
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "generation": {
+                      "$ref": "#/definitions/RunChannelMessage/anyOf/0/anyOf/0/anyOf/7/properties/generation"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "live",
+                        "protected",
+                        "headed",
+                        "no_page",
+                        "unavailable"
+                      ],
+                      "description": "`live`: frames flow; `protected`: a protected screen is hidden; `headed`: the run uses a visible window; `no_page`: no task page (background-only run or not yet launched); `unavailable`: see `reason`."
+                    },
+                    "reason": {
+                      "type": "string",
+                      "enum": [
+                        "capture_failed",
+                        "incompatible_worker",
+                        "protection_unverifiable",
+                        "none"
+                      ],
+                      "description": "`capture_failed`: the screencast failed; `incompatible_worker`: the run owner does not speak frames/1; `protection_unverifiable`: the focus guard could not be installed, so frames stay hidden; `none`: not unavailable."
+                    },
+                    "page": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "host": {
+                              "type": "string",
+                              "maxLength": 253,
+                              "description": "Host of the task page."
+                            },
+                            "title": {
+                              "type": "string",
+                              "maxLength": 200,
+                              "description": "Sanitized page title, at most 200 characters."
+                            }
+                          },
+                          "required": [
+                            "host",
+                            "title"
+                          ],
+                          "additionalProperties": false,
+                          "description": "Current host and title of the task page, for the text alternative."
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Null while protected and when no page exists."
+                    },
+                    "type": {
+                      "type": "string",
+                      "const": "frames.state"
+                    }
+                  },
+                  "required": [
+                    "generation",
+                    "state",
+                    "reason",
+                    "page",
+                    "type"
+                  ],
+                  "additionalProperties": false,
+                  "description": "The live view state changed; sent on the control queue (FEAT-069)."
                 },
                 {
                   "type": "object",

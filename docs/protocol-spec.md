@@ -2039,6 +2039,176 @@ Example:
 }
 ```
 
+## FrameAck
+
+Acknowledges one frame; the next frame is sent only after it.
+
+| Field      | Description                                                                     |
+| ---------- | ------------------------------------------------------------------------------- |
+| generation | Frame generation; monotonic per run stream, never reset while the worker lives. |
+| frame_seq  | Monotonic per run stream over forwarded frames; used for acks.                  |
+
+Example:
+
+```json
+{
+  "generation": "<generation>",
+  "frame_seq": "<frame_seq>"
+}
+```
+
+## FramesCleared
+
+Protection started: discard the displayed image and every older frame.
+
+| Field      | Description                                                              |
+| ---------- | ------------------------------------------------------------------------ |
+| generation | The generation that began with protection; every frame below it is void. |
+| reason     | `protection`: a protected screen began.                                  |
+
+Example:
+
+```json
+{
+  "generation": "<generation>",
+  "reason": "<reason>"
+}
+```
+
+## FramesClearedReason
+
+`protection`: a protected screen began.
+
+Example:
+
+```json
+"protection"
+```
+
+## FramesStart
+
+Start streaming frames of the task page to this client.
+
+| Field      | Description                                                    |
+| ---------- | -------------------------------------------------------------- |
+| max_width  | Largest frame width the client wants (320–1920, default 1280). |
+| max_height | Largest frame height the client wants (240–1200, default 800). |
+
+Example:
+
+```json
+{
+  "max_width": "<max_width>",
+  "max_height": "<max_height>"
+}
+```
+
+## FramesState
+
+The live view state, sent on start and on every change.
+
+| Field      | Description                                                                                                                                                                                                               |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| generation | Frame generation; monotonic per run stream, never reset while the worker lives.                                                                                                                                           |
+| state      | `live`: frames flow; `protected`: a protected screen is hidden; `headed`: the run uses a visible window; `no_page`: no task page (background-only run or not yet launched); `unavailable`: see `reason`.                  |
+| reason     | `capture_failed`: the screencast failed; `incompatible_worker`: the run owner does not speak frames/1; `protection_unverifiable`: the focus guard could not be installed, so frames stay hidden; `none`: not unavailable. |
+| page       | Null while protected and when no page exists.                                                                                                                                                                             |
+
+Example:
+
+```json
+{
+  "generation": "<generation>",
+  "state": "<state>",
+  "reason": "<reason>",
+  "page": "<page>"
+}
+```
+
+## FramesStop
+
+Stop streaming frames to this client.
+
+Example:
+
+```json
+{}
+```
+
+## FramesSubscribe
+
+Watch the live view of one attached run in this window.
+
+| Field  | Description                        |
+| ------ | ---------------------------------- |
+| run_id | The run whose live view is wanted. |
+
+Example:
+
+```json
+{
+  "run_id": "<run_id>"
+}
+```
+
+## FramesSubscribeResult
+
+The current live view state of the run.
+
+| Field      | Description                                                                                                                                                                                                               |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| generation | Frame generation; monotonic per run stream, never reset while the worker lives.                                                                                                                                           |
+| state      | `live`: frames flow; `protected`: a protected screen is hidden; `headed`: the run uses a visible window; `no_page`: no task page (background-only run or not yet launched); `unavailable`: see `reason`.                  |
+| reason     | `capture_failed`: the screencast failed; `incompatible_worker`: the run owner does not speak frames/1; `protection_unverifiable`: the focus guard could not be installed, so frames stay hidden; `none`: not unavailable. |
+| page       | Null while protected and when no page exists.                                                                                                                                                                             |
+
+Example:
+
+```json
+{
+  "generation": "<generation>",
+  "state": "<state>",
+  "reason": "<reason>",
+  "page": "<page>"
+}
+```
+
+## FramesUnsubscribe
+
+Stop watching the live view of one run in this window.
+
+| Field  | Description                        |
+| ------ | ---------------------------------- |
+| run_id | The run whose live view is wanted. |
+
+Example:
+
+```json
+{
+  "run_id": "<run_id>"
+}
+```
+
+## FramesWindowAck
+
+A window drew or dropped one frame of a run and can take the next one.
+
+| Field      | Description                                                                     |
+| ---------- | ------------------------------------------------------------------------------- |
+| generation | Frame generation; monotonic per run stream, never reset while the worker lives. |
+| frame_seq  | Monotonic per run stream over forwarded frames; used for acks.                  |
+| run_id     | The run whose live view is wanted.                                              |
+
+Example:
+
+```json
+{
+  "generation": "<generation>",
+  "frame_seq": "<frame_seq>",
+  "run_id": "<run_id>"
+}
+```
+
 ## GroupEntry
 
 A command with subcommands and no action.
@@ -3009,6 +3179,44 @@ Example:
   "done": "<done>",
   "total": "<total>"
 }
+```
+
+## LiveViewPage
+
+Current host and title of the task page, for the text alternative.
+
+| Field | Description                                   |
+| ----- | --------------------------------------------- |
+| host  | Host of the task page.                        |
+| title | Sanitized page title, at most 200 characters. |
+
+Example:
+
+```json
+{
+  "host": "<host>",
+  "title": "<title>"
+}
+```
+
+## LiveViewStateReason
+
+`capture_failed`: the screencast failed; `incompatible_worker`: the run owner does not speak frames/1; `protection_unverifiable`: the focus guard could not be installed, so frames stay hidden; `none`: not unavailable.
+
+Example:
+
+```json
+"capture_failed"
+```
+
+## LiveViewStreamState
+
+`live`: frames flow; `protected`: a protected screen is hidden; `headed`: the run uses a visible window; `no_page`: no task page (background-only run or not yet launched); `unavailable`: see `reason`.
+
+Example:
+
+```json
+"live"
 ```
 
 ## LocatorCandidate
@@ -4325,6 +4533,32 @@ Example:
 
 ```json
 "<value>"
+```
+
+## ScreencastFrameMeta
+
+Metadata of one screencast frame; encoded at most 1 KiB.
+
+| Field          | Description                                                                          |
+| -------------- | ------------------------------------------------------------------------------------ |
+| generation     | The worker frame generation at capture.                                              |
+| frame_seq      | Monotonic per run stream over forwarded frames; used for acks.                       |
+| document_epoch | The task page's top-level committed-document epoch at capture; null when unreadable. |
+| captured_at    | Capture instant (ISO-8601 UTC) from the CDP frame timestamp.                         |
+| width          | Decoded JPEG width in device-independent px.                                         |
+| height         | Decoded JPEG height in device-independent px.                                        |
+
+Example:
+
+```json
+{
+  "generation": "<generation>",
+  "frame_seq": "<frame_seq>",
+  "document_epoch": "<document_epoch>",
+  "captured_at": "<captured_at>",
+  "width": "<width>",
+  "height": "<height>"
+}
 ```
 
 ## ScreenshotArtifactPath

@@ -195,6 +195,7 @@ export async function runHandler(
     const interactive = context.isInteractive({ json: options.json === true });
     const runtime = await (dependencies.build ?? buildOrchestratorRuntime)({
       logger,
+      ...(context.liveView === undefined ? {} : { liveView: context.liveView }),
       confirmationGateway: context.gateways.confirmation(interactive),
       browser: {
         resourceLockOptions: resourceOptions(context, 'run'),

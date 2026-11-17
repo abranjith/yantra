@@ -1,0 +1,673 @@
+{
+  "vcs": "git",
+  "files": [
+    {
+      "path": ".github/workflows/spike-s1.yml",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/cli/src/adapters/terminal/terminal-adapter.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/cli/src/adapters/worker/worker-adapter.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/cli/src/commands/ask.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/cli/src/commands/do.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/cli/src/commands/research.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/cli/src/commands/resume.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/cli/src/commands/run.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/cli/src/context/command-context.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/cli/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "apps/cli/src/runtime.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/cli/src/ui/host/host-runtime.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "apps/cli/src/ui/host/live-view-relay.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "apps/cli/src/ui/host/rpc-server.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "apps/cli/src/ui/host/run-relay.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/live-view-relay.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "apps/web/src/features/cockpit/Cockpit.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/src/features/cockpit/CockpitAnnouncer.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/src/features/cockpit/CockpitLayout.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/src/features/live/announcer.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/src/host/app-rpc.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/src/host/rpc-client.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/src/live-view/budget-monitor.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/src/live-view/live-view-store.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/src/live-view/live-view-text-alternative.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/src/live-view/use-budget-monitor.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/src/live-view/use-live-view.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/tests/live-view/budget-monitor.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "apps/web/tests/live-view/live-view-store.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/tests/live-view/text-alternative.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/tests/live-view/use-budget-monitor.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-011"
+    },
+    {
+      "path": "docs/architecture.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/app-mission.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/safety-and-privacy.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/protocol-spec.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "e2e/app-live-view.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/fixtures/site/live-view/login.html",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/fixtures/site/live-view/motion.html",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/fixtures/site/live-view/opener.html",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/fixtures/site/live-view/second.html",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/live-view/privacy-scan.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/live-view/privacy-scan.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/live-view/rig.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "e2e/spikes/live-view-s1/metrics.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/spikes/live-view-s1/metrics.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/spikes/live-view-s1/run-spike.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "e2e/spikes/live-view-s1/viewer.html",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "eslint.config.js",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/agent/src/adapters/pi/tools/browser-fill-element.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/runtime/orchestrator.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/src/runtime/run-services.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/adapters/pi/tools/browser-fill-tools.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/agent/tests/boundaries/live-view-boundary.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-012"
+    },
+    {
+      "path": "packages/agent/tests/runtime/live-view-characterization.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/core/src/browser/agent-controller.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/browser/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/browser/page-settle.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/src/browser/screen-protection.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/browser/sensitive-screen-latch.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/executor/execution-context.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/executor/step-handlers/fill-element.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/executor/step-handlers/fill.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/executor/types.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/src/extraction/ask-pipeline.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/core/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/live-view/errors.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/live-view/focus-guard.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/live-view/frame-gate.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/live-view/index.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/src/live-view/live-view-hub.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/core/src/live-view/replay-task-page.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/src/live-view/run-socket.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/core/src/live-view/screencast-source.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/src/live-view/task-page-source.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/src/research/research-loop.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/core/src/run-channel/client.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/core/src/run-channel/outbound-queues.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/core/src/run-channel/server.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/core/src/workflow/replay/run-orchestrator.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/core/tests/browser/agent-controller.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/tests/browser/screen-protection.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/browser/sensitive-screen-latch.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/executor/fill-protection.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/live-view/focus-guard.chrome.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/live-view/focus-guard.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/core/tests/live-view/frame-gate.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/tests/live-view/live-view-hub.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/core/tests/live-view/replay-characterization.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/core/tests/live-view/replay-task-page.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/tests/live-view/run-socket.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "packages/core/tests/live-view/screencast-source.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/tests/live-view/settler-navigation-listener.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/core/tests/run-channel/server.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "packages/protocol/generated/json-schema/run-channel-message.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/generated/json-schema/screencast-frame-meta.json",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/package.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/src/emit/json-schema.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/src/schemas/run-channel.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/src/schemas/screencast.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/tests/run-channel.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/tests/schemas/screencast.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/src/gallery/entries.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "packages/ui/src/gallery/live-view-entries.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "packages/ui/src/icons/registry.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "packages/ui/src/instruments/BrowserViewport.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "packages/ui/src/instruments/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "packages/ui/tests/boundary-rules.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/tests/instruments/browser-viewport.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-010"
+    }
+  ],
+  "excluded": [
+    ".spec-lite/feature-summary.md",
+    ".spec-lite/features/FEAT-069-live_browser_view/changeset.json",
+    ".spec-lite/features/FEAT-069-live_browser_view/spec.md",
+    ".spec-lite/features/FEAT-069-live_browser_view/spike-s1-report.md",
+    ".spec-lite/features/FEAT-069-live_browser_view/spike-s1-results-windows.json",
+    ".spec-lite/memory.md",
+    ".spec-lite/plan_ui.md"
+  ],
+  "baseline": {
+    "sha": "06e14f86c894e355767c104e06a8dd3f622afed8",
+    "capturedAt": "2026-11-15T17:00:53.682Z",
+    "dirtyAtBaseline": [],
+    "dirtyBlobHashes": {},
+    "workflow": "ft/feat-069-live-browser-view@06e14f86c894e355767c104e06a8dd3f622afed8"
+  },
+  "featureId": "FEAT-069"
+}

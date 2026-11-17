@@ -202,6 +202,7 @@ async function executeDo(
         // FEAT-063: progress reaches the terminal through the run's stream.
         runEvents: connector.runEvents,
         signal: context.signal,
+        ...(context.liveView === undefined ? {} : { liveView: context.liveView }),
       },
       {
         cwd: context.cwd,

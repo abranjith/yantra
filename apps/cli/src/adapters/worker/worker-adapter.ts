@@ -8,6 +8,7 @@ import {
   collectInitContextGrants,
   InterventionAuthority,
   InterventionLog,
+  LiveViewHub,
   NeedsYouNotifier,
   NodeDaemonProcessControl,
   SinkNotifier,
@@ -125,6 +126,10 @@ export async function runWorkerInvocation(
     });
     return interventionAuthority;
   };
+  const logger = makeStderrLogger(false, stderr);
+  // One live view per run (FEAT-069): the handler's orchestrator attaches its
+  // task page and serves frames on the run socket; idle until a client starts.
+  const liveView = new LiveViewHub({ logger });
   const context: CommandContext = {
     initAnswers: {
       providerAnswers: () =>
@@ -145,6 +150,7 @@ export async function runWorkerInvocation(
       env,
     }),
     surface: 'worker',
+    liveView,
     cwd: invocation.cwd,
     invocationId: invocation.invocation_id,
     signal: controller.signal,
@@ -154,7 +160,7 @@ export async function runWorkerInvocation(
       surface: 'worker',
       invocationId: invocation.invocation_id,
     }),
-    logger: makeStderrLogger(false, stderr),
+    logger,
     output: {
       stdout,
       stderr,
@@ -244,6 +250,7 @@ export async function runWorkerInvocation(
     return finish({ type: 'result', exit_code: result.exitCode, envelope, text: captured || null });
   } finally {
     dispose();
+    await liveView.close();
     stdout.destroy();
     stderr.destroy();
   }

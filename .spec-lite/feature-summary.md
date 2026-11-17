@@ -38,6 +38,14 @@ Source spec: [spec.md](.spec-lite/features/FEAT-044-managed_stable_installation/
 
 ---
 
+## Live Browser View
+
+**FEAT-069 — Live Browser View** _(completed: 2026-11-17 by implement)_
+Source spec: [spec.md](features/FEAT-069-live_browser_view/spec.md)
+While a run drives a headless browser, the Mission cockpit shows the run's task page live (about 10 fps, JPEG q70, at most 1280×800) behind its glass panels. The task page is the agent's active page (an adopted popup counts as a new target) or a replayed workflow's page; `ask`/`research` background pages are never shown. A visible-window run shows "Running in a visible window", and a run with no page shows a "no live page" message. Capture happens only while an app window watches (`frames.subscribe` → `frames.start` over the run socket's `frames/1` capability) and never changes a run's outcome or artifacts. The screen is hidden ("Protected screen — hidden") while a stored secret is latched (agent or replay `fill`/`fill_element`) until the next document, while a masked or password-field value is being filled, and while a protected control has focus or focus cannot be verified. Every frame is generation-tagged: the worker, the host and the app each drop older generations, and after protection only post-clear captures show. Frames are never persisted and never reach the model. A text alternative (site, title, timeline link) is always shown, and state changes are announced once. In a real app window the cockpit draws about 10 fps at roughly 2–3% of one core. It switches itself to Solid when the view runs under 5 fps or above 15% of one core for two 5-second windows.
+
+---
+
 ## Run Ownership
 
 **FEAT-064 — Run Ownership, Run Socket & Reconciliation** _(completed: 2026-11-10 by implement)_
@@ -556,6 +564,10 @@ The `ConnectorIO` interface in `apps/cli/src/connector-io.ts` is the load-bearin
 Verification: 29 unit tests across `apps/cli/src/` (commander setup, exit-code map, global-flags parser, ConnectorIO contract, audit-builder round-trip, auto-detect for `show`); 7 e2e tests in `e2e/cli-commands.spec.ts` covering the no-args banner, `list runs|workflows --json` empty roots, `audit`/`report` not-found paths, and `init --provider {none|invalid}`. Distribution channels (npm `bin: { yantra: dist/bin.js }`, Homebrew tap, Scoop bucket) and the bundled-CLI release pipeline are deferred to the first stable release.
 
 ## Consent & Safety
+
+**FEAT-069 — Live View Never Shows a Protected Screen** _(updated: 2026-11-15 by implement)_
+Source spec: [spec.md](features/FEAT-069-live_browser_view/spec.md)
+The live browser view is hidden whenever the run's secret latch is set (now also by deterministic secret fills), a masked-value fill is in progress, or a password, sensitive-`autocomplete` or `data-yantra-secret` control has focus. An isolated-world focus guard reports focus, and an unknown focus counts as protected. Protection starts a new frame generation and sends `frames.cleared` before any later frame, so a frame captured before protection never appears in any window, however late it arrives. Frames are never written to disk or sent to the model, so `context.screenshots` does not apply.
 
 **FEAT-058 — Local Capture Without a Grant** _(updated: 2026-10-18 by implement)_
 Source spec: [spec.md](.spec-lite/features/FEAT-058-local_deliverable_capture/spec.md)

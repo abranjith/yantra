@@ -146,6 +146,7 @@ export async function resumeHandler(
         : new BoundResumeConfirmationGateway({ claim: parkedDecision.claim, logger });
     const runtime = await (dependencies.build ?? buildOrchestratorRuntime)({
       logger,
+      ...(context.liveView === undefined ? {} : { liveView: context.liveView }),
       confirmationGateway,
       browser: {
         resourceLockOptions: resourceOptions(context, 'resume'),

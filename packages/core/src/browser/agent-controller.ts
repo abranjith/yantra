@@ -38,6 +38,7 @@ import {
 import type { WithheldReason } from '../interaction/protected-value.js';
 import type { SubmitFacts } from '../interaction/submit-class.js';
 import type { AttemptRecord } from '../interaction/types.js';
+import { TaskPageEvents, type TaskPageSource } from '../live-view/task-page-source.js';
 import { intentsToWorkflowCandidates } from '../locator/candidate-codec.js';
 import type { ElementDescription } from '../locator/types.js';
 import { scrollContainerInPage } from '../widgets/scroll.js';
@@ -74,6 +75,7 @@ import {
   type MintedCandidates,
   type PointerPoint,
 } from './pointer-preflight.js';
+import { ScreenProtection } from './screen-protection.js';
 import { SensitiveScreenLatch } from './sensitive-screen-latch.js';
 import { wrapPuppeteerPage } from './session.js';
 import {
@@ -401,6 +403,19 @@ export class AgentBrowserController implements WidgetPort {
   public readonly runId: string;
   /** Shared run-local latch consulted by secret fills and screenshot capture. */
   public readonly sensitiveScreenLatch = new SensitiveScreenLatch();
+  /**
+   * Whether the task page might show a secret (FEAT-069): the latch above,
+   * open fill holds, and protected-control focus. Read only by the live view.
+   */
+  public readonly screenProtection = new ScreenProtection(this.sensitiveScreenLatch);
+  /** Task-page changes for the live view; no listener means no work (FEAT-069). */
+  private readonly taskPageEvents = new TaskPageEvents((error) => {
+    this.logger?.warn?.(
+      { runId: this.runId, error: error instanceof Error ? error.name : 'unknown' },
+      'live view task-page listener failed',
+    );
+  });
+  private tornDownForLiveView = false;
 
   private readonly provider: BrowserProvider;
   private readonly extractor: Extractor;
@@ -1633,8 +1648,26 @@ export class AgentBrowserController implements WidgetPort {
     return this.settler?.epoch ?? null;
   }
 
+  /**
+   * The live view's read-only port onto this run's task page (FEAT-069): the
+   * active page under the popup policy, never a background pool page.
+   */
+  public taskPageSource(): TaskPageSource {
+    return {
+      current: () => (this.page === null ? null : { page: this.page, headless: this.headless }),
+      topLevelEpoch: () => this.topLevelDocumentEpoch(),
+      screenProtection: this.screenProtection,
+      subscribe: (listener) => this.taskPageEvents.subscribe(listener),
+    };
+  }
+
   /** Close Chrome and remove the ephemeral profile. Idempotent. */
   public teardown(): Promise<void> {
+    if (!this.tornDownForLiveView) {
+      this.tornDownForLiveView = true;
+      // First, so a live view stops capturing before the browser goes away.
+      this.taskPageEvents.emit({ kind: 'torn_down' });
+    }
     this.sensitiveScreenLatch.clearOnTeardown();
     this.teardownPromise ??= this.performTeardown();
     return this.teardownPromise;
@@ -1655,6 +1688,7 @@ export class AgentBrowserController implements WidgetPort {
     this.pageFacade = facade;
     this.page = facade.puppeteerPage;
     this.installPagePolicies(this.page);
+    this.taskPageEvents.emit({ kind: 'page_installed' });
   }
 
   private installPagePolicies(page: PuppeteerPage): void {
@@ -1676,6 +1710,12 @@ export class AgentBrowserController implements WidgetPort {
         // before trusting an identity, so a genuine document swap still refuses
         // — without discarding recovery on every in-page route change.
         this.lastDigestHash = null;
+        // After the controller's own invalidation: the live view bumps its
+        // frame generation for the new document (FEAT-069).
+        this.taskPageEvents.emit({
+          kind: 'navigation_committed',
+          epoch: this.topLevelDocumentEpoch(),
+        });
       },
     });
 
@@ -1877,6 +1917,7 @@ export class AgentBrowserController implements WidgetPort {
     this.page = popup;
     this.pageFacade = wrapPuppeteerPage(popup);
     this.installPagePolicies(popup);
+    this.taskPageEvents.emit({ kind: 'target_changed' });
     // A background tab is throttled by Chrome; the run's page has to be the
     // foreground one or every later wait measures the wrong page.
     await popup.bringToFront().catch(() => undefined);

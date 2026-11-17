@@ -9,6 +9,8 @@ import { writeBriefArtifacts, type BriefArtifactPaths } from '../brief/write-art
 import { dataDir } from '../browser/paths.js';
 import { warmProcessIdentity } from '../browser/process-identity.js';
 import type { Logger } from '../browser/types.js';
+import type { LiveViewHub } from '../live-view/live-view-hub.js';
+import { serveLiveViewOnRunSocket } from '../live-view/run-socket.js';
 import {
   domainFromUrl,
   rankReasonForFailureStage,
@@ -85,6 +87,12 @@ interface AskPipelineDependencies {
    * it to its ownership session, so every browser it launches is recorded.
    */
   readonly ownershipRecorder?: DeferredBrowserOwnershipRecorder;
+  /**
+   * The run's live browser view (FEAT-069). `ask` reads pages only in the
+   * background pool, which is never streamed, so the hub is served on the run
+   * socket with no task page and answers `frames.state no_page`.
+   */
+  readonly liveView?: LiveViewHub;
 }
 
 /**
@@ -108,8 +116,10 @@ export class AskPipeline {
     options: RunOwnershipSessionOptions,
   ) => Promise<RunOwnershipSession>;
   private readonly clock: () => Date;
+  private readonly liveView: LiveViewHub | undefined;
 
   public constructor(deps: AskPipelineDependencies) {
+    this.liveView = deps.liveView;
     this.searchProvider = deps.searchProvider;
     this.fetcher = deps.fetcher;
     this.extractor = deps.extractor;
@@ -156,6 +166,7 @@ export class AskPipeline {
       throw error;
     }
     ownership.attachEvents(runEvents);
+    if (this.liveView !== undefined) serveLiveViewOnRunSocket(ownership, this.liveView);
     const events = openTaskEventBus(runDir, runEvents);
     const emit = (event: TaskEvent): void => {
       events.publish(event);

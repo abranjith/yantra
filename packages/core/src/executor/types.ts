@@ -14,7 +14,10 @@ import type {
 import type { ElementHandle } from 'puppeteer-core';
 
 import type { PageSettler } from '../browser/page-settle.js';
+import type { ScreenProtection } from '../browser/screen-protection.js';
+import type { SensitiveScreenLatch } from '../browser/sensitive-screen-latch.js';
 import type { BrowserSession, Logger, Page } from '../browser/types.js';
+import type { ReplayTaskPage } from '../live-view/replay-task-page.js';
 import type { EngineLocatorChain, InjectedScriptHost } from '../locator/types.js';
 import type { SanitizedPayload } from '../sanitizer/index.js';
 
@@ -227,6 +230,17 @@ export interface ExecutionContext {
    * do not collect evidence.
    */
   readonly evidence: ReplayEvidenceLedger | null;
+  /**
+   * Run-local latch set before a deterministic secret fill dispatches its
+   * value (FEAT-069). Cleared only by a top-level navigation or teardown.
+   * Optional so hand-built test contexts need not carry one;
+   * `createExecutionContext` always does.
+   */
+  readonly sensitiveScreenLatch?: SensitiveScreenLatch;
+  /** The latch plus fill holds and protected focus; read only by the live view. */
+  readonly screenProtection?: ScreenProtection;
+  /** The live view's port onto this run's page (FEAT-069); never model-visible. */
+  readonly taskPage?: ReplayTaskPage;
 }
 
 // ---------------------------------------------------------------------------

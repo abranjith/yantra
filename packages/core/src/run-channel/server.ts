@@ -89,6 +89,18 @@ export interface ChannelConnection {
   readonly clientKind: 'host' | 'cli' | 'test';
   readonly channelVersion: number;
   send(message: RunChannelServerMessage): void;
+  /** Capabilities negotiated in `hello_ok` (the real server; fakes may omit it). */
+  readonly capabilities?: readonly string[];
+  /**
+   * Offers one screencast frame to this connection's one-frame slot, behind
+   * its control and event queue (FEAT-069). False when the frame cannot be
+   * framed (over 4 MiB) or the connection is closed; nothing is written then.
+   */
+  sendFrame?(meta: unknown, jpeg: Uint8Array): boolean;
+  /** Drops this connection's unsent frame, if any (on `frames.cleared`). */
+  clearFrame?(): void;
+  /** Calls `listener` once when the connection closes. */
+  whenClosed?(listener: () => void): void;
 }
 
 export type ChannelHandler = (request: ChannelRequest, connection: ChannelConnection) => void;
@@ -348,6 +360,7 @@ class ServerConnection implements ChannelConnection {
   public state: ConnectionState = 'hello';
   public clientKind: 'host' | 'cli' | 'test' = 'test';
   public channelVersion = 0;
+  public capabilities: readonly string[] = [];
   public readonly closed: Promise<void>;
   private readonly decoder = new FrameDecoder({ limit: MAX_HELLO_FRAME_BYTES });
   private helloTimer: unknown;
@@ -394,6 +407,27 @@ class ServerConnection implements ChannelConnection {
   /** @internal Offers a screencast frame to this connection's one-frame slot. */
   public offerFrame(frame: Buffer): void {
     if (this.state === 'open') this.queues.offerFrame(frame);
+  }
+
+  public sendFrame(meta: unknown, jpeg: Uint8Array): boolean {
+    if (this.state !== 'open') return false;
+    let frame: Buffer;
+    try {
+      frame = encodeScreencastFrame(meta, jpeg);
+    } catch (error) {
+      if (error instanceof RunChannelFrameError) return false;
+      throw error;
+    }
+    this.queues.offerFrame(frame);
+    return true;
+  }
+
+  public clearFrame(): void {
+    this.queues.dropFrame();
+  }
+
+  public whenClosed(listener: () => void): void {
+    void this.closed.then(listener);
   }
 
   /** @internal Screencast frames replaced before they were written. */
@@ -551,6 +585,7 @@ class ServerConnection implements ChannelConnection {
       return;
     }
     this.channelVersion = negotiated.version;
+    this.capabilities = negotiated.capabilities;
     this.state = 'open';
     this.attachedAt = clock().getTime();
     this.heartbeatTimer = timers.setInterval(() => {

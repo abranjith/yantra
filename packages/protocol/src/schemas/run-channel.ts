@@ -5,6 +5,7 @@ import { CommandInvocation, isAbsoluteCwd } from '../commands/invocation.js';
 import { CommandResultMessageSchema } from './command-result.js';
 import { DecisionResponse } from './intervention.js';
 import { RunEvent, isRunEventKind } from './run-event.js';
+import { FrameAck, FramesCleared, FramesStart, FramesState, FramesStop } from './screencast.js';
 
 /**
  * The run channel (FEAT-064, plan §6): the per-run local socket the owner of a
@@ -69,7 +70,16 @@ export const RunChannelEventPayload = z
   .describe('A RunEvent, or an event of a kind this executable does not know.');
 export type RunChannelEventPayload = z.infer<typeof RunChannelEventPayload>;
 
-const CLIENT_TYPES = ['hello', 'subscribe', 'cancel', 'ping', 'intervention.answer'] as const;
+const CLIENT_TYPES = [
+  'hello',
+  'subscribe',
+  'cancel',
+  'ping',
+  'intervention.answer',
+  'frames.start',
+  'frames.stop',
+  'frame.ack',
+] as const;
 const SERVER_TYPES = [
   'hello_ok',
   'hello_incompatible',
@@ -78,6 +88,8 @@ const SERVER_TYPES = [
   'heartbeat',
   'cancel_ack',
   'intervention.response',
+  'frames.cleared',
+  'frames.state',
   'error',
 ] as const;
 
@@ -132,6 +144,15 @@ const KnownClientMessage = z.discriminatedUnion('type', [
     })
     .strict()
     .describe('Answer a live intervention through the authenticated run socket.'),
+  FramesStart.extend({ type: z.literal('frames.start') }).describe(
+    'Start the live view for this connection (needs the frames/1 capability; FEAT-069).',
+  ),
+  FramesStop.extend({ type: z.literal('frames.stop') }).describe(
+    'Stop the live view for this connection (FEAT-069).',
+  ),
+  FrameAck.extend({ type: z.literal('frame.ack') }).describe(
+    'The client took one frame; the owner sends the next only after it (FEAT-069).',
+  ),
 ]);
 
 /** A message a client sends to a run owner. */
@@ -189,6 +210,12 @@ const KnownServerMessage = z.discriminatedUnion('type', [
     })
     .strict()
     .describe('Authoritative response to a live intervention answer.'),
+  FramesCleared.extend({ type: z.literal('frames.cleared') }).describe(
+    'Protection started: discard the displayed frame; sent on the control queue (FEAT-069).',
+  ),
+  FramesState.extend({ type: z.literal('frames.state') }).describe(
+    'The live view state changed; sent on the control queue (FEAT-069).',
+  ),
   z
     .object({
       type: z.literal('error'),

@@ -52,6 +52,7 @@ import { AppHost, SILENT_HOST_LOGGER, type HostLogger, type HostRoute } from './
 import { IdleExit } from './idle-exit.js';
 import { registerInbox } from './inbox-rpc.js';
 import { hostActiveRuns } from './ledger-reads.js';
+import { LiveViewRelay } from './live-view-relay.js';
 import { registerMissionReads } from './mission-reads.js';
 import { registerReads } from './reads.js';
 import { recoverHost } from './recovery.js';
@@ -205,13 +206,20 @@ export async function startHostRuntime(deps: HostRuntimeDeps): Promise<RunningHo
       logger,
     });
     let attendance: Attendance | null = null;
+    let liveView: LiveViewRelay | null = null;
     const relay = new RunRelay({
       runsRoot: runsRoot(),
       logger,
-      onAttach: (runId) => attendance?.attached(runId),
+      onAttach: (runId) => {
+        attendance?.attached(runId);
+        liveView?.runAttached(runId);
+      },
       onLiveEvent: (runId, seq, event) => attendance?.forward(runId, seq, event),
+      onDetach: (runId) => liveView?.runDetached(runId),
     });
     relay.register(methods);
+    liveView = new LiveViewRelay({ runs: relay, logger });
+    liveView.register(methods);
     attendance = new Attendance({
       broadcast: (count) => relay.sendToWorkers({ type: 'attendance', count }),
       sendTo: (runId, count) => {
@@ -230,6 +238,7 @@ export async function startHostRuntime(deps: HostRuntimeDeps): Promise<RunningHo
       attendanceRef.stop();
     });
     cleanups.push(() => {
+      liveView.close();
       relay.close();
     });
     const supervisor = new Supervisor({

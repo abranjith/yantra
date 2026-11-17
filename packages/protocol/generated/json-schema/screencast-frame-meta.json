@@ -1,0 +1,58 @@
+{
+  "$ref": "#/definitions/ScreencastFrameMeta",
+  "definitions": {
+    "ScreencastFrameMeta": {
+      "type": "object",
+      "properties": {
+        "generation": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "The worker frame generation at capture."
+        },
+        "frame_seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Monotonic per run stream over forwarded frames; used for acks."
+        },
+        "document_epoch": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The task page's top-level committed-document epoch at capture; null when unreadable."
+        },
+        "captured_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Capture instant (ISO-8601 UTC) from the CDP frame timestamp."
+        },
+        "width": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "Decoded JPEG width in device-independent px."
+        },
+        "height": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "Decoded JPEG height in device-independent px."
+        }
+      },
+      "required": [
+        "generation",
+        "frame_seq",
+        "document_epoch",
+        "captured_at",
+        "width",
+        "height"
+      ],
+      "additionalProperties": false,
+      "description": "Metadata of one screencast frame; encoded at most 1 KiB."
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

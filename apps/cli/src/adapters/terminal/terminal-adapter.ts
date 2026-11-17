@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 
-import { NodeDaemonProcessControl } from '@yantra/core';
+import { LiveViewHub, NodeDaemonProcessControl } from '@yantra/core';
 import { InteractiveConfirmationGateway, InteractiveInstallOfferGateway } from '@yantra/core';
 import { parseInvocation } from '@yantra/protocol';
 
@@ -44,6 +44,8 @@ export function createTerminalContext(options: TerminalOptions = {}): CommandCon
       env: options.env ?? process.env,
     }),
     surface: 'terminal',
+    // Idle until a client starts it: CLI runs are attached in Phase 2 (plan §13).
+    liveView: new LiveViewHub(),
     cwd: options.cwd ?? process.cwd(),
     invocationId: null,
     signal: options.signal ?? new AbortController().signal,

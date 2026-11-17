@@ -180,12 +180,12 @@ describe('@no-llm RunChannelServer: handshake', () => {
     const peer = await RawPeer.open((await serve()).address);
     peer.hello();
     await peer.waitForFrames(1);
-    peer.sendJson({ type: 'intervention.answer', intervention_id: 'c1', decision: 'grant' });
+    peer.sendJson({ type: 'future.request', request_id: 'c1' });
     await peer.waitForFrames(2);
     peer.sendJson({ type: 'ping' });
     await peer.waitForFrames(3);
     expect(peer.messages().slice(1)).toEqual([
-      { type: 'error', code: 'unsupported', message: 'intervention.answer' },
+      { type: 'error', code: 'unsupported', message: 'future.request' },
       { type: 'heartbeat', at: expect.any(String) },
     ]);
     expect(peer.socket.destroyed).toBe(false);

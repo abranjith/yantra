@@ -1662,6 +1662,54 @@ runDir))`; a `subscribe` that arrives earlier waits for it. On `subscribe {from_
 
 The acceptance suite `e2e/run-ownership.spec.ts` exercises each row with real processes.
 
+#### Live browser view
+
+`src/live-view/` (FEAT-069) streams a run's **task page** to app windows. Frames are never
+persisted and never reach a tool or prompt (`packages/agent/tests/boundaries/live-view-boundary.spec.ts`).
+
+```mermaid
+flowchart LR
+  subgraph Worker["Run owner (worker or terminal)"]
+    TP["TaskPageSource<br/>controller page or ReplayTaskPage"] --> HUB[LiveViewHub]
+    SP["ScreenProtection<br/>latch + fill holds + focus"] --> HUB
+    FG["focus guard<br/>isolated world"] --> SP
+    SC["ScreencastSource<br/>CDP, paced acks"] --> GATE[FrameGate]
+    GATE --> HUB
+    HUB --> RS["run socket<br/>control queue, then one-slot frame queue"]
+  end
+  subgraph Host["App host"]
+    RC["RunChannelClient<br/>frames/1"] --> LVR["LiveViewRelay<br/>floor + one slot per window"]
+  end
+  subgraph App["App window"]
+    ST["LiveViewStore<br/>floor re-checked at draw"] --> VP[BrowserViewport]
+    ST --> TXT[text alternative]
+  end
+  RS --> RC
+  LVR -- "JSON-RPC text + binary frames" --> ST
+```
+
+- **Protection.** `ScreenProtection` (`browser/screen-protection.ts`) combines the run's
+  `SensitiveScreenLatch`, which is now observable and also set by the replay `fill` and `fill_element`
+  secret paths, with fill holds for masked-value fills and the focus guard's report. `unknown`
+  focus counts as protected.
+- **Generations.** `FrameGate` is pure and uses an injected clock. Protection set or cleared, a
+  navigation commit, a target change and a stream restart each start a new generation. A frame is
+  admitted only while unprotected, with a capture time at least one clock tick after the generation
+  began. Each hop applies the same floor: the worker gate, the host relay (`frames.cleared` and
+  `frames.state` raise it), and the app store at draw time.
+- **Hub.** One `LiveViewHub` per run reconciles the stream serially toward its desired state. The
+  focus guard and the CDP screencast exist only while at least one client is started, so the hub is
+  idle and free otherwise. On protection it first empties every client slot and sends
+  `frames.cleared`, then stops the screencast. Each client has one frame slot and one frame in
+  flight. Failures become `frames.state unavailable` and never reach the run. The command context
+  creates one hub per invocation, which `do`, `run`, `resume`, `ask` and `research` pass to their
+  orchestrators.
+- **Transport.** `serveLiveViewOnRunSocket` registers `frames.start`, `frames.stop` and `frame.ack`
+  under the `frames/1` capability. Control messages ride the event queue, which always flushes
+  first, and `frames.cleared` drops a queued frame. The host's `LiveViewRelay` acks worker frames on
+  receipt, keeps one slot per window, and sends a binary WebSocket message only after that window's
+  `frames.ack` and while its socket holds less than 64 KiB.
+
 #### Run views
 
 `src/run-view/` (FEAT-066) holds the read side of the app's run pages. It is Node code the app

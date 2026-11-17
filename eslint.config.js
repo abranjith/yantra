@@ -71,9 +71,10 @@ const UI_BOUNDARY_PATTERNS = [
 /**
  * The app (`apps/web`) may also run the browser-safe command registry
  * (`@yantra/protocol/commands`: the invocation parser, the shell formatter and
- * condition evaluation, which no browser code may restate, FEAT-067). Its
- * barrel imports no Node built-in, which a protocol boundary test enforces;
- * the rest of protocol stays type-only.
+ * condition evaluation, which no browser code may restate, FEAT-067) and the
+ * screencast frame codec (`@yantra/protocol/screencast`, FEAT-069). Neither
+ * imports a Node built-in, which protocol boundary tests enforce; the rest of
+ * protocol stays type-only.
  */
 const WEB_BOUNDARY_PATTERNS = UI_BOUNDARY_PATTERNS.map((pattern) => {
   if (!pattern.group.includes('@yantra/protocol')) return pattern;
@@ -81,8 +82,8 @@ const WEB_BOUNDARY_PATTERNS = UI_BOUNDARY_PATTERNS.map((pattern) => {
   const { group: _group, ...rest } = pattern;
   return {
     ...rest,
-    regex: '^@yantra/protocol(?!/commands$)(?:/.*)?$',
-    message: `${pattern.message}; apps/web may also import values from @yantra/protocol/commands`,
+    regex: '^@yantra/protocol(?!/(?:commands|screencast)$)(?:/.*)?$',
+    message: `${pattern.message}; apps/web may also import values from @yantra/protocol/commands and @yantra/protocol/screencast`,
   };
 });
 

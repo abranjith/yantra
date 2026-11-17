@@ -10,6 +10,7 @@
  */
 
 import {
+  AppWindow,
   Ban,
   Check,
   ChevronDown,
@@ -21,9 +22,11 @@ import {
   Copy,
   createLucideIcon,
   ExternalLink,
+  EyeOff,
   Hand,
   Info,
   Minus,
+  MonitorOff,
   Plus,
   RotateCw,
   X,
@@ -57,6 +60,9 @@ export const ICON_NAMES = [
   'nav.check',
   'field.increment',
   'field.decrement',
+  'liveView.headed',
+  'liveView.noPage',
+  'liveView.unavailable',
   'glyph.bindu',
   'glyph.contract',
   'glyph.capture',
@@ -100,6 +106,10 @@ export const ICON_REGISTRY = {
   'nav.check': lucide(Check),
   'field.increment': lucide(Plus),
   'field.decrement': lucide(Minus),
+  // FEAT-069 live view states; `glyph.protected` covers the protected screen.
+  'liveView.headed': lucide(AppWindow),
+  'liveView.noPage': lucide(EyeOff),
+  'liveView.unavailable': lucide(MonitorOff),
   'glyph.bindu': glyph('drshya-bindu', BINDU),
   'glyph.contract': glyph('drshya-contract', CONTRACT),
   'glyph.capture': glyph('drshya-capture', CAPTURE),
