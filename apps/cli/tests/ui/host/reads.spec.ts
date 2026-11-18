@@ -156,19 +156,30 @@ describe('parity with yantra <cmd> --json', () => {
       'read.show',
       { args: ['fixture'], options: { workflow: true } },
       ['show', 'fixture', '--workflow'],
+      'ShowResult',
     ],
-    ['read.show', { args: [FIXED_RUN], options: { run: true } }, ['show', FIXED_RUN, '--run']],
-    ['read.prefs.list', {}, ['prefs', 'list']],
-    ['read.prefs.get', { args: ['defaults.detail'] }, ['prefs', 'get', 'defaults.detail']],
-    ['read.daemon.status', {}, ['daemon', 'status']],
-  ] as const)('%s %j equals the CLI document', async (method, params, argv) => {
+    [
+      'read.show',
+      { args: [FIXED_RUN], options: { run: true } },
+      ['show', FIXED_RUN, '--run'],
+      'ShowResult',
+    ],
+    ['read.prefs.list', {}, ['prefs', 'list'], 'PrefsResult'],
+    [
+      'read.prefs.get',
+      { args: ['defaults.detail'] },
+      ['prefs', 'get', 'defaults.detail'],
+      'PrefsResult',
+    ],
+    ['read.daemon.status', {}, ['daemon', 'status'], 'DaemonStatusResult'],
+  ] as const)('%s %j equals the CLI document', async (method, params, argv, schema) => {
     // Act
     const result = await read(method, params);
     const cli = await cliJson(argv);
 
     // Assert
     expect(result.value).toEqual(cli);
-    expect(result.schema).toBeNull();
+    expect(result.schema).toBe(schema);
   });
 });
 

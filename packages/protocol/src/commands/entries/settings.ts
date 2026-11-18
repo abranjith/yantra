@@ -34,7 +34,7 @@ export const configPath = leaf({
   effect: 'none',
   danger: NO_DANGER,
   exit_codes: [exit.ok(), exit.validation(PARSE_ERRORS)],
-  json: CONFIG_JSON,
+  json: { flag: '--json', shape: 'envelope', schema: 'ConfigPathResult' },
 });
 
 export const configList = leaf({
@@ -46,7 +46,7 @@ export const configList = leaf({
   effect: 'none',
   danger: NO_DANGER,
   exit_codes: [exit.ok(), exit.validation(`${PARSE_ERRORS}, or config.yaml is invalid`)],
-  json: CONFIG_JSON,
+  json: { flag: '--json', shape: 'envelope', schema: 'ConfigListResult' },
 });
 
 export const configGet = leaf({
@@ -62,7 +62,7 @@ export const configGet = leaf({
     exit.ok(),
     exit.validation(`${PARSE_ERRORS}, an unknown key, or config.yaml is invalid`),
   ],
-  json: CONFIG_JSON,
+  json: { flag: '--json', shape: 'envelope', schema: 'ConfigGetResult' },
 });
 
 export const configSet = leaf({
@@ -133,7 +133,7 @@ export const configValidate = leaf({
   effect: 'none',
   danger: NO_DANGER,
   exit_codes: [exit.ok('config.yaml is valid'), exit.validation(`${PARSE_ERRORS}, or invalid`)],
-  json: CONFIG_JSON,
+  json: { flag: '--json', shape: 'envelope', schema: 'ConfigValidateResult' },
 });
 
 export const configDataDir = leaf({
@@ -241,7 +241,7 @@ export const modelList = leaf({
   effect: 'none',
   danger: NO_DANGER,
   exit_codes: [exit.ok(), exit.validation(`${PARSE_ERRORS}, or config.yaml is invalid`)],
-  json: CONFIG_JSON,
+  json: { flag: '--json', shape: 'envelope', schema: 'ModelListResult' },
 });
 
 export const modelAdd = leaf({
@@ -322,7 +322,7 @@ export const profile = leaf({
   effect: 'none',
   danger: NO_DANGER,
   exit_codes: [exit.ok(), exit.validation(PARSE_ERRORS)],
-  json: { flag: '--json', shape: 'envelope', schema: null },
+  json: { flag: '--json', shape: 'envelope', schema: 'ProfileResult' },
 });
 
 export const prefs = leaf({
@@ -362,7 +362,7 @@ export const prefs = leaf({
     exit.validation(`${PARSE_ERRORS}, an unknown action or key, or an invalid value`),
     exit.environment('the local preference index is unavailable'),
   ],
-  json: CONFIG_JSON,
+  json: { flag: '--json', shape: 'envelope', schema: 'PrefsResult' },
 });
 
 export const sites = group({
@@ -384,7 +384,7 @@ export const sitesList = leaf({
     exit.validation(`${PARSE_ERRORS}, or the ranking store reported an error`),
     exit.environment('the site ranking index is unavailable'),
   ],
-  json: CONFIG_JSON,
+  json: { flag: '--json', shape: 'envelope', schema: 'SitesListResult' },
 });
 
 export const sitesAdd = leaf({

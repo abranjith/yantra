@@ -815,6 +815,30 @@ Example:
 }
 ```
 
+## BrowserListResult
+
+The `yantra browser list --json` document.
+
+| Field         | Description                                                      |
+| ------------- | ---------------------------------------------------------------- |
+| schemaVersion | The protocol schema version every CLI `--json` envelope carries. |
+| kind          | Always `browser_list`.                                           |
+| selection     | The configured selection.                                        |
+| effective     | The browser Yantra would launch, or why none resolves.           |
+| managed       | The Yantra-managed build, or its absence.                        |
+
+Example:
+
+```json
+{
+  "schemaVersion": "<schemaVersion>",
+  "kind": "<kind>",
+  "selection": "<selection>",
+  "effective": "<effective>",
+  "managed": "<managed>"
+}
+```
+
 ## BudgetSchema
 
 Execution budget constraints.
@@ -1131,6 +1155,110 @@ Example:
 "<value>"
 ```
 
+## ConfigGetResult
+
+The `yantra config get --json` document.
+
+| Field         | Description                                                      |
+| ------------- | ---------------------------------------------------------------- |
+| schemaVersion | The protocol schema version every CLI `--json` envelope carries. |
+| kind          | Always `config.get`.                                             |
+| key           | The dotted key that was read.                                    |
+| value         | Its value: a scalar, a list or a nested block.                   |
+
+Example:
+
+```json
+{
+  "schemaVersion": "<schemaVersion>",
+  "kind": "<kind>",
+  "key": "<key>",
+  "value": "<value>"
+}
+```
+
+## ConfigListResult
+
+The `yantra config list --json` document.
+
+| Field         | Description                                                             |
+| ------------- | ----------------------------------------------------------------------- |
+| schemaVersion | The protocol schema version every CLI `--json` envelope carries.        |
+| kind          | Always `config.list`.                                                   |
+| config        | config.yaml, validated, with credential references shown as references. |
+
+Example:
+
+```json
+{
+  "schemaVersion": "<schemaVersion>",
+  "kind": "<kind>",
+  "config": "<config>"
+}
+```
+
+## ConfigPathResult
+
+The `yantra config path --json` document.
+
+| Field         | Description                                                      |
+| ------------- | ---------------------------------------------------------------- |
+| schemaVersion | The protocol schema version every CLI `--json` envelope carries. |
+| kind          | Always `config.path`.                                            |
+| rows          | Every storage location, in display order.                        |
+
+Example:
+
+```json
+{
+  "schemaVersion": "<schemaVersion>",
+  "kind": "<kind>",
+  "rows": "<rows>"
+}
+```
+
+## ConfigPathRow
+
+One storage location.
+
+| Field  | Description                                                       |
+| ------ | ----------------------------------------------------------------- |
+| name   | What the location is: home, config, profile, data, cache, runs, … |
+| path   | The absolute path.                                                |
+| source | Where the location came from: default, env:<NAME>, or config.     |
+
+Example:
+
+```json
+{
+  "name": "<name>",
+  "path": "<path>",
+  "source": "<source>"
+}
+```
+
+## ConfigValidateResult
+
+The `yantra config validate --json` document.
+
+| Field         | Description                                                      |
+| ------------- | ---------------------------------------------------------------- |
+| schemaVersion | The protocol schema version every CLI `--json` envelope carries. |
+| kind          | Always `config.validate`.                                        |
+| valid         | Always true: an invalid config.yaml exits 1.                     |
+| path          | The config.yaml that was validated.                              |
+
+Example:
+
+```json
+{
+  "schemaVersion": "<schemaVersion>",
+  "kind": "<kind>",
+  "valid": "<valid>",
+  "path": "<path>"
+}
+```
+
 ## ConfirmationBinding
 
 Six-field action-binding tuple for parked confirmation replay verification.
@@ -1297,6 +1425,30 @@ Example:
 
 ```json
 "<value>"
+```
+
+## DaemonStatusResult
+
+The `yantra daemon status --json` document.
+
+| Field                | Description                                 |
+| -------------------- | ------------------------------------------- |
+| running              | Whether the scheduler daemon is running.    |
+| pid                  | Its process id, or null.                    |
+| schedulesLoaded      | Schedules it has loaded.                    |
+| nextFires            | Upcoming fires.                             |
+| pendingConfirmations | Parked fires waiting for your confirmation. |
+
+Example:
+
+```json
+{
+  "running": "<running>",
+  "pid": "<pid>",
+  "schedulesLoaded": "<schedulesLoaded>",
+  "nextFires": "<nextFires>",
+  "pendingConfirmations": "<pendingConfirmations>"
+}
 ```
 
 ## DangerSpec
@@ -3287,6 +3439,50 @@ Example:
 }
 ```
 
+## ModelListResult
+
+The `yantra model list --json` document.
+
+| Field         | Description                                                      |
+| ------------- | ---------------------------------------------------------------- |
+| schemaVersion | The protocol schema version every CLI `--json` envelope carries. |
+| kind          | Always `model.list`.                                             |
+| rows          | Every registered model, in config order.                         |
+
+Example:
+
+```json
+{
+  "schemaVersion": "<schemaVersion>",
+  "kind": "<kind>",
+  "rows": "<rows>"
+}
+```
+
+## ModelListRow
+
+One registered model.
+
+| Field      | Description                                               |
+| ---------- | --------------------------------------------------------- |
+| provider   | The model provider, e.g. anthropic or ollama.             |
+| id         | The model id at that provider.                            |
+| input      | Input kinds the model accepts: text, image.               |
+| credential | Where its credential was found: env, keychain, or absent. |
+| default    | Whether profile.yaml selects it as the default.           |
+
+Example:
+
+```json
+{
+  "provider": "<provider>",
+  "id": "<id>",
+  "input": "<input>",
+  "credential": "<credential>",
+  "default": "<default>"
+}
+```
+
 ## NameMatch
 
 Accessible-name matcher for intent locators.
@@ -3661,6 +3857,26 @@ Example:
 "<value>"
 ```
 
+## PreferenceRow
+
+One effective preference.
+
+| Field  | Description                |
+| ------ | -------------------------- |
+| key    | The dotted preference key. |
+| value  | Its value.                 |
+| source | Where the value came from. |
+
+Example:
+
+```json
+{
+  "key": "<key>",
+  "value": "<value>",
+  "source": "<source>"
+}
+```
+
 ## PrefsChangedNotification
 
 Preferences changed; re-read them.
@@ -3669,6 +3885,34 @@ Example:
 
 ```json
 {}
+```
+
+## PrefsResult
+
+The `yantra prefs --json` document.
+
+| Field         | Description                                                      |
+| ------------- | ---------------------------------------------------------------- |
+| schemaVersion | The protocol schema version every CLI `--json` envelope carries. |
+| kind          | Always `prefs`.                                                  |
+| rows          | `prefs list`: every stored preference.                           |
+| key           | The key read or changed.                                         |
+| record        | `prefs get`: the stored record.                                  |
+| status        | A mutating action: what happened.                                |
+| value         | `prefs set`: the value written.                                  |
+
+Example:
+
+```json
+{
+  "schemaVersion": "<schemaVersion>",
+  "kind": "<kind>",
+  "rows": "<rows>",
+  "key": "<key>",
+  "record": "<record>",
+  "status": "<status>",
+  "value": "<value>"
+}
 ```
 
 ## ProcessIdentityRecord
@@ -3686,6 +3930,28 @@ Example:
 {
   "pid": "<pid>",
   "start_token": "<start_token>"
+}
+```
+
+## ProfileResult
+
+The `yantra profile --json` document.
+
+| Field         | Description                                                      |
+| ------------- | ---------------------------------------------------------------- |
+| schemaVersion | The protocol schema version every CLI `--json` envelope carries. |
+| kind          | Always `profile`.                                                |
+| profilePath   | The profile.yaml path.                                           |
+| preferences   | Every effective preference, by key.                              |
+
+Example:
+
+```json
+{
+  "schemaVersion": "<schemaVersion>",
+  "kind": "<kind>",
+  "profilePath": "<profilePath>",
+  "preferences": "<preferences>"
 }
 ```
 
@@ -4535,6 +4801,52 @@ Example:
 "<value>"
 ```
 
+## ScheduleRow
+
+One registered schedule.
+
+| Field               | Description                                      |
+| ------------------- | ------------------------------------------------ |
+| id                  | The schedule id (`yantra unschedule <id>`).      |
+| workflowName        | The workflow it runs.                            |
+| cronExpr            | Its cron expression.                             |
+| params              | Workflow parameters.                             |
+| notifyTarget        | Where a fire is reported: desktop, file or none. |
+| onConfirm           | Confirmation policy.                             |
+| enabled             | Whether the daemon fires it.                     |
+| createdAt           | When it was registered.                          |
+| lastFireAt          | The last fire, or null.                          |
+| nextFireAt          | The next fire, or null when disabled.            |
+| pendingConfirmation | A fire is waiting for your confirmation.         |
+
+Example:
+
+```json
+{
+  "id": "<id>",
+  "workflowName": "<workflowName>",
+  "cronExpr": "<cronExpr>",
+  "params": "<params>",
+  "notifyTarget": "<notifyTarget>",
+  "onConfirm": "<onConfirm>",
+  "enabled": "<enabled>",
+  "createdAt": "<createdAt>",
+  "lastFireAt": "<lastFireAt>",
+  "nextFireAt": "<nextFireAt>",
+  "pendingConfirmation": "<pendingConfirmation>"
+}
+```
+
+## SchedulesResult
+
+The `yantra schedules --json` document: a bare array of schedules.
+
+Example:
+
+```json
+"<value>"
+```
+
 ## ScreencastFrameMeta
 
 Metadata of one screencast frame; encoded at most 1 KiB.
@@ -4685,6 +4997,74 @@ Example:
 "<value>"
 ```
 
+## ShowResult
+
+The `yantra show --json` document.
+
+| Field         | Description                                                      |
+| ------------- | ---------------------------------------------------------------- |
+| schemaVersion | The protocol schema version every CLI `--json` envelope carries. |
+| kind          | Always `show`.                                                   |
+| item          | What was shown.                                                  |
+
+Example:
+
+```json
+{
+  "schemaVersion": "<schemaVersion>",
+  "kind": "<kind>",
+  "item": "<item>"
+}
+```
+
+## SiteRankRow
+
+One ranked domain.
+
+| Field           | Description                                  |
+| --------------- | -------------------------------------------- |
+| domain          | The hostname.                                |
+| rank            | Its current rank.                            |
+| positiveSignals | Signals that raised the rank.                |
+| negativeSignals | Signals that lowered the rank.               |
+| origin          | auto: learned from runs; user: added by you. |
+| firstSeenAt     | When the domain was first ranked.            |
+| lastSignalAt    | When its rank last changed.                  |
+
+Example:
+
+```json
+{
+  "domain": "<domain>",
+  "rank": "<rank>",
+  "positiveSignals": "<positiveSignals>",
+  "negativeSignals": "<negativeSignals>",
+  "origin": "<origin>",
+  "firstSeenAt": "<firstSeenAt>",
+  "lastSignalAt": "<lastSignalAt>"
+}
+```
+
+## SitesListResult
+
+The `yantra sites list --json` document.
+
+| Field         | Description                                                      |
+| ------------- | ---------------------------------------------------------------- |
+| schemaVersion | The protocol schema version every CLI `--json` envelope carries. |
+| kind          | Always `sites`.                                                  |
+| rows          | Every ranked domain.                                             |
+
+Example:
+
+```json
+{
+  "schemaVersion": "<schemaVersion>",
+  "kind": "<kind>",
+  "rows": "<rows>"
+}
+```
+
 ## Step
 
 Single executable unit in a validated plan.
@@ -4817,6 +5197,54 @@ Example:
 }
 ```
 
+## TemplateListResult
+
+The `yantra template list --json` document.
+
+| Field         | Description                                                      |
+| ------------- | ---------------------------------------------------------------- |
+| schemaVersion | The protocol schema version every CLI `--json` envelope carries. |
+| kind          | Always `template_list`.                                          |
+| tag           | The --tag filter, or null.                                       |
+| items         | The saved templates that match.                                  |
+
+Example:
+
+```json
+{
+  "schemaVersion": "<schemaVersion>",
+  "kind": "<kind>",
+  "tag": "<tag>",
+  "items": "<items>"
+}
+```
+
+## TemplateListRow
+
+One saved template.
+
+| Field       | Description                 |
+| ----------- | --------------------------- |
+| name        | The saved template name.    |
+| tags        | Its tags.                   |
+| description | Its description, or null.   |
+| slotCount   | How many slots it declares. |
+| modified    | When the file last changed. |
+| path        | The template file.          |
+
+Example:
+
+```json
+{
+  "name": "<name>",
+  "tags": "<tags>",
+  "description": "<description>",
+  "slotCount": "<slotCount>",
+  "modified": "<modified>",
+  "path": "<path>"
+}
+```
+
 ## TemplateManifest
 
 Validated slot manifest produced from a report template.
@@ -4862,6 +5290,34 @@ Example:
   "kind": "<kind>",
   "template": "<template>",
   "bindings": "<bindings>"
+}
+```
+
+## TemplateShowResult
+
+The `yantra template show --json` document.
+
+| Field         | Description                                                      |
+| ------------- | ---------------------------------------------------------------- |
+| schemaVersion | The protocol schema version every CLI `--json` envelope carries. |
+| kind          | Always `template_show`.                                          |
+| name          | The saved template name.                                         |
+| path          | The template file.                                               |
+| markdown      | The template text, verbatim.                                     |
+| template      | The parsed template metadata.                                    |
+| slots         | Its slots, in document order.                                    |
+
+Example:
+
+```json
+{
+  "schemaVersion": "<schemaVersion>",
+  "kind": "<kind>",
+  "name": "<name>",
+  "path": "<path>",
+  "markdown": "<markdown>",
+  "template": "<template>",
+  "slots": "<slots>"
 }
 ```
 
@@ -4927,6 +5383,32 @@ Example:
 
 ```json
 "text"
+```
+
+## TemplateSlotRow
+
+One template slot.
+
+| Field       | Description                          |
+| ----------- | ------------------------------------ |
+| key         | The slot key.                        |
+| kind        | The slot kind.                       |
+| heading     | The heading path, joined with " > ". |
+| constraints | The slot constraints.                |
+| columns     | Table columns, for a table slot.     |
+| guidance    | Author guidance, or null.            |
+
+Example:
+
+```json
+{
+  "key": "<key>",
+  "kind": "<kind>",
+  "heading": "<heading>",
+  "constraints": "<constraints>",
+  "columns": "<columns>",
+  "guidance": "<guidance>"
+}
 ```
 
 ## TemplateSlotValue
@@ -5155,6 +5637,52 @@ Example:
 
 ```json
 "<value>"
+```
+
+## UsageResult
+
+The `yantra usage --json` document.
+
+| Field         | Description                                                      |
+| ------------- | ---------------------------------------------------------------- |
+| schemaVersion | The protocol schema version every CLI `--json` envelope carries. |
+| kind          | Always `usage`.                                                  |
+| rows          | One row per day and provider.                                    |
+| totals        | Sums over every row.                                             |
+| note          | Why the result is empty, when it is.                             |
+
+Example:
+
+```json
+{
+  "schemaVersion": "<schemaVersion>",
+  "kind": "<kind>",
+  "rows": "<rows>",
+  "totals": "<totals>",
+  "note": "<note>"
+}
+```
+
+## UsageRow
+
+Task volume and cost for one day and provider.
+
+| Field        | Description                                         |
+| ------------ | --------------------------------------------------- |
+| day          | The day, YYYY-MM-DD.                                |
+| provider     | The model provider, or null for deterministic runs. |
+| taskCount    | Tasks that day.                                     |
+| totalCostUsd | Their metered cost in USD.                          |
+
+Example:
+
+```json
+{
+  "day": "<day>",
+  "provider": "<provider>",
+  "taskCount": "<taskCount>",
+  "totalCostUsd": "<totalCostUsd>"
+}
 ```
 
 ## ValueRef

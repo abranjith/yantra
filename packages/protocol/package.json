@@ -19,6 +19,10 @@
     "./screencast": {
       "types": "./dist/schemas/screencast.d.ts",
       "import": "./dist/schemas/screencast.js"
+    },
+    "./parity": {
+      "types": "./dist/parity.d.ts",
+      "import": "./dist/parity.js"
     }
   },
   "files": [

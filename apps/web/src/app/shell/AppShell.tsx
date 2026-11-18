@@ -2,6 +2,7 @@ import { Outlet } from '@tanstack/react-router';
 import { useState, type ReactNode } from 'react';
 
 import { useConnection, type ConnectionStore } from '../../host/connection-store.js';
+import { CommandPalette } from '../../palette/CommandPalette.js';
 import { navRegistry, type NavRegistry } from '../nav-registry.js';
 
 import { BinduProvider, BinduStore } from './bindu-store.js';
@@ -26,6 +27,7 @@ export function AppShell({ store, nav = navRegistry, children }: AppShellProps):
       <AppToasts>
         <div className="flex min-h-screen flex-col bg-bg text-ink">
           <TopBar nav={nav.entries()} />
+          <CommandPalette />
           <ConnectionBanner {...(store === undefined ? {} : { store })} />
           {state.status === 'session_ended' || state.status === 'incompatible' ? (
             <SessionEnded
