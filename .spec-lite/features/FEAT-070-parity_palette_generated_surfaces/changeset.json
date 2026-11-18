@@ -140,6 +140,11 @@
       "task": "TASK-002"
     },
     {
+      "path": "apps/web/tests/app/shell.spec.tsx",
+      "status": "M",
+      "role": "implement"
+    },
+    {
       "path": "apps/web/tests/generated/behavior-parity.spec.ts",
       "status": "A",
       "role": "implement",
@@ -170,10 +175,25 @@
       "task": "TASK-002"
     },
     {
+      "path": "docs/architecture.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/parity-command-palette-generated-surfaces.md",
+      "status": "U",
+      "role": "implement"
+    },
+    {
       "path": "docs/protocol-spec.md",
       "status": "M",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "docs/usage.md",
+      "status": "M",
+      "role": "implement"
     },
     {
       "path": "eslint.config.js",
@@ -288,9 +308,15 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "README.md",
+      "status": "M",
+      "role": "implement"
     }
   ],
   "excluded": [
+    ".spec-lite/feature-summary.md",
     ".spec-lite/features/FEAT-070-parity_palette_generated_surfaces/changeset.json",
     ".spec-lite/features/FEAT-070-parity_palette_generated_surfaces/spec.md",
     ".spec-lite/plan_ui.md"

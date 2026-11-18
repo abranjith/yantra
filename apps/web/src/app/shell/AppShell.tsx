@@ -27,7 +27,6 @@ export function AppShell({ store, nav = navRegistry, children }: AppShellProps):
       <AppToasts>
         <div className="flex min-h-screen flex-col bg-bg text-ink">
           <TopBar nav={nav.entries()} />
-          <CommandPalette />
           <ConnectionBanner {...(store === undefined ? {} : { store })} />
           {state.status === 'session_ended' || state.status === 'incompatible' ? (
             <SessionEnded
@@ -36,7 +35,10 @@ export function AppShell({ store, nav = navRegistry, children }: AppShellProps):
                 : {})}
             />
           ) : (
-            <main className="flex-1 px-6 py-8">{children ?? <Outlet />}</main>
+            <>
+              <CommandPalette />
+              <main className="flex-1 px-6 py-8">{children ?? <Outlet />}</main>
+            </>
           )}
         </div>
       </AppToasts>

@@ -139,7 +139,7 @@ Schemas.
 
 `CommandInvocation` (`invocation.ts`, emitted as `command-invocation.json`) is what was requested:
 a ULID `invocation_id` (the launch idempotency key), the canonical `path` with aliases resolved,
-the `argv` tokens after the path exactly as given, and an absolute `cwd` (checked syntactically for
+the `argv` tokens after the path exactly as given, an optional attended `stdin_text` payload for worker input collectors (never command-line arguments), and an absolute `cwd` (checked syntactically for
 POSIX, drive-letter and UNC forms, without `node:path`). `parseInvocation(argv, { cwd })` parses
 the tokens after the program name exactly as the generated commander tree would, and returns a
 `Result`: on success the leaf entry, arguments by name, options by attribute with commander
@@ -156,7 +156,9 @@ re-parses identically. `apps/cli/tests/registry/parse-parity.spec.ts` checks agr
 real tree for every leaf, 200 fast-check runs each over valid and near-valid argv.
 
 `formatInvocation(invocation, shell, { program })` (`format.ts`) is the CLI twin: the command line
-the app shows and copies. It is for display only; workers are spawned shell-free.
+the app shows and copies. It is for display only; workers are spawned shell-free. `tokenizeCommandLine()` is its browser-safe inverse for the app palette. It supports the platform shell grammars without evaluation and returns closed refusals for shell operators, redirects, expansions, globs, multiline input, and malformed quoting.
+
+FEAT-070 publishes `@yantra/protocol/parity`, which exposes the browser-safe command/event/artifact registries and typed CLI read schemas. `apps/web/src/parity/manifest.ts` derives complete command and option mappings from that data and combines them with explicit event and artifact targets. Generated surfaces consume the same registry and schemas for forms and tables; completeness tests fail on either missing or stale mappings, while the five credential/onboarding reservations remain assigned to FEAT-071.
 `defaultShellFor(platform)` picks PowerShell on Windows and POSIX elsewhere. Each token is
 quoted for its shell:
 

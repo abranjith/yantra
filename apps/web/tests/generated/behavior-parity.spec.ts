@@ -16,7 +16,6 @@ function sample(field: FormField): FormValues[string] {
   if (field.inputKind.kind === 'path') return '/sandbox/fixture';
   if (field.inputKind.kind === 'duration') return '1s';
   if (field.inputKind.kind === 'number') return String(Math.max(field.inputKind.min ?? 1, 1));
-  if (field.inputKind.kind === 'url') return 'https://example.com';
   return 'fixture';
 }
 
