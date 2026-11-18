@@ -32,6 +32,17 @@ export interface DraftProblem {
 
 export class UnsupportedFieldError extends Error {
   public override readonly name = 'UnsupportedFieldError';
+  public constructor(readonly field: string) {
+    super(field);
+  }
+}
+
+export function initialFormValues(fields: readonly FormField[]): FormValues {
+  return Object.fromEntries(
+    fields
+      .filter((field) => field.defaultValue !== undefined)
+      .map((field) => [field.id, field.defaultValue as FormValues[string]]),
+  );
 }
 
 export function deriveFields(

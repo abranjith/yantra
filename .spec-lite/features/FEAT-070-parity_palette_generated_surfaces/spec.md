@@ -848,7 +848,7 @@ ParityTarget>>`, so adding a union member breaks `tsc` on `src`; - `artifacts`: 
 
 - [x] TASK-001: Shell-aware command-line tokenizer (inverse of `format`)
 - [x] TASK-002: `--json` output schemas for the read commands that generated surfaces render
-- [ ] TASK-003: Parity manifest framework with `RunEvent` and artifact coverage
+- [x] TASK-003: Parity manifest framework with `RunEvent` and artifact coverage
 - [ ] TASK-004: Generated form engine
 - [ ] TASK-005: Generated tables, surface definitions and the generic surface
 - [ ] TASK-006: Settings: Installation, Preferences with provenance, Models, Sites and Data

@@ -5,7 +5,14 @@ import { useMemo, useState, type Key, type ReactNode } from 'react';
 import { InvocationTwin } from '../features/cockpit/cli-twin.js';
 import { useRpc } from '../host/app-rpc.js';
 
-import { buildInvocation, deriveFields, validateDraft, type FormValues } from './form-model.js';
+import {
+  buildInvocation,
+  deriveFields,
+  initialFormValues,
+  UnsupportedFieldError,
+  validateDraft,
+  type FormValues,
+} from './form-model.js';
 import { invokeCommand } from './use-invocation.js';
 
 export interface GeneratedFormProps {
@@ -22,12 +29,22 @@ export function GeneratedForm({
   onSubmitted,
 }: GeneratedFormProps): ReactNode {
   const rpc = useRpc();
-  const [values, setValues] = useState<FormValues>(initialValues);
+  const fieldResult = useMemo(() => {
+    try {
+      return { fields: deriveFields(command), error: null } as const;
+    } catch (error) {
+      return { fields: [], error } as const;
+    }
+  }, [command]);
+  const fields = fieldResult.fields;
+  const [values, setValues] = useState<FormValues>(() => ({
+    ...initialFormValues(fields),
+    ...initialValues,
+  }));
   const [confirming, setConfirming] = useState(false);
   const [consenting, setConsenting] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const fields = useMemo(() => deriveFields(command), [command]);
   const consent =
     command.path.join(' ') === 'browser install' || command.path.join(' ') === 'browser update';
   const visible = fields.filter((field) => !(consent && field.flag === '--yes'));
@@ -65,6 +82,13 @@ export function GeneratedForm({
     }
     void perform();
   };
+
+  if (fieldResult.error instanceof UnsupportedFieldError)
+    return <p role="alert">Unsupported field: {fieldResult.error.field}</p>;
+  if (fieldResult.error !== null)
+    throw fieldResult.error instanceof Error
+      ? fieldResult.error
+      : new Error('Unable to derive generated fields');
 
   return (
     <form
