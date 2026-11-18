@@ -61,7 +61,7 @@ export const show = leaf({
     exit.ok(),
     exit.validation(`${PARSE_ERRORS}, or the workflow or run cannot be found or loaded`),
   ],
-  json: { flag: '--json', shape: 'envelope', schema: null },
+  json: { flag: '--json', shape: 'envelope', schema: 'ShowResult' },
 });
 
 export const usage = leaf({
@@ -83,7 +83,7 @@ export const usage = leaf({
     exit.ok('success, including an empty result when the history index is unavailable'),
     exit.validation(`${PARSE_ERRORS}, an unknown --type or --since, or a rollup failure`),
   ],
-  json: { flag: '--json', shape: 'envelope', schema: null },
+  json: { flag: '--json', shape: 'envelope', schema: 'UsageResult' },
 });
 
 export const audit = leaf({

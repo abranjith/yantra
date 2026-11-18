@@ -1,0 +1,332 @@
+{
+  "vcs": "git",
+  "files": [
+    {
+      "path": "apps/cli/src/adapters/worker/worker-adapter.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "apps/cli/src/commands/config.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "apps/cli/src/ui/host/reads.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/reads.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/adapters/ConfigEditAdapter.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/adapters/DaemonAdapter.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/adapters/OpenAdapter.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/app/router.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/app/shell/AppShell.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/generated/form-model.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/generated/GeneratedForm.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/generated/GeneratedTable.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/generated/table-model.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/generated/use-invocation.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/palette/CommandPalette.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/palette/execute.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/palette/palette-model.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/parity/check.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/parity/manifest.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/parity/types.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/routes/generated.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/surfaces/definitions.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/surfaces/GeneratedSurface.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/tests/app/shell.spec.tsx",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "apps/web/tests/generated/behavior-parity.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "apps/web/tests/generated/form-model.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/tests/generated/table-model.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/tests/palette/palette-model.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/tests/parity/manifest-completeness.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "docs/architecture.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "docs/features/parity-command-palette-generated-surfaces.md",
+      "status": "U",
+      "role": "implement"
+    },
+    {
+      "path": "docs/protocol-spec.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "docs/usage.md",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "eslint.config.js",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/generated/json-schema/command-invocation.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/generated/json-schema/invocation-record.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/generated/json-schema/worker-launch.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/package.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/src/commands/entries/browser.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/src/commands/entries/daemon.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/src/commands/entries/runs.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/src/commands/entries/settings.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/src/commands/entries/template.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/src/commands/entries/workflow.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/src/commands/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/protocol/src/commands/invocation.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/src/commands/tokenize.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/protocol/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/src/parity.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/src/schemas/cli-read-outputs.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/tests/commands/tokenize.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/protocol/tests/schemas/cli-read-outputs.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "README.md",
+      "status": "M",
+      "role": "implement"
+    }
+  ],
+  "excluded": [
+    ".spec-lite/feature-summary.md",
+    ".spec-lite/features/FEAT-070-parity_palette_generated_surfaces/changeset.json",
+    ".spec-lite/features/FEAT-070-parity_palette_generated_surfaces/spec.md",
+    ".spec-lite/plan_ui.md"
+  ],
+  "baseline": {
+    "sha": "6dae28d0575db71f17f7286102d7dc8a61ba3c50",
+    "capturedAt": "2026-11-17T05:13:19.202Z",
+    "dirtyAtBaseline": [],
+    "dirtyBlobHashes": {},
+    "workflow": "ft/feat-070-parity-palette-generated-surfaces@6dae28d0575db71f17f7286102d7dc8a61ba3c50"
+  },
+  "featureId": "FEAT-070"
+}

@@ -79,6 +79,12 @@ export {
   type Shell,
 } from './format.js';
 export {
+  TOKENIZE_REFUSALS,
+  tokenizeCommandLine,
+  type TokenizeRefusal,
+  type TokenizeResult,
+} from './tokenize.js';
+export {
   COMMAND_REGISTRY,
   COMMAND_REGISTRY_INPUT,
   LEAF_COMMAND_IDS,

@@ -846,17 +846,17 @@ ParityTarget>>`, so adding a union member breaks `tsc` on `src`; - `artifacts`: 
 
 ## 8. State Tracking
 
-- [ ] TASK-001: Shell-aware command-line tokenizer (inverse of `format`)
-- [ ] TASK-002: `--json` output schemas for the read commands that generated surfaces render
-- [ ] TASK-003: Parity manifest framework with `RunEvent` and artifact coverage
-- [ ] TASK-004: Generated form engine
-- [ ] TASK-005: Generated tables, surface definitions and the generic surface
-- [ ] TASK-006: Settings: Installation, Preferences with provenance, Models, Sites and Data
-- [ ] TASK-007: Settings → Browser and the Daemon surface (start and stop adapters)
-- [ ] TASK-008: Workflows, Templates, Schedules and Usage surfaces
-- [ ] TASK-009: `config edit` and `open` adapters
-- [ ] TASK-010: Command palette (`Ctrl/Cmd+K`) with CLI syntax
-- [ ] TASK-011: Command and option parity: zero unmapped, empty unmigrated allowlist
-- [ ] TASK-012: Behavior parity: execute every generated form against a sandboxed `YANTRA_HOME`
+- [x] TASK-001: Shell-aware command-line tokenizer (inverse of `format`)
+- [x] TASK-002: `--json` output schemas for the read commands that generated surfaces render
+- [x] TASK-003: Parity manifest framework with `RunEvent` and artifact coverage
+- [x] TASK-004: Generated form engine
+- [x] TASK-005: Generated tables, surface definitions and the generic surface
+- [x] TASK-006: Settings: Installation, Preferences with provenance, Models, Sites and Data
+- [x] TASK-007: Settings → Browser and the Daemon surface (start and stop adapters)
+- [x] TASK-008: Workflows, Templates, Schedules and Usage surfaces
+- [x] TASK-009: `config edit` and `open` adapters
+- [x] TASK-010: Command palette (`Ctrl/Cmd+K`) with CLI syntax
+- [x] TASK-011: Command and option parity: zero unmapped, empty unmigrated allowlist
+- [x] TASK-012: Behavior parity: execute every generated form against a sandboxed `YANTRA_HOME`
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

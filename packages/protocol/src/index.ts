@@ -309,3 +309,4 @@ export * from './schemas/cli-reads.js';
 export * from './schemas/run-result.js';
 export * from './schemas/ui-mission.js';
 export * from './schemas/intervention.js';
+export * from './schemas/cli-read-outputs.js';

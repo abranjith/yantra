@@ -114,6 +114,7 @@ Yantra honors robots policy, blocklists, rate limits, CAPTCHAs, and bot walls; i
 - [The Yantra App](docs/features/yantra-app.md) — `yantra ui`, the loopback-only app host, browser choice, sessions, the persisted two-slot queue with drift review, crash recovery, attendance, the Ledger of runs, run results with citation evidence, the in-app Audit, bounded run-file viewers, and the `ui.theme`/`ui.surfaces` preferences.
 - [Drshya Design System](docs/features/drshya-design-system.md) — the `@yantra/ui` package for the Yantra app: OKLCH tokens with build-time contrast checks, the semantic icon registry, 16 accessible primitive families, and the real-Chrome gallery harness.
 - [Command Registry](docs/features/command-registry.md) — every CLI command as declarative data in `@yantra/protocol/commands`, the generated commander tree with byte-identical `--help`, `parseInvocation`, and shell-aware `formatInvocation` for copyable commands.
+- [Parity, Command Palette, and Generated Surfaces](docs/features/parity-command-palette-generated-surfaces.md) — registry-derived settings/library/system pages, typed tables, exceptional adapters, and the Ctrl/Cmd+K CLI-syntax palette.
 - [Safety and Privacy](docs/features/safety-and-privacy.md) — masking, consent, secrets, policy, audit boundaries, and which run files the app serves.
 
 ### Generated reference

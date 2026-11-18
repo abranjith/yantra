@@ -2,6 +2,7 @@ import { Outlet } from '@tanstack/react-router';
 import { useState, type ReactNode } from 'react';
 
 import { useConnection, type ConnectionStore } from '../../host/connection-store.js';
+import { CommandPalette } from '../../palette/CommandPalette.js';
 import { navRegistry, type NavRegistry } from '../nav-registry.js';
 
 import { BinduProvider, BinduStore } from './bindu-store.js';
@@ -34,7 +35,10 @@ export function AppShell({ store, nav = navRegistry, children }: AppShellProps):
                 : {})}
             />
           ) : (
-            <main className="flex-1 px-6 py-8">{children ?? <Outlet />}</main>
+            <>
+              <CommandPalette />
+              <main className="flex-1 px-6 py-8">{children ?? <Outlet />}</main>
+            </>
           )}
         </div>
       </AppToasts>

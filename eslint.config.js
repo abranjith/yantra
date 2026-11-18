@@ -82,8 +82,8 @@ const WEB_BOUNDARY_PATTERNS = UI_BOUNDARY_PATTERNS.map((pattern) => {
   const { group: _group, ...rest } = pattern;
   return {
     ...rest,
-    regex: '^@yantra/protocol(?!/(?:commands|screencast)$)(?:/.*)?$',
-    message: `${pattern.message}; apps/web may also import values from @yantra/protocol/commands and @yantra/protocol/screencast`,
+    regex: '^@yantra/protocol(?!/(?:commands|screencast|parity)$)(?:/.*)?$',
+    message: `${pattern.message}; apps/web may also import values from @yantra/protocol/commands, @yantra/protocol/screencast and @yantra/protocol/parity`,
   };
 });
 

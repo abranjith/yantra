@@ -44,7 +44,7 @@ export const browserList = leaf({
     exit.ok('inventory reported, including an unavailable selection'),
     exit.validation(PARSE_ERRORS),
   ],
-  json: { flag: '--json', shape: 'envelope', schema: null },
+  json: { flag: '--json', shape: 'envelope', schema: 'BrowserListResult' },
 });
 
 export const browserUse = leaf({

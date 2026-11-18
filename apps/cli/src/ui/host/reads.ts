@@ -66,6 +66,18 @@ export const READERS: readonly ReaderSpec[] = [
   // The effective profile with defaults and provenance: what the app applies (TASK-011).
   { method: 'read.profile', path: ['profile'] },
   { method: 'read.daemon.status', path: ['daemon', 'status'] },
+  { method: 'read.config.path', path: ['config', 'path'] },
+  { method: 'read.config.list', path: ['config', 'list'] },
+  { method: 'read.config.get', path: ['config', 'get'] },
+  { method: 'read.config.validate', path: ['config', 'validate'] },
+  { method: 'read.model.list', path: ['model', 'list'] },
+  { method: 'read.sites.list', path: ['sites', 'list'] },
+  { method: 'read.browser.list', path: ['browser', 'list'] },
+  { method: 'read.browser.update', path: ['browser', 'update'], fixedArgs: ['--dry-run'] },
+  { method: 'read.doctor', path: ['doctor'] },
+  { method: 'read.template.show', path: ['template', 'show'] },
+  { method: 'read.schedules', path: ['schedules'] },
+  { method: 'read.usage', path: ['usage'] },
   // The composer's template choice (FEAT-067).
   { method: 'read.template.list', path: ['template', 'list'] },
 ];
@@ -78,20 +90,7 @@ export interface UnmappedRead {
 }
 
 /** Dated allowlist of read paths not mapped yet. It may only shrink. */
-export const UNMAPPED_READS: readonly UnmappedRead[] = [
-  'config path',
-  'config list',
-  'config get',
-  'config validate',
-  'schedules',
-  'model list',
-  'usage',
-  'sites list',
-  'template show',
-  'doctor',
-  'browser list',
-  'browser update',
-].map((path) => ({ path, since: '2026-11-03', owner: 'FEAT-070' }));
+export const UNMAPPED_READS: readonly UnmappedRead[] = [];
 
 /** Every registry leaf path whose default or any rule's class is `read`. */
 export function readPaths(): string[] {

@@ -180,7 +180,7 @@ export async function runWorkerInvocation(
         const value = await input({ kind: 'confirm', message });
         return typeof value === 'boolean' ? value : null;
       },
-      stdin: () => Promise.resolve(null),
+      stdin: () => Promise.resolve(invocation.stdin_text ?? null),
       editor: () => Promise.resolve(false),
     },
     gateways: {

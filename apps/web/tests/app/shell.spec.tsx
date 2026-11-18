@@ -24,16 +24,20 @@ async function renderApp() {
 }
 
 describe('navigation', () => {
-  it('renders the registered routes (Mission, Ledger, Inbox)', async () => {
+  it('renders every registered route, including the generated surfaces', async () => {
     await renderApp();
     const nav = screen.getByRole('navigation', { name: 'Main' });
     const links = within(nav).getAllByRole('link');
-    expect(links.map((link) => link.textContent)).toEqual(['Mission', 'Ledger', 'Inbox']);
-    expect(navRegistry.entries()).toEqual([
-      { path: '/mission', label: 'Mission' },
-      { path: '/runs', label: 'Ledger' },
-      { path: '/inbox', label: 'Inbox' },
-    ]);
+    expect(links.map((link) => link.textContent)).toEqual(
+      navRegistry.entries().map((entry) => entry.label),
+    );
+    const entries = navRegistry.entries();
+    expect(entries).toContainEqual({ path: '/mission', label: 'Mission' });
+    expect(entries).toContainEqual({ path: '/runs', label: 'Ledger' });
+    expect(entries).toContainEqual({ path: '/settings/installation', label: 'Installation' });
+    expect(entries).toContainEqual({ path: '/workflows', label: 'Workflows' });
+    expect(entries).toContainEqual({ path: '/daemon', label: 'Daemon' });
+    expect(entries).toContainEqual({ path: '/inbox', label: 'Inbox' });
     expect(links[0]?.getAttribute('aria-current')).toBe('page');
   });
 

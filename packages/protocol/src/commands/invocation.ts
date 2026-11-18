@@ -40,6 +40,10 @@ export const CommandInvocation = z
       .string()
       .refine(isAbsoluteCwd, 'cwd must be an absolute path')
       .describe('Absolute working directory the invocation was requested from.'),
+    stdin_text: z
+      .string()
+      .optional()
+      .describe('Optional attended text supplied through the worker input collector; never argv.'),
   })
   .strict()
   .describe('A requested command invocation.');

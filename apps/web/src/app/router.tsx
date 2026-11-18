@@ -1,5 +1,21 @@
 import { createRouter, type RouterHistory } from '@tanstack/react-router';
 
+import {
+  browserRoute,
+  credentialsRoute,
+  daemonRoute,
+  dataRoute,
+  healthRoute,
+  installationRoute,
+  modelsRoute,
+  onboardingRoute,
+  preferencesRoute,
+  schedulesRoute,
+  sitesRoute,
+  templatesRoute,
+  usageRoute,
+  workflowsRoute,
+} from '../routes/generated.js';
 import { inboxRoute } from '../routes/inbox.js';
 import { ledgerRoute } from '../routes/ledger.js';
 import { missionInvocationRoute } from '../routes/mission.invocations.$invocationId.js';
@@ -22,6 +38,20 @@ export const routeTree = rootRoute.addChildren([
   inboxRoute,
   missionRunRoute,
   missionInvocationRoute,
+  installationRoute,
+  preferencesRoute,
+  modelsRoute,
+  browserRoute,
+  sitesRoute,
+  dataRoute,
+  workflowsRoute,
+  templatesRoute,
+  schedulesRoute,
+  usageRoute,
+  daemonRoute,
+  onboardingRoute,
+  healthRoute,
+  credentialsRoute,
 ]);
 
 /** Builds the router, with an injected history in tests. */

@@ -57,5 +57,5 @@ export const daemonStatus = leaf({
   effect: 'none',
   danger: { level: 'none' },
   exit_codes: [exit.ok('status reported, running or not'), exit.validation(PARSE_ERRORS)],
-  json: { flag: '--json', shape: 'document', schema: null },
+  json: { flag: '--json', shape: 'document', schema: 'DaemonStatusResult' },
 });

@@ -114,7 +114,7 @@ export const schedules = leaf({
     exit.validation(PARSE_ERRORS),
     exit.execution('the schedule store reported an error'),
   ],
-  json: { flag: '--json', shape: 'document', schema: null },
+  json: { flag: '--json', shape: 'document', schema: 'SchedulesResult' },
 });
 
 export const confirm = leaf({

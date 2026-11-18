@@ -965,6 +965,10 @@ yantra prefs set ui.surfaces solid
 | `ui.theme`    | `system`, `light`, `dark` | `system` |
 | `ui.surfaces` | `glass`, `solid`          | `glass`  |
 
+The app navigation also exposes registry-generated Settings, Library, and System pages for configuration paths, preferences, models, browser management, sites, workflows, templates, schedules, usage, and daemon control. Forms show the canonical CLI twin before submission and keep the same validation, confirmation, locking, and effect behavior as the CLI.
+
+Press **Ctrl+K** (Windows/Linux) or **Cmd+K** (macOS) to open the command palette. Type one Yantra command, with or without the leading `yantra`. The palette parses the host platform's shell syntax but does not evaluate it: pipes, redirects, expansions, globs, multiline commands, and malformed quotes are refused. Read commands navigate to their app surface; mutation commands use the normal invocation RPC and dangerous commands require confirmation.
+
 An invalid value exits `1` and lists the valid values;
 `yantra config set ui.theme …` redirects to `yantra prefs set`. An open window
 picks up a `prefs set` change the next time it connects, so reload it to apply

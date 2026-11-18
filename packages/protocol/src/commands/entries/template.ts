@@ -91,7 +91,7 @@ export const templateList = leaf({
   effect: 'none',
   danger: NO_DANGER,
   exit_codes: [exit.ok(), exit.validation(PARSE_ERRORS)],
-  json: TEMPLATE_JSON,
+  json: { flag: '--json', shape: 'envelope', schema: 'TemplateListResult' },
 });
 
 export const templateShow = leaf({
@@ -111,7 +111,7 @@ export const templateShow = leaf({
       `${PARSE_ERRORS}, an invalid or unknown name, or a template that fails to parse`,
     ),
   ],
-  json: TEMPLATE_JSON,
+  json: { flag: '--json', shape: 'envelope', schema: 'TemplateShowResult' },
 });
 
 export const templateRemove = leaf({
