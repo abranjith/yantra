@@ -141,7 +141,7 @@
     },
     {
       "path": "apps/web/tests/generated/behavior-parity.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
