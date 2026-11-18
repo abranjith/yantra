@@ -1077,12 +1077,13 @@ Example:
 
 A requested command invocation.
 
-| Field         | Description                                                            |
-| ------------- | ---------------------------------------------------------------------- |
-| invocation_id | Client-generated ULID; the idempotency key for launching (D11).        |
-| path          | Canonical command path, aliases resolved (e.g. ["do"] for "discover"). |
-| argv          | Tokens after the path, exactly as given, in order.                     |
-| cwd           | Absolute working directory the invocation was requested from.          |
+| Field         | Description                                                                     |
+| ------------- | ------------------------------------------------------------------------------- |
+| invocation_id | Client-generated ULID; the idempotency key for launching (D11).                 |
+| path          | Canonical command path, aliases resolved (e.g. ["do"] for "discover").          |
+| argv          | Tokens after the path, exactly as given, in order.                              |
+| cwd           | Absolute working directory the invocation was requested from.                   |
+| stdin_text    | Optional attended text supplied through the worker input collector; never argv. |
 
 Example:
 
@@ -1091,7 +1092,8 @@ Example:
   "invocation_id": "<invocation_id>",
   "path": "<path>",
   "argv": "<argv>",
-  "cwd": "<cwd>"
+  "cwd": "<cwd>",
+  "stdin_text": "<stdin_text>"
 }
 ```
 

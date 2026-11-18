@@ -280,7 +280,8 @@ async function runUnset(
 }
 
 async function runEdit(context: CommandContext, options: ConfigOptions): Promise<void> {
-  if (context.surface === 'worker')
+  const workerText = context.surface === 'worker' ? await context.input.stdin() : null;
+  if (context.surface === 'worker' && workerText === null)
     throw new CommandFailure(
       1,
       'config.editor.unavailable',
@@ -298,12 +299,17 @@ async function runEdit(context: CommandContext, options: ConfigOptions): Promise
         original = stringify(defaultConfig());
         await writeFileAtomic(path, original, { mode: 0o600 });
       }
-      if (!context.settings.env().EDITOR?.trim()) fail(context, '$EDITOR is not set');
       let saved: boolean;
-      try {
-        saved = await context.input.editor(path);
-      } catch {
-        saved = false;
+      if (workerText !== null) {
+        await writeFileAtomic(path, workerText, { mode: 0o600 });
+        saved = true;
+      } else {
+        if (!context.settings.env().EDITOR?.trim()) fail(context, '$EDITOR is not set');
+        try {
+          saved = await context.input.editor(path);
+        } catch {
+          saved = false;
+        }
       }
       if (!saved) {
         await writeFileAtomic(path, original, { mode: 0o600 });

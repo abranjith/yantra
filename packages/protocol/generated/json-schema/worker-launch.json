@@ -35,6 +35,10 @@
             "cwd": {
               "type": "string",
               "description": "Absolute working directory the invocation was requested from."
+            },
+            "stdin_text": {
+              "type": "string",
+              "description": "Optional attended text supplied through the worker input collector; never argv."
             }
           },
           "required": [

@@ -2,6 +2,18 @@
   "vcs": "git",
   "files": [
     {
+      "path": "apps/cli/src/adapters/worker/worker-adapter.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "apps/cli/src/commands/config.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "apps/cli/src/ui/host/reads.ts",
       "status": "M",
       "role": "implement",
@@ -128,6 +140,12 @@
       "task": "TASK-002"
     },
     {
+      "path": "apps/web/tests/generated/behavior-parity.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "apps/web/tests/generated/form-model.spec.ts",
       "status": "A",
       "role": "implement",
@@ -162,6 +180,24 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/generated/json-schema/command-invocation.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/generated/json-schema/invocation-record.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/generated/json-schema/worker-launch.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
     },
     {
       "path": "packages/protocol/package.json",
@@ -210,6 +246,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/protocol/src/commands/invocation.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
     },
     {
       "path": "packages/protocol/src/commands/tokenize.ts",
