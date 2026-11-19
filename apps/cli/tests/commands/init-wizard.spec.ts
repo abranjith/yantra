@@ -1,4 +1,5 @@
 import type { KeychainProvider } from '@yantra/core';
+import { INIT_QUESTIONS, evaluateWhen, resolveQuestionMessage } from '@yantra/protocol';
 import { describe, expect, it, vi } from 'vitest';
 
 import { runInitWizard } from '../../src/adapters/terminal/init-wizard.js';
@@ -124,4 +125,74 @@ describe('@no-llm init wizard', () => {
       expect(keychain.stored.size).toBe(0);
     });
   });
+
+  it.each([
+    {
+      provider: 'anthropic' as const,
+      credentialSource: 'environment variable',
+      searchProvider: 'skip',
+      answers: {
+        provider: 'anthropic',
+        credential_source: 'environment variable',
+        search_key_provider: 'skip',
+      },
+    },
+    {
+      provider: 'ollama' as const,
+      credentialSource: 'keychain',
+      searchProvider: 'tavily',
+      answers: {
+        provider: 'ollama',
+        credential_source: 'keychain',
+        search_key_provider: 'tavily',
+      },
+    },
+    {
+      provider: 'none' as const,
+      credentialSource: 'skip',
+      searchProvider: 'brave',
+      answers: {
+        provider: 'none',
+        search_key_provider: 'brave',
+      },
+    },
+  ])(
+    'receives prompt messages in INIT_QUESTIONS catalog order for $provider branch',
+    async ({ provider, credentialSource, searchProvider, answers }) => {
+      const seenMessages: string[] = [];
+      const selections =
+        provider === 'none'
+          ? [provider, searchProvider]
+          : [provider, credentialSource, searchProvider];
+      const keychain: KeychainProvider = {
+        get: async () => null,
+        set: async () => undefined,
+        delete: async () => false,
+        list: async () => [],
+        isAvailable: async () => true,
+      };
+
+      await runInitWizard({
+        select: async (message) => {
+          seenMessages.push(message);
+          return selections.shift() ?? null;
+        },
+        text: async (message) => {
+          seenMessages.push(message);
+          return '';
+        },
+        password: async (message) => {
+          seenMessages.push(message);
+          return 'secret-val';
+        },
+        keychain: async () => keychain,
+      });
+
+      const expectedMessages = INIT_QUESTIONS.filter(
+        (q) => q.section !== 'context' && evaluateWhen(q, answers),
+      ).map((q) => resolveQuestionMessage(q, answers));
+
+      expect(seenMessages).toEqual(expectedMessages);
+    },
+  );
 });

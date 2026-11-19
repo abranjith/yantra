@@ -2643,6 +2643,128 @@ Example:
 "resume"
 ```
 
+## InitAnswerScalar
+
+No description provided.
+
+Example:
+
+```json
+"<value>"
+```
+
+## InitAnswersRequest
+
+Onboarding submission request.
+
+| Field         | Description                                             |
+| ------------- | ------------------------------------------------------- |
+| answers       | Non-secret onboarding answers keyed by InitQuestion.id. |
+| secrets       | secret                                                  |
+| reset         |                                                         |
+| invocation_id |                                                         |
+
+Example:
+
+```json
+{
+  "answers": "<answers>",
+  "secrets": "<secrets>",
+  "reset": "<reset>",
+  "invocation_id": "<invocation_id>"
+}
+```
+
+## InitQuestion
+
+One question descriptor in the shared init catalog.
+
+| Field     | Description                                                           |
+| --------- | --------------------------------------------------------------------- |
+| id        | Unique identifier for an onboarding/init question.                    |
+| kind      | Input widget kind for an init question.                               |
+| message   |                                                                       |
+| choices   |                                                                       |
+| initial   |                                                                       |
+| initialBy | Optional map from an earlier answer value to a literal initial value. |
+| optional  |                                                                       |
+| when      |                                                                       |
+| section   | Logical onboarding step grouping.                                     |
+
+Example:
+
+```json
+{
+  "id": "<id>",
+  "kind": "<kind>",
+  "message": "<message>",
+  "choices": "<choices>",
+  "initial": "<initial>",
+  "initialBy": "<initialBy>",
+  "optional": "<optional>",
+  "when": "<when>",
+  "section": "<section>"
+}
+```
+
+## InitQuestionId
+
+Unique identifier for an onboarding/init question.
+
+Example:
+
+```json
+"provider"
+```
+
+## InitQuestionInitialBy
+
+Optional map from an earlier answer value to a literal initial value.
+
+| Field    | Description                                        |
+| -------- | -------------------------------------------------- |
+| question | Unique identifier for an onboarding/init question. |
+| map      |                                                    |
+
+Example:
+
+```json
+{
+  "question": "<question>",
+  "map": "<map>"
+}
+```
+
+## InitQuestionKind
+
+Input widget kind for an init question.
+
+Example:
+
+```json
+"select"
+```
+
+## InitQuestionSection
+
+Logical onboarding step grouping.
+
+Example:
+
+```json
+"model"
+```
+
+## InitQuestionWhen
+
+No description provided.
+
+Example:
+
+```json
+"<value>"
+```
+
 ## InputKind
 
 How a generated form collects this value.
@@ -3691,6 +3813,72 @@ Example:
 
 ```json
 "attempted"
+```
+
+## OnboardingError
+
+No description provided.
+
+Example:
+
+```json
+"<value>"
+```
+
+## OnboardingResult
+
+Result of an onboarding submission (no secret values).
+
+| Field           | Description |
+| --------------- | ----------- |
+| status          |             |
+| config_path     |             |
+| profile_path    |             |
+| profile_written |             |
+| provider        |             |
+| search_key      |             |
+| command         |             |
+| location_shared |             |
+
+Example:
+
+```json
+{
+  "status": "<status>",
+  "config_path": "<config_path>",
+  "profile_path": "<profile_path>",
+  "profile_written": "<profile_written>",
+  "provider": "<provider>",
+  "search_key": "<search_key>",
+  "command": "<command>",
+  "location_shared": "<location_shared>"
+}
+```
+
+## OnboardingStatus
+
+Current onboarding and installation readiness status.
+
+| Field              | Description |
+| ------------------ | ----------- |
+| config_exists      |             |
+| profile_exists     |             |
+| config_path        |             |
+| profile_path       |             |
+| data_dir           |             |
+| keychain_available |             |
+
+Example:
+
+```json
+{
+  "config_exists": "<config_exists>",
+  "profile_exists": "<profile_exists>",
+  "config_path": "<config_path>",
+  "profile_path": "<profile_path>",
+  "data_dir": "<data_dir>",
+  "keychain_available": "<keychain_available>"
+}
 ```
 
 ## OptionGroup

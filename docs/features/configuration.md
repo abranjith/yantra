@@ -293,7 +293,9 @@ yantra init --reset
 ```
 
 On an interactive TTY without `--json` or `--yes`, and when `--provider` is not
-supplied, `yantra init` asks for:
+supplied, `yantra init` drives its prompts from the shared `INIT_QUESTIONS`
+catalog in `@yantra/protocol` (the same question set used by app onboarding),
+asking for:
 
 1. `anthropic`, `ollama`, or `none`;
 2. an environment reference, a keychain credential, or no credential;

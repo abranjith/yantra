@@ -2,6 +2,14 @@
 import { mkdir, rename, stat } from 'node:fs/promises';
 import { dirname, isAbsolute, win32 } from 'node:path';
 
+import {
+  INIT_QUESTIONS,
+  evaluateWhen,
+  resolveQuestionInitial,
+  resolveQuestionMessage,
+  type InitAnswerScalar,
+  type InitQuestionId,
+} from '@yantra/protocol';
 import { stringify } from 'yaml';
 
 import { configPath } from '../browser/paths.js';
@@ -53,55 +61,89 @@ export async function collectInitProviderAnswers(deps: InitProviderInput): Promi
   const text = deps.text;
   const password = deps.password;
   const keychain = deps.keychain ?? createKeychainProvider;
-  const provider = normalizeProvider(
-    await select('Model provider', ['anthropic', 'ollama', 'none']),
-  );
-  if (provider === 'none') {
-    const searchKey = await searchKeyStep(select, password, keychain);
-    return {
-      provider,
-      modelId: null,
-      baseUrl: null,
-      apiKey: null,
-      dataDir: await storage(text),
-      searchKey,
-    };
-  }
 
-  const credentialMode =
-    (await select('Credential source', ['environment variable', 'keychain', 'skip'])) ?? 'skip';
+  const collected: Partial<Record<InitQuestionId, InitAnswerScalar>> = {};
+  let provider: InitAnswers['provider'] = 'none';
+  let modelId: string | null = null;
+  let baseUrl: string | null = null;
   let apiKey: ConfigRef | null = null;
-  if (credentialMode === 'environment variable') {
-    const defaultName = provider === 'anthropic' ? 'ANTHROPIC_API_KEY' : 'OLLAMA_API_KEY';
-    const name =
-      nonEmpty((await text('Environment variable name', defaultName))?.trim()) ?? defaultName;
-    const parsed = parseConfigRef(`\${env:${name}}`);
-    if (!parsed.isOk) throw new Error(parsed.error);
-    apiKey = parsed.value;
-  } else if (credentialMode === 'keychain') {
-    const key = `${provider}.api_key`;
-    const value = await password(`Secret value for ${key}`);
-    if (value) {
-      const store = await keychain();
-      if (!(await store.isAvailable()))
-        throw new Error(
-          'OS keychain is unavailable; choose an environment-variable reference instead',
-        );
-      await store.set(YANTRA_KEYCHAIN_SERVICE, key, value);
-      const parsed = parseConfigRef(`\${secret:${key}}`);
-      if (!parsed.isOk) throw new Error(parsed.error);
-      apiKey = parsed.value;
+  let dataDir: string | null = null;
+  let searchKey: SearchKeyOutcome = { status: 'skipped' };
+
+  for (const question of INIT_QUESTIONS) {
+    if (question.section === 'context' || !evaluateWhen(question, collected)) continue;
+    const message = resolveQuestionMessage(question, collected);
+
+    switch (question.id) {
+      case 'provider': {
+        provider = normalizeProvider(await select(message, question.choices ?? []));
+        collected.provider = provider;
+        break;
+      }
+      case 'credential_source': {
+        const mode = (await select(message, question.choices ?? [])) ?? 'skip';
+        collected.credential_source = mode;
+        break;
+      }
+      case 'credential_env_name': {
+        const defaultName = resolveQuestionInitial(question, collected) ?? 'ANTHROPIC_API_KEY';
+        const name = nonEmpty((await text(message, defaultName))?.trim()) ?? defaultName;
+        const parsed = parseConfigRef(`\${env:${name}}`);
+        if (!parsed.isOk) throw new Error(parsed.error);
+        apiKey = parsed.value;
+        collected.credential_env_name = name;
+        break;
+      }
+      case 'credential_secret': {
+        const key = `${provider}.api_key`;
+        const value = await password(message);
+        if (value) {
+          const store = await keychain();
+          if (!(await store.isAvailable()))
+            throw new Error(
+              'OS keychain is unavailable; choose an environment-variable reference instead',
+            );
+          await store.set(YANTRA_KEYCHAIN_SERVICE, key, value);
+          const parsed = parseConfigRef(`\${secret:${key}}`);
+          if (!parsed.isOk) throw new Error(parsed.error);
+          apiKey = parsed.value;
+        }
+        break;
+      }
+      case 'model_id': {
+        const defaultModel = resolveQuestionInitial(question, collected) ?? 'claude-opus-4-7';
+        modelId = nonEmpty((await text(message, defaultModel))?.trim()) ?? defaultModel;
+        collected.model_id = modelId;
+        break;
+      }
+      case 'ollama_base_url': {
+        const defaultUrl = resolveQuestionInitial(question, collected) ?? 'http://localhost:11434';
+        baseUrl = nonEmpty((await text(message, defaultUrl))?.trim()) ?? defaultUrl;
+        collected.ollama_base_url = baseUrl;
+        break;
+      }
+      case 'search_key_provider': {
+        const choice = await select(message, question.choices ?? []);
+        collected.search_key_provider = choice ?? 'skip';
+        break;
+      }
+      case 'search_key_secret': {
+        const choice = collected.search_key_provider;
+        if (choice === 'tavily' || choice === 'brave') {
+          searchKey = await storeSearchKey(choice, message, password, keychain);
+        }
+        break;
+      }
+      case 'data_dir': {
+        const value = (await text(message))?.trim();
+        dataDir = nonEmpty(value) ?? null;
+        collected.data_dir = dataDir;
+        break;
+      }
     }
   }
-  const defaultModel = provider === 'anthropic' ? 'claude-opus-4-7' : 'llama3.1:8b';
-  const modelId = nonEmpty((await text('Model id', defaultModel))?.trim()) ?? defaultModel;
-  const baseUrl =
-    provider === 'ollama'
-      ? (nonEmpty((await text('Ollama base URL', 'http://localhost:11434'))?.trim()) ??
-        'http://localhost:11434')
-      : null;
-  const searchKey = await searchKeyStep(select, password, keychain);
-  return { provider, modelId, baseUrl, apiKey, dataDir: await storage(text), searchKey };
+
+  return { provider, modelId, baseUrl, apiKey, dataDir, searchKey };
 }
 
 /**
@@ -111,15 +153,14 @@ export async function collectInitProviderAnswers(deps: InitProviderInput): Promi
  * model step (`<provider>.api_key`). An unavailable keychain does not fail
  * `init`: the outcome carries the `yantra secret set` command to run later.
  */
-async function searchKeyStep(
-  select: NonNullable<InitProviderInput['select']>,
+async function storeSearchKey(
+  choice: KeyedSearchProvider,
+  message: string,
   password: NonNullable<InitProviderInput['password']>,
   keychain: NonNullable<InitProviderInput['keychain']>,
 ): Promise<SearchKeyOutcome> {
-  const choice = await select('Search provider key (optional)', ['tavily', 'brave', 'skip']);
-  if (choice !== 'tavily' && choice !== 'brave') return { status: 'skipped' };
   const account = `${choice}.api_key`;
-  const value = await password(`Secret value for ${account}`);
+  const value = await password(message);
   if (!value) return { status: 'skipped' };
   const manual: SearchKeyOutcome = {
     status: 'manual',
@@ -136,11 +177,6 @@ async function searchKeyStep(
   if (!(await store.isAvailable())) return manual;
   await store.set(YANTRA_KEYCHAIN_SERVICE, account, value);
   return { status: 'stored', provider: choice };
-}
-
-async function storage(text: NonNullable<InitProviderInput['text']>): Promise<string | null> {
-  const value = (await text('Data directory (blank for ~/.yantra/data)'))?.trim();
-  return nonEmpty(value) ?? null;
 }
 
 function nonEmpty(value: string | undefined): string | undefined {
@@ -166,12 +202,6 @@ export interface ContextGrantDeps {
   readonly text?: (message: string) => Promise<string | null>;
 }
 
-const LOCATION_QUESTION =
-  'Share your location with the agent? Without it, Yantra will ask you to name a ' +
-  "location in queries like 'hotels near me' rather than guessing one.";
-
-const CITY_QUESTION = 'City or area (e.g. Naperville, IL) — leave blank to set later';
-
 /** The behavior-preserving answers used when prompting is skipped or cancelled. */
 export function defaultContextGrantAnswers(): ContextGrantAnswers {
   return { grants: { location: true, screenshots: false }, city: null };
@@ -191,20 +221,32 @@ export async function collectInitContextGrants(
 ): Promise<ContextGrantAnswers> {
   const confirm = deps.confirm;
   const text = deps.text;
+  const collected: Partial<Record<InitQuestionId, InitAnswerScalar>> = {};
+  let locationGranted = true;
+  let cityValue: string | null = null;
 
-  const shareLocation = await confirm(LOCATION_QUESTION);
-  if (shareLocation === null) {
-    return defaultContextGrantAnswers();
-  }
-  if (!shareLocation) {
-    return { grants: { location: false, screenshots: false }, city: null };
+  for (const question of INIT_QUESTIONS) {
+    if (question.section !== 'context' || !evaluateWhen(question, collected)) continue;
+    const message = resolveQuestionMessage(question, collected);
+
+    if (question.id === 'context_location') {
+      const shareLocation = await confirm(message);
+      if (shareLocation === null) {
+        return defaultContextGrantAnswers();
+      }
+      collected.context_location = shareLocation;
+      locationGranted = shareLocation;
+    } else if (question.id === 'context_city') {
+      const city = await text(message);
+      const trimmed = city === null ? '' : city.trim();
+      cityValue = trimmed.length > 0 ? trimmed : null;
+      collected.context_city = cityValue;
+    }
   }
 
-  const city = await text(CITY_QUESTION);
-  const trimmed = city === null ? '' : city.trim();
   return {
-    grants: { location: true, screenshots: false },
-    city: trimmed.length > 0 ? trimmed : null,
+    grants: { location: locationGranted, screenshots: false },
+    city: locationGranted ? cityValue : null,
   };
 }
 
