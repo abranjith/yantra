@@ -73,6 +73,18 @@ describe('@no-llm secret command', () => {
     expect(f.stdout.read()).not.toContain('hidden');
   });
 
+  it('projects only key and source in JSON list rows', async () => {
+    const f = fixture();
+    f.values.set('json-test-key', 'CANARY-value');
+    await makeSecretCommand(f.runtime).parseAsync(['list', '--json'], { from: 'user' });
+    expect(JSON.parse(f.stdout.read())).toMatchObject({
+      kind: 'secret.list',
+      rows: expect.arrayContaining([{ key: 'json-test-key', source: 'keychain' }]),
+    });
+    expect(f.stdout.read()).not.toContain('referenced_by');
+    expect(f.stdout.read()).not.toContain('CANARY-value');
+  });
+
   it('lists an environment-backed config reference without its value', async () => {
     const root = await mkdtemp(join(tmpdir(), 'yantra-secret-list-'));
     const savedHome = process.env.YANTRA_HOME;

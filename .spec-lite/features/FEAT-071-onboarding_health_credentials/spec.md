@@ -82,7 +82,7 @@ Plan references: §1, D2, D5, D13, D15, D16, §6 (execution classes: `init` adap
     shows the referencing entries and requires explicit confirmation.
   - The CLI's behavior and output are unchanged.
 
-> **DEVIATION-1 (awaiting confirmation): Onboarding does not let the user pick the storage
+> **DEVIATION-1 (approved): Onboarding does not let the user pick the storage
 > location while the app is running.**
 >
 > **What the plan says.** plan_ui §12 lists "storage" among the onboarding answers.
@@ -912,7 +912,7 @@ read-only `possible-orphans.ts` over FEAT-064's record format. It never adds cle
 
 ## 8. State Tracking
 
-- [ ] TASK-001: Shared core credential service; `yantra secret` delegates to it with unchanged output
+- [x] TASK-001: Shared core credential service; `yantra secret` delegates to it with unchanged output
 - [ ] TASK-002: Credentials surface: write-only set, names-only list, guarded remove, all in-process
 - [ ] TASK-003: One `init` question catalog in protocol, driving the terminal wizard unchanged
 - [ ] TASK-004: Browser answer collector and in-process `onboarding.submit`, file-equivalent to terminal `init`
