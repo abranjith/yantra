@@ -12,7 +12,7 @@ export const PRIMITIVE_FAMILIES = {
   Disclosure: ['Disclosure', 'DisclosureTrigger', 'DisclosurePanel'],
   Toast: ['ToastProvider'],
   Table: ['Table'],
-  TextField: ['TextField'],
+  TextField: ['TextField', 'SecretField'],
   NumberField: ['NumberField'],
   Checkbox: ['Checkbox'],
   Switch: ['Switch'],

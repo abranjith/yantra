@@ -1239,6 +1239,16 @@ Example:
 }
 ```
 
+## ConfigRefDisplay
+
+A configuration reference without any secret value.
+
+Example:
+
+```json
+"<value>"
+```
+
 ## ConfigValidateResult
 
 The `yantra config validate --json` document.
@@ -1427,6 +1437,76 @@ Example:
 
 ```json
 "<value>"
+```
+
+## CredentialListResult
+
+Keychain availability and credential rows (names and references only).
+
+| Field     | Description |
+| --------- | ----------- |
+| available |             |
+| remedy    |             |
+| rows      |             |
+
+Example:
+
+```json
+{
+  "available": "<available>",
+  "remedy": "<remedy>",
+  "rows": "<rows>"
+}
+```
+
+## CredentialReference
+
+A model or search configuration entry referencing this credential.
+
+| Field | Description                                         |
+| ----- | --------------------------------------------------- |
+| kind  |                                                     |
+| id    |                                                     |
+| ref   | A configuration reference without any secret value. |
+
+Example:
+
+```json
+{
+  "kind": "<kind>",
+  "id": "<id>",
+  "ref": "<ref>"
+}
+```
+
+## CredentialRow
+
+A credential entry with its source and configuration references.
+
+| Field         | Description                                   |
+| ------------- | --------------------------------------------- |
+| key           |                                               |
+| source        | Where the credential currently resolves from. |
+| referenced_by |                                               |
+
+Example:
+
+```json
+{
+  "key": "<key>",
+  "source": "<source>",
+  "referenced_by": "<referenced_by>"
+}
+```
+
+## CredentialSource
+
+Where the credential currently resolves from.
+
+Example:
+
+```json
+"keychain"
 ```
 
 ## DaemonStatusResult
@@ -4902,6 +4982,76 @@ Example:
   "kind": "<kind>",
   "key": "<key>",
   "hosts": "<hosts>"
+}
+```
+
+## SecretRemoveRequest
+
+Remove a credential from the OS keychain.
+
+| Field | Description            |
+| ----- | ---------------------- |
+| key   | Keychain account name. |
+
+Example:
+
+```json
+{
+  "key": "<key>"
+}
+```
+
+## SecretRemoveResponse
+
+Whether the credential was removed or already absent.
+
+| Field  | Description |
+| ------ | ----------- |
+| status |             |
+| key    |             |
+
+Example:
+
+```json
+{
+  "status": "<status>",
+  "key": "<key>"
+}
+```
+
+## SecretSetRequest
+
+Store or replace a credential in the OS keychain.
+
+| Field | Description            |
+| ----- | ---------------------- |
+| key   | Keychain account name. |
+| value | secret                 |
+
+Example:
+
+```json
+{
+  "key": "<key>",
+  "value": "<value>"
+}
+```
+
+## SecretSetResponse
+
+Confirmation that the credential was stored.
+
+| Field  | Description |
+| ------ | ----------- |
+| status |             |
+| key    |             |
+
+Example:
+
+```json
+{
+  "status": "<status>",
+  "key": "<key>"
 }
 ```
 

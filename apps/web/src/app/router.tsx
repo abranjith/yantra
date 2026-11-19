@@ -2,7 +2,6 @@ import { createRouter, type RouterHistory } from '@tanstack/react-router';
 
 import {
   browserRoute,
-  credentialsRoute,
   daemonRoute,
   dataRoute,
   healthRoute,
@@ -24,6 +23,7 @@ import { missionRunRoute } from '../routes/mission.runs.$runId.js';
 import { artifactRoute } from '../routes/runs.$runId.artifacts.$.js';
 import { auditRoute } from '../routes/runs.$runId.audit.js';
 import { runRoute } from '../routes/runs.$runId.js';
+import { credentialsRoute } from '../routes/settings.credentials.js';
 
 import { rootRoute } from './root-route.js';
 

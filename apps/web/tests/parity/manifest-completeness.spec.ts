@@ -43,12 +43,12 @@ describe('@no-llm parity manifest completeness', () => {
       ),
     ).toContain('unmapped event: fake');
   });
-  it('reserves only the five FEAT-071 paths', () => {
+  it('reserves only the remaining FEAT-071 paths', () => {
     expect(
       Object.entries(PARITY_MANIFEST.commands)
         .filter(([, target]) => target.kind === 'reserved')
         .map(([path]) => path)
         .sort(),
-    ).toEqual(['doctor', 'init', 'secret list', 'secret rm', 'secret set']);
+    ).toEqual(['doctor', 'init']);
   });
 });

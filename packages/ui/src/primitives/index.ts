@@ -24,6 +24,8 @@ export { ToastProvider } from './Toast.js';
 export { Table } from './Table.js';
 export { TextField } from './TextField.js';
 export type { TextFieldProps } from './TextField.js';
+export { SecretField } from './SecretField.js';
+export type { SecretFieldHandle, SecretFieldProps } from './SecretField.js';
 export { NumberField } from './NumberField.js';
 export type { NumberFieldProps } from './NumberField.js';
 export { Checkbox } from './Checkbox.js';

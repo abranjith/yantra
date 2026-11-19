@@ -39,6 +39,7 @@ import { ArtifactUrls, registerArtifactUrls } from './artifact-urls.js';
 import { Attendance } from './attendance.js';
 import { ChangeFeed, openDefaultSources, registerChangeFeed } from './change-feed.js';
 import { ControlSocketServer } from './control-socket.js';
+import { registerCredentials } from './credentials.js';
 import {
   driftReview,
   registerDriftReview,
@@ -232,6 +233,7 @@ export async function startHostRuntime(deps: HostRuntimeDeps): Promise<RunningHo
     });
     attendance.register(methods);
     registerInbox(methods);
+    registerCredentials(methods, { env: { ...(deps.env ?? {}) }, logger });
     attendance.start();
     const attendanceRef = attendance;
     cleanups.push(() => {

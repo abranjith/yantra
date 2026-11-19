@@ -8,16 +8,112 @@
       "task": "TASK-001"
     },
     {
+      "path": "apps/cli/src/ui/host/credentials.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/cli/src/ui/host/host-runtime.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/cli/src/ui/host/rpc-server.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
       "path": "apps/cli/tests/commands/secret.spec.ts",
       "status": "M",
       "role": "implement",
       "task": "TASK-001"
     },
     {
+      "path": "apps/cli/tests/ui/host/credentials.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/app/router.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/parity/manifest.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/routes/generated.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/routes/settings.credentials.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/surfaces/settings/credentials/credentials-route.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/surfaces/settings/credentials/remove-credential-dialog.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/surfaces/settings/credentials/set-credential-dialog.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/tests/parity/manifest-completeness.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/tests/surfaces/credentials/credentials.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
       "path": "docs/features/configuration.md",
       "status": "M",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "docs/features/safety-and-privacy.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "docs/features/yantra-app.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "docs/protocol-spec.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
     },
     {
       "path": "packages/core/src/index.ts",
@@ -27,7 +123,7 @@
     },
     {
       "path": "packages/core/src/secrets/credential-service.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
     },
@@ -39,9 +135,57 @@
     },
     {
       "path": "packages/core/tests/secrets/credential-service.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-001"
+    },
+    {
+      "path": "packages/protocol/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/src/schemas/credentials.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/tests/credentials.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/src/gallery/entries.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/src/primitives/families.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/src/primitives/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/src/primitives/SecretField.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/tests/primitives/secret-field.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-002"
     }
   ],
   "excluded": [

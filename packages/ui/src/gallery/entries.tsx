@@ -26,6 +26,7 @@ import {
 } from '../primitives/Menu.js';
 import { NumberField } from '../primitives/NumberField.js';
 import { Popover, PopoverDialog, PopoverTrigger } from '../primitives/Popover.js';
+import { SecretField } from '../primitives/SecretField.js';
 import { Select, type ListOption } from '../primitives/Select.js';
 import { Switch } from '../primitives/Switch.js';
 import { Table, type TableColumn } from '../primitives/Table.js';
@@ -461,6 +462,7 @@ function TextFieldSheet(): ReactNode {
         errorMessage="Use letters, digits and dashes only."
       />
       <TextField label="Run ID" isDisabled voice="engine" defaultValue="run-00042" />
+      <SecretField label="API key" placeholder="sk-…" />
       <TextField
         label="Notes"
         multiline

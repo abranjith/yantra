@@ -29,4 +29,3 @@ export const usageRoute = route('usage', '/usage');
 export const daemonRoute = route('daemon', '/daemon');
 export const onboardingRoute = route('onboarding', '/onboarding');
 export const healthRoute = route('health', '/health');
-export const credentialsRoute = route('credentials', '/settings/credentials');

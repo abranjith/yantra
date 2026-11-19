@@ -913,7 +913,7 @@ read-only `possible-orphans.ts` over FEAT-064's record format. It never adds cle
 ## 8. State Tracking
 
 - [x] TASK-001: Shared core credential service; `yantra secret` delegates to it with unchanged output
-- [ ] TASK-002: Credentials surface: write-only set, names-only list, guarded remove, all in-process
+- [x] TASK-002: Credentials surface: write-only set, names-only list, guarded remove, all in-process
 - [ ] TASK-003: One `init` question catalog in protocol, driving the terminal wizard unchanged
 - [ ] TASK-004: Browser answer collector and in-process `onboarding.submit`, file-equivalent to terminal `init`
 - [ ] TASK-005: Onboarding flow in the app: first-run entry, explicit questions, skip, Not now, reset

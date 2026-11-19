@@ -71,8 +71,7 @@ function commandTarget(path: string): ParityTarget {
     };
   if (path === 'init') return { kind: 'reserved', feature: 'FEAT-071', surface: 'onboarding' };
   if (path === 'doctor') return { kind: 'reserved', feature: 'FEAT-071', surface: 'health' };
-  if (path.startsWith('secret '))
-    return { kind: 'reserved', feature: 'FEAT-071', surface: 'credentials' };
+  if (path.startsWith('secret ')) return { kind: 'surface', surface: 'credentials' };
   throw new Error(`No parity target for ${path}`);
 }
 
