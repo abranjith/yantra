@@ -20,6 +20,12 @@
       "task": "TASK-002"
     },
     {
+      "path": "apps/cli/src/ui/host/onboarding.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "apps/cli/src/ui/host/rpc-server.ts",
       "status": "M",
       "role": "implement",
@@ -42,6 +48,18 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/init-equivalence.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/onboarding.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-004"
     },
     {
       "path": "apps/web/src/app/router.tsx",
@@ -152,6 +170,12 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/core/tests/setup/init-service.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
       "path": "packages/protocol/src/index.ts",
       "status": "M",
       "role": "implement",
@@ -165,7 +189,7 @@
     },
     {
       "path": "packages/protocol/src/schemas/init-questions.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },
@@ -177,7 +201,7 @@
     },
     {
       "path": "packages/protocol/tests/init-questions.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-003"
     },

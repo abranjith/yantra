@@ -72,10 +72,19 @@ export class RpcError extends Error {
   public readonly code: number;
   public readonly data: AppRpcErrorData;
 
-  public constructor(name: AppRpcErrorName, message: string, remediation?: string) {
+  public constructor(
+    name: AppRpcErrorName,
+    message: string,
+    remediation?: string,
+    dataCode?: string,
+  ) {
     super(message);
     this.code = AppRpcErrorCode[name];
-    this.data = { code: name, message, ...(remediation === undefined ? {} : { remediation }) };
+    this.data = {
+      code: dataCode ?? name,
+      message,
+      ...(remediation === undefined ? {} : { remediation }),
+    };
   }
 }
 

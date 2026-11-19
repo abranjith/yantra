@@ -55,6 +55,7 @@ import { registerInbox } from './inbox-rpc.js';
 import { hostActiveRuns } from './ledger-reads.js';
 import { LiveViewRelay } from './live-view-relay.js';
 import { registerMissionReads } from './mission-reads.js';
+import { registerOnboarding } from './onboarding.js';
 import { registerReads } from './reads.js';
 import { recoverHost } from './recovery.js';
 import { RpcMethodRegistry, RpcServer } from './rpc-server.js';
@@ -234,6 +235,7 @@ export async function startHostRuntime(deps: HostRuntimeDeps): Promise<RunningHo
     attendance.register(methods);
     registerInbox(methods);
     registerCredentials(methods, { env: { ...(deps.env ?? {}) }, logger });
+    registerOnboarding(methods, { logger });
     attendance.start();
     const attendanceRef = attendance;
     cleanups.push(() => {

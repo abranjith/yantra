@@ -487,6 +487,35 @@ secret value never enters `command.invoke` or any worker's `argv`.
   `credential_changed` (`{op, key}`), and native keychain errors are replaced
   with `KeychainUnavailableError`.
 
+### Initializes configuration and profile in the host (onboarding RPC)
+
+The app host exposes `read.onboarding_status` and `onboarding.submit` to run
+the shared `init` service in-process using `createPreAnsweredCollector` over
+the `@yantra/protocol` question catalog, producing the same `config.yaml`,
+`profile.yaml`, and keychain entries as terminal `yantra init`:
+
+- **Status read (`read.onboarding_status`).** Reports `config_exists`,
+  `profile_exists`, resolved `config_path` and `profile_path`, effective and
+  configured `data_dir` with its source, and `keychain_available`.
+- **Pre-validated submission (`onboarding.submit`).** Validates every
+  applicable question in `INIT_QUESTIONS` before any keychain or filesystem
+  side effect (`missing_answer`, `invalid_answer`), enforces `invocation_id`
+  idempotency across both sequential and concurrent requests, refuses
+  re-initialization without `reset: true` (`already_initialized`), and maps
+  config lock contention to `busy`.
+- **Storage location cannot be changed while the host is running.** If the
+  submitted `data_dir` differs from the configured `paths.data_dir` (`null` on
+  a first run), `onboarding.submit` refuses with `relocation_requires_terminal`
+  and the terminal steps (`Close every Yantra window`,
+  `Run yantra init --reset or yantra config data-dir <path>`, `Run yantra ui`).
+- **Keychain and redaction.** Model keychain writes require an available
+  keychain (`keychain_unavailable` with platform remedy when absent), while an
+  unavailable keychain on the optional search-key step returns
+  `search_key: "manual"` with the `yantra secret set` command. Secret values
+  are accepted only in `secrets` (never `answers`), `onboarding.submit` params
+  are redacted in `host.log`, and neither free-text answers (such as `city`)
+  nor secret values are echoed in responses, errors, or logs.
+
 ### Queues runs, two at a time
 
 - **Runs** (`ask`, `research`, `do`, `run`, `resume` and other run commands)

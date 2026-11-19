@@ -8,6 +8,7 @@ import {
   resolveQuestionInitial,
   resolveQuestionMessage,
   type InitAnswerScalar,
+  type InitQuestion,
   type InitQuestionId,
 } from '@yantra/protocol';
 import { stringify } from 'yaml';
@@ -20,6 +21,8 @@ import { writeConfigDocument } from '../config/write.js';
 import { ResourceBusyError, type ResourceLockOptions } from '../locks/resource-lock.js';
 import type { AmbientGrants } from '../profile/ambient-context.js';
 import { defaultProfile, profilePath, mutateProfile } from '../profile/profile-file.js';
+import { CREDENTIAL_MAX_BYTES } from '../secrets/credential-service.js';
+import { KeychainUnavailableError } from '../secrets/errors.js';
 import {
   createKeychainProvider,
   YANTRA_KEYCHAIN_SERVICE,
@@ -100,8 +103,9 @@ export async function collectInitProviderAnswers(deps: InitProviderInput): Promi
         if (value) {
           const store = await keychain();
           if (!(await store.isAvailable()))
-            throw new Error(
+            throw new KeychainUnavailableError(
               'OS keychain is unavailable; choose an environment-variable reference instead',
+              { operation: 'set' },
             );
           await store.set(YANTRA_KEYCHAIN_SERVICE, key, value);
           const parsed = parseConfigRef(`\${secret:${key}}`);
@@ -326,11 +330,16 @@ export interface InitServiceDependencies {
   readonly profilePath?: string;
   readonly now?: () => number;
   readonly lockOptions?: ResourceLockOptions;
+  readonly writeConfig?: typeof writeConfigDocument;
 }
 export type InitResult =
   | { readonly status: 'already-initialized'; readonly configPath: string }
   | { readonly status: 'invalid-provider'; readonly provider: string }
-  | { readonly status: 'failed'; readonly message: string }
+  | {
+      readonly status: 'failed';
+      readonly message: string;
+      readonly code?: 'keychain_unavailable';
+    }
   | {
       readonly status: 'written';
       readonly configPath: string;
@@ -340,6 +349,178 @@ export type InitResult =
       readonly searchKey: SearchKeyOutcome;
       readonly grants: ContextGrantAnswers;
     };
+
+/** Thrown by {@link createPreAnsweredCollector} when an applicable question has no answer. */
+export class InitMissingAnswerError extends Error {
+  public override readonly name = 'InitMissingAnswerError';
+  public constructor(public readonly questionId: InitQuestionId) {
+    super(`Missing answer for required init question "${questionId}".`);
+  }
+}
+
+/** Thrown by {@link createPreAnsweredCollector} when an answer violates question constraints. */
+export class InitInvalidAnswerError extends Error {
+  public override readonly name = 'InitInvalidAnswerError';
+  public constructor(
+    public readonly questionId: InitQuestionId,
+    public readonly reason: string,
+  ) {
+    super(`Invalid answer for init question "${questionId}": ${reason}`);
+  }
+}
+
+export interface PreAnsweredSecrets {
+  readonly credential_secret?: string | undefined;
+  readonly search_key_secret?: string | undefined;
+}
+
+export interface PreAnsweredCollectorDeps {
+  readonly keychain?: () => Promise<KeychainProvider>;
+}
+
+function validatePreAnsweredAnswers(
+  answers: Readonly<Record<string, InitAnswerScalar | undefined>>,
+  secrets: PreAnsweredSecrets,
+): Partial<Record<InitQuestionId, InitAnswerScalar>> {
+  const collected: Partial<Record<InitQuestionId, InitAnswerScalar>> = {};
+  for (const question of INIT_QUESTIONS) {
+    if (!evaluateWhen(question, collected)) continue;
+
+    if (question.kind === 'secret') {
+      const secretVal = secrets[question.id as keyof PreAnsweredSecrets];
+      if (secretVal !== undefined) {
+        if (typeof secretVal !== 'string' || secretVal.length === 0) {
+          throw new InitInvalidAnswerError(question.id, 'Secret value must be a non-empty string.');
+        }
+        if (new TextEncoder().encode(secretVal).length > CREDENTIAL_MAX_BYTES) {
+          throw new InitInvalidAnswerError(question.id, 'Secret value must not exceed 8 KiB.');
+        }
+      }
+      continue;
+    }
+
+    if (!(question.id in answers) || answers[question.id] === undefined) {
+      throw new InitMissingAnswerError(question.id);
+    }
+
+    const raw = answers[question.id]!;
+    switch (question.kind) {
+      case 'select': {
+        if (typeof raw !== 'string' || !question.choices?.includes(raw)) {
+          throw new InitInvalidAnswerError(
+            question.id,
+            `Expected one of: ${(question.choices ?? []).join(', ')}.`,
+          );
+        }
+        collected[question.id] = raw;
+        break;
+      }
+      case 'confirm': {
+        if (typeof raw !== 'boolean') {
+          throw new InitInvalidAnswerError(question.id, 'Expected a boolean.');
+        }
+        collected[question.id] = raw;
+        break;
+      }
+      case 'text': {
+        if (raw === null) {
+          if (!question.optional) {
+            throw new InitInvalidAnswerError(question.id, 'Expected a non-empty string.');
+          }
+          collected[question.id] = null;
+          break;
+        }
+        if (typeof raw !== 'string') {
+          throw new InitInvalidAnswerError(question.id, 'Expected a string.');
+        }
+        const trimmed = raw.trim();
+        if (!question.optional && trimmed.length === 0) {
+          throw new InitInvalidAnswerError(question.id, 'Expected a non-empty string.');
+        }
+        if (question.id === 'credential_env_name') {
+          const parsed = parseConfigRef(`\${env:${trimmed}}`);
+          if (!parsed.isOk) {
+            throw new InitInvalidAnswerError(question.id, parsed.error);
+          }
+        }
+        if (question.id === 'data_dir' && trimmed.length > 0) {
+          if (!(isAbsolute(trimmed) || win32.isAbsolute(trimmed))) {
+            throw new InitInvalidAnswerError(question.id, 'the data directory must be absolute');
+          }
+        }
+        collected[question.id] = trimmed.length > 0 ? trimmed : null;
+        break;
+      }
+    }
+  }
+  return collected;
+}
+
+/**
+ * Builds an {@link InitAnswerCollector} backed by pre-collected answers and secrets.
+ * Validates every applicable question before any keychain or filesystem side effect.
+ */
+export function createPreAnsweredCollector(
+  answers: Readonly<Record<string, InitAnswerScalar | undefined>>,
+  secrets: PreAnsweredSecrets = {},
+  deps: PreAnsweredCollectorDeps = {},
+): InitAnswerCollector {
+  function nextFrom(
+    queue: InitQuestion[],
+    expectedKind: 'select' | 'text' | 'secret' | 'confirm',
+  ): InitQuestion {
+    const question = queue.shift();
+    if (question?.kind !== expectedKind) {
+      throw new Error(`Pre-answered collector out of sync for ${expectedKind}.`);
+    }
+    return question;
+  }
+
+  return {
+    providerAnswers: async () => {
+      const validated = validatePreAnsweredAnswers(answers, secrets);
+      const queue = INIT_QUESTIONS.filter(
+        (q) => q.section !== 'context' && evaluateWhen(q, validated),
+      );
+      return collectInitProviderAnswers({
+        select: () => {
+          const q = nextFrom(queue, 'select');
+          const value = validated[q.id];
+          return Promise.resolve(typeof value === 'string' ? value : null);
+        },
+        text: () => {
+          const q = nextFrom(queue, 'text');
+          const value = validated[q.id];
+          return Promise.resolve(typeof value === 'string' ? value : null);
+        },
+        password: () => {
+          const q = nextFrom(queue, 'secret');
+          const value = secrets[q.id as keyof PreAnsweredSecrets];
+          return Promise.resolve(typeof value === 'string' ? value : null);
+        },
+        ...(deps.keychain ? { keychain: deps.keychain } : {}),
+      });
+    },
+    contextGrants: async () => {
+      const validated = validatePreAnsweredAnswers(answers, secrets);
+      const queue = INIT_QUESTIONS.filter(
+        (q) => q.section === 'context' && evaluateWhen(q, validated),
+      );
+      return collectInitContextGrants({
+        confirm: () => {
+          const q = nextFrom(queue, 'confirm');
+          const value = validated[q.id];
+          return Promise.resolve(typeof value === 'boolean' ? value : null);
+        },
+        text: () => {
+          const q = nextFrom(queue, 'text');
+          const value = validated[q.id];
+          return Promise.resolve(typeof value === 'string' ? value : null);
+        },
+      });
+    },
+  };
+}
 
 /** Initialize through the same locked configuration/profile writers as normal mutations. */
 export async function runInit(
@@ -365,7 +546,8 @@ export async function runInit(
       throw new Error('the data directory must be absolute');
     if (answers.dataDir) await mkdir(answers.dataDir, { recursive: true, mode: 0o700 });
     let alreadyInitialized = false;
-    await writeConfigDocument(stringify(serializable(buildConfig(answers))), target, {
+    const writeConfig = deps.writeConfig ?? writeConfigDocument;
+    await writeConfig(stringify(serializable(buildConfig(answers))), target, {
       ...deps.lockOptions,
       beforeWrite: async () => {
         if (await fileExists(target)) {
@@ -415,7 +597,16 @@ export async function runInit(
       grants,
     };
   } catch (error) {
-    if (error instanceof ResourceBusyError) throw error;
+    if (
+      error instanceof ResourceBusyError ||
+      error instanceof InitMissingAnswerError ||
+      error instanceof InitInvalidAnswerError
+    ) {
+      throw error;
+    }
+    if (error instanceof KeychainUnavailableError) {
+      return { status: 'failed', message: error.message, code: 'keychain_unavailable' };
+    }
     return { status: 'failed', message: error instanceof Error ? error.message : String(error) };
   }
 }

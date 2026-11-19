@@ -145,9 +145,11 @@ describe('@no-llm CredentialsSurface', () => {
 
     expect(await screen.findByText('OS keychain unavailable')).toBeDefined();
     expect(screen.getByText(/unlock the login keychain/u)).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Set credential' }).disabled).toBe(true);
-    expect(screen.getByRole('button', { name: 'Replace' }).disabled).toBe(true);
-    expect(screen.getByRole('button', { name: 'Remove' }).disabled).toBe(true);
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Set credential' }).disabled).toBe(
+      true,
+    );
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Replace' }).disabled).toBe(true);
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Remove' }).disabled).toBe(true);
   });
 
   it('keeps submitted canary out of DOM, query/mutation cache, sessionStorage, and localStorage', async () => {
