@@ -73,6 +73,13 @@ The app's **Health** screen (`/health`) displays the same offline checks as `yan
   - `keychain.reachable`, `datadir.writable`, `datadir.permissions`, `cachedir.writable`, and `indexdb.writable` are OS-level conditions with no engineered in-app fix.
   - `paths.resolved`, `ethics.robots`, `agent.model`, and `browser.selection` are informational.
 
+**Provider smoke test from the app.** Health includes a **Provider smoke test** panel (`apps/web/src/surfaces/health/agent-smoke-panel.tsx`) that invokes `doctor --agent-smoke` as a run-class worker via `command.invoke`:
+
+- Model-selection options (`--provider`, `--model`, `--thinking`, `--auth-secret`) are rendered from the command registry with their host-resolved effective values and sources (`read.effective_options`).
+- While running, the panel follows the invocation and run stream (`queued`, `starting`, `running`, `disconnected`, `worker not responding`) and supports graceful **Stop** via `command.cancel`.
+- On completion, it renders the `doctor_smoke` outcome (`passed`, `failed`, or `aborted`), provider and model, turns and usage, `statusToolInvoked`, and a link to `/runs/<runId>`. Startup or credential errors (such as `AGENT_AUTH_UNAVAILABLE`) show the error code, remediation, and `environment` for exit `3`.
+- When no provider is configured or `LLM_PROVIDER=none` is set in the host environment, **Run smoke test** is disabled with the CLI reason text and a link to **Settings → Models**.
+
 ### Run discovery and inspection
 
 `yantra list` defaults to recent runs. It merges the rebuildable SQLite history index with readable filesystem run manifests, de-duplicates by run ID, sorts newest first, and can filter by workflow name or status. A run that recorded an outcome word shows it beside its status, such as `failed partial`, and carries it as `taskOutcome` in `--json` items. If the index is unavailable, it warns on stderr and continues with the filesystem scan. `yantra list workflows` lists saved workflows instead.

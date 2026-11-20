@@ -7,6 +7,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 
 import { useRpc } from '../../host/app-rpc.js';
 
+import { AgentSmokePanel } from './agent-smoke-panel.js';
 import {
   REMEDIATION_ROUTE_PATHS,
   resolveRemediations,
@@ -298,6 +299,8 @@ export function HealthSurface(): ReactNode {
               </dl>
             </section>
           ) : null}
+
+          <AgentSmokePanel />
 
           <div className="flex flex-col gap-3" data-testid="health-checks">
             {data.checks.map((check) => {

@@ -50,6 +50,12 @@
       "task": "TASK-002"
     },
     {
+      "path": "apps/cli/tests/characterization/agentic-parity.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "apps/cli/tests/commands/doctor-check-ids.spec.ts",
       "status": "A",
       "role": "implement",
@@ -146,6 +152,12 @@
       "task": "TASK-005"
     },
     {
+      "path": "apps/web/src/surfaces/health/agent-smoke-panel.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "apps/web/src/surfaces/health/health-route.tsx",
       "status": "A",
       "role": "implement",
@@ -153,7 +165,7 @@
     },
     {
       "path": "apps/web/src/surfaces/health/remediations.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
@@ -230,6 +242,12 @@
       "task": "TASK-002"
     },
     {
+      "path": "apps/web/tests/surfaces/health/agent-smoke-panel.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
       "path": "apps/web/tests/surfaces/health/health-route.spec.tsx",
       "status": "A",
       "role": "implement",
@@ -237,7 +255,7 @@
     },
     {
       "path": "apps/web/tests/surfaces/health/remediations.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-007"
     },
