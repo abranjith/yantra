@@ -21,7 +21,7 @@
     },
     {
       "path": "apps/cli/src/ui/host/onboarding.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
@@ -51,13 +51,13 @@
     },
     {
       "path": "apps/cli/tests/ui/host/init-equivalence.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
     {
       "path": "apps/cli/tests/ui/host/onboarding.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-004"
     },
@@ -80,10 +80,70 @@
       "task": "TASK-002"
     },
     {
+      "path": "apps/web/src/routes/mission.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/routes/onboarding.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
       "path": "apps/web/src/routes/settings.credentials.tsx",
       "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/surfaces/GeneratedSurface.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/surfaces/onboarding/evaluate-when.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/surfaces/onboarding/installation-reset-dialog.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/surfaces/onboarding/onboarding-result.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/surfaces/onboarding/onboarding-route.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/surfaces/onboarding/question-step.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/surfaces/onboarding/session-dismissal.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/surfaces/onboarding/setup-banner.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "apps/web/src/surfaces/settings/credentials/credentials-route.tsx",
@@ -116,6 +176,12 @@
       "task": "TASK-002"
     },
     {
+      "path": "apps/web/tests/surfaces/onboarding/onboarding.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
       "path": "docs/features/configuration.md",
       "status": "M",
       "role": "implement",
@@ -138,6 +204,18 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "docs/usage.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "eslint.config.js",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "packages/core/src/index.ts",
@@ -174,6 +252,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/package.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "packages/protocol/src/index.ts",
@@ -224,10 +308,28 @@
       "task": "TASK-002"
     },
     {
+      "path": "packages/ui/src/primitives/RadioGroup.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
       "path": "packages/ui/src/primitives/SecretField.tsx",
       "status": "A",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/tests/gallery/completeness.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/ui/tests/primitives/radio-group.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
     },
     {
       "path": "packages/ui/tests/primitives/secret-field.spec.tsx",

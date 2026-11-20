@@ -916,7 +916,7 @@ read-only `possible-orphans.ts` over FEAT-064's record format. It never adds cle
 - [x] TASK-002: Credentials surface: write-only set, names-only list, guarded remove, all in-process
 - [x] TASK-003: One `init` question catalog in protocol, driving the terminal wizard unchanged
 - [x] TASK-004: Browser answer collector and in-process `onboarding.submit`, file-equivalent to terminal `init`
-- [ ] TASK-005: Onboarding flow in the app: first-run entry, explicit questions, skip, Not now, reset
+- [x] TASK-005: Onboarding flow in the app: first-run entry, explicit questions, skip, Not now, reset
 - [ ] TASK-006: Health renders every `doctor` check from an in-process read
 - [ ] TASK-007: Engineered remediation catalog and actions on Health
 - [ ] TASK-008: Agent smoke check from Health as a run-class worker

@@ -8,6 +8,7 @@ import { GeneratedForm } from '../generated/GeneratedForm.js';
 import { GeneratedTable } from '../generated/GeneratedTable.js';
 
 import { schemaFor, type SurfaceDefinition } from './definitions.js';
+import { InstallationResetTrigger } from './onboarding/installation-reset-dialog.js';
 
 export function GeneratedSurface({
   definition,
@@ -39,6 +40,7 @@ export function GeneratedSurface({
             </DialogTrigger>
           );
         })}
+        {definition.id === 'installation' ? <InstallationResetTrigger /> : null}
       </div>
       {definition.id === 'installation' ? <ConfigEditAdapter cwd={cwd} /> : null}
       {definition.id === 'daemon' ? <DaemonAdapter cwd={cwd} /> : null}

@@ -26,6 +26,7 @@ import {
 } from '../primitives/Menu.js';
 import { NumberField } from '../primitives/NumberField.js';
 import { Popover, PopoverDialog, PopoverTrigger } from '../primitives/Popover.js';
+import { Radio, RadioGroup } from '../primitives/RadioGroup.js';
 import { SecretField } from '../primitives/SecretField.js';
 import { Select, type ListOption } from '../primitives/Select.js';
 import { Switch } from '../primitives/Switch.js';
@@ -496,6 +497,18 @@ function NumberFieldSheet(): ReactNode {
   );
 }
 
+function RadioGroupSheet(): ReactNode {
+  return (
+    <RadioGroup label="Credential source" description="Pick one option explicitly.">
+      <Radio value="environment variable">environment variable</Radio>
+      <Radio value="keychain">keychain</Radio>
+      <Radio value="skip" isDisabled description="Disabled when unavailable">
+        skip
+      </Radio>
+    </RadioGroup>
+  );
+}
+
 function CheckboxSheet(): ReactNode {
   return (
     <div className="flex flex-col gap-3">
@@ -824,6 +837,13 @@ export const GALLERY_ENTRIES: readonly GalleryEntry[] = [
     title: 'Checkbox',
     primitive: 'Checkbox',
     render: () => <CheckboxSheet />,
+    interactive: true,
+  },
+  {
+    id: 'radio-group',
+    title: 'RadioGroup',
+    primitive: 'RadioGroup',
+    render: () => <RadioGroupSheet />,
     interactive: true,
   },
   {

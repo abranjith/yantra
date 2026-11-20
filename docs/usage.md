@@ -62,6 +62,12 @@ yantra config path
 
 Use `--reset` only when that replacement is intended.
 
+In the Yantra app (`yantra ui`), `/onboarding` presents the same question
+catalog across Model, Search, Storage (read-only), Context, and Review steps
+when `config.yaml` is absent, or via **Run setup again** on **Settings →
+Installation** (`/onboarding?reset=1`). Choosing **Not now** writes nothing and
+shows a setup banner on Mission until setup is completed.
+
 ## Install a managed browser
 
 Browser tasks can use a compatible external Chrome or Chromium discovered on

@@ -23,6 +23,10 @@
     "./parity": {
       "types": "./dist/parity.d.ts",
       "import": "./dist/parity.js"
+    },
+    "./init-questions": {
+      "types": "./dist/schemas/init-questions.d.ts",
+      "import": "./dist/schemas/init-questions.js"
     }
   },
   "files": [

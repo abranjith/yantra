@@ -7,7 +7,6 @@ import {
   healthRoute,
   installationRoute,
   modelsRoute,
-  onboardingRoute,
   preferencesRoute,
   schedulesRoute,
   sitesRoute,
@@ -20,6 +19,7 @@ import { ledgerRoute } from '../routes/ledger.js';
 import { missionInvocationRoute } from '../routes/mission.invocations.$invocationId.js';
 import { homeRoute, missionRoute } from '../routes/mission.js';
 import { missionRunRoute } from '../routes/mission.runs.$runId.js';
+import { onboardingRoute } from '../routes/onboarding.js';
 import { artifactRoute } from '../routes/runs.$runId.artifacts.$.js';
 import { auditRoute } from '../routes/runs.$runId.audit.js';
 import { runRoute } from '../routes/runs.$runId.js';

@@ -30,6 +30,8 @@ export { NumberField } from './NumberField.js';
 export type { NumberFieldProps } from './NumberField.js';
 export { Checkbox } from './Checkbox.js';
 export type { CheckboxProps } from './Checkbox.js';
+export { Radio, RadioGroup } from './RadioGroup.js';
+export type { RadioGroupProps, RadioProps } from './RadioGroup.js';
 export { Switch } from './Switch.js';
 export { Popover, PopoverDialog, PopoverTrigger } from './Popover.js';
 export type { OptionProps, PopoverDialogProps, PopoverProps } from './Popover.js';

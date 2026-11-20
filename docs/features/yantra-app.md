@@ -516,6 +516,38 @@ the `@yantra/protocol` question catalog, producing the same `config.yaml`,
   are redacted in `host.log`, and neither free-text answers (such as `city`)
   nor secret values are echoed in responses, errors, or logs.
 
+### First-run onboarding in the app (`/onboarding`)
+
+When `read.onboarding_status.config_exists` is `false`, opening the app routes
+to `/onboarding` and walks through the shared `INIT_QUESTIONS` catalog in five
+steps:
+
+1. **Model.** Select `provider` (`anthropic`, `ollama`, or `none`), credential
+   source (`environment variable`, `keychain`, or `skip`), model ID, and
+   Ollama base URL when applicable. Choices start unselected with no
+   environment inference; if the OS keychain is unavailable, the `keychain`
+   option is disabled with an inline remedy.
+2. **Search.** Optionally choose `tavily`, `brave`, or `skip` and enter a
+   write-only secret via `SecretField`.
+3. **Storage.** Read-only display of the effective `data_dir`, its source, and
+   the terminal steps required to relocate storage while the host is stopped.
+4. **Context.** Explicit Yes/No location sharing choice and optional city.
+5. **Review.** Summarizes every answer (rendering secrets as
+   `Will be stored in the OS keychain as <provider>.api_key` with
+   `ProtectedValue`), then reads secret field refs synchronously on submit and
+   clears them immediately afterward.
+
+- **Skip and Not now.** Optional questions offer the catalog's `skip` choice,
+  and **Next** remains disabled until every applicable question has an explicit
+  answer. Clicking **Not now** writes nothing and returns to Mission, where a
+  non-modal **Yantra isn't set up yet — Set up** banner remains visible while
+  `config.yaml` is absent (dismissal is held in memory only for the current
+  session).
+- **Reset.** **Settings → Installation** provides **Run setup again**, which
+  opens a confirmation dialog explaining that existing `config.yaml` and
+  `profile.yaml` files will be backed up before navigating to
+  `/onboarding?reset=1`.
+
 ### Queues runs, two at a time
 
 - **Runs** (`ask`, `research`, `do`, `run`, `resume` and other run commands)

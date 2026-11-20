@@ -15,6 +15,7 @@ export const PRIMITIVE_FAMILIES = {
   TextField: ['TextField', 'SecretField'],
   NumberField: ['NumberField'],
   Checkbox: ['Checkbox'],
+  RadioGroup: ['RadioGroup', 'Radio'],
   Switch: ['Switch'],
   Popover: ['Popover', 'PopoverTrigger', 'PopoverDialog'],
   Select: ['Select'],

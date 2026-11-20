@@ -4,8 +4,10 @@
  * `/mission/invocations/<id>` follows the invocation until its run exists.
  */
 
+import { useQuery } from '@tanstack/react-query';
 import { createRoute, redirect, useNavigate } from '@tanstack/react-router';
-import { useState, type ReactNode } from 'react';
+import type { OnboardingStatus } from '@yantra/protocol';
+import { useEffect, useState, type ReactNode } from 'react';
 
 import { rootRoute } from '../app/root-route.js';
 import { valuesFromArgv, type ComposerPath } from '../features/composer/composer-model.js';
@@ -17,6 +19,8 @@ import {
 import { SubmitRefusedError, submitInvocation } from '../features/composer/submit.js';
 import { useRunRecovery } from '../features/recovery/RecoveryActions.js';
 import { useRpc } from '../host/app-rpc.js';
+import { isOnboardingDismissed } from '../surfaces/onboarding/session-dismissal.js';
+import { SetupBanner } from '../surfaces/onboarding/setup-banner.js';
 
 /** `?from=<run-id>&settings=current|prior`: prefill from a finished run (Run again → Edit). */
 export interface MissionSearch {
@@ -53,6 +57,17 @@ export function MissionPage({ search = {} }: { readonly search?: MissionSearch }
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
 
+  const onboardingStatus = useQuery({
+    queryKey: ['onboarding', 'status'],
+    queryFn: () => rpc.request<OnboardingStatus>('read.onboarding_status', {}),
+  });
+
+  useEffect(() => {
+    if (onboardingStatus.data?.config_exists === false && !isOnboardingDismissed()) {
+      void navigate({ to: '/onboarding', replace: true });
+    }
+  }, [onboardingStatus.data?.config_exists, navigate]);
+
   const onSubmit = async (submission: ComposerSubmission): Promise<void> => {
     setError(null);
     try {
@@ -81,6 +96,7 @@ export function MissionPage({ search = {} }: { readonly search?: MissionSearch }
   }
   return (
     <div className="flex max-w-4xl flex-col gap-6">
+      {onboardingStatus.data?.config_exists === false ? <SetupBanner /> : null}
       <Composer
         key={search.from ?? 'new'}
         onSubmit={onSubmit}
