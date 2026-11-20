@@ -59,6 +59,20 @@ The app's **Health** screen (`/health`) displays the same offline checks as `yan
 - **Re-run checks** calls `read.doctor` with `refresh: true` to bypass the cached core probe.
 - Any check ID the app does not recognize still renders generically using the title and summary from the host payload.
 
+**Health remediations.** Health maps checks to actions through an engineered catalog (`apps/web/src/surfaces/health/remediations.ts`) rather than guessing from prose hints:
+
+- **One-click command runs:** `browser.compatibility` (`warn` or `fail` when `unverified` or `stale`) offers **Run browser check**, which invokes `browser check` through `command.invoke` and refreshes Health when it finishes.
+- **Guided Settings navigations:**
+  - `browser.managed` (absent or invalid managed build) opens **Settings → Browser** with the install dialog (`intent=install`) so you can review and confirm the download.
+  - `search.tavily.api-key` and `search.brave.api-key` (`warn`), and `search.provider` (`warn` when scraping), open **Settings → Credentials** with `tavily.api_key` or `brave.api_key` prefilled.
+  - `agent.budgets` (`fail` from `profile.yaml` preferences) opens **Settings → Preferences** focused on the invalid preference key.
+  - `config.valid` (`fail`) opens **Settings → Installation** with the raw YAML editor (`mode=raw`).
+- **Prose-only checks (no button):**
+  - `agent.budgets` (`fail` from an `env` variable) shows prose with the host-restart steps, because the app host uses the environment it started with and cannot mutate process environment variables.
+  - `agent.credentials` (`warn`) renders prose only: **Settings → Models** writes `${secret:...}` references to `config.yaml`/`models.json`, whereas the runtime only resolves keychain references passed via `--auth-secret` / `YANTRA_AGENT_AUTH_SECRET`, so navigating to Models would not resolve a keychain credential end-to-end.
+  - `keychain.reachable`, `datadir.writable`, `datadir.permissions`, `cachedir.writable`, and `indexdb.writable` are OS-level conditions with no engineered in-app fix.
+  - `paths.resolved`, `ethics.robots`, `agent.model`, and `browser.selection` are informational.
+
 ### Run discovery and inspection
 
 `yantra list` defaults to recent runs. It merges the rebuildable SQLite history index with readable filesystem run manifests, de-duplicates by run ID, sorts newest first, and can filter by workflow name or status. A run that recorded an outcome word shows it beside its status, such as `failed partial`, and carries it as `taskOutcome` in `--json` items. If the index is unavailable, it warns on stderr and continues with the filesystem scan. `yantra list workflows` lists saved workflows instead.

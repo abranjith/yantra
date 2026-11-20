@@ -21,7 +21,7 @@
     },
     {
       "path": "apps/cli/src/ui/host/health.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
@@ -51,7 +51,7 @@
     },
     {
       "path": "apps/cli/tests/commands/doctor-check-ids.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
@@ -75,7 +75,7 @@
     },
     {
       "path": "apps/cli/tests/ui/host/health.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
@@ -90,6 +90,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-004"
+    },
+    {
+      "path": "apps/web/src/adapters/ConfigEditAdapter.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "apps/web/src/app/router.tsx",
@@ -111,7 +117,7 @@
     },
     {
       "path": "apps/web/src/routes/health.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
@@ -141,9 +147,15 @@
     },
     {
       "path": "apps/web/src/surfaces/health/health-route.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
+    },
+    {
+      "path": "apps/web/src/surfaces/health/remediations.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "apps/web/src/surfaces/onboarding/evaluate-when.ts",
@@ -219,9 +231,15 @@
     },
     {
       "path": "apps/web/tests/surfaces/health/health-route.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
+    },
+    {
+      "path": "apps/web/tests/surfaces/health/remediations.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-007"
     },
     {
       "path": "apps/web/tests/surfaces/onboarding/onboarding.spec.tsx",
@@ -327,7 +345,7 @@
     },
     {
       "path": "packages/protocol/src/schemas/doctor.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
@@ -345,7 +363,7 @@
     },
     {
       "path": "packages/protocol/tests/doctor.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
@@ -369,7 +387,7 @@
     },
     {
       "path": "packages/ui/src/instruments/HealthCheck.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },
@@ -411,7 +429,7 @@
     },
     {
       "path": "packages/ui/tests/instruments/health-check.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-006"
     },

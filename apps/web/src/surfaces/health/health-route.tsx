@@ -1,9 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { DoctorResult } from '@yantra/protocol';
+import { useNavigate } from '@tanstack/react-router';
+import type { DoctorResult, InvocationState, InvocationSummary } from '@yantra/protocol';
+import { createInvocationId } from '@yantra/protocol/commands';
 import { Button, HealthCheck } from '@yantra/ui';
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 import { useRpc } from '../../host/app-rpc.js';
+
+import {
+  REMEDIATION_ROUTE_PATHS,
+  resolveRemediations,
+  type RemediationAction,
+} from './remediations.js';
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${String(bytes)} B`;
@@ -11,13 +19,49 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function isTerminalState(state: InvocationState): boolean {
+  return (
+    state === 'finished' ||
+    state === 'discarded' ||
+    state === 'never_started' ||
+    state === 'needs_review'
+  );
+}
+
+function invokeButtonLabel(defaultLabel: string, state: InvocationState | null): string {
+  if (state === null) return defaultLabel;
+  switch (state) {
+    case 'queued':
+    case 'reserved':
+      return 'Queued…';
+    case 'spawning':
+    case 'claimed':
+      return 'Starting…';
+    case 'running':
+      return 'Running…';
+    case 'start_unknown':
+      return 'Checking…';
+    default:
+      return defaultLabel;
+  }
+}
+
+interface ActiveRemediationRun {
+  readonly remediationId: string;
+  readonly summary: InvocationSummary;
+}
+
 /**
- * Health (`/health`, FEAT-071 TASK-006): renders every `yantra doctor` check
- * from an in-process `read.doctor` call, plus browser and search provenance.
+ * Health (`/health`, FEAT-071 TASK-006/TASK-007): renders every `yantra doctor`
+ * check from an in-process `read.doctor` call, browser and search provenance,
+ * and engineered remediation actions from `REMEDIATION_CATALOG`.
  */
 export function HealthSurface(): ReactNode {
   const rpc = useRpc();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [activeRun, setActiveRun] = useState<ActiveRemediationRun | null>(null);
+  const [invokeError, setInvokeError] = useState<string | null>(null);
 
   const query = useQuery({
     queryKey: ['health', 'doctor'],
@@ -31,8 +75,102 @@ export function HealthSurface(): ReactNode {
     },
   });
 
+  const invokeRemediation = useMutation({
+    mutationFn: async ({
+      remediationId,
+      path,
+      argv,
+    }: {
+      readonly remediationId: string;
+      readonly path: readonly string[];
+      readonly argv: readonly string[];
+    }) => {
+      setInvokeError(null);
+      const summary = await rpc.request<InvocationSummary>('command.invoke', {
+        invocation: {
+          invocation_id: createInvocationId(),
+          path: [...path],
+          argv: [...argv],
+          cwd: '/',
+        },
+        displayed_effective: { settings: [], content: [] },
+      });
+      return { remediationId, summary };
+    },
+    onSuccess: ({ remediationId, summary }) => {
+      if (isTerminalState(summary.state)) {
+        setActiveRun(null);
+        rerun.mutate();
+        return;
+      }
+      setActiveRun({ remediationId, summary });
+    },
+    onError: (err) => {
+      setActiveRun(null);
+      setInvokeError(err instanceof Error ? err.message : 'Failed to run remediation.');
+    },
+  });
+
+  const activeInvocationId = activeRun?.summary.invocation_id ?? null;
+
+  useEffect(() => {
+    if (activeInvocationId === null) return undefined;
+
+    const finishAndRefresh = (): void => {
+      setActiveRun(null);
+      rerun.mutate();
+    };
+
+    const offResult = rpc.on('invocation.result', (params) => {
+      if (params.invocation_id === activeInvocationId) {
+        finishAndRefresh();
+      }
+    });
+
+    const offChanged = rpc.on('invocation.changed', () => {
+      void rpc
+        .request<InvocationSummary>('read.invocation', { invocation_id: activeInvocationId })
+        .then((fresh) => {
+          if (isTerminalState(fresh.state)) {
+            finishAndRefresh();
+          } else {
+            setActiveRun((prev) =>
+              prev?.summary.invocation_id === activeInvocationId
+                ? { ...prev, summary: fresh }
+                : prev,
+            );
+          }
+        })
+        .catch(() => {
+          // Best-effort refresh; invocation.result will still trigger completion.
+        });
+    });
+
+    return () => {
+      offResult();
+      offChanged();
+    };
+  }, [rpc, activeInvocationId, rerun]);
+
   const data = query.data;
   const error = query.error ?? rerun.error;
+
+  const handleAction = (remediationId: string, action: RemediationAction): void => {
+    if (action.kind === 'invoke') {
+      invokeRemediation.mutate({
+        remediationId,
+        path: action.path,
+        argv: action.argv,
+      });
+      return;
+    }
+    if (action.kind === 'navigate') {
+      void navigate({
+        to: REMEDIATION_ROUTE_PATHS[action.route],
+        search: action.params,
+      });
+    }
+  };
 
   return (
     <section className="mx-auto flex max-w-4xl flex-col gap-6">
@@ -60,6 +198,15 @@ export function HealthSurface(): ReactNode {
           className="rounded-card border border-rule bg-surface p-4 text-sm text-signal-failed-ink"
         >
           {error instanceof Error ? error.message : 'Failed to load health diagnostics.'}
+        </p>
+      ) : null}
+
+      {invokeError !== null ? (
+        <p
+          role="alert"
+          className="rounded-card border border-rule bg-surface p-4 text-sm text-signal-failed-ink"
+        >
+          {invokeError}
         </p>
       ) : null}
 
@@ -153,17 +300,68 @@ export function HealthSurface(): ReactNode {
           ) : null}
 
           <div className="flex flex-col gap-3" data-testid="health-checks">
-            {data.checks.map((check) => (
-              <HealthCheck
-                key={check.id}
-                id={check.id}
-                title={check.title}
-                status={check.status}
-                summary={check.summary}
-                {...(check.details === undefined ? {} : { details: check.details })}
-                {...(check.remediation === undefined ? {} : { remediation: check.remediation })}
-              />
-            ))}
+            {data.checks.map((check) => {
+              const remediations = resolveRemediations(check);
+              const actionable = remediations.filter((item) => item.action.kind !== 'text');
+              const textNotes = remediations
+                .map((item) => (item.action.kind === 'text' ? item.action.note : undefined))
+                .filter((note): note is string => note !== undefined);
+              const combinedRemediation = [check.remediation, ...textNotes]
+                .filter((part): part is string => part !== undefined && part.length > 0)
+                .join(' ');
+
+              const remediationSlot =
+                actionable.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {actionable.map((item) => {
+                      const isThisActive = activeRun?.remediationId === item.id;
+                      const isThisInvoking =
+                        invokeRemediation.isPending &&
+                        invokeRemediation.variables?.remediationId === item.id;
+                      const disabled =
+                        item.action.kind === 'invoke' &&
+                        (isThisActive || isThisInvoking || rerun.isPending);
+                      const label =
+                        item.action.kind === 'invoke'
+                          ? invokeButtonLabel(
+                              item.label,
+                              isThisActive
+                                ? activeRun.summary.state
+                                : isThisInvoking
+                                  ? 'spawning'
+                                  : null,
+                            )
+                          : item.label;
+
+                      return (
+                        <Button
+                          key={item.id}
+                          variant="secondary"
+                          isDisabled={disabled}
+                          onPress={() => {
+                            handleAction(item.id, item.action);
+                          }}
+                        >
+                          {label}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                ) : undefined;
+
+              return (
+                <HealthCheck
+                  key={check.id}
+                  id={check.id}
+                  title={check.title}
+                  status={check.status}
+                  summary={check.summary}
+                  {...(check.details === undefined ? {} : { details: check.details })}
+                  {...(combinedRemediation.length > 0 ? { remediation: combinedRemediation } : {})}
+                  {...(remediationSlot === undefined ? {} : { remediationSlot })}
+                />
+              );
+            })}
           </div>
         </>
       ) : null}

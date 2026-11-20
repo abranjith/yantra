@@ -703,8 +703,8 @@ read-only `possible-orphans.ts` over FEAT-064's record format. It never adds cle
         credential chain resolves a keychain reference set there;
       - otherwise `text`.
 
-      Record the verdict in `evidence`. DEVIATION if the plan's "one-click" expectation cannot be
-      met.
+      Record the verdict in `evidence`. DEVIATION: `agent.credentials` is text-only; saving a
+      credential reference in Models does not activate the runtime `--auth-secret` path.
 
     - `keychain.reachable`, `datadir.writable`, `datadir.permissions`, `cachedir.writable`,
       `indexdb.writable`: `text`. These are OS-level conditions with no engineered path. The prose
@@ -918,7 +918,7 @@ read-only `possible-orphans.ts` over FEAT-064's record format. It never adds cle
 - [x] TASK-004: Browser answer collector and in-process `onboarding.submit`, file-equivalent to terminal `init`
 - [x] TASK-005: Onboarding flow in the app: first-run entry, explicit questions, skip, Not now, reset
 - [x] TASK-006: Health renders every `doctor` check from an in-process read
-- [ ] TASK-007: Engineered remediation catalog and actions on Health
+- [x] TASK-007: Engineered remediation catalog and actions on Health
 - [ ] TASK-008: Agent smoke check from Health as a run-class worker
 - [ ] TASK-009: Host environment age and possible orphans on Health
 - [ ] TASK-010: Parity mapping, end-to-end app flows, and the credential security suite

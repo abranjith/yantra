@@ -1,13 +1,10 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { DOCTOR_CHECK_IDS, type DoctorResult } from '@yantra/protocol';
+import { DOCTOR_CHECK_IDS, type DoctorResult, type InvocationSummary } from '@yantra/protocol';
 import { describe, expect, it } from 'vitest';
 
-import { RpcProvider } from '../../../src/host/app-rpc.js';
-import { HealthSurface } from '../../../src/surfaces/health/health-route.js';
 import { expectNoAxeViolations } from '../../support/axe.js';
-import { FakeRpc } from '../../support/fake-rpc.js';
+import { FakeRpc, renderAt } from '../../support/fake-rpc.js';
 
 function allKnownChecksResult(): DoctorResult {
   return {
@@ -43,28 +40,23 @@ function allKnownChecksResult(): DoctorResult {
   };
 }
 
-function renderHealth(result: DoctorResult) {
-  const rpc = new FakeRpc();
-  rpc.answer('read.doctor', result);
-
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
-
-  const view = render(
-    <QueryClientProvider client={queryClient}>
-      <RpcProvider rpc={rpc}>
-        <HealthSurface />
-      </RpcProvider>
-    </QueryClientProvider>,
-  );
-
-  return { ...view, rpc, queryClient };
+function finishedSummary(path: readonly string[]): InvocationSummary {
+  return {
+    invocation_id: 'inv_0123456789abcdef',
+    state: 'finished',
+    execution_class: 'run',
+    path: [...path],
+    run_id: null,
+    queued_at: '2026-11-19T00:00:00Z',
+    review: null,
+    result: { exit_code: 0, finished_at: '2026-11-19T00:00:01Z' },
+  };
 }
 
 describe('@no-llm HealthSurface', () => {
   it('renders a row for every DoctorCheckId plus browser and search provenance', async () => {
-    const { container } = renderHealth(allKnownChecksResult());
+    const rpc = new FakeRpc().answer('read.doctor', allKnownChecksResult());
+    const { container } = await renderAt('/health', rpc);
 
     await waitFor(() => {
       expect(screen.getByTestId('health-overall').textContent).toBe('warn');
@@ -98,7 +90,8 @@ describe('@no-llm HealthSurface', () => {
       nodeVersion: 'v24.15.0',
     };
 
-    const { container } = renderHealth(result);
+    const rpc = new FakeRpc().answer('read.doctor', result);
+    const { container } = await renderAt('/health', rpc);
 
     await waitFor(() => {
       expect(screen.getByText('Future subsystem ready')).toBeTruthy();
@@ -109,7 +102,8 @@ describe('@no-llm HealthSurface', () => {
 
   it('sends refresh: true when Re-run checks is pressed', async () => {
     const user = userEvent.setup();
-    const { rpc } = renderHealth(allKnownChecksResult());
+    const rpc = new FakeRpc().answer('read.doctor', allKnownChecksResult());
+    await renderAt('/health', rpc);
 
     await waitFor(() => {
       expect(screen.getByTestId('health-overall')).toBeTruthy();
@@ -125,8 +119,89 @@ describe('@no-llm HealthSurface', () => {
     });
   });
 
+  it('invokes browser check remediation and refreshes doctor on completion', async () => {
+    const user = userEvent.setup();
+    const result: DoctorResult = {
+      checks: [
+        {
+          id: 'browser.compatibility',
+          title: 'Browser passes required capabilities',
+          status: 'warn',
+          summary: 'This browser has not been checked on this machine yet.',
+          details: { compatibility: 'unverified', path: '/usr/bin/chrome' },
+          remediation: 'Run `yantra browser check` to test it locally.',
+        },
+      ],
+      overall: 'warn',
+      version: '0.0.1',
+      platform: 'linux',
+      nodeVersion: 'v24.15.0',
+    };
+
+    const rpc = new FakeRpc()
+      .answer('read.doctor', result)
+      .answer('command.invoke', finishedSummary(['browser', 'check']));
+
+    await renderAt('/health', rpc);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Run browser check' })).toBeTruthy();
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Run browser check' }));
+
+    await waitFor(() => {
+      const invokeCalls = rpc.paramsOf('command.invoke');
+      expect(invokeCalls).toHaveLength(1);
+      const invocation = invokeCalls[0]?.invocation as { path: string[]; argv: string[] };
+      expect(invocation.path).toEqual(['browser', 'check']);
+      expect(invocation.argv).toEqual([]);
+
+      const doctorCalls = rpc.paramsOf('read.doctor');
+      expect(doctorCalls.some((params) => params.refresh === true)).toBe(true);
+    });
+  });
+
+  it('navigates from search key remediation to Credentials with key prefilled', async () => {
+    const user = userEvent.setup();
+    const result: DoctorResult = {
+      checks: [
+        {
+          id: 'search.tavily.api-key',
+          title: 'Tavily API key',
+          status: 'warn',
+          summary: 'No tavily API key is available.',
+          details: { source: 'absent' },
+          remediation: 'Run `yantra secret set tavily.api_key`.',
+        },
+      ],
+      overall: 'warn',
+      version: '0.0.1',
+      platform: 'linux',
+      nodeVersion: 'v24.15.0',
+    };
+
+    const rpc = new FakeRpc()
+      .answer('read.doctor', result)
+      .answer('secret.list', { available: true, remedy: null, rows: [] });
+
+    const { router } = await renderAt('/health', rpc);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Add Tavily key' })).toBeTruthy();
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Add Tavily key' }));
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/settings/credentials');
+      expect((router.state.location.search as { key?: string }).key).toBe('tavily.api_key');
+    });
+  });
+
   it('has no axe violations', async () => {
-    const { container } = renderHealth(allKnownChecksResult());
+    const rpc = new FakeRpc().answer('read.doctor', allKnownChecksResult());
+    const { container } = await renderAt('/health', rpc);
 
     await waitFor(() => {
       expect(screen.getByTestId('health-overall')).toBeTruthy();
