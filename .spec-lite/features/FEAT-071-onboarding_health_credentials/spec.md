@@ -920,7 +920,7 @@ read-only `possible-orphans.ts` over FEAT-064's record format. It never adds cle
 - [x] TASK-006: Health renders every `doctor` check from an in-process read
 - [x] TASK-007: Engineered remediation catalog and actions on Health
 - [x] TASK-008: Agent smoke check from Health as a run-class worker
-- [ ] TASK-009: Host environment age and possible orphans on Health
+- [x] TASK-009: Host environment age and possible orphans on Health
 - [ ] TASK-010: Parity mapping, end-to-end app flows, and the credential security suite
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

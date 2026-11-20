@@ -102,3 +102,5 @@ export * from './receipt/index.js';
 export * from './setup/init-service.js';
 
 export * from './interventions/index.js';
+
+export { readPossibleOrphans, type ReadPossibleOrphansOptions } from './run/possible-orphans.js';

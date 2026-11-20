@@ -153,7 +153,7 @@
     },
     {
       "path": "apps/web/src/surfaces/health/agent-smoke-panel.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
@@ -162,6 +162,18 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-006"
+    },
+    {
+      "path": "apps/web/src/surfaces/health/host-environment.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "apps/web/src/surfaces/health/possible-orphans.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
     },
     {
       "path": "apps/web/src/surfaces/health/remediations.ts",
@@ -243,7 +255,7 @@
     },
     {
       "path": "apps/web/tests/surfaces/health/agent-smoke-panel.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-008"
     },
@@ -252,6 +264,12 @@
       "status": "A",
       "role": "implement",
       "task": "TASK-006"
+    },
+    {
+      "path": "apps/web/tests/surfaces/health/host-and-orphans.spec.tsx",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
     },
     {
       "path": "apps/web/tests/surfaces/health/remediations.spec.ts",
@@ -314,6 +332,12 @@
       "task": "TASK-001"
     },
     {
+      "path": "packages/core/src/run/possible-orphans.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
       "path": "packages/core/src/secrets/credential-service.ts",
       "status": "A",
       "role": "implement",
@@ -330,6 +354,12 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/run/possible-orphans.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-009"
     },
     {
       "path": "packages/core/tests/secrets/credential-service.spec.ts",

@@ -2643,6 +2643,28 @@ Example:
 }
 ```
 
+## HostEnvironmentInfo
+
+App host environment capture metadata; never includes environment names or values.
+
+| Field           | Description                                                 |
+| --------------- | ----------------------------------------------------------- |
+| host_started_at | ISO timestamp when the app host started.                    |
+| env_captured_at | ISO timestamp when the host captured its environment (D13). |
+| yantra_version  | Version of the Yantra executable running the host.          |
+| host_pid        | Process ID of the running app host.                         |
+
+Example:
+
+```json
+{
+  "host_started_at": "<host_started_at>",
+  "env_captured_at": "<env_captured_at>",
+  "yantra_version": "<yantra_version>",
+  "host_pid": "<host_pid>"
+}
+```
+
 ## HostHelloParams
 
 No description provided.
@@ -4262,6 +4284,48 @@ Example:
   "default_scope": "<default_scope>",
   "steps": "<steps>",
   "outputs": "<outputs>"
+}
+```
+
+## PossibleOrphan
+
+Read-only retained ownership record whose process identity is unverifiable.
+
+| Field                        | Description                                            |
+| ---------------------------- | ------------------------------------------------------ |
+| run_id                       | Run identifier owning the retained record.             |
+| pid                          | Recorded process ID.                                   |
+| recorded_start_token_present | Whether a creation start token was recorded on disk.   |
+| executable                   | Executable basename only; never a full directory path. |
+| recorded_at                  | ISO timestamp when the ownership record was written.   |
+| reason                       | Why Yantra left the process untouched.                 |
+
+Example:
+
+```json
+{
+  "run_id": "<run_id>",
+  "pid": "<pid>",
+  "recorded_start_token_present": "<recorded_start_token_present>",
+  "executable": "<executable>",
+  "recorded_at": "<recorded_at>",
+  "reason": "<reason>"
+}
+```
+
+## PossibleOrphansResult
+
+Read-only list of possible orphan processes.
+
+| Field   | Description                                                   |
+| ------- | ------------------------------------------------------------- |
+| orphans | Retained ownership records whose identity verdict is unknown. |
+
+Example:
+
+```json
+{
+  "orphans": "<orphans>"
 }
 ```
 

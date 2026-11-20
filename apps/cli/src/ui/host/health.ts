@@ -14,9 +14,19 @@ import {
   createKeychainProvider,
   doctor as runCoreDoctor,
   loadSearchConfig,
+  readPossibleOrphans,
   runsRoot,
+  yantraVersion,
+  type ProcessLivenessProbe,
 } from '@yantra/core';
-import { DoctorReadParams, DoctorResult } from '@yantra/protocol';
+import {
+  DoctorReadParams,
+  DoctorResult,
+  EmptyParams,
+  HostEnvironmentInfo,
+  PossibleOrphansResult,
+  type PossibleOrphan,
+} from '@yantra/protocol';
 
 import { collectDoctorResult, type DoctorRuntime } from '../../commands/doctor.js';
 import { loadEffectivePreferences } from '../../preferences.js';
@@ -28,6 +38,10 @@ export interface HealthDeps {
   readonly env: Readonly<NodeJS.ProcessEnv>;
   readonly logger?: HostLogger;
   readonly collect?: (options: { readonly refresh?: boolean }) => Promise<DoctorResult>;
+  readonly hostStatus?: HostEnvironmentInfo;
+  readonly probe?: ProcessLivenessProbe;
+  readonly runsDir?: string;
+  readonly readOrphans?: () => Promise<readonly PossibleOrphan[]>;
 }
 
 const DISCARD = new Writable({
@@ -75,6 +89,37 @@ export function registerHealth(methods: RpcMethodRegistry, deps: HealthDeps): vo
         );
       }
       return parsed.data;
+    },
+  });
+
+  const fallbackNow = new Date().toISOString();
+  const hostStatus: HostEnvironmentInfo = deps.hostStatus ?? {
+    host_started_at: fallbackNow,
+    env_captured_at: fallbackNow,
+    yantra_version: yantraVersion(),
+    host_pid: process.pid,
+  };
+
+  methods.register('read.host_status', {
+    params: EmptyParams,
+    result: HostEnvironmentInfo,
+    handler: () => Promise.resolve(HostEnvironmentInfo.parse(hostStatus)),
+  });
+
+  const readOrphans =
+    deps.readOrphans ??
+    (async () =>
+      readPossibleOrphans({
+        root: deps.runsDir ?? runsRoot(),
+        ...(deps.probe === undefined ? {} : { probe: deps.probe }),
+      }));
+
+  methods.register('read.possible_orphans', {
+    params: EmptyParams,
+    result: PossibleOrphansResult,
+    handler: async () => {
+      const orphans = await readOrphans();
+      return PossibleOrphansResult.parse({ orphans });
     },
   });
 }

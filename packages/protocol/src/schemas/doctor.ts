@@ -123,3 +123,57 @@ export const DoctorReadParams = z
   .strict()
   .describe('Parameters for the in-process `read.doctor` RPC.');
 export type DoctorReadParams = z.infer<typeof DoctorReadParams>;
+
+/** Result of `read.host_status` (FEAT-071 TASK-009). */
+export const HostEnvironmentInfo = z
+  .object({
+    host_started_at: z
+      .string()
+      .datetime({ offset: true })
+      .describe('ISO timestamp when the app host started.'),
+    env_captured_at: z
+      .string()
+      .datetime({ offset: true })
+      .describe('ISO timestamp when the host captured its environment (D13).'),
+    yantra_version: z
+      .string()
+      .min(1)
+      .describe('Version of the Yantra executable running the host.'),
+    host_pid: z.number().int().positive().describe('Process ID of the running app host.'),
+  })
+  .strict()
+  .describe('App host environment capture metadata; never includes environment names or values.');
+export type HostEnvironmentInfo = z.infer<typeof HostEnvironmentInfo>;
+
+/** One read-only retained ownership record whose identity verdict is `unknown` (FEAT-071 TASK-009). */
+export const PossibleOrphan = z
+  .object({
+    run_id: z.string().min(1).describe('Run identifier owning the retained record.'),
+    pid: z.number().int().positive().describe('Recorded process ID.'),
+    recorded_start_token_present: z
+      .boolean()
+      .describe('Whether a creation start token was recorded on disk.'),
+    executable: z
+      .string()
+      .min(1)
+      .describe('Executable basename only; never a full directory path.'),
+    recorded_at: z
+      .string()
+      .datetime({ offset: true })
+      .describe('ISO timestamp when the ownership record was written.'),
+    reason: z.literal('identity_unverifiable').describe('Why Yantra left the process untouched.'),
+  })
+  .strict()
+  .describe('Read-only retained ownership record whose process identity is unverifiable.');
+export type PossibleOrphan = z.infer<typeof PossibleOrphan>;
+
+/** Result of `read.possible_orphans` (FEAT-071 TASK-009). */
+export const PossibleOrphansResult = z
+  .object({
+    orphans: z
+      .array(PossibleOrphan)
+      .describe('Retained ownership records whose identity verdict is unknown.'),
+  })
+  .strict()
+  .describe('Read-only list of possible orphan processes.');
+export type PossibleOrphansResult = z.infer<typeof PossibleOrphansResult>;

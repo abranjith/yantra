@@ -237,7 +237,17 @@ export async function startHostRuntime(deps: HostRuntimeDeps): Promise<RunningHo
     registerInbox(methods);
     registerCredentials(methods, { env: { ...(deps.env ?? {}) }, logger });
     registerOnboarding(methods, { logger });
-    registerHealth(methods, { env: { ...(deps.env ?? {}) }, logger });
+    registerHealth(methods, {
+      env: { ...(deps.env ?? {}) },
+      logger,
+      hostStatus: {
+        host_started_at: acquired.started_at,
+        env_captured_at: envCapturedAt,
+        yantra_version: deps.yantraVersion,
+        host_pid: deps.identity.pid,
+      },
+      ...(deps.probe === undefined ? {} : { probe: deps.probe }),
+    });
     attendance.start();
     const attendanceRef = attendance;
     cleanups.push(() => {

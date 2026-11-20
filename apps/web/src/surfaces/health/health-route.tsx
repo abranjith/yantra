@@ -8,6 +8,8 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useRpc } from '../../host/app-rpc.js';
 
 import { AgentSmokePanel } from './agent-smoke-panel.js';
+import { HostEnvironmentPanel } from './host-environment.js';
+import { PossibleOrphansPanel } from './possible-orphans.js';
 import {
   REMEDIATION_ROUTE_PATHS,
   resolveRemediations,
@@ -301,6 +303,10 @@ export function HealthSurface(): ReactNode {
           ) : null}
 
           <AgentSmokePanel />
+
+          <HostEnvironmentPanel />
+
+          <PossibleOrphansPanel />
 
           <div className="flex flex-col gap-3" data-testid="health-checks">
             {data.checks.map((check) => {

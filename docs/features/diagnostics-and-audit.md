@@ -80,6 +80,11 @@ The app's **Health** screen (`/health`) displays the same offline checks as `yan
 - On completion, it renders the `doctor_smoke` outcome (`passed`, `failed`, or `aborted`), provider and model, turns and usage, `statusToolInvoked`, and a link to `/runs/<runId>`. Startup or credential errors (such as `AGENT_AUTH_UNAVAILABLE`) show the error code, remediation, and `environment` for exit `3`.
 - When no provider is configured or `LLM_PROVIDER=none` is set in the host environment, **Run smoke test** is disabled with the CLI reason text and a link to **Settings → Models**.
 
+**App host environment and possible orphans.** Health also includes two read-only host inspection blocks:
+
+- **App host** (`apps/web/src/surfaces/health/host-environment.tsx`, backed by `read.host_status`) displays when the host captured its environment (relative age and ISO timestamp), the Yantra version, and the host PID, without exposing any environment variable names or values. It also states that runs started from the app use the environment the host started with, and that picking up environment changes requires closing every Yantra window, waiting for the host to exit, and running `yantra ui` again.
+- **Possible orphans** (`apps/web/src/surfaces/health/possible-orphans.tsx`, backed by `read.possible_orphans` and `readPossibleOrphans` in `@yantra/core`) is shown only when retained run-ownership records have an `unknown` process-identity verdict. Each row shows a link to `/runs/<runId>`, PID, executable basename, recorded timestamp, and the notice that Yantra could not confirm the process belongs to the run so it was not stopped. **Check again** re-reads the list; there is no kill or terminate control.
+
 ### Run discovery and inspection
 
 `yantra list` defaults to recent runs. It merges the rebuildable SQLite history index with readable filesystem run manifests, de-duplicates by run ID, sorts newest first, and can filter by workflow name or status. A run that recorded an outcome word shows it beside its status, such as `failed partial`, and carries it as `taskOutcome` in `--json` items. If the index is unavailable, it warns on stderr and continues with the filesystem scan. `yantra list workflows` lists saved workflows instead.
