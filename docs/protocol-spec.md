@@ -1789,6 +1789,154 @@ Example:
 }
 ```
 
+## DoctorBrowserProvenance
+
+Effective browser selection and managed-storage provenance.
+
+| Field            | Description                                                |
+| ---------------- | ---------------------------------------------------------- |
+| source           | Configured browser source (e.g. auto, managed, or a path). |
+| origin           | Where the selection came from.                             |
+| ownership        | Whether Yantra manages the build.                          |
+| executablePath   | Resolved canonical browser executable path.                |
+| browserVersion   | Detected browser version string.                           |
+| compatibility    | Compatibility state of the selected browser.               |
+| managedRoot      | Root directory for Yantra-managed browser builds.          |
+| managedBuild     | Active managed build ID, or null when absent.              |
+| orphanCount      | Count of superseded managed builds.                        |
+| reclaimableBytes | Bytes reclaimable by removing superseded managed builds.   |
+| alternatives     | Alternative browser executables discovered.                |
+| remediation      | Prose remediation for the browser selection.               |
+
+Example:
+
+```json
+{
+  "source": "<source>",
+  "origin": "<origin>",
+  "ownership": "<ownership>",
+  "executablePath": "<executablePath>",
+  "browserVersion": "<browserVersion>",
+  "compatibility": "<compatibility>",
+  "managedRoot": "<managedRoot>",
+  "managedBuild": "<managedBuild>",
+  "orphanCount": "<orphanCount>",
+  "reclaimableBytes": "<reclaimableBytes>",
+  "alternatives": "<alternatives>",
+  "remediation": "<remediation>"
+}
+```
+
+## DoctorCheck
+
+One diagnostic check emitted by `yantra doctor`.
+
+| Field       | Description                                                                       |
+| ----------- | --------------------------------------------------------------------------------- |
+| id          | Check identifier (a `DoctorCheckId`, or an unknown ID for forward compatibility). |
+| title       | Human-readable check title.                                                       |
+| status      | Check status in CLI words: ok, warn, or fail.                                     |
+| summary     | One-line outcome summary for this check.                                          |
+| remediation | Prose fix hint when the check warns or fails.                                     |
+| details     | Optional structured key/value details for this check.                             |
+
+Example:
+
+```json
+{
+  "id": "<id>",
+  "title": "<title>",
+  "status": "<status>",
+  "summary": "<summary>",
+  "remediation": "<remediation>",
+  "details": "<details>"
+}
+```
+
+## DoctorCheckId
+
+Closed identifier of a known `yantra doctor` check.
+
+Example:
+
+```json
+"browser.selection"
+```
+
+## DoctorReadParams
+
+Parameters for the in-process `read.doctor` RPC.
+
+| Field   | Description                                            |
+| ------- | ------------------------------------------------------ |
+| refresh | When true, bypasses the cached core environment probe. |
+
+Example:
+
+```json
+{
+  "refresh": "<refresh>"
+}
+```
+
+## DoctorResult
+
+Structured `yantra doctor` result.
+
+| Field       | Description                                                 |
+| ----------- | ----------------------------------------------------------- |
+| checks      | Ordered list of diagnostic checks.                          |
+| overall     | Worst status across all checks.                             |
+| version     | Yantra protocol version.                                    |
+| platform    | Host operating system platform.                             |
+| nodeVersion | Node.js runtime version.                                    |
+| browser     | Effective browser selection and managed-storage provenance. |
+| search      | Planned search-provider provenance.                         |
+
+Example:
+
+```json
+{
+  "checks": "<checks>",
+  "overall": "<overall>",
+  "version": "<version>",
+  "platform": "<platform>",
+  "nodeVersion": "<nodeVersion>",
+  "browser": "<browser>",
+  "search": "<search>"
+}
+```
+
+## DoctorSearchProvenance
+
+Planned search-provider provenance.
+
+| Field    | Description                                        |
+| -------- | -------------------------------------------------- |
+| provider | Planned search provider name.                      |
+| kind     | Whether the provider uses a keyed API or scraping. |
+| via      | Layer that selected the provider.                  |
+
+Example:
+
+```json
+{
+  "provider": "<provider>",
+  "kind": "<kind>",
+  "via": "<via>"
+}
+```
+
+## DoctorStatus
+
+Check status in CLI words: ok, warn, or fail.
+
+Example:
+
+```json
+"ok"
+```
+
 ## DriftDifference
 
 One setting or content identity that changed while queued.

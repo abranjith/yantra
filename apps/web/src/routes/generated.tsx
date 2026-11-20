@@ -27,4 +27,3 @@ export const templatesRoute = route('templates', '/templates');
 export const schedulesRoute = route('schedules', '/schedules');
 export const usageRoute = route('usage', '/usage');
 export const daemonRoute = route('daemon', '/daemon');
-export const healthRoute = route('health', '/health');

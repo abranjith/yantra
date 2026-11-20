@@ -4,7 +4,6 @@ import {
   browserRoute,
   daemonRoute,
   dataRoute,
-  healthRoute,
   installationRoute,
   modelsRoute,
   preferencesRoute,
@@ -14,6 +13,7 @@ import {
   usageRoute,
   workflowsRoute,
 } from '../routes/generated.js';
+import { healthRoute } from '../routes/health.js';
 import { inboxRoute } from '../routes/inbox.js';
 import { ledgerRoute } from '../routes/ledger.js';
 import { missionInvocationRoute } from '../routes/mission.invocations.$invocationId.js';

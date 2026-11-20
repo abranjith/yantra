@@ -311,4 +311,5 @@ export * from './schemas/ui-mission.js';
 export * from './schemas/intervention.js';
 export * from './schemas/cli-read-outputs.js';
 export * from './schemas/credentials.js';
+export * from './schemas/doctor.js';
 export * from './schemas/init-questions.js';

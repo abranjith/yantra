@@ -50,6 +50,15 @@ Once that directory exists, the smoke writes `execution-receipt.json` before ope
 
 The smoke passes only if the provider run completes and the `status` tool succeeds. It has no deterministic fallback: missing credentials, an unknown model, an unreachable provider, or a failed round trip exits `3`; Ctrl+C tears down the session and exits `130`. With `--json` the smoke suppresses the event stream and the human summary and emits one `doctor_smoke` envelope instead. Its directory is not a normal auditable run because it has no `manifest.json`.
 
+#### Health in the app
+
+The app's **Health** screen (`/health`) displays the same offline checks as `yantra doctor` via an in-process `read.doctor` RPC against the host:
+
+- Every check renders with its CLI status word (`ok`, `warn`, `fail`), title, summary, optional key/value details disclosure, and prose remediation when present.
+- Overall status (`ok`, `warn`, `fail`) and runtime metadata (`platform`, `nodeVersion`, protocol `version`) appear at the top, along with the **Browser provenance** block (selection, compatibility, managed build, superseded-build count, and reclaimable bytes) and **Search provenance** block when available.
+- **Re-run checks** calls `read.doctor` with `refresh: true` to bypass the cached core probe.
+- Any check ID the app does not recognize still renders generically using the title and summary from the host payload.
+
 ### Run discovery and inspection
 
 `yantra list` defaults to recent runs. It merges the rebuildable SQLite history index with readable filesystem run manifests, de-duplicates by run ID, sorts newest first, and can filter by workflow name or status. A run that recorded an outcome word shows it beside its status, such as `failed partial`, and carries it as `taskOutcome` in `--json` items. If the index is unavailable, it warns on stderr and continues with the filesystem scan. `yantra list workflows` lists saved workflows instead.

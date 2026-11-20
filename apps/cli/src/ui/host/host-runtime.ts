@@ -49,6 +49,7 @@ import {
   type EffectiveResolver,
 } from './drift-review.js';
 import { HostStartError } from './errors.js';
+import { registerHealth } from './health.js';
 import { AppHost, SILENT_HOST_LOGGER, type HostLogger, type HostRoute } from './host.js';
 import { IdleExit } from './idle-exit.js';
 import { registerInbox } from './inbox-rpc.js';
@@ -236,6 +237,7 @@ export async function startHostRuntime(deps: HostRuntimeDeps): Promise<RunningHo
     registerInbox(methods);
     registerCredentials(methods, { env: { ...(deps.env ?? {}) }, logger });
     registerOnboarding(methods, { logger });
+    registerHealth(methods, { env: { ...(deps.env ?? {}) }, logger });
     attendance.start();
     const attendanceRef = attendance;
     cleanups.push(() => {

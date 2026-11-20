@@ -12,6 +12,7 @@ import { CitationChip } from '../instruments/CitationChip.js';
 import { ConditionTable } from '../instruments/ConditionTable.js';
 import { EventInspector } from '../instruments/EventInspector.js';
 import { EvidencePane, SourceEvidence } from '../instruments/EvidencePane.js';
+import { HealthCheck } from '../instruments/HealthCheck.js';
 import {
   DISPLAYED_STATE_LABELS,
   OUTCOME_WORDS,
@@ -20,6 +21,7 @@ import {
 import { ProtectedValue } from '../instruments/ProtectedValue.js';
 import { RequirementList } from '../instruments/RequirementList.js';
 import { SafeMarkdown, type CitationContext } from '../instruments/SafeMarkdown.js';
+import { Button } from '../primitives/Button.js';
 
 import type { GalleryEntry } from './entries.js';
 
@@ -272,6 +274,43 @@ export const INSTRUMENT_ENTRIES: readonly GalleryEntry[] = [
           detail: { attempts: [1, 2, 3], note: null, ok: false },
         }}
       />
+    ),
+    interactive: true,
+  },
+  {
+    id: 'instrument-health-check',
+    title: 'HealthCheck',
+    primitive: null,
+    render: () => (
+      <div className="flex flex-col gap-3">
+        <HealthCheck
+          id="paths.resolved"
+          title="Storage paths resolved"
+          status="ok"
+          summary="Storage paths: data=/home/user/.yantra/data (default), cache=/home/user/.yantra/cache (default)."
+          details={{ dataDir: '/home/user/.yantra/data', cacheDir: '/home/user/.yantra/cache' }}
+        />
+        <HealthCheck
+          id="search.tavily.api-key"
+          title="Tavily API key"
+          status="warn"
+          summary="No tavily API key is available."
+          remediation="Run `yantra secret set tavily.api_key` or configure an ${env:NAME} reference."
+          remediationSlot={
+            <Button size="sm" variant="secondary" onPress={NOOP}>
+              Add key
+            </Button>
+          }
+        />
+        <HealthCheck
+          id="datadir.writable"
+          title="Yantra data directory writable"
+          status="fail"
+          summary="Data directory is not writable."
+          remediation="Check filesystem permissions for /home/user/.yantra/data."
+          details={{ path: '/home/user/.yantra/data', code: 'EACCES' }}
+        />
+      </div>
     ),
     interactive: true,
   },
