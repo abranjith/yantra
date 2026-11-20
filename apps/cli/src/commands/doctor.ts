@@ -33,6 +33,7 @@
  * Both modes honor `--json`.
  */
 
+import { randomUUID } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -57,7 +58,9 @@ import {
   type KeychainProvider,
   runsRoot,
   storageDirSources,
+  writeFileAtomic,
 } from '@yantra/core';
+import { formatRunId } from '@yantra/core/workflow/replay';
 import {
   COMMAND_REGISTRY,
   PROTOCOL_VERSION,
@@ -219,7 +222,11 @@ export function makeDoctorHandler(
       const preferences = await resolved.loadPreferences();
       context.settings.usePreferences(preferences);
       const flags = commandFlags(context, options);
-      const isJson = options.json === true || flags.json;
+      // A worker must deliver the smoke envelope even when invoked from the app without --json.
+      const isJson =
+        options.json === true ||
+        flags.json ||
+        (context.surface === 'worker' && options.agentSmoke === true);
       const renderer = isJson ? new JSONRenderer() : new TerminalRenderer();
       const connector = context.connector(renderer);
       const renderOpts = buildRenderOpts(
@@ -530,8 +537,28 @@ async function runAgentSmokeCommand(
 ): Promise<void> {
   const { provider, id: modelId } = agent.model;
   const streaming = !renderOpts.json;
-  const runId = `agent-smoke-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+  const started = new Date();
+  const worker = context.surface === 'worker';
+  const runId = worker
+    ? formatRunId(started, 'doctor-smoke', randomUUID().slice(0, 8))
+    : `agent-smoke-${started.toISOString().replace(/[:.]/g, '-')}`;
   const runDir = join(runtime.runsRoot(), runId);
+
+  async function recordOutcome(outcome: DoctorSmokeRenderResult['outcome']): Promise<void> {
+    if (!worker) return;
+    const ended = new Date();
+    await writeFileAtomic(
+      join(runDir, 'manifest.json'),
+      JSON.stringify({
+        runId,
+        workflowName: 'doctor-smoke',
+        startedAt: started.toISOString(),
+        endedAt: ended.toISOString(),
+        durationMs: ended.getTime() - started.getTime(),
+        status: outcome === 'passed' ? 'completed' : outcome,
+      }),
+    );
+  }
   await mkdir(runDir, { recursive: true, mode: 0o700 });
   await writeExecutionReceipt(runDir, await draftRunReceipt(context, ['doctor'], { agent }));
 
@@ -600,6 +627,7 @@ async function runAgentSmokeCommand(
         contextFiles: report.enumeration.contextFiles.length,
       },
     };
+    await recordOutcome(result.outcome);
     connector.renderResult({ kind: 'doctor_smoke', result }, renderOpts);
 
     if (report.result.outcome === 'aborted') {
@@ -615,6 +643,7 @@ async function runAgentSmokeCommand(
     }
   } catch (err) {
     if (err instanceof CommanderError) throw err;
+    await recordOutcome(context.signal.aborted ? 'aborted' : 'failed');
     if (err instanceof AgentStartupError) {
       runtime.stderr.write(`\n${err.code}: ${err.message}\n`);
     } else {

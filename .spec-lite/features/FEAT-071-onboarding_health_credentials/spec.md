@@ -921,6 +921,10 @@ read-only `possible-orphans.ts` over FEAT-064's record format. It never adds cle
 - [x] TASK-007: Engineered remediation catalog and actions on Health
 - [x] TASK-008: Agent smoke check from Health as a run-class worker
 - [x] TASK-009: Host environment age and possible orphans on Health
-- [ ] TASK-010: Parity mapping, end-to-end app flows, and the credential security suite
+- [x] TASK-010: Parity mapping, end-to-end app flows, and the credential security suite
+
+Windows real-Chrome acceptance passed. macOS and Linux verification remains pending CI. The
+repository-wide suite did not finish green: the core invocation-store slot-invariant test failed
+and a Vitest worker exited unexpectedly.
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

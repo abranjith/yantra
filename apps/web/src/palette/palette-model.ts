@@ -49,7 +49,10 @@ export type PaletteOutcome =
     }
   | { readonly state: 'exempt'; readonly command: string; readonly reason: string }
   | { readonly state: 'refused_syntax'; readonly reason: TokenizeRefusal; readonly at: number }
-  | { readonly state: 'secret_in_argv'; readonly command: string };
+  | { readonly state: 'secret_in_argv'; readonly command: string; readonly message: string };
+
+const SECRET_IN_ARGV_MESSAGE =
+  'secret values are never accepted in argv because shell history and process listings can expose them';
 
 function distance(a: string, b: string): number {
   const row = Array.from({ length: b.length + 1 }, (_, i) => i);
@@ -99,8 +102,11 @@ export function interpret(
     return { state: 'unknown_command', typed, suggestions: suggestionsFor(typed, registry) };
   }
   const command = matching.path.join(' ');
-  if (matching.id === 'secret.set' && argv.length > matching.path.length + 1)
-    return { state: 'secret_in_argv', command };
+  const positionalsAfterPath = argv
+    .slice(matching.path.length)
+    .filter((token) => !token.startsWith('-'));
+  if (matching.id === 'secret.set' && positionalsAfterPath.length > 1)
+    return { state: 'secret_in_argv', command, message: SECRET_IN_ARGV_MESSAGE };
   const parsed = parseInvocation(argv, { cwd: '/', invocationId: createInvocationId(), registry });
   if (!parsed.isOk) {
     const token =

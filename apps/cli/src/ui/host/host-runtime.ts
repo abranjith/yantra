@@ -28,6 +28,7 @@ import {
   workerLaunchRoot,
   hostStartFailurePath,
   writeFileAtomic,
+  type KeychainProvider,
   type ProcessIdentity,
   type ProcessLivenessProbe,
 } from '@yantra/core';
@@ -91,6 +92,8 @@ export interface HostRuntimeDeps {
   readonly probe?: ProcessLivenessProbe;
   /** Overrides for the supervisor (tests: a fake spawner, a stepped clock). */
   readonly supervisor?: Partial<SupervisorDeps>;
+  /** Keychain provider override (tests: an in-memory fake keychain). */
+  readonly keychain?: KeychainProvider;
   /** Registers feature RPC methods (reads, supervisor, …) before the server starts. */
   readonly registerMethods?: (methods: RpcMethodRegistry, host: RunningHostCore) => void;
 }
@@ -235,8 +238,16 @@ export async function startHostRuntime(deps: HostRuntimeDeps): Promise<RunningHo
     });
     attendance.register(methods);
     registerInbox(methods);
-    registerCredentials(methods, { env: { ...(deps.env ?? {}) }, logger });
-    registerOnboarding(methods, { logger });
+    const keychainArg = deps.keychain;
+    registerCredentials(methods, {
+      env: { ...(deps.env ?? {}) },
+      logger,
+      ...(keychainArg === undefined ? {} : { keychain: keychainArg }),
+    });
+    registerOnboarding(methods, {
+      logger,
+      ...(keychainArg === undefined ? {} : { keychain: () => Promise.resolve(keychainArg) }),
+    });
     registerHealth(methods, {
       env: { ...(deps.env ?? {}) },
       logger,
@@ -247,6 +258,7 @@ export async function startHostRuntime(deps: HostRuntimeDeps): Promise<RunningHo
         host_pid: deps.identity.pid,
       },
       ...(deps.probe === undefined ? {} : { probe: deps.probe }),
+      ...(keychainArg === undefined ? {} : { keychain: () => Promise.resolve(keychainArg) }),
     });
     attendance.start();
     const attendanceRef = attendance;

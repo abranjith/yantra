@@ -14,6 +14,12 @@
       "task": "TASK-001"
     },
     {
+      "path": "apps/cli/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
       "path": "apps/cli/src/ui/host/credentials.ts",
       "status": "A",
       "role": "implement",
@@ -74,6 +80,12 @@
       "task": "TASK-001"
     },
     {
+      "path": "apps/cli/tests/ui/host/behavior-parity-feat071.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
       "path": "apps/cli/tests/ui/host/credentials.spec.ts",
       "status": "A",
       "role": "implement",
@@ -108,6 +120,24 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/palette/CommandPalette.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/src/palette/execute.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/src/palette/palette-model.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
     },
     {
       "path": "apps/web/src/parity/manifest.ts",
@@ -165,13 +195,13 @@
     },
     {
       "path": "apps/web/src/surfaces/health/host-environment.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
     {
       "path": "apps/web/src/surfaces/health/possible-orphans.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
@@ -242,6 +272,18 @@
       "task": "TASK-002"
     },
     {
+      "path": "apps/web/tests/generated/behavior-parity.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/tests/palette/palette-model.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
       "path": "apps/web/tests/parity/manifest-completeness.spec.ts",
       "status": "M",
       "role": "implement",
@@ -267,7 +309,7 @@
     },
     {
       "path": "apps/web/tests/surfaces/health/host-and-orphans.spec.tsx",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
@@ -296,6 +338,12 @@
       "task": "TASK-006"
     },
     {
+      "path": "docs/features/parity-command-palette-generated-surfaces.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
       "path": "docs/features/safety-and-privacy.md",
       "status": "M",
       "role": "implement",
@@ -320,6 +368,12 @@
       "task": "TASK-005"
     },
     {
+      "path": "e2e/app-onboarding-credentials-health.spec.ts",
+      "status": "U",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
       "path": "eslint.config.js",
       "status": "M",
       "role": "implement",
@@ -333,7 +387,7 @@
     },
     {
       "path": "packages/core/src/run/possible-orphans.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
@@ -357,7 +411,7 @@
     },
     {
       "path": "packages/core/tests/run/possible-orphans.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-009"
     },
@@ -495,6 +549,7 @@
     }
   ],
   "excluded": [
+    ".spec-lite/feature-summary.md",
     ".spec-lite/features/FEAT-071-onboarding_health_credentials/changeset.json",
     ".spec-lite/features/FEAT-071-onboarding_health_credentials/spec.md",
     ".spec-lite/plan_ui.md"

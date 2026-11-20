@@ -36,12 +36,13 @@ function requiredValues(fields: readonly FormField[]): FormValues {
 }
 
 const generatedPaths = [
-  ...new Set(
-    SURFACE_DEFINITIONS.flatMap((surface) => [
+  ...new Set([
+    ...SURFACE_DEFINITIONS.flatMap((surface) => [
       ...surface.actions,
       ...surface.rowActions.map((action) => action.command),
     ]),
-  ),
+    'doctor',
+  ]),
 ];
 
 describe('@no-llm generated form behavior parity', () => {

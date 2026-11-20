@@ -69,8 +69,9 @@ function commandTarget(path: string): ParityTarget {
       reason: 'Close the app, run yantra config data-dir <path>, then run yantra ui.',
       reviewed: REVIEWED,
     };
-  if (path === 'init') return { kind: 'reserved', feature: 'FEAT-071', surface: 'onboarding' };
-  if (path === 'doctor') return { kind: 'reserved', feature: 'FEAT-071', surface: 'health' };
+  if (path === 'init')
+    return { kind: 'adapter', adapter: 'init-onboarding', surface: 'onboarding' };
+  if (path === 'doctor') return { kind: 'surface', surface: 'health' };
   if (path.startsWith('secret ')) return { kind: 'surface', surface: 'credentials' };
   throw new Error(`No parity target for ${path}`);
 }
@@ -105,6 +106,19 @@ function optionTarget(command: string, id: string, flag: string): OptionParity {
       reason: 'The app always detaches the scheduler daemon.',
       reviewed: REVIEWED,
     };
+  if (command === 'init' && flag === '--reset')
+    return { kind: 'adapter_action', label: 'Run setup again' };
+  if (command === 'init' && (flag === '--provider' || flag === '--yes'))
+    return {
+      kind: 'exemption',
+      reason:
+        'Onboarding asks every applicable question explicitly and requires structured user answers (SD-2).',
+      reviewed: REVIEWED,
+    };
+  if (command === 'doctor' && flag === '--refresh')
+    return { kind: 'adapter_action', label: 'Re-run checks' };
+  if (command === 'doctor' && flag === '--agent-smoke')
+    return { kind: 'adapter_action', label: 'Provider smoke test' };
   if (flag === '--print' && command === 'ui')
     return { kind: 'exemption', reason: 'The app is already open.', reviewed: REVIEWED };
   return { kind: 'field' };

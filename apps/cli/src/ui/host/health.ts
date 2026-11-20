@@ -17,6 +17,7 @@ import {
   readPossibleOrphans,
   runsRoot,
   yantraVersion,
+  type KeychainProvider,
   type ProcessLivenessProbe,
 } from '@yantra/core';
 import {
@@ -42,6 +43,7 @@ export interface HealthDeps {
   readonly probe?: ProcessLivenessProbe;
   readonly runsDir?: string;
   readonly readOrphans?: () => Promise<readonly PossibleOrphan[]>;
+  readonly keychain?: () => Promise<KeychainProvider>;
 }
 
 const DISCARD = new Writable({
@@ -50,7 +52,10 @@ const DISCARD = new Writable({
   },
 });
 
-function defaultRuntime(env: Readonly<NodeJS.ProcessEnv>): DoctorRuntime {
+function defaultRuntime(
+  env: Readonly<NodeJS.ProcessEnv>,
+  keychain?: () => Promise<KeychainProvider>,
+): DoctorRuntime {
   return {
     env: { ...env },
     stdout: DISCARD,
@@ -61,7 +66,7 @@ function defaultRuntime(env: Readonly<NodeJS.ProcessEnv>): DoctorRuntime {
     loadPreferences: loadEffectivePreferences,
     smoke: runAgentSmoke,
     runsRoot,
-    keychain: createKeychainProvider,
+    keychain: keychain ?? createKeychainProvider,
     searchConfig: loadSearchConfig,
   };
 }
@@ -71,7 +76,7 @@ export function registerHealth(methods: RpcMethodRegistry, deps: HealthDeps): vo
   const collect =
     deps.collect ??
     (async (options: { readonly refresh?: boolean }) =>
-      collectDoctorResult(defaultRuntime(deps.env), {
+      collectDoctorResult(defaultRuntime(deps.env, deps.keychain), {
         refresh: options.refresh === true,
       }) as Promise<DoctorResult>);
 

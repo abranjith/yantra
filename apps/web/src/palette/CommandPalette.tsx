@@ -87,7 +87,11 @@ export function CommandPalette({
               description="Type one Yantra command. Shell operators and expansions are refused."
             />
             <div aria-live="polite" className="text-ink-2">
-              {outcome === null ? '' : outcome.state.replaceAll('_', ' ')}
+              {outcome === null
+                ? ''
+                : outcome.state === 'secret_in_argv'
+                  ? outcome.message
+                  : outcome.state.replaceAll('_', ' ')}
             </div>
             <Button type="submit">{dangerArmed ? 'Confirm dangerous command' : 'Run'}</Button>
             <Button variant="secondary" onPress={close}>

@@ -68,7 +68,11 @@ function isTerminalInvocation(state: InvocationState | undefined): boolean {
 
 function asSmokeEnvelope(envelope: unknown): DoctorSmokeEnvelope | null {
   if (typeof envelope !== 'object' || envelope === null) return null;
-  const candidate = envelope as Record<string, unknown>;
+  const raw = envelope as Record<string, unknown>;
+  const candidate =
+    typeof raw.result === 'object' && raw.result !== null
+      ? (raw.result as Record<string, unknown>)
+      : raw;
   const outcome = candidate.outcome;
   if (outcome !== 'passed' && outcome !== 'failed' && outcome !== 'aborted') return null;
   if (typeof candidate.provider !== 'string' || typeof candidate.model !== 'string') return null;
