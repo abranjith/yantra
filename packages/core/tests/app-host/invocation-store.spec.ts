@@ -5,7 +5,7 @@
  */
 
 import { fork } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -25,6 +25,7 @@ import {
 import {
   FileInvocationStore,
   INVOCATION_TRANSITIONS,
+  PRUNE_KEEP_LATEST,
   canTransition,
   capResultEnvelope,
 } from '../../src/app-host/invocation-store.js';
@@ -390,4 +391,95 @@ describe('results', () => {
     const raw = readFileSync(join(dir, 'invocations', `${idOf(1)}.json`), 'utf8');
     expect(JSON.parse(raw)).toMatchObject({ invocation_id: idOf(1) });
   });
+});
+
+describe('prune (REV-007)', () => {
+  /** Writes a terminal record straight to disk, bypassing the lock, for scale. */
+  function writeDone(n: number, state: 'finished' | 'discarded', updatedAt: Date): void {
+    const id = idOf(n);
+    writeFileSync(
+      join(dir, 'invocations', `${id}.json`),
+      `${JSON.stringify({
+        ...record(n),
+        state,
+        updated_at: updatedAt.toISOString(),
+        ...(state === 'finished'
+          ? { run_id: `run-${id}`, worker: { pid: 1, start_token: 'w' } }
+          : {}),
+      })}\n`,
+    );
+    if (state === 'finished') {
+      writeFileSync(join(dir, 'invocations', `${id}.result.json`), '{}\n');
+    }
+  }
+
+  const NOW = new Date(Date.UTC(2026, 10, 11, 11, 0, 0));
+
+  it('keeps every record that is active or still waits on the user', async () => {
+    // Mutate records hold no run slot, and the queued ones come last in FIFO
+    // order, so every state is reachable side by side.
+    const kept: State[] = [
+      'reserved',
+      'claimed',
+      'running',
+      'never_started',
+      'start_unknown',
+      'needs_review',
+      'queued',
+    ];
+    for (const [index, state] of kept.entries()) {
+      await reach(index + 1, state, { execution_class: 'mutate' });
+    }
+
+    const removed = await store.prune({ keepLatest: 0, maxAgeMs: 0 });
+
+    expect(removed).toEqual([]);
+    expect((await store.list()).map((item) => item.state).sort()).toEqual([...kept].sort());
+  });
+
+  it('removes finished and discarded records beyond the newest N, with their results', async () => {
+    mkdirSync(join(dir, 'invocations'), { recursive: true });
+    for (let n = 1; n <= 5; n += 1) {
+      writeDone(n, n % 2 === 0 ? 'discarded' : 'finished', new Date(NOW.getTime() - n * 1_000));
+    }
+
+    const removed = await store.prune({ keepLatest: 2 });
+
+    expect(removed.sort()).toEqual([idOf(3), idOf(4), idOf(5)]);
+    expect((await store.list()).map((item) => item.invocation_id).sort()).toEqual([
+      idOf(1),
+      idOf(2),
+    ]);
+    expect(existsSync(join(dir, 'invocations', `${idOf(3)}.result.json`))).toBe(false);
+    expect(existsSync(join(dir, 'invocations', `${idOf(1)}.result.json`))).toBe(true);
+  });
+
+  it('removes records older than the maximum age even within the newest N', async () => {
+    mkdirSync(join(dir, 'invocations'), { recursive: true });
+    const day = 24 * 60 * 60 * 1000;
+    writeDone(1, 'finished', new Date(NOW.getTime() - day));
+    writeDone(2, 'finished', new Date(NOW.getTime() - 8 * day));
+
+    const removed = await store.prune();
+
+    expect(removed).toEqual([idOf(2)]);
+    expect((await store.list()).map((item) => item.invocation_id)).toEqual([idOf(1)]);
+  });
+
+  it('bounds the directory after 5,000 finished records to the default history', async () => {
+    mkdirSync(join(dir, 'invocations'), { recursive: true });
+    for (let n = 1; n <= 5_000; n += 1) {
+      writeDone(n, 'finished', new Date(NOW.getTime() - n * 1_000));
+    }
+    await reach(5_001, 'queued');
+
+    const removed = await store.prune();
+    const left = await store.list();
+
+    expect(removed).toHaveLength(5_000 - PRUNE_KEEP_LATEST);
+    expect(left).toHaveLength(PRUNE_KEEP_LATEST + 1);
+    expect(left.some((item) => item.invocation_id === idOf(5_001))).toBe(true);
+    // The newest history survives: the most recent finish is record 1.
+    expect(left.some((item) => item.invocation_id === idOf(1))).toBe(true);
+  }, 120_000);
 });
