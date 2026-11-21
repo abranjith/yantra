@@ -11,13 +11,13 @@ Yantra’s app exposes the registered CLI surface without maintaining a second, 
 - Derives table columns from described output schemas and supports paged reads and bound row actions.
 - Opens a command palette with **Ctrl+K** or **Cmd+K**. It accepts Yantra CLI syntax for POSIX shells, PowerShell, and `cmd.exe` without evaluating shell input.
 - Refuses pipes, redirects, expansions, globs, multiline input, and unterminated quotes rather than guessing.
-- Keeps command, option, run-event, artifact, and app-surface coverage under parity tests. Credential commands remain reserved for FEAT-071.
+- Keeps command, option, run-event, artifact, and app-surface coverage under parity tests, with zero remaining reserved commands (`init`, `doctor`, and `secret` are mapped to Onboarding, Health, and Credentials).
 
 ## How to Use It
 
 Open the Yantra app and choose a generated destination from the main navigation. Use the action buttons above a table to open a generated command form, review its CLI twin, and submit it.
 
-To use the palette, press **Ctrl+K** on Windows/Linux or **Cmd+K** on macOS, then type either a complete command such as `yantra sites add example.com` or the command without the leading executable. Read commands navigate to their app surface; mutation commands are submitted through the normal command invocation RPC. Dangerous commands require a second confirmation.
+To use the palette, press **Ctrl+K** on Windows/Linux or **Cmd+K** on macOS, then type either a complete command such as `yantra sites add example.com` or the command without the leading executable. Read commands (`doctor`, `list`, …), `init`, and `secret list`/`secret rm` navigate to their app surface; `secret set <key>` opens **Settings → Credentials** with `<key>` prefilled and refuses any positional `[value]` with the CLI's argv-refusal message; mutation commands (including `doctor --agent-smoke`) are submitted through the normal command invocation RPC. Dangerous commands require a second confirmation.
 
 The Installation page also provides a raw `config.yaml` editor. Edited text is supplied to the worker input collector and is not placed in command-line arguments. Browser and daemon lifecycle actions use dedicated adapters where a generic form is not sufficient.
 

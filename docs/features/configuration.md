@@ -293,7 +293,9 @@ yantra init --reset
 ```
 
 On an interactive TTY without `--json` or `--yes`, and when `--provider` is not
-supplied, `yantra init` asks for:
+supplied, `yantra init` drives its prompts from the shared `INIT_QUESTIONS`
+catalog in `@yantra/protocol` (the same question set used by app onboarding),
+asking for:
 
 1. `anthropic`, `ollama`, or `none`;
 2. an environment reference, a keychain credential, or no credential;
@@ -425,7 +427,7 @@ yantra secret rm tavily.api_key
 `secret set` reads from an echo-disabled TTY prompt or piped stdin. It never
 accepts the value as an argument, so the value does not enter shell history or
 a process listing. Piped input has one trailing newline removed. Empty values
-are rejected.
+and values exceeding 8 KiB (8,192 bytes) in UTF-8 are rejected.
 
 `secret list` prints known key names with `keychain`, `env`, or `absent`; it
 never prints values. `secret rm` reports `removed` or `absent`. `set` and `rm`
@@ -433,9 +435,11 @@ exit with the environment-error code when the OS keychain is unavailable and
 suggest `${env:NAME}` references as the supported alternative. Every secret
 subcommand accepts `--json`.
 
-These credential commands run on the secure terminal surface. Worker execution
-refuses `secret set`, `secret list`, and `secret rm` with exit `1`; credential
-values still enter only through the hidden prompt or stdin.
+These operations are backed by a shared core credential service intended for
+both the CLI and the app. In the CLI, these credential commands run on the
+secure terminal surface; worker execution refuses `secret set`, `secret list`,
+and `secret rm` with exit `1`, and credential values still enter only through
+the hidden prompt or stdin.
 
 ### Open completed run output
 

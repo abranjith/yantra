@@ -26,6 +26,13 @@ export { exitCodeForDoOutcome } from './commands/do.js';
 // drives the real host relay over a real worker run socket.
 export { LiveViewRelay, WINDOW_BUFFER_LIMIT } from './ui/host/live-view-relay.js';
 export type { RpcConnection } from './ui/host/rpc-server.js';
+export {
+  startHostRuntime,
+  type HostRuntimeDeps,
+  type RunningHost,
+} from './ui/host/host-runtime.js';
+export { openHostLog } from './ui/host/host-log.js';
+export { spawnDetachedWorker } from './worker/spawn.js';
 
 /** Compatibility entrypoint; process defaults belong to bin.ts. */
 export const run = (argv: readonly string[], options: CliRunOptions = {}): Promise<number> =>

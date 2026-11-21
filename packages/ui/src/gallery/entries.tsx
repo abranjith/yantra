@@ -26,6 +26,8 @@ import {
 } from '../primitives/Menu.js';
 import { NumberField } from '../primitives/NumberField.js';
 import { Popover, PopoverDialog, PopoverTrigger } from '../primitives/Popover.js';
+import { Radio, RadioGroup } from '../primitives/RadioGroup.js';
+import { SecretField } from '../primitives/SecretField.js';
 import { Select, type ListOption } from '../primitives/Select.js';
 import { Switch } from '../primitives/Switch.js';
 import { Table, type TableColumn } from '../primitives/Table.js';
@@ -461,6 +463,7 @@ function TextFieldSheet(): ReactNode {
         errorMessage="Use letters, digits and dashes only."
       />
       <TextField label="Run ID" isDisabled voice="engine" defaultValue="run-00042" />
+      <SecretField label="API key" placeholder="sk-…" />
       <TextField
         label="Notes"
         multiline
@@ -491,6 +494,18 @@ function NumberFieldSheet(): ReactNode {
       />
       <NumberField label="Captures" isDisabled defaultValue={3} />
     </div>
+  );
+}
+
+function RadioGroupSheet(): ReactNode {
+  return (
+    <RadioGroup label="Credential source" description="Pick one option explicitly.">
+      <Radio value="environment variable">environment variable</Radio>
+      <Radio value="keychain">keychain</Radio>
+      <Radio value="skip" isDisabled description="Disabled when unavailable">
+        skip
+      </Radio>
+    </RadioGroup>
   );
 }
 
@@ -822,6 +837,13 @@ export const GALLERY_ENTRIES: readonly GalleryEntry[] = [
     title: 'Checkbox',
     primitive: 'Checkbox',
     render: () => <CheckboxSheet />,
+    interactive: true,
+  },
+  {
+    id: 'radio-group',
+    title: 'RadioGroup',
+    primitive: 'RadioGroup',
+    render: () => <RadioGroupSheet />,
     interactive: true,
   },
   {

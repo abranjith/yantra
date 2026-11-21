@@ -7,7 +7,10 @@ import { stringify } from 'yaml';
 
 import { withResourceLock, ResourceBusyError } from '../../src/locks/resource-lock.js';
 import {
+  InitInvalidAnswerError,
+  InitMissingAnswerError,
   collectInitProviderAnswers,
+  createPreAnsweredCollector,
   defaultContextGrantAnswers,
   defaultsFor,
   runInit,
@@ -154,5 +157,48 @@ describe('@no-llm shared init service', () => {
       },
       { targetPath: path },
     );
+  });
+
+  it('validates all applicable pre-answered questions before any keychain side effect', async () => {
+    const stored = new Map<string, string>();
+    const preCollector = createPreAnsweredCollector(
+      {
+        provider: 'anthropic',
+        credential_source: 'keychain',
+        model_id: 'claude-opus-4-7',
+        search_key_provider: 'skip',
+        data_dir: null,
+        // context_location intentionally omitted
+      },
+      { credential_secret: 'CANARY-never-written' },
+      {
+        keychain: async () => ({
+          isAvailable: async () => true,
+          set: async (_s, account, value) => {
+            stored.set(account, value);
+          },
+          get: async () => null,
+          delete: async () => false,
+          list: async () => [],
+        }),
+      },
+    );
+    await expect(runInit(request, preCollector, dependencies())).rejects.toBeInstanceOf(
+      InitMissingAnswerError,
+    );
+    expect(stored.size).toBe(0);
+    expect(await readdir(root)).toEqual([]);
+  });
+
+  it('throws InitInvalidAnswerError without echoing free text', async () => {
+    const preCollector = createPreAnsweredCollector({
+      provider: 'bogus-free-text-provider',
+      search_key_provider: 'skip',
+      data_dir: null,
+      context_location: false,
+    });
+    const error = await runInit(request, preCollector, dependencies()).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(InitInvalidAnswerError);
+    expect((error as Error).message).not.toContain('bogus-free-text-provider');
   });
 });

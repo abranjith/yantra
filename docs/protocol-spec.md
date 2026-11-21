@@ -1239,6 +1239,16 @@ Example:
 }
 ```
 
+## ConfigRefDisplay
+
+A configuration reference without any secret value.
+
+Example:
+
+```json
+"<value>"
+```
+
 ## ConfigValidateResult
 
 The `yantra config validate --json` document.
@@ -1427,6 +1437,76 @@ Example:
 
 ```json
 "<value>"
+```
+
+## CredentialListResult
+
+Keychain availability and credential rows (names and references only).
+
+| Field     | Description |
+| --------- | ----------- |
+| available |             |
+| remedy    |             |
+| rows      |             |
+
+Example:
+
+```json
+{
+  "available": "<available>",
+  "remedy": "<remedy>",
+  "rows": "<rows>"
+}
+```
+
+## CredentialReference
+
+A model or search configuration entry referencing this credential.
+
+| Field | Description                                         |
+| ----- | --------------------------------------------------- |
+| kind  |                                                     |
+| id    |                                                     |
+| ref   | A configuration reference without any secret value. |
+
+Example:
+
+```json
+{
+  "kind": "<kind>",
+  "id": "<id>",
+  "ref": "<ref>"
+}
+```
+
+## CredentialRow
+
+A credential entry with its source and configuration references.
+
+| Field         | Description                                   |
+| ------------- | --------------------------------------------- |
+| key           |                                               |
+| source        | Where the credential currently resolves from. |
+| referenced_by |                                               |
+
+Example:
+
+```json
+{
+  "key": "<key>",
+  "source": "<source>",
+  "referenced_by": "<referenced_by>"
+}
+```
+
+## CredentialSource
+
+Where the credential currently resolves from.
+
+Example:
+
+```json
+"keychain"
 ```
 
 ## DaemonStatusResult
@@ -1707,6 +1787,154 @@ Example:
   "settings": "<settings>",
   "content": "<content>"
 }
+```
+
+## DoctorBrowserProvenance
+
+Effective browser selection and managed-storage provenance.
+
+| Field            | Description                                                |
+| ---------------- | ---------------------------------------------------------- |
+| source           | Configured browser source (e.g. auto, managed, or a path). |
+| origin           | Where the selection came from.                             |
+| ownership        | Whether Yantra manages the build.                          |
+| executablePath   | Resolved canonical browser executable path.                |
+| browserVersion   | Detected browser version string.                           |
+| compatibility    | Compatibility state of the selected browser.               |
+| managedRoot      | Root directory for Yantra-managed browser builds.          |
+| managedBuild     | Active managed build ID, or null when absent.              |
+| orphanCount      | Count of superseded managed builds.                        |
+| reclaimableBytes | Bytes reclaimable by removing superseded managed builds.   |
+| alternatives     | Alternative browser executables discovered.                |
+| remediation      | Prose remediation for the browser selection.               |
+
+Example:
+
+```json
+{
+  "source": "<source>",
+  "origin": "<origin>",
+  "ownership": "<ownership>",
+  "executablePath": "<executablePath>",
+  "browserVersion": "<browserVersion>",
+  "compatibility": "<compatibility>",
+  "managedRoot": "<managedRoot>",
+  "managedBuild": "<managedBuild>",
+  "orphanCount": "<orphanCount>",
+  "reclaimableBytes": "<reclaimableBytes>",
+  "alternatives": "<alternatives>",
+  "remediation": "<remediation>"
+}
+```
+
+## DoctorCheck
+
+One diagnostic check emitted by `yantra doctor`.
+
+| Field       | Description                                                                       |
+| ----------- | --------------------------------------------------------------------------------- |
+| id          | Check identifier (a `DoctorCheckId`, or an unknown ID for forward compatibility). |
+| title       | Human-readable check title.                                                       |
+| status      | Check status in CLI words: ok, warn, or fail.                                     |
+| summary     | One-line outcome summary for this check.                                          |
+| remediation | Prose fix hint when the check warns or fails.                                     |
+| details     | Optional structured key/value details for this check.                             |
+
+Example:
+
+```json
+{
+  "id": "<id>",
+  "title": "<title>",
+  "status": "<status>",
+  "summary": "<summary>",
+  "remediation": "<remediation>",
+  "details": "<details>"
+}
+```
+
+## DoctorCheckId
+
+Closed identifier of a known `yantra doctor` check.
+
+Example:
+
+```json
+"browser.selection"
+```
+
+## DoctorReadParams
+
+Parameters for the in-process `read.doctor` RPC.
+
+| Field   | Description                                            |
+| ------- | ------------------------------------------------------ |
+| refresh | When true, bypasses the cached core environment probe. |
+
+Example:
+
+```json
+{
+  "refresh": "<refresh>"
+}
+```
+
+## DoctorResult
+
+Structured `yantra doctor` result.
+
+| Field       | Description                                                 |
+| ----------- | ----------------------------------------------------------- |
+| checks      | Ordered list of diagnostic checks.                          |
+| overall     | Worst status across all checks.                             |
+| version     | Yantra protocol version.                                    |
+| platform    | Host operating system platform.                             |
+| nodeVersion | Node.js runtime version.                                    |
+| browser     | Effective browser selection and managed-storage provenance. |
+| search      | Planned search-provider provenance.                         |
+
+Example:
+
+```json
+{
+  "checks": "<checks>",
+  "overall": "<overall>",
+  "version": "<version>",
+  "platform": "<platform>",
+  "nodeVersion": "<nodeVersion>",
+  "browser": "<browser>",
+  "search": "<search>"
+}
+```
+
+## DoctorSearchProvenance
+
+Planned search-provider provenance.
+
+| Field    | Description                                        |
+| -------- | -------------------------------------------------- |
+| provider | Planned search provider name.                      |
+| kind     | Whether the provider uses a keyed API or scraping. |
+| via      | Layer that selected the provider.                  |
+
+Example:
+
+```json
+{
+  "provider": "<provider>",
+  "kind": "<kind>",
+  "via": "<via>"
+}
+```
+
+## DoctorStatus
+
+Check status in CLI words: ok, warn, or fail.
+
+Example:
+
+```json
+"ok"
 ```
 
 ## DriftDifference
@@ -2415,6 +2643,28 @@ Example:
 }
 ```
 
+## HostEnvironmentInfo
+
+App host environment capture metadata; never includes environment names or values.
+
+| Field           | Description                                                 |
+| --------------- | ----------------------------------------------------------- |
+| host_started_at | ISO timestamp when the app host started.                    |
+| env_captured_at | ISO timestamp when the host captured its environment (D13). |
+| yantra_version  | Version of the Yantra executable running the host.          |
+| host_pid        | Process ID of the running app host.                         |
+
+Example:
+
+```json
+{
+  "host_started_at": "<host_started_at>",
+  "env_captured_at": "<env_captured_at>",
+  "yantra_version": "<yantra_version>",
+  "host_pid": "<host_pid>"
+}
+```
+
 ## HostHelloParams
 
 No description provided.
@@ -2561,6 +2811,128 @@ Example:
 
 ```json
 "resume"
+```
+
+## InitAnswerScalar
+
+No description provided.
+
+Example:
+
+```json
+"<value>"
+```
+
+## InitAnswersRequest
+
+Onboarding submission request.
+
+| Field         | Description                                             |
+| ------------- | ------------------------------------------------------- |
+| answers       | Non-secret onboarding answers keyed by InitQuestion.id. |
+| secrets       | secret                                                  |
+| reset         |                                                         |
+| invocation_id |                                                         |
+
+Example:
+
+```json
+{
+  "answers": "<answers>",
+  "secrets": "<secrets>",
+  "reset": "<reset>",
+  "invocation_id": "<invocation_id>"
+}
+```
+
+## InitQuestion
+
+One question descriptor in the shared init catalog.
+
+| Field     | Description                                                           |
+| --------- | --------------------------------------------------------------------- |
+| id        | Unique identifier for an onboarding/init question.                    |
+| kind      | Input widget kind for an init question.                               |
+| message   |                                                                       |
+| choices   |                                                                       |
+| initial   |                                                                       |
+| initialBy | Optional map from an earlier answer value to a literal initial value. |
+| optional  |                                                                       |
+| when      |                                                                       |
+| section   | Logical onboarding step grouping.                                     |
+
+Example:
+
+```json
+{
+  "id": "<id>",
+  "kind": "<kind>",
+  "message": "<message>",
+  "choices": "<choices>",
+  "initial": "<initial>",
+  "initialBy": "<initialBy>",
+  "optional": "<optional>",
+  "when": "<when>",
+  "section": "<section>"
+}
+```
+
+## InitQuestionId
+
+Unique identifier for an onboarding/init question.
+
+Example:
+
+```json
+"provider"
+```
+
+## InitQuestionInitialBy
+
+Optional map from an earlier answer value to a literal initial value.
+
+| Field    | Description                                        |
+| -------- | -------------------------------------------------- |
+| question | Unique identifier for an onboarding/init question. |
+| map      |                                                    |
+
+Example:
+
+```json
+{
+  "question": "<question>",
+  "map": "<map>"
+}
+```
+
+## InitQuestionKind
+
+Input widget kind for an init question.
+
+Example:
+
+```json
+"select"
+```
+
+## InitQuestionSection
+
+Logical onboarding step grouping.
+
+Example:
+
+```json
+"model"
+```
+
+## InitQuestionWhen
+
+No description provided.
+
+Example:
+
+```json
+"<value>"
 ```
 
 ## InputKind
@@ -3613,6 +3985,72 @@ Example:
 "attempted"
 ```
 
+## OnboardingError
+
+No description provided.
+
+Example:
+
+```json
+"<value>"
+```
+
+## OnboardingResult
+
+Result of an onboarding submission (no secret values).
+
+| Field           | Description |
+| --------------- | ----------- |
+| status          |             |
+| config_path     |             |
+| profile_path    |             |
+| profile_written |             |
+| provider        |             |
+| search_key      |             |
+| command         |             |
+| location_shared |             |
+
+Example:
+
+```json
+{
+  "status": "<status>",
+  "config_path": "<config_path>",
+  "profile_path": "<profile_path>",
+  "profile_written": "<profile_written>",
+  "provider": "<provider>",
+  "search_key": "<search_key>",
+  "command": "<command>",
+  "location_shared": "<location_shared>"
+}
+```
+
+## OnboardingStatus
+
+Current onboarding and installation readiness status.
+
+| Field              | Description |
+| ------------------ | ----------- |
+| config_exists      |             |
+| profile_exists     |             |
+| config_path        |             |
+| profile_path       |             |
+| data_dir           |             |
+| keychain_available |             |
+
+Example:
+
+```json
+{
+  "config_exists": "<config_exists>",
+  "profile_exists": "<profile_exists>",
+  "config_path": "<config_path>",
+  "profile_path": "<profile_path>",
+  "data_dir": "<data_dir>",
+  "keychain_available": "<keychain_available>"
+}
+```
+
 ## OptionGroup
 
 A named, reusable option set.
@@ -3846,6 +4284,48 @@ Example:
   "default_scope": "<default_scope>",
   "steps": "<steps>",
   "outputs": "<outputs>"
+}
+```
+
+## PossibleOrphan
+
+Read-only retained ownership record whose process identity is unverifiable.
+
+| Field                        | Description                                            |
+| ---------------------------- | ------------------------------------------------------ |
+| run_id                       | Run identifier owning the retained record.             |
+| pid                          | Recorded process ID.                                   |
+| recorded_start_token_present | Whether a creation start token was recorded on disk.   |
+| executable                   | Executable basename only; never a full directory path. |
+| recorded_at                  | ISO timestamp when the ownership record was written.   |
+| reason                       | Why Yantra left the process untouched.                 |
+
+Example:
+
+```json
+{
+  "run_id": "<run_id>",
+  "pid": "<pid>",
+  "recorded_start_token_present": "<recorded_start_token_present>",
+  "executable": "<executable>",
+  "recorded_at": "<recorded_at>",
+  "reason": "<reason>"
+}
+```
+
+## PossibleOrphansResult
+
+Read-only list of possible orphan processes.
+
+| Field   | Description                                                   |
+| ------- | ------------------------------------------------------------- |
+| orphans | Retained ownership records whose identity verdict is unknown. |
+
+Example:
+
+```json
+{
+  "orphans": "<orphans>"
 }
 ```
 
@@ -4902,6 +5382,76 @@ Example:
   "kind": "<kind>",
   "key": "<key>",
   "hosts": "<hosts>"
+}
+```
+
+## SecretRemoveRequest
+
+Remove a credential from the OS keychain.
+
+| Field | Description            |
+| ----- | ---------------------- |
+| key   | Keychain account name. |
+
+Example:
+
+```json
+{
+  "key": "<key>"
+}
+```
+
+## SecretRemoveResponse
+
+Whether the credential was removed or already absent.
+
+| Field  | Description |
+| ------ | ----------- |
+| status |             |
+| key    |             |
+
+Example:
+
+```json
+{
+  "status": "<status>",
+  "key": "<key>"
+}
+```
+
+## SecretSetRequest
+
+Store or replace a credential in the OS keychain.
+
+| Field | Description            |
+| ----- | ---------------------- |
+| key   | Keychain account name. |
+| value | secret                 |
+
+Example:
+
+```json
+{
+  "key": "<key>",
+  "value": "<value>"
+}
+```
+
+## SecretSetResponse
+
+Confirmation that the credential was stored.
+
+| Field  | Description |
+| ------ | ----------- |
+| status |             |
+| key    |             |
+
+Example:
+
+```json
+{
+  "status": "<status>",
+  "key": "<key>"
 }
 ```
 

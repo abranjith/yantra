@@ -1,3 +1,4 @@
+export * from './credential-service.js';
 export * from './errors.js';
 export * from './keychain.js';
 export * from './resolver.js';

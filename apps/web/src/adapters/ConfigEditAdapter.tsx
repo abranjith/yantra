@@ -8,7 +8,13 @@ interface ConfigListDocument {
   readonly config?: unknown;
 }
 
-export function ConfigEditAdapter({ cwd }: { readonly cwd: string }): ReactNode {
+export function ConfigEditAdapter({
+  cwd,
+  defaultOpen = false,
+}: {
+  readonly cwd: string;
+  readonly defaultOpen?: boolean;
+}): ReactNode {
   const rpc = useRpc();
   const [text, setText] = useState('');
   const [problem, setProblem] = useState<string | null>(null);
@@ -48,7 +54,7 @@ export function ConfigEditAdapter({ cwd }: { readonly cwd: string }): ReactNode 
     }
   };
   return (
-    <DialogTrigger>
+    <DialogTrigger defaultOpen={defaultOpen}>
       <Button variant="secondary">Edit config.yaml</Button>
       <Dialog title="Edit config.yaml">
         <div className="flex flex-col gap-4">

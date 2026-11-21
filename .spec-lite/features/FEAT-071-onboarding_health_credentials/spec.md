@@ -82,7 +82,7 @@ Plan references: §1, D2, D5, D13, D15, D16, §6 (execution classes: `init` adap
     shows the referencing entries and requires explicit confirmation.
   - The CLI's behavior and output are unchanged.
 
-> **DEVIATION-1 (awaiting confirmation): Onboarding does not let the user pick the storage
+> **DEVIATION-1 (approved): Onboarding does not let the user pick the storage
 > location while the app is running.**
 >
 > **What the plan says.** plan_ui §12 lists "storage" among the onboarding answers.
@@ -703,8 +703,8 @@ read-only `possible-orphans.ts` over FEAT-064's record format. It never adds cle
         credential chain resolves a keychain reference set there;
       - otherwise `text`.
 
-      Record the verdict in `evidence`. DEVIATION if the plan's "one-click" expectation cannot be
-      met.
+      Record the verdict in `evidence`. DEVIATION: `agent.credentials` is text-only; saving a
+      credential reference in Models does not activate the runtime `--auth-secret` path.
 
     - `keychain.reachable`, `datadir.writable`, `datadir.permissions`, `cachedir.writable`,
       `indexdb.writable`: `text`. These are OS-level conditions with no engineered path. The prose
@@ -912,15 +912,21 @@ read-only `possible-orphans.ts` over FEAT-064's record format. It never adds cle
 
 ## 8. State Tracking
 
-- [ ] TASK-001: Shared core credential service; `yantra secret` delegates to it with unchanged output
-- [ ] TASK-002: Credentials surface: write-only set, names-only list, guarded remove, all in-process
-- [ ] TASK-003: One `init` question catalog in protocol, driving the terminal wizard unchanged
-- [ ] TASK-004: Browser answer collector and in-process `onboarding.submit`, file-equivalent to terminal `init`
-- [ ] TASK-005: Onboarding flow in the app: first-run entry, explicit questions, skip, Not now, reset
-- [ ] TASK-006: Health renders every `doctor` check from an in-process read
-- [ ] TASK-007: Engineered remediation catalog and actions on Health
-- [ ] TASK-008: Agent smoke check from Health as a run-class worker
-- [ ] TASK-009: Host environment age and possible orphans on Health
-- [ ] TASK-010: Parity mapping, end-to-end app flows, and the credential security suite
+- [x] TASK-001: Shared core credential service; `yantra secret` delegates to it with unchanged output
+- [x] TASK-002: Credentials surface: write-only set, names-only list, guarded remove, all in-process
+- [x] TASK-003: One `init` question catalog in protocol, driving the terminal wizard unchanged
+- [x] TASK-004: Browser answer collector and in-process `onboarding.submit`, file-equivalent to terminal `init`
+- [x] TASK-005: Onboarding flow in the app: first-run entry, explicit questions, skip, Not now, reset
+- [x] TASK-006: Health renders every `doctor` check from an in-process read
+- [x] TASK-007: Engineered remediation catalog and actions on Health
+- [x] TASK-008: Agent smoke check from Health as a run-class worker
+- [x] TASK-009: Host environment age and possible orphans on Health
+- [x] TASK-010: Parity mapping, end-to-end app flows, and the credential security suite
+
+Windows real-Chrome acceptance passed. Local macOS and Linux verification was deferred at the
+user's request. The initial repository-wide run reported a slot-invariant test failure and an
+unexpected Vitest worker exit. The reservation test now waits for child stdout to drain before
+reading its result; all 109 invocation-store tests passed afterward. A serialized repository-wide
+rerun exceeded the local execution time limit; the PR's CI is still needed for full-suite results.
 
 Legend: [ ] Not started | [/] In progress | [x] Completed

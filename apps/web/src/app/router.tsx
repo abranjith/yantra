@@ -2,13 +2,10 @@ import { createRouter, type RouterHistory } from '@tanstack/react-router';
 
 import {
   browserRoute,
-  credentialsRoute,
   daemonRoute,
   dataRoute,
-  healthRoute,
   installationRoute,
   modelsRoute,
-  onboardingRoute,
   preferencesRoute,
   schedulesRoute,
   sitesRoute,
@@ -16,14 +13,17 @@ import {
   usageRoute,
   workflowsRoute,
 } from '../routes/generated.js';
+import { healthRoute } from '../routes/health.js';
 import { inboxRoute } from '../routes/inbox.js';
 import { ledgerRoute } from '../routes/ledger.js';
 import { missionInvocationRoute } from '../routes/mission.invocations.$invocationId.js';
 import { homeRoute, missionRoute } from '../routes/mission.js';
 import { missionRunRoute } from '../routes/mission.runs.$runId.js';
+import { onboardingRoute } from '../routes/onboarding.js';
 import { artifactRoute } from '../routes/runs.$runId.artifacts.$.js';
 import { auditRoute } from '../routes/runs.$runId.audit.js';
 import { runRoute } from '../routes/runs.$runId.js';
+import { credentialsRoute } from '../routes/settings.credentials.js';
 
 import { rootRoute } from './root-route.js';
 

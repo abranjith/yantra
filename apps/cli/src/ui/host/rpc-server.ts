@@ -46,16 +46,45 @@ export const AUTH_TIMEOUT_MS = 5_000;
 /** Ping interval. */
 export const HEARTBEAT_MS = 15_000;
 
+/** RPC methods whose request params may contain secrets and must be redacted in logs. */
+export const REDACTED_RPC_PARAM_METHODS: ReadonlySet<string> = new Set([
+  'secret.set',
+  'onboarding.submit',
+]);
+
+/** Returns a log-safe projection of RPC params, stripping secrets for sensitive methods. */
+export function redactRpcParams(method: string, params: unknown): Record<string, unknown> {
+  if (!REDACTED_RPC_PARAM_METHODS.has(method)) {
+    return params !== null && typeof params === 'object' && !Array.isArray(params)
+      ? { method, ...(params as Record<string, unknown>) }
+      : { method };
+  }
+  if (params !== null && typeof params === 'object' && 'key' in params) {
+    const key = (params as { key?: unknown }).key;
+    if (typeof key === 'string') return { method, key };
+  }
+  return { method };
+}
+
 /** A JSON-RPC error a handler throws on purpose. */
 export class RpcError extends Error {
   public override readonly name = 'RpcError';
   public readonly code: number;
   public readonly data: AppRpcErrorData;
 
-  public constructor(name: AppRpcErrorName, message: string, remediation?: string) {
+  public constructor(
+    name: AppRpcErrorName,
+    message: string,
+    remediation?: string,
+    dataCode?: string,
+  ) {
     super(message);
     this.code = AppRpcErrorCode[name];
-    this.data = { code: name, message, ...(remediation === undefined ? {} : { remediation }) };
+    this.data = {
+      code: dataCode ?? name,
+      message,
+      ...(remediation === undefined ? {} : { remediation }),
+    };
   }
 }
 
@@ -388,6 +417,8 @@ export class RpcServer {
         ),
       );
     }
+    const sensitive = REDACTED_RPC_PARAM_METHODS.has(name);
+    if (sensitive) this.logger.debug?.(redactRpcParams(name, parsedParams.data), 'rpc request');
     try {
       const value = await method.handler(parsedParams.data, {
         windowId: connection.windowId,
@@ -406,13 +437,18 @@ export class RpcServer {
       return reply({ jsonrpc: '2.0', id: id ?? null, result: result.data });
     } catch (error) {
       if (error instanceof RpcError) return reply(errorResponse(id ?? null, error));
-      this.logger.error({ method: name, err: errorName(error) }, 'rpc handler failed');
+      this.logger.error(
+        sensitive ? { method: name } : { method: name, err: errorName(error) },
+        'rpc handler failed',
+      );
       return reply(
         errorResponse(
           id ?? null,
           new RpcError(
             'internal_error',
-            `${name} failed: ${error instanceof Error ? error.message : 'unknown error'}.`,
+            sensitive
+              ? `${name} failed.`
+              : `${name} failed: ${error instanceof Error ? error.message : 'unknown error'}.`,
             'Try again; if it keeps failing, see host.log.',
           ),
         ),

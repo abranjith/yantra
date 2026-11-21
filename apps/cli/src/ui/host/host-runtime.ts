@@ -28,6 +28,7 @@ import {
   workerLaunchRoot,
   hostStartFailurePath,
   writeFileAtomic,
+  type KeychainProvider,
   type ProcessIdentity,
   type ProcessLivenessProbe,
 } from '@yantra/core';
@@ -39,6 +40,7 @@ import { ArtifactUrls, registerArtifactUrls } from './artifact-urls.js';
 import { Attendance } from './attendance.js';
 import { ChangeFeed, openDefaultSources, registerChangeFeed } from './change-feed.js';
 import { ControlSocketServer } from './control-socket.js';
+import { registerCredentials } from './credentials.js';
 import {
   driftReview,
   registerDriftReview,
@@ -48,12 +50,14 @@ import {
   type EffectiveResolver,
 } from './drift-review.js';
 import { HostStartError } from './errors.js';
+import { registerHealth } from './health.js';
 import { AppHost, SILENT_HOST_LOGGER, type HostLogger, type HostRoute } from './host.js';
 import { IdleExit } from './idle-exit.js';
 import { registerInbox } from './inbox-rpc.js';
 import { hostActiveRuns } from './ledger-reads.js';
 import { LiveViewRelay } from './live-view-relay.js';
 import { registerMissionReads } from './mission-reads.js';
+import { registerOnboarding } from './onboarding.js';
 import { registerReads } from './reads.js';
 import { recoverHost } from './recovery.js';
 import { RpcMethodRegistry, RpcServer } from './rpc-server.js';
@@ -88,6 +92,8 @@ export interface HostRuntimeDeps {
   readonly probe?: ProcessLivenessProbe;
   /** Overrides for the supervisor (tests: a fake spawner, a stepped clock). */
   readonly supervisor?: Partial<SupervisorDeps>;
+  /** Keychain provider override (tests: an in-memory fake keychain). */
+  readonly keychain?: KeychainProvider;
   /** Registers feature RPC methods (reads, supervisor, …) before the server starts. */
   readonly registerMethods?: (methods: RpcMethodRegistry, host: RunningHostCore) => void;
 }
@@ -232,6 +238,28 @@ export async function startHostRuntime(deps: HostRuntimeDeps): Promise<RunningHo
     });
     attendance.register(methods);
     registerInbox(methods);
+    const keychainArg = deps.keychain;
+    registerCredentials(methods, {
+      env: { ...(deps.env ?? {}) },
+      logger,
+      ...(keychainArg === undefined ? {} : { keychain: keychainArg }),
+    });
+    registerOnboarding(methods, {
+      logger,
+      ...(keychainArg === undefined ? {} : { keychain: () => Promise.resolve(keychainArg) }),
+    });
+    registerHealth(methods, {
+      env: { ...(deps.env ?? {}) },
+      logger,
+      hostStatus: {
+        host_started_at: acquired.started_at,
+        env_captured_at: envCapturedAt,
+        yantra_version: deps.yantraVersion,
+        host_pid: deps.identity.pid,
+      },
+      ...(deps.probe === undefined ? {} : { probe: deps.probe }),
+      ...(keychainArg === undefined ? {} : { keychain: () => Promise.resolve(keychainArg) }),
+    });
     attendance.start();
     const attendanceRef = attendance;
     cleanups.push(() => {

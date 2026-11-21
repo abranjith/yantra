@@ -255,4 +255,87 @@ describe('@no-llm agentic adapter parity', () => {
       expect(codes).toEqual([130, 130]);
     },
   );
+  it('doctor --agent-smoke yields the same doctor_smoke envelope and exit code in terminal and worker', async () => {
+    const smokeDir = join(home, 'smoke-runs');
+    await mkdir(smokeDir, { recursive: true });
+    let terminalStdout = '';
+    const terminalSink = new Writable({
+      write(chunk, _enc, cb) {
+        terminalStdout += String(chunk);
+        cb();
+      },
+    });
+    const stderrSink = new Writable({
+      write(_c, _e, cb) {
+        cb();
+      },
+    });
+    const doctorRuntime: CliRunOptions['doctorRuntime'] = {
+      runsRoot: () => smokeDir,
+      loadPreferences: () => Promise.resolve(new Map()),
+      smoke: (input) =>
+        Promise.resolve({
+          sessionId: 'smoke-session',
+          logPath: join(input.runDir, 'smoke.log'),
+          statusToolInvoked: true,
+          result: {
+            outcome: 'completed',
+            stopReason: 'stop',
+            usage: { turns: 1, inputTokens: 42, outputTokens: 12 },
+          },
+          enumeration: {
+            agentDir: join(home, 'agent'),
+            authPath: join(home, 'auth.json'),
+            modelsPath: join(home, 'models.json'),
+            settingsSource: 'explicit-pinned-yantra-paths',
+            extensions: [],
+            skills: [],
+            prompts: [],
+            themes: [],
+            contextFiles: [],
+          },
+        }),
+    };
+    const env = { OLLAMA_API_KEY: 'present-for-offline-probe' };
+    const argv = [
+      'doctor',
+      '--agent-smoke',
+      '--json',
+      '--provider',
+      'ollama',
+      '--model',
+      'llama3.1:8b',
+    ];
+    const terminalCode = await runTerminal(
+      argv,
+      { doctorRuntime },
+      { env, isTty: false, stdout: terminalSink, stderr: stderrSink },
+    );
+    const channel = new InMemoryChannel();
+    const workerResult = await runWorkerInvocation(
+      {
+        invocation_id: createInvocationId(),
+        cwd: home,
+        path: ['doctor'],
+        argv: ['--agent-smoke', '--json', '--provider', 'ollama', '--model', 'llama3.1:8b'],
+      },
+      channel,
+      env,
+      { doctorRuntime },
+    );
+
+    expect(terminalCode).toBe(0);
+    expect(workerResult.type).toBe('result');
+    expect(workerResult.exit_code).toBe(0);
+    if (workerResult.type === 'result') {
+      const terminalEnvelope = JSON.parse(terminalStdout) as Record<string, unknown>;
+      const workerEnvelope = workerResult.envelope as Record<string, unknown>;
+      expect(workerEnvelope).toMatchObject({
+        ...terminalEnvelope,
+        runId: expect.any(String),
+        runDir: expect.any(String),
+        logPath: expect.any(String),
+      });
+    }
+  });
 });

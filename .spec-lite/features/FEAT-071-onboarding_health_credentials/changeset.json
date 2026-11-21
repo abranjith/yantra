@@ -1,0 +1,570 @@
+{
+  "vcs": "git",
+  "files": [
+    {
+      "path": "apps/cli/src/commands/doctor.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/commands/secret.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/cli/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/cli/src/ui/host/credentials.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/cli/src/ui/host/health.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/ui/host/host-runtime.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/cli/src/ui/host/onboarding.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "apps/cli/src/ui/host/reads.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/src/ui/host/rpc-server.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/cli/tests/characterization/agentic-parity.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/cli/tests/commands/doctor-check-ids.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/tests/commands/init-wizard.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "apps/cli/tests/commands/secret.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/behavior-parity-feat071.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/credentials.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/health.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/init-equivalence.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "apps/cli/tests/ui/host/onboarding.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "apps/web/src/adapters/ConfigEditAdapter.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "apps/web/src/app/router.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/palette/CommandPalette.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/src/palette/execute.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/src/palette/palette-model.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/src/parity/manifest.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/routes/generated.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/routes/health.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/web/src/routes/mission.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/routes/onboarding.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/routes/settings.credentials.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/surfaces/GeneratedSurface.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/surfaces/health/agent-smoke-panel.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/web/src/surfaces/health/health-route.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/web/src/surfaces/health/host-environment.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "apps/web/src/surfaces/health/possible-orphans.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "apps/web/src/surfaces/health/remediations.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "apps/web/src/surfaces/onboarding/evaluate-when.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/surfaces/onboarding/installation-reset-dialog.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/surfaces/onboarding/onboarding-result.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/surfaces/onboarding/onboarding-route.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/surfaces/onboarding/question-step.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/surfaces/onboarding/session-dismissal.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/surfaces/onboarding/setup-banner.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "apps/web/src/surfaces/settings/credentials/credentials-route.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/surfaces/settings/credentials/remove-credential-dialog.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/src/surfaces/settings/credentials/set-credential-dialog.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/tests/generated/behavior-parity.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/tests/palette/palette-model.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "apps/web/tests/parity/manifest-completeness.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/tests/surfaces/credentials/credentials.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "apps/web/tests/surfaces/health/agent-smoke-panel.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-008"
+    },
+    {
+      "path": "apps/web/tests/surfaces/health/health-route.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "apps/web/tests/surfaces/health/host-and-orphans.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "apps/web/tests/surfaces/health/remediations.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-007"
+    },
+    {
+      "path": "apps/web/tests/surfaces/onboarding/onboarding.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "docs/features/configuration.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "docs/features/diagnostics-and-audit.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "docs/features/parity-command-palette-generated-surfaces.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "docs/features/safety-and-privacy.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "docs/features/yantra-app.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "docs/protocol-spec.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "docs/usage.md",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "e2e/app-onboarding-credentials-health.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-010"
+    },
+    {
+      "path": "eslint.config.js",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/core/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/run/possible-orphans.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/core/src/secrets/credential-service.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/secrets/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/src/setup/init-service.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/app-host/invocation-store.spec.ts",
+      "status": "M",
+      "role": "implement"
+    },
+    {
+      "path": "packages/core/tests/run/possible-orphans.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-009"
+    },
+    {
+      "path": "packages/core/tests/secrets/credential-service.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-001"
+    },
+    {
+      "path": "packages/core/tests/setup/init-service.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-004"
+    },
+    {
+      "path": "packages/protocol/package.json",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/protocol/src/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/src/schemas/credentials.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/src/schemas/doctor.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/protocol/src/schemas/init-questions.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/protocol/tests/credentials.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/protocol/tests/doctor.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/protocol/tests/init-questions.spec.ts",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-003"
+    },
+    {
+      "path": "packages/ui/src/gallery/entries.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/src/gallery/instrument-entries.tsx",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/ui/src/instruments/HealthCheck.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/ui/src/instruments/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/ui/src/primitives/families.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/src/primitives/index.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/src/primitives/RadioGroup.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/ui/src/primitives/SecretField.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    },
+    {
+      "path": "packages/ui/tests/gallery/completeness.spec.ts",
+      "status": "M",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/ui/tests/instruments/health-check.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-006"
+    },
+    {
+      "path": "packages/ui/tests/primitives/radio-group.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-005"
+    },
+    {
+      "path": "packages/ui/tests/primitives/secret-field.spec.tsx",
+      "status": "A",
+      "role": "implement",
+      "task": "TASK-002"
+    }
+  ],
+  "excluded": [
+    ".spec-lite/feature-summary.md",
+    ".spec-lite/features/FEAT-071-onboarding_health_credentials/changeset.json",
+    ".spec-lite/features/FEAT-071-onboarding_health_credentials/spec.md",
+    ".spec-lite/plan_ui.md"
+  ],
+  "baseline": {
+    "sha": "3d2e0d498a294137d0fd4be8952e1e73a2a284fb",
+    "capturedAt": "2026-11-19T04:36:24.694Z",
+    "dirtyAtBaseline": [],
+    "dirtyBlobHashes": {},
+    "workflow": "ft/feat-071-onboarding-health-credentials@3d2e0d498a294137d0fd4be8952e1e73a2a284fb"
+  },
+  "featureId": "FEAT-071"
+}

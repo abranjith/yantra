@@ -113,3 +113,4 @@ export {
   type BrowserViewportReason,
   type BrowserViewportState,
 } from './BrowserViewport.js';
+export { HealthCheck, type HealthCheckProps } from './HealthCheck.js';

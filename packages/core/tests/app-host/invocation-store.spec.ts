@@ -205,8 +205,19 @@ describe('the slot invariant', () => {
               out += chunk.toString();
             });
             proc.once('error', reject);
-            proc.once('exit', () => {
-              resolve(JSON.parse(out) as { reserved?: boolean; error?: string });
+            // `exit` can fire before stdout has drained, especially under load.
+            proc.once('close', (code, signal) => {
+              if (code !== 0) {
+                reject(new Error(`Reservation child ${id} exited with ${code ?? signal}.`));
+                return;
+              }
+              try {
+                resolve(JSON.parse(out) as { reserved?: boolean; error?: string });
+              } catch (error) {
+                reject(
+                  new Error(`Reservation child ${id} returned invalid JSON.`, { cause: error }),
+                );
+              }
             });
           }),
       ),
@@ -215,7 +226,7 @@ describe('the slot invariant', () => {
     // Assert
     expect(outcomes.filter((outcome) => outcome.error !== undefined)).toEqual([]);
     const active = (await store.list()).filter((item) => item.state === 'reserved');
-    expect(active.length).toBeLessThanOrEqual(2);
+    expect(active).toHaveLength(2);
     expect(outcomes.filter((outcome) => outcome.reserved === true)).toHaveLength(active.length);
   }, 120_000);
 });

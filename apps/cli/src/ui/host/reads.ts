@@ -53,6 +53,8 @@ export interface ReaderSpec {
   readonly paged?: boolean;
   /** Registered by `run-reads.ts` with typed params (FEAT-066), not the generic reader. */
   readonly runRead?: boolean;
+  /** Registered by `health.ts` with typed params (FEAT-071), not the generic reader. */
+  readonly healthRead?: boolean;
 }
 
 /** The M1 readers. */
@@ -74,7 +76,7 @@ export const READERS: readonly ReaderSpec[] = [
   { method: 'read.sites.list', path: ['sites', 'list'] },
   { method: 'read.browser.list', path: ['browser', 'list'] },
   { method: 'read.browser.update', path: ['browser', 'update'], fixedArgs: ['--dry-run'] },
-  { method: 'read.doctor', path: ['doctor'] },
+  { method: 'read.doctor', path: ['doctor'], healthRead: true },
   { method: 'read.template.show', path: ['template', 'show'] },
   { method: 'read.schedules', path: ['schedules'] },
   { method: 'read.usage', path: ['usage'] },
@@ -253,7 +255,7 @@ export function registerReads(methods: RpcMethodRegistry, deps: ReadDeps): void 
       registerLedgerRead(methods, ledgerDeps(deps));
       continue;
     }
-    if (spec.runRead === true) continue;
+    if (spec.runRead === true || spec.healthRead === true) continue;
     methods.register(spec.method, {
       params: ReadParams,
       result: ReadResult,

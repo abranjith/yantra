@@ -1,9 +1,10 @@
 import {
+  createCredentialService,
   createKeychainProvider,
-  loadConfig,
-  parseConfigRef,
-  YANTRA_KEYCHAIN_SERVICE,
-  type ConfigRef,
+  CredentialKeyInvalidError,
+  CredentialValueInvalidError,
+  KeychainUnavailableError,
+  validateCredentialKey,
   type KeychainProvider,
 } from '@yantra/core';
 import { type Command, CommanderError } from 'commander';
@@ -57,50 +58,29 @@ async function runSet(
   options: SecretOptions,
   runtime: SecretRuntime,
 ): Promise<void> {
-  validateKey(key, runtime);
-  if (argvValue !== undefined)
-    fail(
-      runtime,
-      'secret values are never accepted in argv because shell history and process listings can expose them',
-    );
-  const keychain = await runtime.createKeychain();
-  if (!(await keychain.isAvailable())) unavailable(runtime);
-  const value = runtime.isTty
-    ? await runtime.promptSecret(`Secret value for ${key}`)
-    : await runtime.readInput?.();
-  if (!value) fail(runtime, 'secret value must not be empty');
-  await keychain.set(YANTRA_KEYCHAIN_SERVICE, key, value);
+  await withCredentialErrors(runtime, async () => {
+    validateCredentialKey(key);
+    if (argvValue !== undefined)
+      fail(
+        runtime,
+        'secret values are never accepted in argv because shell history and process listings can expose them',
+      );
+    const service = await credentials(runtime);
+    await service.requireAvailable('set');
+    const value = runtime.isTty
+      ? await runtime.promptSecret(`Secret value for ${key}`)
+      : await runtime.readInput?.();
+    await service.setCredential({ key, value: value ?? '' });
+  });
   if (options.json) emit(runtime, 'secret.set', { status: 'set', key });
   else runtime.stdout.write(`Stored ${key}.\n`);
 }
 
 async function runList(options: SecretOptions, runtime: SecretRuntime): Promise<void> {
-  const keychain = await runtime.createKeychain();
-  const available = await keychain.isAvailable();
-  const stored = available ? await keychain.list(YANTRA_KEYCHAIN_SERVICE) : [];
-  const rows = new Map<string, 'keychain' | 'env' | 'absent'>();
-  for (const entry of stored) rows.set(entry.account, 'keychain');
-  const loaded = await loadConfig();
-  if (loaded.isOk) {
-    for (const provider of ['tavily', 'brave'] as const) {
-      const account = `${provider}.api_key`;
-      const ref = loaded.value.search[provider].api_key;
-      const displayKey = ref?.kind === 'secret' ? ref.key : account;
-      rows.set(displayKey, sourceFor(ref, runtime.env, rows.get(displayKey)));
-    }
-    for (const model of loaded.value.models) {
-      if (model.api_key?.kind === 'secret')
-        rows.set(model.api_key.key, rows.get(model.api_key.key) ?? 'absent');
-      else if (model.api_key?.kind === 'env')
-        rows.set(
-          `${model.provider}/${model.id}`,
-          runtime.env[model.api_key.name] ? 'env' : 'absent',
-        );
-    }
-  }
-  const result = [...rows]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, source]) => ({ key, source }));
+  const { rows } = await withCredentialErrors(runtime, async () =>
+    (await credentials(runtime)).listCredentials(),
+  );
+  const result = rows.map(({ key, source }) => ({ key, source }));
   if (options.json) emit(runtime, 'secret.list', { rows: result });
   else for (const row of result) runtime.stdout.write(`${row.key}\t${row.source}\n`);
 }
@@ -110,28 +90,30 @@ async function runRemove(
   options: SecretOptions,
   runtime: SecretRuntime,
 ): Promise<void> {
-  validateKey(key, runtime);
-  const keychain = await runtime.createKeychain();
-  if (!(await keychain.isAvailable())) unavailable(runtime);
-  const removed = await keychain.delete(YANTRA_KEYCHAIN_SERVICE, key);
-  const status = removed ? 'removed' : 'absent';
+  const { status } = await withCredentialErrors(runtime, async () => {
+    validateCredentialKey(key);
+    return (await credentials(runtime)).removeCredential({ key });
+  });
   if (options.json) emit(runtime, 'secret.rm', { key, status });
   else runtime.stdout.write(`${key}\t${status}\n`);
 }
 
-function sourceFor(
-  ref: ConfigRef | null,
-  env: NodeJS.ProcessEnv,
-  stored: 'keychain' | 'env' | 'absent' | undefined,
-): 'keychain' | 'env' | 'absent' {
-  if (!ref) return stored ?? 'absent';
-  if (ref.kind === 'env') return env[ref.name] ? 'env' : 'absent';
-  return stored ?? 'absent';
+async function credentials(runtime: SecretRuntime) {
+  return createCredentialService({ keychain: await runtime.createKeychain(), env: runtime.env });
 }
 
-function validateKey(key: string, runtime: SecretRuntime): void {
-  const parsed = parseConfigRef(`\${secret:${key}}`);
-  if (!parsed.isOk) fail(runtime, `${parsed.error}; expected a key such as tavily.api_key`);
+async function withCredentialErrors<T>(
+  runtime: SecretRuntime,
+  action: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await action();
+  } catch (error) {
+    if (error instanceof KeychainUnavailableError) fail(runtime, error.message, 3);
+    if (error instanceof CredentialKeyInvalidError || error instanceof CredentialValueInvalidError)
+      fail(runtime, error.message);
+    throw error;
+  }
 }
 
 async function readPiped(stream: NodeJS.ReadableStream): Promise<string> {
@@ -139,16 +121,6 @@ async function readPiped(stream: NodeJS.ReadableStream): Promise<string> {
   stream.setEncoding('utf8');
   for await (const chunk of stream) value += String(chunk);
   return value.replace(/\r?\n$/u, '');
-}
-
-function unavailable(runtime: SecretRuntime): never {
-  const remedy =
-    process.platform === 'linux'
-      ? 'install libsecret and start a Secret Service'
-      : process.platform === 'darwin'
-        ? 'unlock the login keychain'
-        : 'enable Windows Credential Manager';
-  fail(runtime, `OS keychain unavailable; ${remedy}, or use a \${env:NAME} reference`, 3);
 }
 
 function emit(runtime: SecretRuntime, kind: string, body: Record<string, unknown>): void {

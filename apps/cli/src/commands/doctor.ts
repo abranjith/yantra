@@ -33,6 +33,7 @@
  * Both modes honor `--json`.
  */
 
+import { randomUUID } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -57,9 +58,15 @@ import {
   type KeychainProvider,
   runsRoot,
   storageDirSources,
+  writeFileAtomic,
 } from '@yantra/core';
-import { COMMAND_REGISTRY, honorsAbort as abortHonored } from '@yantra/protocol';
-import { PROTOCOL_VERSION } from '@yantra/protocol';
+import { formatRunId } from '@yantra/core/workflow/replay';
+import {
+  COMMAND_REGISTRY,
+  PROTOCOL_VERSION,
+  honorsAbort as abortHonored,
+  type DoctorCheckId,
+} from '@yantra/protocol';
 import { type Command, CommanderError } from 'commander';
 
 import {
@@ -122,7 +129,7 @@ export interface DoctorRuntime {
   readonly searchConfig: typeof loadSearchConfig;
 }
 
-const CHECK_TITLES: Record<string, string> = {
+export const CHECK_TITLES = {
   'browser.selection': 'Effective browser selection',
   'browser.compatibility': 'Browser passes required capabilities',
   'browser.managed': 'Yantra-managed browser storage',
@@ -140,7 +147,57 @@ const CHECK_TITLES: Record<string, string> = {
   'search.tavily.api-key': 'Tavily API key',
   'search.brave.api-key': 'Brave API key',
   'search.provider': 'Search provider',
-};
+} as const satisfies Record<DoctorCheckId, string>;
+
+export interface DoctorCollectOptions extends AgentModelOptions, NoLlmOption {
+  readonly refresh?: boolean;
+  readonly preferences?: Awaited<ReturnType<typeof loadEffectivePreferences>>;
+}
+
+/**
+ * Collects all offline doctor checks (core, agent diagnostics, configuration)
+ * and projects them into the structured {@link DoctorRenderResult} shape.
+ */
+export async function collectDoctorResult(
+  runtime: DoctorRuntime,
+  options: DoctorCollectOptions = {},
+): Promise<DoctorRenderResult> {
+  const preferences = options.preferences ?? (await runtime.loadPreferences());
+  // `--no-llm` (or `LLM_PROVIDER=none`) selects the deterministic path, so
+  // the agent checks report that selection rather than silently probing
+  // for a model and credential that this invocation would never use.
+  const deterministic = noLlmReason(options, runtime.env);
+  const [report, agentChecks, configChecks] = await Promise.all([
+    runtime.coreDoctor({ refresh: options.refresh === true }),
+    runtime.agentDiagnostics(runtime.env, preferences, {
+      ...options,
+      ...(deterministic === null ? {} : { noLlm: deterministic }),
+    }),
+    runConfigurationChecks(runtime),
+  ]);
+  const checks = [...report.checks, ...agentChecks, ...configChecks];
+  const titles: Readonly<Record<string, string>> = CHECK_TITLES;
+
+  return {
+    checks: checks.map((check) => ({
+      id: check.id,
+      title: titles[check.id] ?? check.id,
+      status: check.status === 'error' ? 'fail' : check.status,
+      summary: check.message,
+      ...(check.fixHint !== null ? { remediation: check.fixHint } : {}),
+    })),
+    overall: checks.some((check) => check.status === 'error')
+      ? 'fail'
+      : checks.some((check) => check.status === 'warn')
+        ? 'warn'
+        : 'ok',
+    version: PROTOCOL_VERSION,
+    platform: process.platform,
+    nodeVersion: process.versions.node,
+    ...browserProvenance(report.checks),
+    ...searchProvenance(configChecks),
+  };
+}
 
 export function makeDoctorCommand(runtime?: Partial<DoctorRuntime> & TerminalOptions): Command {
   return createRegisteredCommand('doctor', { doctor: makeDoctorHandler(runtime) });
@@ -165,7 +222,11 @@ export function makeDoctorHandler(
       const preferences = await resolved.loadPreferences();
       context.settings.usePreferences(preferences);
       const flags = commandFlags(context, options);
-      const isJson = options.json === true || flags.json;
+      // A worker must deliver the smoke envelope even when invoked from the app without --json.
+      const isJson =
+        options.json === true ||
+        flags.json ||
+        (context.surface === 'worker' && options.agentSmoke === true);
       const renderer = isJson ? new JSONRenderer() : new TerminalRenderer();
       const connector = context.connector(renderer);
       const renderOpts = buildRenderOpts(
@@ -199,41 +260,11 @@ export function makeDoctorHandler(
         return;
       }
 
-      // `--no-llm` (or `LLM_PROVIDER=none`) selects the deterministic path, so
-      // the agent checks report that selection rather than silently probing
-      // for a model and credential that this invocation would never use.
-      const deterministic = noLlmReason(options, resolved.env);
-
       try {
-        const [report, agentChecks, configChecks] = await Promise.all([
-          resolved.coreDoctor({ refresh: options.refresh === true }),
-          resolved.agentDiagnostics(resolved.env, preferences, {
-            ...options,
-            ...(deterministic === null ? {} : { noLlm: deterministic }),
-          }),
-          runConfigurationChecks(resolved),
-        ]);
-        const checks = [...report.checks, ...agentChecks, ...configChecks];
-
-        const result: DoctorRenderResult = {
-          checks: checks.map((check) => ({
-            id: check.id,
-            title: CHECK_TITLES[check.id] ?? check.id,
-            status: check.status === 'error' ? 'fail' : check.status,
-            summary: check.message,
-            ...(check.fixHint !== null ? { remediation: check.fixHint } : {}),
-          })),
-          overall: checks.some((check) => check.status === 'error')
-            ? 'fail'
-            : checks.some((check) => check.status === 'warn')
-              ? 'warn'
-              : 'ok',
-          version: PROTOCOL_VERSION,
-          platform: process.platform,
-          nodeVersion: process.versions.node,
-          ...browserProvenance(report.checks),
-          ...searchProvenance(configChecks),
-        };
+        const result = await collectDoctorResult(resolved, {
+          ...options,
+          preferences,
+        });
 
         connector.renderResult({ kind: 'doctor', result }, renderOpts);
         if (result.overall === 'fail') {
@@ -506,8 +537,28 @@ async function runAgentSmokeCommand(
 ): Promise<void> {
   const { provider, id: modelId } = agent.model;
   const streaming = !renderOpts.json;
-  const runId = `agent-smoke-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+  const started = new Date();
+  const worker = context.surface === 'worker';
+  const runId = worker
+    ? formatRunId(started, 'doctor-smoke', randomUUID().slice(0, 8))
+    : `agent-smoke-${started.toISOString().replace(/[:.]/g, '-')}`;
   const runDir = join(runtime.runsRoot(), runId);
+
+  async function recordOutcome(outcome: DoctorSmokeRenderResult['outcome']): Promise<void> {
+    if (!worker) return;
+    const ended = new Date();
+    await writeFileAtomic(
+      join(runDir, 'manifest.json'),
+      JSON.stringify({
+        runId,
+        workflowName: 'doctor-smoke',
+        startedAt: started.toISOString(),
+        endedAt: ended.toISOString(),
+        durationMs: ended.getTime() - started.getTime(),
+        status: outcome === 'passed' ? 'completed' : outcome,
+      }),
+    );
+  }
   await mkdir(runDir, { recursive: true, mode: 0o700 });
   await writeExecutionReceipt(runDir, await draftRunReceipt(context, ['doctor'], { agent }));
 
@@ -576,6 +627,7 @@ async function runAgentSmokeCommand(
         contextFiles: report.enumeration.contextFiles.length,
       },
     };
+    await recordOutcome(result.outcome);
     connector.renderResult({ kind: 'doctor_smoke', result }, renderOpts);
 
     if (report.result.outcome === 'aborted') {
@@ -591,6 +643,7 @@ async function runAgentSmokeCommand(
     }
   } catch (err) {
     if (err instanceof CommanderError) throw err;
+    await recordOutcome(context.signal.aborted ? 'aborted' : 'failed');
     if (err instanceof AgentStartupError) {
       runtime.stderr.write(`\n${err.code}: ${err.message}\n`);
     } else {
