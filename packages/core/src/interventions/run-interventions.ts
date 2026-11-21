@@ -15,7 +15,7 @@ import { join } from 'node:path';
 import type { RunEvent } from '@yantra/protocol';
 
 import { runsRoot } from '../browser/paths.js';
-import type { ChannelHandler } from '../run-channel/server.js';
+import type { ChannelConnection, ChannelHandler } from '../run-channel/server.js';
 
 import { InterventionAuthority, type InterventionEventSink } from './authority.js';
 import { UnattendedCeilingClock } from './deadline.js';
@@ -28,6 +28,14 @@ export interface InterventionChannelHost {
 
 /** The capability a client must hold to send interventions messages. */
 export const INTERVENTIONS_CAPABILITY = 'interventions';
+
+/** Who an answer is recorded as, by the connection's handshake client kind. */
+const DECIDED_BY_CLIENT: Partial<
+  Record<ChannelConnection['clientKind'], 'user_app' | 'user_cli_confirm'>
+> = {
+  host: 'user_app',
+  cli: 'user_cli_confirm',
+};
 
 /**
  * Registers `attendance` and `intervention.answer` on a run socket. Every
@@ -54,11 +62,17 @@ export function serveInterventionsOnRunSocket(
         typeof message.intervention_id === 'string' ? message.intervention_id : null;
       const decision =
         message.decision === 'granted' || message.decision === 'denied' ? message.decision : null;
-      const decidedBy =
-        message.decided_by === 'user_app' || message.decided_by === 'user_cli_confirm'
-          ? message.decided_by
-          : null;
-      if (interventionId === null || decision === null || decidedBy === null) {
+      // Provenance comes from the authenticated connection, never the message
+      // (REV-010, plan §7): the host relays app windows; `cli` is `yantra
+      // confirm`. A message that claims otherwise, or any other client kind,
+      // is refused.
+      const decidedBy = DECIDED_BY_CLIENT[connection.clientKind] ?? null;
+      if (
+        interventionId === null ||
+        decision === null ||
+        decidedBy === null ||
+        message.decided_by !== decidedBy
+      ) {
         connection.send({ type: 'error', code: 'bad_request', message: 'intervention.answer' });
         return;
       }

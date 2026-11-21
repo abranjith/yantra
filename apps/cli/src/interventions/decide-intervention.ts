@@ -46,7 +46,9 @@ export async function tryLiveDecision(
   if (verdict === 'dead') return null;
   if (verdict === 'unknown') return 'unavailable';
   const client = new RunChannelClient({
-    clientKind: 'cli',
+    // The owner records provenance from the client kind (REV-010): the app
+    // host answers for a window, `yantra confirm` answers as the CLI.
+    clientKind: decidedBy === 'user_app' ? 'host' : 'cli',
     runDir,
     capabilities: [INTERVENTIONS_CAPABILITY],
     helloTimeoutMs: 750,

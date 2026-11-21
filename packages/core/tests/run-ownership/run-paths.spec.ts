@@ -320,7 +320,7 @@ async function answerLive(
   const read = await readLease(runDir);
   if (read.kind !== 'lease') throw new Error('no lease');
   const client = new RunChannelClient({
-    clientKind: 'test',
+    clientKind: 'cli',
     runDir,
     logger: silent,
     capabilities: [INTERVENTIONS_CAPABILITY],

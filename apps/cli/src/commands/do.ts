@@ -203,6 +203,8 @@ async function executeDo(
         runEvents: connector.runEvents,
         signal: context.signal,
         ...(context.liveView === undefined ? {} : { liveView: context.liveView }),
+        // A worker starts unattended; the app host's attendance drives it (REV-006).
+        ...(context.surface === 'worker' ? { initialAttendance: 0 } : {}),
       },
       {
         cwd: context.cwd,

@@ -269,6 +269,64 @@ describe('@no-llm agentic adapter parity', () => {
       expect(codes).toEqual([130, 130]);
     },
   );
+  it.each(['do', 'ask', 'research'] as const)(
+    '%s starts unattended in the worker and leaves terminal attendance to the connector (REV-006)',
+    async (command) => {
+      const seen: Record<string, number | undefined> = {};
+      const calls: string[] = [];
+      for (const surface of ['terminal', 'worker'] as const) {
+        const runTask = (input: AgenticTaskRequest) => {
+          calls.push(surface);
+          seen[surface] = input.initialAttendance;
+          const outcome = published(home);
+          input.connector.renderAgentOutcome(outcome);
+          return Promise.resolve(outcome);
+        };
+        const options: CliRunOptions = {
+          [command === 'do'
+            ? 'doRuntime'
+            : command === 'research'
+              ? 'researchRuntime'
+              : 'askRuntime']: {
+            runTask,
+            recordHistory: () => Promise.resolve(),
+            resolveDefaults: () => Promise.resolve(new Map()),
+            resolveAgent: (name, opts, env, prefs) =>
+              resolveAgentInvocation(name, opts, env, prefs, {
+                probeCredential: () => Promise.resolve({ available: true, authSource: 'fixture' }),
+              }),
+          },
+        };
+        const sink = new Writable({
+          write(_c, _e, cb) {
+            cb();
+          },
+        });
+        if (surface === 'terminal')
+          await runTerminal([command, 'fixture'], options, {
+            env: {},
+            isTty: false,
+            stdout: sink,
+            stderr: sink,
+          });
+        else
+          await runWorkerInvocation(
+            {
+              invocation_id: createInvocationId(),
+              cwd: home,
+              path: [command],
+              argv: ['fixture'],
+            },
+            new InMemoryChannel(),
+            {},
+            options,
+          );
+      }
+      expect(calls).toEqual(['terminal', 'worker']);
+      expect(seen.terminal).toBeUndefined();
+      expect(seen.worker).toBe(0);
+    },
+  );
   it('doctor --agent-smoke yields the same doctor_smoke envelope and exit code in terminal and worker', async () => {
     const smokeDir = join(home, 'smoke-runs');
     await mkdir(smokeDir, { recursive: true });

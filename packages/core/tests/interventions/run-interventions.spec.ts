@@ -63,7 +63,11 @@ afterEach(async () => {
   cleanupSandbox();
 });
 
-async function socket(runs: RunInterventions) {
+/** Opens one peer per client kind on a run socket served by `runs`. */
+async function socket(
+  runs: RunInterventions,
+  clientKinds: readonly string[] = ['host'],
+): Promise<RawPeer[]> {
   const server = await RunChannelServer.listen({
     runId: RUN_ID,
     token: TOKEN,
@@ -76,11 +80,15 @@ async function socket(runs: RunInterventions) {
         server.register(type, capability, handler),
     },
   });
-  const peer = await RawPeer.open(server.address);
-  peers.push(peer);
-  peer.hello({ capabilities: ['events', INTERVENTIONS_CAPABILITY] });
-  await peer.waitForFrames(1);
-  return peer;
+  const opened: RawPeer[] = [];
+  for (const clientKind of clientKinds) {
+    const peer = await RawPeer.open(server.address);
+    peers.push(peer);
+    peer.hello({ capabilities: ['events', INTERVENTIONS_CAPABILITY], client_kind: clientKind });
+    await peer.waitForFrames(1);
+    opened.push(peer);
+  }
+  return opened;
 }
 
 const typed = (peer: RawPeer, type: string) =>
@@ -92,7 +100,7 @@ const typed = (peer: RawPeer, type: string) =>
 describe('a live consent answered over the run socket', () => {
   it('is decided by the owner authority with the answering surface recorded', async () => {
     const runs = new RunInterventions({ initialAttendance: 0, runsRoot: () => root });
-    const peer = await socket(runs);
+    const peer = (await socket(runs))[0]!;
     const waiting = runs.authorityFor(RUN_ID).raise(request());
 
     peer.sendJson({
@@ -112,33 +120,70 @@ describe('a live consent answered over the run socket', () => {
 
   it('is decided exactly once when the app and yantra confirm both answer', async () => {
     const runs = new RunInterventions({ initialAttendance: 0, runsRoot: () => root });
-    const peer = await socket(runs);
+    const [cli, host] = await socket(runs, ['cli', 'host']);
     const waiting = runs.authorityFor(RUN_ID).raise(request());
 
-    peer.sendJson({
+    cli!.sendJson({
       type: 'intervention.answer',
       intervention_id: request().confirmation_id,
       decision: 'denied',
       decided_by: 'user_cli_confirm',
     });
-    peer.sendJson({
+    host!.sendJson({
       type: 'intervention.answer',
       intervention_id: request().confirmation_id,
       decision: 'granted',
       decided_by: 'user_app',
     });
 
-    await expect(waiting).resolves.toMatchObject({ decision: 'denied' });
-    await until(() => typed(peer, 'intervention.response').length === 2);
-    const statuses = typed(peer, 'intervention.response').map(
-      (message) => (message.response as { status: string }).status,
+    const decided = await waiting;
+    await until(
+      () =>
+        typed(cli!, 'intervention.response').length === 1 &&
+        typed(host!, 'intervention.response').length === 1,
+    );
+    const statuses = [cli!, host!].map(
+      (peer) => (typed(peer, 'intervention.response')[0]!.response as { status: string }).status,
     );
     expect(statuses.sort()).toEqual(['accepted', 'already_decided']);
+    const winner = statuses[0] === 'accepted' ? 'user_cli_confirm' : 'user_app';
+    expect(decided.decided_by).toBe(winner);
   });
+
+  it.each([
+    ['host', 'user_cli_confirm'],
+    ['cli', 'user_app'],
+    ['test', 'user_app'],
+    ['test', 'user_cli_confirm'],
+  ])(
+    'refuses a %s connection claiming %s, and leaves the request waiting (REV-010)',
+    async (clientKind, claimed) => {
+      const runs = new RunInterventions({ initialAttendance: 0, runsRoot: () => root });
+      const [peer] = await socket(runs, [clientKind]);
+      const waiting = runs.authorityFor(RUN_ID).raise(request());
+      let settled = false;
+      void waiting.then(() => (settled = true));
+
+      peer!.sendJson({
+        type: 'intervention.answer',
+        intervention_id: request().confirmation_id,
+        decision: 'granted',
+        decided_by: claimed,
+      });
+
+      await until(() => typed(peer!, 'error').length === 1);
+      expect(typed(peer!, 'error')[0]).toMatchObject({
+        code: 'bad_request',
+        message: 'intervention.answer',
+      });
+      expect(settled).toBe(false);
+      await runs.authorityFor(RUN_ID).close();
+    },
+  );
 
   it('answers an unknown id as stale and leaves the pending request waiting', async () => {
     const runs = new RunInterventions({ initialAttendance: 0, runsRoot: () => root });
-    const peer = await socket(runs);
+    const peer = (await socket(runs))[0]!;
     const waiting = runs.authorityFor(RUN_ID).raise(request());
     let settled = false;
     void waiting.then(() => (settled = true));
@@ -164,7 +209,7 @@ describe('a live consent answered over the run socket', () => {
     [{ intervention_id: 'x', decision: 'granted', decided_by: 'someone_else' }],
   ])('rejects a malformed answer %j as bad_request', async (fields) => {
     const runs = new RunInterventions({ initialAttendance: 0, runsRoot: () => root });
-    const peer = await socket(runs);
+    const peer = (await socket(runs))[0]!;
 
     peer.sendJson({ type: 'intervention.answer', ...fields });
 
@@ -179,7 +224,7 @@ describe('a live consent answered over the run socket', () => {
 describe('attendance from the host', () => {
   it('reaches the owner authority, from the initial count onward', async () => {
     const runs = new RunInterventions({ initialAttendance: 0, runsRoot: () => root });
-    const peer = await socket(runs);
+    const peer = (await socket(runs))[0]!;
     const authority = runs.authorityFor(RUN_ID);
     expect(authority.attendance()).toBe(0);
 
@@ -192,7 +237,7 @@ describe('attendance from the host', () => {
 
   it.each([[-1], [1.5], ['2'], [null]])('rejects count %j as bad_request', async (count) => {
     const runs = new RunInterventions({ initialAttendance: 1, runsRoot: () => root });
-    const peer = await socket(runs);
+    const peer = (await socket(runs))[0]!;
 
     peer.sendJson({ type: 'attendance', count });
 
