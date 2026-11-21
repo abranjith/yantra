@@ -1,4 +1,3 @@
-import { join } from 'node:path';
 import { Writable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 
@@ -6,21 +5,17 @@ import {
   AuthorityConnectorConfirmationGateway,
   collectInitProviderAnswers,
   collectInitContextGrants,
-  InterventionAuthority,
-  InterventionLog,
   LiveViewHub,
   NeedsYouNotifier,
   NodeDaemonProcessControl,
+  RunInterventions,
   SinkNotifier,
-  UnattendedCeilingClock,
-  runsRoot,
 } from '@yantra/core';
 import {
   CommandResultMessageSchema,
   parseInvocation,
   type CommandInvocation,
   type CommandResultMessage,
-  type ConfirmationRequest,
   type JsonValue,
 } from '@yantra/protocol';
 
@@ -106,26 +101,21 @@ export async function runWorkerInvocation(
     const value = await input({ kind, message, ...(choices === undefined ? {} : { choices }) });
     return typeof value === 'string' ? value : null;
   };
-  let interventionAuthority: InterventionAuthority | null = null;
-  const authorityFor = (request: ConfirmationRequest): InterventionAuthority => {
-    if (interventionAuthority !== null) return interventionAuthority;
-    const ceiling = new UnattendedCeilingClock({ now: Date.now });
-    ceiling.setAttendance(channel.attended() ? 1 : 0);
-    interventionAuthority = new InterventionAuthority({
-      runId: request.run_id,
-      log: new InterventionLog(join(runsRoot(), request.run_id, 'interventions.jsonl')),
-      events: { publish: () => undefined, flush: () => Promise.resolve() },
-      clock: { now: () => new Date().toISOString() },
-      ceiling,
-    });
-    new NeedsYouNotifier({
-      authority: interventionAuthority,
-      notifier: new SinkNotifier(),
-      runId: request.run_id,
-      subject: invocation.path.join(' '),
-    });
-    return interventionAuthority;
-  };
+  // One authority per run this invocation owns (REV-002). The owner binds it
+  // to the run socket, so the host's answers and attendance reach it; a
+  // worker has no prompt of its own, so attendance starts at what the channel
+  // reports (0 for a real worker) and the host drives it from there (D5).
+  const runInterventions = new RunInterventions({
+    initialAttendance: channel.attended() ? 1 : 0,
+    onAuthority: (authority, runId) => {
+      new NeedsYouNotifier({
+        authority,
+        notifier: new SinkNotifier(),
+        runId,
+        subject: invocation.path.join(' '),
+      });
+    },
+  });
   const logger = makeStderrLogger(false, stderr);
   // One live view per run (FEAT-069): the handler's orchestrator attaches its
   // task page and serves frames on the run socket; idle until a client starts.
@@ -187,9 +177,10 @@ export async function runWorkerInvocation(
       confirmation: (interactive) =>
         interactive
           ? new AuthorityConnectorConfirmationGateway({
-              authority: authorityFor,
+              authority: (request) => runInterventions.authorityFor(request.run_id),
+              runs: runInterventions,
               answer: async (request, signal) => {
-                if (!channel.attended()) return new Promise<'denied'>(() => undefined);
+                if (!channel.attended()) return deniedWhenAborted(signal);
                 return channel.requestConfirmation(request, signal);
               },
             })
@@ -220,7 +211,7 @@ export async function runWorkerInvocation(
               confirmationPrompt: (request, signal) =>
                 channel.attended()
                   ? channel.requestConfirmation(request, signal)
-                  : new Promise<'denied'>(() => undefined),
+                  : deniedWhenAborted(signal),
             },
       ),
     openExternal: (path) => channel.diagnostic(`open: ${path}`),
@@ -256,4 +247,17 @@ export async function runWorkerInvocation(
     stdout.destroy();
     stderr.destroy();
   }
+}
+
+/**
+ * An unattended worker has no prompt to show: the wait is bounded by the
+ * intervention authority (or the confirmation bridge), and a window may still
+ * answer it over the run socket. Settle as denied once the caller gives up,
+ * so the pending prompt does not outlive the request.
+ */
+function deniedWhenAborted(signal: AbortSignal): Promise<'denied'> {
+  if (signal.aborted) return Promise.resolve('denied');
+  return new Promise((resolve) => {
+    signal.addEventListener('abort', () => resolve('denied'), { once: true });
+  });
 }

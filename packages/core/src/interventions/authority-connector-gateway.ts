@@ -7,6 +7,7 @@ import type {
 } from '../executor/confirmation-gateway.js';
 
 import type { InterventionAuthority, RaiseOptions } from './authority.js';
+import type { RunBindableGateway, RunInterventionBinding } from './run-interventions.js';
 
 export type ConfirmationAnswer = 'granted' | 'denied' | GatewayDecision;
 
@@ -18,11 +19,23 @@ export interface AuthorityConnectorGatewayOptions {
     signal: AbortSignal,
   ) => Promise<ConfirmationAnswer>;
   readonly limits?: RaiseOptions | ((request: ConfirmationRequest) => RaiseOptions);
+  /**
+   * Binds the authority to a run's socket and event log when the run owner
+   * opens them (REV-002). Usually the `RunInterventions` that supplies
+   * `authority`.
+   */
+  readonly runs?: RunBindableGateway;
 }
 
 /** Connects a prompt/socket answerer to the live decision authority. */
-export class AuthorityConnectorConfirmationGateway implements ConfirmationGateway {
+export class AuthorityConnectorConfirmationGateway
+  implements ConfirmationGateway, RunBindableGateway
+{
   public constructor(private readonly options: AuthorityConnectorGatewayOptions) {}
+
+  public attachRun(runId: string, binding: RunInterventionBinding): void {
+    this.options.runs?.attachRun(runId, binding);
+  }
 
   public request(request: ConfirmationRequest): Promise<ConfirmationOutcome> {
     const controller = new AbortController();

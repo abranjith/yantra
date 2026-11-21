@@ -52,6 +52,7 @@ import {
   createConfirmationStore,
   InterventionAuthority,
   InterventionLog,
+  serveInterventionsOnRunSocket,
   UnattendedCeilingClock,
   recordRunEndInterventions,
   createKeychainProvider,
@@ -766,55 +767,7 @@ export async function runAgenticTask(
     if (ownership !== undefined && request.liveView !== undefined) {
       serveLiveViewOnRunSocket(ownership, request.liveView);
     }
-    ownership?.registerChannelHandler('attendance', 'interventions', (message, connection) => {
-      const count =
-        typeof message.count === 'number' && Number.isInteger(message.count) ? message.count : null;
-      if (count === null || count < 0) {
-        connection.send({ type: 'error', code: 'bad_request', message: 'attendance' });
-        return;
-      }
-      void interventionAuthority.setAttendance(count);
-    });
-    ownership?.registerChannelHandler(
-      'intervention.answer',
-      'interventions',
-      (message, connection) => {
-        const interventionId =
-          typeof message.intervention_id === 'string' ? message.intervention_id : null;
-        const decision =
-          message.decision === 'granted' || message.decision === 'denied' ? message.decision : null;
-        const decidedBy =
-          message.decided_by === 'user_app' || message.decided_by === 'user_cli_confirm'
-            ? message.decided_by
-            : null;
-        if (interventionId === null || decision === null || decidedBy === null) {
-          connection.send({ type: 'error', code: 'bad_request', message: 'intervention.answer' });
-          return;
-        }
-        void interventionAuthority
-          .answer({
-            interventionId,
-            decision,
-            decidedBy,
-          })
-          .then(
-            (response) => {
-              connection.send({
-                type: 'intervention.response',
-                intervention_id: interventionId,
-                response,
-              });
-            },
-            () => {
-              connection.send({
-                type: 'error',
-                code: 'bad_request',
-                message: 'intervention.answer',
-              });
-            },
-          );
-      },
-    );
+    if (ownership !== undefined) serveInterventionsOnRunSocket(ownership, interventionAuthority);
     const confirmationBridge = new ConfirmationBridge({
       connector: request.connector,
       timeoutMs: budgetsConfig.confirmationWaitMs,

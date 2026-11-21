@@ -3,7 +3,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Writable } from 'node:stream';
 
-import type { AgenticTaskOutcome, AgenticTaskRequest } from '@yantra/agent';
+import {
+  ConfirmationBridge,
+  type AgenticTaskOutcome,
+  type AgenticTaskRequest,
+} from '@yantra/agent';
 import { resetPathCache, writeExecutionReceipt } from '@yantra/core';
 import { createInvocationId, type ConfirmationRequest } from '@yantra/protocol';
 import { canonicalBrief } from '@yantra/test-helpers';
@@ -84,7 +88,17 @@ describe('@no-llm agentic adapter parity', () => {
           await writeExecutionReceipt(runDir, input.receipt!);
           let outcome = published(runDir);
           if (command === 'do') {
-            const decision = await input.connector.requestConfirmation(request, input.signal!);
+            // Consent goes through the bridge, as in the do orchestrator: it
+            // bounds the wait by the request's timeout_ms. Unattended, the
+            // worker waits out that deadline and the non-TTY terminal fails
+            // closed at once; both end timed_out and hand off (REV-015).
+            const bridge = new ConfirmationBridge({
+              connector: input.connector,
+              timeoutMs: 60_000,
+              runSignal: input.signal!,
+              remainingWallClockMs: () => 60_000,
+            });
+            const { decision } = await bridge.request(request);
             if (decision !== 'granted')
               outcome = {
                 kind: 'handoff',

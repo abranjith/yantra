@@ -10,7 +10,7 @@ import {
 } from '@yantra/protocol';
 import lockfile from 'proper-lockfile';
 
-import { ConfirmationStore } from '../executor/confirmation-gateway.js';
+import { ConfirmationStore, type ConfirmationEntry } from '../executor/confirmation-gateway.js';
 
 import { bindingOf } from './binding.js';
 import { InterventionLog } from './intervention-log.js';
@@ -20,6 +20,11 @@ export interface DecideParkedInput {
   readonly runId: string;
   readonly decision: 'granted' | 'denied';
   readonly decidedBy: 'user_cli_confirm' | 'user_app';
+  /**
+   * The request the user answered. When given, only that request can be
+   * decided: a different pending request returns `stale` and is left alone.
+   */
+  readonly confirmationId?: string;
   readonly now?: string;
 }
 
@@ -41,6 +46,9 @@ export class ParkedDecisionService {
     await this.repairClaimProjection(input.runDir);
 
     const pending = await store.findPending(input.runId);
+    if (input.confirmationId !== undefined && pending?.confirmation_id !== input.confirmationId) {
+      return answeredElsewhere(await store.readAll(), input.confirmationId);
+    }
     if (pending === null) {
       const latest = await store.latestRequest(input.runId);
       const prior = latest === null ? null : await store.latestDecision(input.runId);
@@ -147,6 +155,20 @@ function corruptClaimToDecision(confirmationId: string): ConfirmationDecision {
     decided_at: new Date(0).toISOString(),
     decided_by: 'user_cli_confirm',
   };
+}
+
+/** The answer for a request that is not the run's pending one. */
+function answeredElsewhere(
+  entries: readonly ConfirmationEntry[],
+  confirmationId: string,
+): DecisionResponse {
+  let requested = false;
+  for (const entry of entries) {
+    if (entry.data.confirmation_id !== confirmationId) continue;
+    if (entry.kind === 'decision') return alreadyDecidedFromDecision(entry.data);
+    requested = true;
+  }
+  return { status: 'stale', reason: requested ? 'not_waiting' : 'unknown_id' };
 }
 
 function alreadyDecidedFromDecision(decision: ConfirmationDecision): DecisionResponse {
