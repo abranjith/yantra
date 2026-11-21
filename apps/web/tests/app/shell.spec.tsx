@@ -5,11 +5,12 @@
  */
 
 import { act, render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { NavRegistry, navRegistry } from '../../src/app/nav-registry.js';
 import { AppShell } from '../../src/app/shell/AppShell.js';
 import { ConnectionBanner, connectionMessage } from '../../src/app/shell/ConnectionBanner.js';
+import { openItemsLabel, topBarBindu } from '../../src/app/shell/TopBar.js';
 import { ConnectionStore } from '../../src/host/connection-store.js';
 import { FakeRpc, renderAt } from '../support/fake-rpc.js';
 
@@ -130,5 +131,77 @@ describe('session ended', () => {
       </AppShell>,
     );
     expect(screen.getByText('The running app is Yantra 2.0.0.')).toBeTruthy();
+  });
+});
+
+describe('the Inbox in the top bar (REV-005)', () => {
+  /** The app at `/` (Mission) with `count` open Inbox items. */
+  async function renderWithInbox(count: () => number) {
+    const rpc = new FakeRpc()
+      .answer('read.mission_context', { home: '/home/u', platform: 'linux' })
+      .answer('read.template.list', { schema: null, value: { items: [] }, next_cursor: null })
+      .answer('read.effective_options', { path: ['ask'], mode: 'llm', options: [] })
+      .answer('inbox.list', () => ({ items: [], count: count() }))
+      .answer('attendance.heartbeat', {});
+    await renderAt('/', rpc);
+    return rpc;
+  }
+
+  it('badges the Inbox link and turns the Bindu Rani off the Inbox page', async () => {
+    await renderWithInbox(() => 2);
+
+    const nav = screen.getByRole('navigation', { name: 'Main' });
+    const inbox = await within(nav).findByRole('link', { name: 'Inbox, 2 items need you' });
+    expect(inbox.querySelector('[data-inbox-badge]')?.textContent).toBe('2');
+    const bindu = screen.getByRole('img', { name: 'Yantra status: 2 items need you' });
+    expect(bindu.getAttribute('data-state')).toBe('attention');
+  });
+
+  it('shows no badge and an idle Bindu with nothing open', async () => {
+    const rpc = await renderWithInbox(() => 0);
+
+    await vi.waitFor(() => {
+      expect(rpc.paramsOf('inbox.list').length).toBeGreaterThan(0);
+    });
+    const nav = screen.getByRole('navigation', { name: 'Main' });
+    expect(within(nav).getByRole('link', { name: 'Inbox' })).toBeTruthy();
+    expect(document.querySelector('[data-inbox-badge]')).toBeNull();
+    expect(screen.getByRole('img', { name: 'Yantra status: idle' })).toBeTruthy();
+  });
+
+  it('updates the badge when an intervention event arrives', async () => {
+    let open = 1;
+    const rpc = await renderWithInbox(() => open);
+    await screen.findByRole('link', { name: 'Inbox, 1 item needs you' });
+
+    open = 0;
+    await act(async () => {
+      rpc.notify('intervention.event', { run_id: 'r', seq: 2, event: {} });
+      await Promise.resolve();
+    });
+
+    await vi.waitFor(() => {
+      expect(document.querySelector('[data-inbox-badge]')).toBeNull();
+    });
+    expect(screen.getByRole('img', { name: 'Yantra status: idle' })).toBeTruthy();
+  });
+
+  it('subscribes the window to interventions on every page, so it attends (D5)', async () => {
+    const rpc = await renderWithInbox(() => 0);
+    expect(rpc.subscriptions).toContain('interventions.subscribe');
+  });
+
+  it('words one and several open items', () => {
+    expect(openItemsLabel(1)).toBe('1 item needs you');
+    expect(openItemsLabel(3)).toBe('3 items need you');
+  });
+
+  it('keeps the shell Bindu with nothing open and overrides it with open items', () => {
+    const shell = { state: 'thinking' as const };
+    expect(topBarBindu(shell, 0)).toBe(shell);
+    expect(topBarBindu(shell, 1)).toEqual({
+      state: 'attention',
+      label: 'Yantra status: 1 item needs you',
+    });
   });
 });

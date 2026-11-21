@@ -1,20 +1,17 @@
 import { createRoute } from '@tanstack/react-router';
-import { useEffect, useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 import { navRegistry } from '../app/nav-registry.js';
 import { rootRoute } from '../app/root-route.js';
 import { ConsentCard } from '../features/interventions/ConsentCard.js';
-import {
-  InterventionsStore,
-  useInterventionsStore,
-} from '../features/interventions/interventions-store.js';
-import { useRpc } from '../host/app-rpc.js';
+import { useInterventions } from '../features/interventions/interventions-context.js';
+import { useInterventionsStore } from '../features/interventions/interventions-store.js';
 
 function InboxPage(): ReactNode {
-  const rpc = useRpc();
-  const [store] = useState(() => new InterventionsStore(rpc));
+  // The window's store (REV-005): the shell started it, so the badge, the
+  // Bindu and this page show one count.
+  const store = useInterventions();
   const state = useInterventionsStore(store);
-  useEffect(() => store.start(), [store]);
 
   return (
     <section className="mx-auto flex max-w-4xl flex-col gap-6">
@@ -33,7 +30,7 @@ function InboxPage(): ReactNode {
           item.kind === 'consent_live' || item.kind === 'consent_parked' ? (
             <ConsentCard key={item.item_id} item={item} store={store} />
           ) : (
-            <article key={item.item_id} className="rounded-card border border-rule bg-surface p-5">
+            <article key={item.item_id} className="rounded-frame border border-rule bg-surface p-5">
               <h2 className="font-semibold text-ink">{item.title}</h2>
               {item.intervention?.handoff ? (
                 <p className="mt-2 text-caption text-ink-2">{item.intervention.handoff.blocker}</p>

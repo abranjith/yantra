@@ -198,7 +198,7 @@ export function HealthSurface(): ReactNode {
       {error !== null && error !== undefined ? (
         <p
           role="alert"
-          className="rounded-card border border-rule bg-surface p-4 text-caption text-signal-failed-ink"
+          className="rounded-frame border border-rule bg-surface p-4 text-caption text-signal-failed-ink"
         >
           {error instanceof Error ? error.message : 'Failed to load health diagnostics.'}
         </p>
@@ -207,7 +207,7 @@ export function HealthSurface(): ReactNode {
       {invokeError !== null ? (
         <p
           role="alert"
-          className="rounded-card border border-rule bg-surface p-4 text-caption text-signal-failed-ink"
+          className="rounded-frame border border-rule bg-surface p-4 text-caption text-signal-failed-ink"
         >
           {invokeError}
         </p>
@@ -217,7 +217,7 @@ export function HealthSurface(): ReactNode {
 
       {data !== undefined ? (
         <>
-          <div className="flex flex-wrap items-center justify-between gap-4 rounded-card border border-rule bg-surface p-4 text-caption">
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-frame border border-rule bg-surface p-4 text-caption">
             <div className="flex items-center gap-2">
               <span className="text-ink-2">Overall:</span>
               <span className="font-semibold text-ink" data-testid="health-overall">
@@ -240,7 +240,7 @@ export function HealthSurface(): ReactNode {
           {data.browser !== undefined ? (
             <section
               aria-labelledby="health-browser-heading"
-              className="flex flex-col gap-2 rounded-card border border-rule bg-surface p-4 text-caption"
+              className="flex flex-col gap-2 rounded-frame border border-rule bg-surface p-4 text-caption"
             >
               <h2 id="health-browser-heading" className="font-medium text-ink">
                 Browser provenance
@@ -286,7 +286,7 @@ export function HealthSurface(): ReactNode {
           {data.search !== undefined ? (
             <section
               aria-labelledby="health-search-heading"
-              className="flex flex-col gap-2 rounded-card border border-rule bg-surface p-4 text-caption"
+              className="flex flex-col gap-2 rounded-frame border border-rule bg-surface p-4 text-caption"
             >
               <h2 id="health-search-heading" className="font-medium text-ink">
                 Search provenance

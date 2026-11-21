@@ -121,7 +121,7 @@ export function GuardedSwitch({
         </div>
       ) : (
         <div
-          className="flex gap-2 rounded-card border border-rule p-3"
+          className="flex gap-2 rounded-frame border border-rule p-3"
           role="group"
           aria-label="Review approval"
         >

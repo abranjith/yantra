@@ -235,7 +235,7 @@ export function OnboardingSurface({ initialReset = false }: OnboardingSurfacePro
         </p>
       ) : null}
 
-      <div className="rounded-card border border-rule bg-surface p-5">
+      <div className="rounded-frame border border-rule bg-surface p-5">
         {(['model', 'search', 'storage', 'context'] as const).map((section) => (
           <QuestionStep
             key={section}
@@ -338,7 +338,7 @@ export function OnboardingSurface({ initialReset = false }: OnboardingSurfacePro
       {submitError !== null ? (
         <div
           role="alert"
-          className="rounded-card border border-rule bg-surface p-4 text-caption text-signal-failed-ink"
+          className="rounded-frame border border-rule bg-surface p-4 text-caption text-signal-failed-ink"
         >
           <p className="font-medium">{submitError.message}</p>
           {submitError.remediation !== undefined &&

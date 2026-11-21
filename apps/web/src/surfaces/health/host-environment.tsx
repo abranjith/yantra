@@ -66,7 +66,7 @@ export function HostEnvironmentPanel({
     <section
       aria-labelledby="health-host-env-heading"
       data-testid="health-host-environment"
-      className="flex flex-col gap-3 rounded-card border border-rule bg-surface p-4 text-caption"
+      className="flex flex-col gap-3 rounded-frame border border-rule bg-surface p-4 text-caption"
     >
       <h2 id="health-host-env-heading" className="font-medium text-ink">
         App host

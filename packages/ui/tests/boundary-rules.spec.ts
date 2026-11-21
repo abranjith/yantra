@@ -218,6 +218,9 @@ describe('@no-llm Drshya lint boundary rules', () => {
       'ease-in-out',
       'animate-spin',
       'text-sm/6',
+      'rounded-card',
+      'rounded-pill',
+      'rounded-b-badge',
     ])(
       'rejects the cleared default %s, which compiles to nothing (REV-008)',
       async (utility) => {
@@ -247,6 +250,7 @@ describe('@no-llm Drshya lint boundary rules', () => {
         'text-micro text-caption text-body text-lead text-title text-headline text-display',
         'text-ink text-ink-2 text-accent',
         'rounded-chip rounded-control rounded-frame rounded-full rounded-none',
+        'rounded-t-chip rounded-bl-frame md:rounded-control',
         'shadow-glass shadow-none ease-standard font-sans font-mono type-engine',
         'context-sm subtext-lg',
       ].join(' ');

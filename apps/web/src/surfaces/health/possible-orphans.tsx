@@ -27,7 +27,7 @@ export function PossibleOrphansPanel(): ReactNode {
     <section
       aria-labelledby="health-possible-orphans-heading"
       data-testid="health-possible-orphans"
-      className="flex flex-col gap-3 rounded-card border border-rule bg-surface p-4 text-caption"
+      className="flex flex-col gap-3 rounded-frame border border-rule bg-surface p-4 text-caption"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 id="health-possible-orphans-heading" className="font-medium text-ink">

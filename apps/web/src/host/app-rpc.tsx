@@ -119,6 +119,11 @@ export function RpcProvider({
   return <RpcContext.Provider value={rpc}>{children}</RpcContext.Provider>;
 }
 
+/** The RPC handle, or null outside {@link RpcProvider} (shell tests render without a host). */
+export function useOptionalRpc(): AppRpc | null {
+  return useContext(RpcContext);
+}
+
 /** The RPC handle; throws outside {@link RpcProvider} (a wiring bug). */
 export function useRpc(): AppRpc {
   const rpc = useContext(RpcContext);

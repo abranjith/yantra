@@ -1,6 +1,7 @@
 import { Outlet } from '@tanstack/react-router';
 import { useState, type ReactNode } from 'react';
 
+import { InterventionsProvider } from '../../features/interventions/interventions-context.js';
 import { useConnection, type ConnectionStore } from '../../host/connection-store.js';
 import { CommandPalette } from '../../palette/CommandPalette.js';
 import { navRegistry, type NavRegistry } from '../nav-registry.js';
@@ -24,24 +25,26 @@ export function AppShell({ store, nav = navRegistry, children }: AppShellProps):
   const [bindu] = useState(() => new BinduStore());
   return (
     <BinduProvider store={bindu}>
-      <AppToasts>
-        <div className="flex min-h-screen flex-col bg-bg text-ink">
-          <TopBar nav={nav.entries()} />
-          <ConnectionBanner {...(store === undefined ? {} : { store })} />
-          {state.status === 'session_ended' || state.status === 'incompatible' ? (
-            <SessionEnded
-              {...(state.status === 'incompatible'
-                ? { detail: `The running app is Yantra ${state.hostVersion}.` }
-                : {})}
-            />
-          ) : (
-            <>
-              <CommandPalette />
-              <main className="flex-1 px-6 py-8">{children ?? <Outlet />}</main>
-            </>
-          )}
-        </div>
-      </AppToasts>
+      <InterventionsProvider>
+        <AppToasts>
+          <div className="flex min-h-screen flex-col bg-bg text-ink">
+            <TopBar nav={nav.entries()} />
+            <ConnectionBanner {...(store === undefined ? {} : { store })} />
+            {state.status === 'session_ended' || state.status === 'incompatible' ? (
+              <SessionEnded
+                {...(state.status === 'incompatible'
+                  ? { detail: `The running app is Yantra ${state.hostVersion}.` }
+                  : {})}
+              />
+            ) : (
+              <>
+                <CommandPalette />
+                <main className="flex-1 px-6 py-8">{children ?? <Outlet />}</main>
+              </>
+            )}
+          </div>
+        </AppToasts>
+      </InterventionsProvider>
     </BinduProvider>
   );
 }

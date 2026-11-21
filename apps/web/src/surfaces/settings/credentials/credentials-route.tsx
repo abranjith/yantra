@@ -69,7 +69,7 @@ export function CredentialsSurface({ initialKey }: CredentialsSurfaceProps): Rea
       {query.isError ? (
         <p
           role="alert"
-          className="rounded-card border border-rule bg-surface p-4 text-caption text-signal-failed-ink"
+          className="rounded-frame border border-rule bg-surface p-4 text-caption text-signal-failed-ink"
         >
           {query.error instanceof Error ? query.error.message : 'Failed to load credentials.'}
         </p>
@@ -78,7 +78,7 @@ export function CredentialsSurface({ initialKey }: CredentialsSurfaceProps): Rea
       {data !== undefined && !available ? (
         <div
           role="alert"
-          className="rounded-card border border-rule bg-surface p-4 text-caption text-ink"
+          className="rounded-frame border border-rule bg-surface p-4 text-caption text-ink"
         >
           <p className="font-medium">OS keychain unavailable</p>
           <p className="mt-1 text-ink-2">
@@ -94,7 +94,7 @@ export function CredentialsSurface({ initialKey }: CredentialsSurfaceProps): Rea
       ) : null}
 
       {data !== undefined && data.rows.length > 0 ? (
-        <div className="overflow-x-auto rounded-card border border-rule bg-surface">
+        <div className="overflow-x-auto rounded-frame border border-rule bg-surface">
           <table className="w-full border-collapse text-left text-caption">
             <thead>
               <tr className="border-b border-rule text-ink-2">

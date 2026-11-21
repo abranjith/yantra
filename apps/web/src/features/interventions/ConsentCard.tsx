@@ -27,7 +27,7 @@ export function ConsentCard({
   };
 
   return (
-    <article className="flex max-w-2xl flex-col gap-4 rounded-card border border-rule bg-surface p-5">
+    <article className="flex max-w-2xl flex-col gap-4 rounded-frame border border-rule bg-surface p-5">
       <div>
         <p className="text-micro uppercase tracking-wide text-ink-3">
           {request.action_kind} on {request.host}

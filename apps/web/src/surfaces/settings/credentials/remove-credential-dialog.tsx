@@ -75,7 +75,7 @@ export function RemoveCredentialDialog({ row, onClose }: RemoveCredentialDialogP
             Remove <span className="type-engine">{row.key}</span> from the OS keychain?
           </p>
           {hasReferences ? (
-            <div className="flex flex-col gap-3 rounded-card border border-rule bg-sunken p-3">
+            <div className="flex flex-col gap-3 rounded-frame border border-rule bg-sunken p-3">
               <p className="text-caption font-medium text-ink">
                 This credential is referenced by {row.referenced_by.length}{' '}
                 {row.referenced_by.length === 1 ? 'configuration entry' : 'configuration entries'}:

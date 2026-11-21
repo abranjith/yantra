@@ -149,12 +149,13 @@ const COLOR_FUNCTION_SOURCE = '(?:oklch|oklab|rgba?|hsla?)\\(';
 /**
  * Utilities in a namespace Drshya clears (packages/ui/src/tokens/scale.ts,
  * CLEARED_NAMESPACES) that have no Drshya step: they compile to nothing
- * (REV-008). Drshya steps (`text-caption`, `rounded-control`, `shadow-glass`,
+ * (REV-008). Any `rounded-<name>` other than a Drshya step is dead too, so
+ * the radius check is an allowlist. Drshya steps (`text-caption`, `rounded-control`, `shadow-glass`,
  * `ease-standard`) and static values (`rounded-none`, `rounded-full`,
  * `shadow-none`) are not matched.
  */
 const CLEARED_UTILITY_SOURCE =
-  '(?:^|[\\s:])(?:text-(?:xs|sm|base|lg|[2-9]?xl)|rounded(?:-[trblse]{1,2})?-(?:xs|sm|md|lg|[2-4]?xl)|shadow-(?:2xs|xs|sm|md|lg|xl|2xl|inner)|font-serif|ease-(?:in|out|in-out)|animate-(?:spin|ping|pulse|bounce))(?=$|[\\s\\u002F])';
+  '(?:^|[\\s:])(?:text-(?:xs|sm|base|lg|[2-9]?xl)|rounded(?:-[trblse]{1,2})?-(?!(?:chip|control|frame|full|none)(?=$|[\\s\\u002F]))[a-z0-9]+|shadow-(?:2xs|xs|sm|md|lg|xl|2xl|inner)|font-serif|ease-(?:in|out|in-out)|animate-(?:spin|ping|pulse|bounce))(?=$|[\\s\\u002F])';
 
 const RAW_PALETTE_MESSAGE = `Raw palette utility: style with Drshya semantic utilities (bg-surface, text-ink-2, border-rule), never a Tailwind palette or primitive ramp. ${DRSHYA_RULE}`;
 const ARBITRARY_COLOR_MESSAGE = `Arbitrary color value: add or use a semantic token instead of -[#…] or -[oklch(…)]. ${DRSHYA_RULE}`;

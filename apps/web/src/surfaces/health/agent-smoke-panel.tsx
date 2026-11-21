@@ -361,7 +361,7 @@ export function AgentSmokePanel(): ReactNode {
     <section
       aria-labelledby="health-smoke-heading"
       data-testid="agent-smoke-panel"
-      className="flex flex-col gap-4 rounded-card border border-rule bg-surface p-4 text-caption"
+      className="flex flex-col gap-4 rounded-frame border border-rule bg-surface p-4 text-caption"
     >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -454,7 +454,7 @@ export function AgentSmokePanel(): ReactNode {
           <div className="flex flex-wrap items-center gap-2">
             <span className="type-engine font-semibold text-signal-failed-ink">{outcome.code}</span>
             {outcome.exit_code === 3 ? (
-              <span className="rounded-pill bg-surface px-2 py-0.5 text-ink-2">environment</span>
+              <span className="rounded-full bg-surface px-2 py-0.5 text-ink-2">environment</span>
             ) : null}
           </div>
           <p className="text-ink">{outcome.message}</p>

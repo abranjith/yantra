@@ -31,7 +31,7 @@ export function OnboardingResultView({ result }: OnboardingResultProps): ReactNo
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="rounded-card border border-rule bg-surface p-5 text-caption">
+      <div className="rounded-frame border border-rule bg-surface p-5 text-caption">
         <p className="font-medium text-ink">Configuration written</p>
         <dl className="mt-3 grid gap-2 sm:grid-cols-[10rem_1fr]">
           <dt className="text-ink-2">Config file</dt>

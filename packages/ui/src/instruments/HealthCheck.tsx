@@ -33,7 +33,7 @@ const STATUS_ICON: Readonly<Record<DoctorStatus, IconName>> = {
 };
 
 const statusBadgeStyles = tv({
-  base: 'inline-flex shrink-0 items-center gap-1.5 rounded-badge border px-2 py-0.5 text-micro font-medium',
+  base: 'inline-flex shrink-0 items-center gap-1.5 rounded-chip border px-2 py-0.5 text-micro font-medium',
   variants: {
     status: {
       ok: 'border-signal-fulfilled-border bg-signal-fulfilled-bg text-signal-fulfilled-ink',
@@ -67,7 +67,7 @@ export function HealthCheck({
       data-check-id={id}
       data-check-status={status}
       className={cn(
-        'flex flex-col gap-2 rounded-card border border-rule bg-surface p-4 text-caption',
+        'flex flex-col gap-2 rounded-frame border border-rule bg-surface p-4 text-caption',
         className,
       )}
     >
