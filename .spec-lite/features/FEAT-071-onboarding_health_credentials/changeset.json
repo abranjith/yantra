@@ -81,7 +81,7 @@
     },
     {
       "path": "apps/cli/tests/ui/host/behavior-parity-feat071.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
@@ -369,7 +369,7 @@
     },
     {
       "path": "e2e/app-onboarding-credentials-health.spec.ts",
-      "status": "U",
+      "status": "A",
       "role": "implement",
       "task": "TASK-010"
     },
@@ -408,6 +408,11 @@
       "status": "M",
       "role": "implement",
       "task": "TASK-003"
+    },
+    {
+      "path": "packages/core/tests/app-host/invocation-store.spec.ts",
+      "status": "M",
+      "role": "implement"
     },
     {
       "path": "packages/core/tests/run/possible-orphans.spec.ts",

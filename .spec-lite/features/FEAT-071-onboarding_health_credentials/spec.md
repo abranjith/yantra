@@ -923,8 +923,10 @@ read-only `possible-orphans.ts` over FEAT-064's record format. It never adds cle
 - [x] TASK-009: Host environment age and possible orphans on Health
 - [x] TASK-010: Parity mapping, end-to-end app flows, and the credential security suite
 
-Windows real-Chrome acceptance passed. macOS and Linux verification remains pending CI. The
-repository-wide suite did not finish green: the core invocation-store slot-invariant test failed
-and a Vitest worker exited unexpectedly.
+Windows real-Chrome acceptance passed. Local macOS and Linux verification was deferred at the
+user's request. The initial repository-wide run reported a slot-invariant test failure and an
+unexpected Vitest worker exit. The reservation test now waits for child stdout to drain before
+reading its result; all 109 invocation-store tests passed afterward. A serialized repository-wide
+rerun exceeded the local execution time limit; the PR's CI is still needed for full-suite results.
 
 Legend: [ ] Not started | [/] In progress | [x] Completed
