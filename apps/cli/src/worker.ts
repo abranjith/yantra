@@ -9,7 +9,7 @@
  * exit on the invocation.
  */
 
-import { FileInvocationStore, currentProcessIdentity, runsRoot } from '@yantra/core';
+import { FileInvocationStore, currentProcessIdentity } from '@yantra/core';
 
 import { invocationLifecycle } from './ui/worker-claim.js';
 import { runWorker } from './worker/entry.js';
@@ -20,7 +20,6 @@ const EXIT_BACKSTOP_MS = 5_000;
 const lifecycle = invocationLifecycle({
   store: new FileInvocationStore(),
   identity: currentProcessIdentity,
-  runsRoot: runsRoot(),
 });
 const code = await runWorker(process.argv.slice(2), {
   env: process.env,

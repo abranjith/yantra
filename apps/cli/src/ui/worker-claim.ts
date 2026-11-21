@@ -7,8 +7,9 @@
  * 1. **claim** it (`reserved | spawning → claimed`, recording this process's
  *    identity). A refused claim (the item was withdrawn or recovered) means
  *    another outcome already owns it: the worker exits 0 and does nothing.
- * 2. While the command runs, find the run this process owns (the lease whose
- *    owner is this process) and record it with `markRunning`.
+ * 2. When the command claims its run's lease, record that run with
+ *    `markRunning`. The claim is announced in-process by
+ *    `RunOwnershipSession.open` (REV-011), so nothing scans run directories.
  * 3. After the command, the FEAT-064 result sink has written the result at
  *    `invocationResultPath(id)`; `finish` records the exit code.
  *
@@ -16,11 +17,13 @@
  * runs ungated.
  */
 
-import { readdir, readFile } from 'node:fs/promises';
-import { join } from 'node:path';
-
-import { ClaimRefusedError, type FileInvocationStore, type ProcessIdentity } from '@yantra/core';
-import { RunLease, type WorkerLaunch } from '@yantra/protocol';
+import {
+  ClaimRefusedError,
+  onRunLeaseClaimed,
+  type FileInvocationStore,
+  type ProcessIdentity,
+} from '@yantra/core';
+import type { RunLease, WorkerLaunch } from '@yantra/protocol';
 
 import type { WorkerStartGate } from '../worker/entry.js';
 
@@ -28,8 +31,8 @@ export interface WorkerClaimDeps {
   readonly store: FileInvocationStore;
   /** This process's creation identity. */
   readonly identity: () => Promise<ProcessIdentity>;
-  readonly runsRoot: string;
-  readonly pollMs?: number;
+  /** Subscribes to leases this process claims (default: core's in-process notice). */
+  readonly onLeaseClaimed?: (listener: (lease: RunLease) => void) => () => void;
 }
 
 /** What the claim decided. */
@@ -51,39 +54,13 @@ export async function claimInvocation(
   }
 }
 
-/**
- * The run directory whose lease this process owns, or null. Only directories
- * claimed after `since` are considered.
- */
-export async function findOwnedRun(
-  runsRoot: string,
-  owner: ProcessIdentity,
-  since: number,
-): Promise<string | null> {
-  let names: string[];
-  try {
-    names = await readdir(runsRoot);
-  } catch {
-    return null;
-  }
-  for (const name of names) {
-    try {
-      const parsed = RunLease.safeParse(
-        JSON.parse(await readFile(join(runsRoot, name, 'lease.json'), 'utf8')) as unknown,
-      );
-      if (
-        parsed.success &&
-        parsed.data.owner.pid === owner.pid &&
-        parsed.data.owner.start_token === owner.startToken &&
-        Date.parse(parsed.data.claimed_at) >= since - 1_000
-      ) {
-        return parsed.data.run_id;
-      }
-    } catch {
-      // No lease (yet), or a run that is not this process's.
-    }
-  }
-  return null;
+/** True when `lease` was claimed by `owner` since `since` (PID reuse safe). */
+export function ownedBy(lease: RunLease, owner: ProcessIdentity, since: number): boolean {
+  return (
+    lease.owner.pid === owner.pid &&
+    lease.owner.start_token === owner.startToken &&
+    Date.parse(lease.claimed_at) >= since - 1_000
+  );
 }
 
 /** The gate plus the bookkeeping around one app-launched command. */
@@ -96,23 +73,22 @@ export interface InvocationLifecycle {
 /** Builds the worker's gate and completion hook; see the module comment. */
 export function invocationLifecycle(deps: WorkerClaimDeps): InvocationLifecycle {
   let claimedId: string | null = null;
-  let watcher: NodeJS.Timeout | null = null;
-  let running = false;
+  let stopListening: (() => void) | null = null;
+  let marking: Promise<void> = Promise.resolve();
+  const subscribe = deps.onLeaseClaimed ?? onRunLeaseClaimed;
 
+  // The first run this process claims is the invocation's run; nested runs
+  // a command opens later are not.
   const watch = (id: string, owner: ProcessIdentity, since: number): void => {
-    const tick = async (): Promise<void> => {
-      const runId = await findOwnedRun(deps.runsRoot, owner, since);
-      if (runId === null || running) return;
-      running = true;
-      if (watcher !== null) clearInterval(watcher);
-      await deps.store.markRunning(id, runId).catch(() => {
-        running = false;
-      });
-    };
-    watcher = setInterval(() => {
-      void tick();
-    }, deps.pollMs ?? 250);
-    watcher.unref();
+    stopListening = subscribe((lease) => {
+      if (stopListening === null || !ownedBy(lease, owner, since)) return;
+      stopListening();
+      stopListening = null;
+      marking = deps.store.markRunning(id, lease.run_id).then(
+        () => undefined,
+        () => undefined,
+      );
+    });
   };
 
   return {
@@ -126,7 +102,10 @@ export function invocationLifecycle(deps: WorkerClaimDeps): InvocationLifecycle 
       return true;
     },
     finish: async (exitCode) => {
-      if (watcher !== null) clearInterval(watcher);
+      stopListening?.();
+      stopListening = null;
+      // A fast command can end before its run was recorded; record it first.
+      await marking;
       if (claimedId === null) return;
       await deps.store.finish(claimedId, { exitCode });
     },
