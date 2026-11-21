@@ -23,6 +23,7 @@
                 "minLength": 1
               },
               "minItems": 1,
+              "maxItems": 8,
               "description": "Canonical command path, aliases resolved (e.g. [\"do\"] for \"discover\")."
             },
             "argv": {
@@ -30,6 +31,7 @@
               "items": {
                 "type": "string"
               },
+              "maxItems": 1024,
               "description": "Tokens after the path, exactly as given, in order."
             },
             "cwd": {

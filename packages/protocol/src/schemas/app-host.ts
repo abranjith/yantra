@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { expandOptions } from '../commands/expand.js';
 import { CommandInvocation } from '../commands/invocation.js';
 import { COMMAND_REGISTRY } from '../commands/registry.js';
-import { JsonValue, type CommandRegistry } from '../commands/schema.js';
+import { BoundedJsonValue, JsonValue, type CommandRegistry } from '../commands/schema.js';
 
 import { ContentIdentitySchema, ReceiptSettingSchema } from './execution-receipt.js';
 import { WorkerResult } from './run-channel.js';
@@ -115,14 +115,19 @@ export function secretSettingKeys(registry: CommandRegistry = COMMAND_REGISTRY):
  * Exported so a test can prove the refusal with a key the shipped registry
  * does not mark secret.
  */
+/** The most settings, and the most content identities, a composer may show (REV-013). */
+export const DISPLAYED_EFFECTIVE_MAX = 512;
+
 export function displayedEffectiveSchema(secretKeys: ReadonlySet<string>) {
   return z
     .object({
       settings: z
-        .array(ReceiptSettingSchema)
+        .array(ReceiptSettingSchema.extend({ value: BoundedJsonValue }))
+        .max(DISPLAYED_EFFECTIVE_MAX)
         .describe('Effective non-secret settings the composer showed, with their sources.'),
       content: z
         .array(ContentIdentitySchema)
+        .max(DISPLAYED_EFFECTIVE_MAX)
         .describe('Workflow and template content identities the composer showed.'),
     })
     .strict()

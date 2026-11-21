@@ -28,8 +28,10 @@
                       "type": "array",
                       "items": {
                         "type": "string",
-                        "minLength": 1
+                        "minLength": 1,
+                        "maxLength": 64
                       },
+                      "maxItems": 32,
                       "description": "Capability names."
                     },
                     "client_kind": {
@@ -260,6 +262,7 @@
                       "items": {
                         "$ref": "#/definitions/RunChannelMessage/anyOf/0/anyOf/0/anyOf/0/properties/capabilities/items"
                       },
+                      "maxItems": 32,
                       "description": "Capabilities both sides have."
                     },
                     "run_id": {

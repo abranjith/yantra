@@ -29,6 +29,7 @@
                 "minLength": 1
               },
               "minItems": 1,
+              "maxItems": 8,
               "description": "Canonical command path, aliases resolved (e.g. [\"do\"] for \"discover\")."
             },
             "argv": {
@@ -36,6 +37,7 @@
               "items": {
                 "type": "string"
               },
+              "maxItems": 1024,
               "description": "Tokens after the path, exactly as given, in order."
             },
             "cwd": {
@@ -121,7 +123,8 @@
                         "type": "array",
                         "items": {
                           "$ref": "#/definitions/InvocationRecord/properties/displayed_effective/properties/settings/items/properties/value"
-                        }
+                        },
+                        "maxItems": 256
                       },
                       {
                         "type": "object",
@@ -130,7 +133,7 @@
                         }
                       }
                     ],
-                    "description": "Any JSON value."
+                    "description": "Any JSON value; arrays hold at most 256 items."
                   },
                   "source": {
                     "anyOf": [
@@ -252,6 +255,7 @@
                 "additionalProperties": false,
                 "description": "An effective non-secret setting and its provenance."
               },
+              "maxItems": 512,
               "description": "Effective non-secret settings the composer showed, with their sources."
             },
             "content": {
@@ -286,6 +290,7 @@
                 "additionalProperties": false,
                 "description": "A content identity at execution start."
               },
+              "maxItems": 512,
               "description": "Workflow and template content identities the composer showed."
             }
           },
@@ -360,7 +365,33 @@
                       "submitted": {
                         "anyOf": [
                           {
-                            "$ref": "#/definitions/InvocationRecord/properties/displayed_effective/properties/settings/items/properties/value"
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "boolean"
+                              },
+                              {
+                                "type": "null"
+                              },
+                              {
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/definitions/InvocationRecord/properties/review/anyOf/0/properties/differences/items/properties/submitted/anyOf/0"
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "$ref": "#/definitions/InvocationRecord/properties/review/anyOf/0/properties/differences/items/properties/submitted/anyOf/0"
+                                }
+                              }
+                            ],
+                            "description": "Any JSON value."
                           },
                           {
                             "type": "null"
@@ -371,7 +402,7 @@
                       "current": {
                         "anyOf": [
                           {
-                            "$ref": "#/definitions/InvocationRecord/properties/displayed_effective/properties/settings/items/properties/value"
+                            "$ref": "#/definitions/InvocationRecord/properties/review/anyOf/0/properties/differences/items/properties/submitted/anyOf/0"
                           },
                           {
                             "type": "null"

@@ -33,6 +33,27 @@ export const JsonValue: z.ZodType<JsonValue> = z
   )
   .describe('Any JSON value.');
 
+/**
+ * The most items an array inside a {@link BoundedJsonValue} may hold. Window
+ * input is bounded (REV-013): Zod 3 spends memory per failing array element
+ * (GHSA-mrhx-c7xc-m3w5), so nothing a window sends may be unbounded.
+ */
+export const BOUNDED_JSON_ARRAY_MAX = 256;
+
+/** {@link JsonValue} with every array at most {@link BOUNDED_JSON_ARRAY_MAX} items. */
+export const BoundedJsonValue: z.ZodType<JsonValue> = z
+  .lazy(() =>
+    z.union([
+      z.string(),
+      z.number(),
+      z.boolean(),
+      z.null(),
+      z.array(BoundedJsonValue).max(BOUNDED_JSON_ARRAY_MAX),
+      z.record(BoundedJsonValue),
+    ]),
+  )
+  .describe('Any JSON value; arrays hold at most 256 items.');
+
 /** The plan §6 execution classes. */
 export const ExecutionClass = z
   .enum(['run', 'read', 'mutate', 'exclusive', 'in-process-secure', 'adapter', 'exemption'])

@@ -497,6 +497,16 @@ Example:
 }
 ```
 
+## BoundedJsonValue
+
+Any JSON value; arrays hold at most 256 items.
+
+Example:
+
+```json
+"<value>"
+```
+
 ## BranchCondition
 
 Branch condition expression.
