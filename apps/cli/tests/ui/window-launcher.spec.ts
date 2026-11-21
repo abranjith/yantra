@@ -1,22 +1,37 @@
 // @no-llm
 /**
  * The app window launcher (FEAT-065 TASK-006): browser order, the exact
- * argument list, detached shell-free spawn, and the no-Chromium result.
+ * argument list, detached shell-free spawn, and the no-Chromium result; the
+ * launch code reaches the window through an owner-only bootstrap page, never
+ * through argv (REV-004).
  */
 
 import type { spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { mkdtempSync, rmSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-import { resetPathCache, uiChromeProfilePath } from '@yantra/core';
+import { resetPathCache, uiChromeProfilePath, uiWindowBootstrapRoot } from '@yantra/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  BOOTSTRAP_MAX_AGE_MS,
   NO_BROWSER_REMEDIATION,
   appWindowArgs,
+  bootstrapHtml,
   openAppWindow,
+  removeStaleBootstraps,
 } from '../../src/ui/window-launcher.js';
 
 interface SpawnCall {
@@ -109,12 +124,49 @@ describe('the spawned window', () => {
       spawn: fakeSpawn(calls),
     });
     expect(calls[0]?.args).toEqual([
-      `--app=${URL}`,
+      expect.stringMatching(/^--app=file:\/\/.*launch-[0-9a-f]{32}\.html$/u),
       `--user-data-dir=${uiChromeProfilePath()}`,
       '--no-first-run',
       '--no-default-browser-check',
     ]);
     expect(uiChromeProfilePath()).toBe(join(home, 'data', 'ui', 'chrome-profile'));
+  });
+
+  it('never puts the launch code in the command line (REV-004)', async () => {
+    const calls: SpawnCall[] = [];
+    await openAppWindow(URL, {
+      discover: () => ({ kind: 'chrome', path: '/chrome', name: 'Google Chrome' }),
+      spawn: fakeSpawn(calls),
+    });
+    const argv = calls[0]!.args.join(' ');
+    expect(argv).not.toContain('code=');
+    expect(argv).not.toContain('abc');
+    expect(argv).not.toContain('127.0.0.1');
+  });
+
+  it('opens an owner-only bootstrap page that redirects to the host URL', async () => {
+    const calls: SpawnCall[] = [];
+    await openAppWindow(URL, {
+      discover: () => ({ kind: 'chrome', path: '/chrome', name: 'Google Chrome' }),
+      spawn: fakeSpawn(calls),
+    });
+    const page = fileURLToPath(calls[0]!.args[0]!.slice('--app='.length));
+    expect(page.startsWith(uiWindowBootstrapRoot())).toBe(true);
+    expect(uiWindowBootstrapRoot()).toBe(join(home, 'data', 'ui', 'window'));
+    expect(readFileSync(page, 'utf8')).toBe(bootstrapHtml(URL));
+    if (process.platform !== 'win32') {
+      expect(statSync(page).mode & 0o777).toBe(0o600);
+      expect(statSync(uiWindowBootstrapRoot()).mode & 0o777).toBe(0o700);
+    }
+  });
+
+  it('writes no bootstrap page when no browser opens', async () => {
+    await openAppWindow(URL, {
+      discover: () => null,
+      yantraBrowser: () => Promise.resolve(null),
+      spawn: fakeSpawn([]),
+    });
+    expect(() => readdirSync(uiWindowBootstrapRoot())).toThrow();
   });
 
   it('never passes a remote-debugging or automation flag', () => {
@@ -165,5 +217,35 @@ describe('no Chromium', () => {
     });
     expect(result).toMatchObject({ opened: false, remediation: NO_BROWSER_REMEDIATION });
     expect(result.opened === false && result.message).toContain('ENOENT');
+  });
+});
+
+describe('bootstrap pages (REV-004)', () => {
+  it('redirect by meta refresh and script, escaped for both', () => {
+    const html = bootstrapHtml('http://127.0.0.1:1/#code=a&b"<x>');
+    expect(html).toContain('content="0;url=http://127.0.0.1:1/#code=a&amp;b&quot;&lt;x&gt;"');
+    expect(html).toContain('location.replace("http://127.0.0.1:1/#code=a&b\\"\\u003cx>")');
+    expect(html).toContain('<meta name="referrer" content="no-referrer">');
+    expect(html).not.toMatch(/<script>[^<]*<x>/u);
+  });
+
+  it('are swept once older than the code lifetime, leaving fresh and foreign files', () => {
+    const dir = join(home, 'sweep');
+    mkdirSync(dir, { recursive: true });
+    const now = Date.now();
+    for (const name of ['launch-old.html', 'launch-fresh.html', 'other.html']) {
+      writeFileSync(join(dir, name), 'x');
+    }
+    const old = (now - BOOTSTRAP_MAX_AGE_MS - 1_000) / 1000;
+    utimesSync(join(dir, 'launch-old.html'), old, old);
+    utimesSync(join(dir, 'other.html'), old, old);
+
+    return removeStaleBootstraps(dir, now).then(() => {
+      expect(readdirSync(dir).sort()).toEqual(['launch-fresh.html', 'other.html']);
+    });
+  });
+
+  it('sweeping a missing directory does nothing', async () => {
+    await expect(removeStaleBootstraps(join(home, 'nope'))).resolves.toBeUndefined();
   });
 });
