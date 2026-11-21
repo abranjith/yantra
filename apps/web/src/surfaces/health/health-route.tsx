@@ -180,7 +180,7 @@ export function HealthSurface(): ReactNode {
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-display font-semibold text-ink">Health</h1>
-          <p className="mt-1 text-sm text-ink-2">
+          <p className="mt-1 text-caption text-ink-2">
             Offline environment diagnostics from <span className="type-engine">yantra doctor</span>.
           </p>
         </div>
@@ -198,7 +198,7 @@ export function HealthSurface(): ReactNode {
       {error !== null && error !== undefined ? (
         <p
           role="alert"
-          className="rounded-card border border-rule bg-surface p-4 text-sm text-signal-failed-ink"
+          className="rounded-card border border-rule bg-surface p-4 text-caption text-signal-failed-ink"
         >
           {error instanceof Error ? error.message : 'Failed to load health diagnostics.'}
         </p>
@@ -207,24 +207,24 @@ export function HealthSurface(): ReactNode {
       {invokeError !== null ? (
         <p
           role="alert"
-          className="rounded-card border border-rule bg-surface p-4 text-sm text-signal-failed-ink"
+          className="rounded-card border border-rule bg-surface p-4 text-caption text-signal-failed-ink"
         >
           {invokeError}
         </p>
       ) : null}
 
-      {query.isLoading ? <p className="text-sm text-ink-2">Running diagnostics…</p> : null}
+      {query.isLoading ? <p className="text-caption text-ink-2">Running diagnostics…</p> : null}
 
       {data !== undefined ? (
         <>
-          <div className="flex flex-wrap items-center justify-between gap-4 rounded-card border border-rule bg-surface p-4 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-card border border-rule bg-surface p-4 text-caption">
             <div className="flex items-center gap-2">
               <span className="text-ink-2">Overall:</span>
               <span className="font-semibold text-ink" data-testid="health-overall">
                 {data.overall}
               </span>
             </div>
-            <div className="flex flex-wrap gap-4 text-xs text-ink-2">
+            <div className="flex flex-wrap gap-4 text-micro text-ink-2">
               <span>
                 Platform: <span className="type-engine text-ink">{data.platform}</span>
               </span>
@@ -240,12 +240,12 @@ export function HealthSurface(): ReactNode {
           {data.browser !== undefined ? (
             <section
               aria-labelledby="health-browser-heading"
-              className="flex flex-col gap-2 rounded-card border border-rule bg-surface p-4 text-sm"
+              className="flex flex-col gap-2 rounded-card border border-rule bg-surface p-4 text-caption"
             >
               <h2 id="health-browser-heading" className="font-medium text-ink">
                 Browser provenance
               </h2>
-              <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-xs">
+              <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-micro">
                 <dt className="text-ink-2">Selection</dt>
                 <dd className="type-engine text-ink">
                   {data.browser.source} ({data.browser.origin}
@@ -278,7 +278,7 @@ export function HealthSurface(): ReactNode {
                 </dd>
               </dl>
               {data.browser.remediation !== undefined ? (
-                <p className="mt-1 text-xs text-ink-2">{data.browser.remediation}</p>
+                <p className="mt-1 text-micro text-ink-2">{data.browser.remediation}</p>
               ) : null}
             </section>
           ) : null}
@@ -286,12 +286,12 @@ export function HealthSurface(): ReactNode {
           {data.search !== undefined ? (
             <section
               aria-labelledby="health-search-heading"
-              className="flex flex-col gap-2 rounded-card border border-rule bg-surface p-4 text-sm"
+              className="flex flex-col gap-2 rounded-card border border-rule bg-surface p-4 text-caption"
             >
               <h2 id="health-search-heading" className="font-medium text-ink">
                 Search provenance
               </h2>
-              <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-xs">
+              <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-micro">
                 <dt className="text-ink-2">Provider</dt>
                 <dd className="type-engine text-ink">{data.search.provider}</dd>
                 <dt className="text-ink-2">Kind</dt>

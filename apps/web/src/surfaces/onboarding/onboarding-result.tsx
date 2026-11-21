@@ -31,7 +31,7 @@ export function OnboardingResultView({ result }: OnboardingResultProps): ReactNo
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="rounded-card border border-rule bg-surface p-5 text-sm">
+      <div className="rounded-card border border-rule bg-surface p-5 text-caption">
         <p className="font-medium text-ink">Configuration written</p>
         <dl className="mt-3 grid gap-2 sm:grid-cols-[10rem_1fr]">
           <dt className="text-ink-2">Config file</dt>
@@ -55,7 +55,7 @@ export function OnboardingResultView({ result }: OnboardingResultProps): ReactNo
 
         {result.search_key === 'manual' && result.command !== undefined ? (
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-chip border border-rule bg-sunken px-3 py-2">
-            <code className="type-engine text-xs text-ink">{result.command}</code>
+            <code className="type-engine text-micro text-ink">{result.command}</code>
             <Button
               size="sm"
               variant="secondary"
@@ -71,7 +71,7 @@ export function OnboardingResultView({ result }: OnboardingResultProps): ReactNo
         <p className="mt-4 text-ink-2">{locationLine}</p>
       </div>
 
-      <nav aria-label="Next steps" className="flex flex-wrap items-center gap-4 text-sm">
+      <nav aria-label="Next steps" className="flex flex-wrap items-center gap-4 text-caption">
         <span className="text-ink-2">Next:</span>
         <RouterLink to="/mission" className={linkStyles()}>
           Mission

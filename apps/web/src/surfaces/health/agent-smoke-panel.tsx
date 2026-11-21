@@ -153,7 +153,7 @@ function SmokeDisplayedStateLine({ displayed }: { readonly displayed: DisplayedS
   return (
     <div
       data-testid="smoke-run-status"
-      className="flex flex-wrap items-center gap-2 text-xs text-ink-2"
+      className="flex flex-wrap items-center gap-2 text-micro text-ink-2"
     >
       <span className="font-medium text-ink">{DISPLAYED_WORDS[displayed.kind]}</span>
       {displayed.position !== null ? (
@@ -361,14 +361,14 @@ export function AgentSmokePanel(): ReactNode {
     <section
       aria-labelledby="health-smoke-heading"
       data-testid="agent-smoke-panel"
-      className="flex flex-col gap-4 rounded-card border border-rule bg-surface p-4 text-sm"
+      className="flex flex-col gap-4 rounded-card border border-rule bg-surface p-4 text-caption"
     >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h2 id="health-smoke-heading" className="font-medium text-ink">
             Provider smoke test
           </h2>
-          <p className="mt-1 text-xs text-ink-2">
+          <p className="mt-1 text-micro text-ink-2">
             Runs a live round trip against the configured provider using{' '}
             <span className="type-engine">yantra doctor --agent-smoke</span>.
           </p>
@@ -401,7 +401,7 @@ export function AgentSmokePanel(): ReactNode {
         <div
           role="note"
           data-testid="smoke-unavailable"
-          className="flex flex-wrap items-center justify-between gap-2 rounded-control border border-rule bg-sunken p-3 text-xs text-ink-2"
+          className="flex flex-wrap items-center justify-between gap-2 rounded-control border border-rule bg-sunken p-3 text-micro text-ink-2"
         >
           <span>{unavailableReason}</span>
           <RouterLink to={MODELS_PATH} className={linkStyles()}>
@@ -433,7 +433,7 @@ export function AgentSmokePanel(): ReactNode {
       ) : null}
 
       {invokeError !== null ? (
-        <p role="alert" className="text-xs text-signal-failed-ink">
+        <p role="alert" className="text-micro text-signal-failed-ink">
           {invokeError}
         </p>
       ) : null}
@@ -449,7 +449,7 @@ export function AgentSmokePanel(): ReactNode {
       {outcome !== null && outcome.type === 'error' ? (
         <div
           data-testid="smoke-error-result"
-          className="flex flex-col gap-1 rounded-control border border-rule bg-sunken p-3 text-xs"
+          className="flex flex-col gap-1 rounded-control border border-rule bg-sunken p-3 text-micro"
         >
           <div className="flex flex-wrap items-center gap-2">
             <span className="type-engine font-semibold text-signal-failed-ink">{outcome.code}</span>
@@ -467,7 +467,7 @@ export function AgentSmokePanel(): ReactNode {
       {smokeEnvelope !== null ? (
         <div
           data-testid="smoke-result"
-          className="flex flex-col gap-2 rounded-control border border-rule bg-sunken p-3 text-xs"
+          className="flex flex-col gap-2 rounded-control border border-rule bg-sunken p-3 text-micro"
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">

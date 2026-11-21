@@ -33,7 +33,7 @@ const STATUS_ICON: Readonly<Record<DoctorStatus, IconName>> = {
 };
 
 const statusBadgeStyles = tv({
-  base: 'inline-flex shrink-0 items-center gap-1.5 rounded-badge border px-2 py-0.5 text-xs font-medium',
+  base: 'inline-flex shrink-0 items-center gap-1.5 rounded-badge border px-2 py-0.5 text-micro font-medium',
   variants: {
     status: {
       ok: 'border-signal-fulfilled-border bg-signal-fulfilled-bg text-signal-fulfilled-ink',
@@ -67,7 +67,7 @@ export function HealthCheck({
       data-check-id={id}
       data-check-status={status}
       className={cn(
-        'flex flex-col gap-2 rounded-card border border-rule bg-surface p-4 text-sm',
+        'flex flex-col gap-2 rounded-card border border-rule bg-surface p-4 text-caption',
         className,
       )}
     >
@@ -85,13 +85,13 @@ export function HealthCheck({
         {remediationSlot !== undefined ? <div className="shrink-0">{remediationSlot}</div> : null}
       </div>
 
-      {remediation !== undefined ? <p className="text-xs text-ink-2">{remediation}</p> : null}
+      {remediation !== undefined ? <p className="text-micro text-ink-2">{remediation}</p> : null}
 
       {detailEntries.length > 0 ? (
         <Disclosure className="mt-1">
-          <DisclosureTrigger className="text-xs">Details</DisclosureTrigger>
+          <DisclosureTrigger className="text-micro">Details</DisclosureTrigger>
           <DisclosurePanel>
-            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
+            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-micro">
               {detailEntries.map(([key, value]) => (
                 <div key={key} className="contents">
                   <dt className="text-ink-2">{key}</dt>

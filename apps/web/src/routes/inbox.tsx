@@ -19,9 +19,9 @@ function InboxPage(): ReactNode {
   return (
     <section className="mx-auto flex max-w-4xl flex-col gap-6">
       <header>
-        <p className="text-xs uppercase tracking-wide text-ink-3">Inbox</p>
-        <h1 className="text-3xl font-semibold text-ink">Needs your attention</h1>
-        <p className="mt-2 text-sm text-ink-2" aria-live="polite">
+        <p className="text-micro uppercase tracking-wide text-ink-3">Inbox</p>
+        <h1 className="text-headline font-semibold text-ink">Needs your attention</h1>
+        <p className="mt-2 text-caption text-ink-2" aria-live="polite">
           {state.count} item{state.count === 1 ? '' : 's'}
         </p>
       </header>
@@ -36,10 +36,10 @@ function InboxPage(): ReactNode {
             <article key={item.item_id} className="rounded-card border border-rule bg-surface p-5">
               <h2 className="font-semibold text-ink">{item.title}</h2>
               {item.intervention?.handoff ? (
-                <p className="mt-2 text-sm text-ink-2">{item.intervention.handoff.blocker}</p>
+                <p className="mt-2 text-caption text-ink-2">{item.intervention.handoff.blocker}</p>
               ) : null}
               {item.intervention?.missing ? (
-                <ul className="mt-2 list-disc pl-5 text-sm text-ink-2">
+                <ul className="mt-2 list-disc pl-5 text-caption text-ink-2">
                   {item.intervention.missing.map((missing) => (
                     <li key={missing.label}>
                       {missing.label}: {missing.reason}
@@ -50,7 +50,7 @@ function InboxPage(): ReactNode {
               {item.dismissible ? (
                 <button
                   type="button"
-                  className="mt-3 rounded-chip border border-rule px-3 py-1 text-sm"
+                  className="mt-3 rounded-chip border border-rule px-3 py-1 text-caption"
                   onClick={() => void store.dismiss(item.item_id)}
                 >
                   Dismiss

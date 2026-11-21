@@ -146,10 +146,20 @@ const RAW_PALETTE_SOURCE = `(?:^|[\\s:])${COLOR_UTILITY_PREFIX}-${PALETTE_NAME}(
 const ARBITRARY_COLOR_SOURCE = '-\\[(?:#|(?:rgba?|hsla?|oklch|oklab|lab|lch|color)\\()';
 const HEX_COLOR_SOURCE = '^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$';
 const COLOR_FUNCTION_SOURCE = '(?:oklch|oklab|rgba?|hsla?)\\(';
+/**
+ * Utilities in a namespace Drshya clears (packages/ui/src/tokens/scale.ts,
+ * CLEARED_NAMESPACES) that have no Drshya step: they compile to nothing
+ * (REV-008). Drshya steps (`text-caption`, `rounded-control`, `shadow-glass`,
+ * `ease-standard`) and static values (`rounded-none`, `rounded-full`,
+ * `shadow-none`) are not matched.
+ */
+const CLEARED_UTILITY_SOURCE =
+  '(?:^|[\\s:])(?:text-(?:xs|sm|base|lg|[2-9]?xl)|rounded(?:-[trblse]{1,2})?-(?:xs|sm|md|lg|[2-4]?xl)|shadow-(?:2xs|xs|sm|md|lg|xl|2xl|inner)|font-serif|ease-(?:in|out|in-out)|animate-(?:spin|ping|pulse|bounce))(?=$|[\\s\\u002F])';
 
 const RAW_PALETTE_MESSAGE = `Raw palette utility: style with Drshya semantic utilities (bg-surface, text-ink-2, border-rule), never a Tailwind palette or primitive ramp. ${DRSHYA_RULE}`;
 const ARBITRARY_COLOR_MESSAGE = `Arbitrary color value: add or use a semantic token instead of -[#…] or -[oklch(…)]. ${DRSHYA_RULE}`;
 const COLOR_LITERAL_MESSAGE = `Color literal outside the token data: colors live in packages/ui/src/tokens and reach components as semantic utilities. ${DRSHYA_RULE}`;
+const CLEARED_UTILITY_MESSAGE = `Default Tailwind utility in a namespace Drshya clears: it compiles to nothing. Use a Drshya step (text-micro|caption|body|lead|title|headline|display, rounded-chip|control|frame|full, shadow-glass, ease-standard) or a type-* utility. ${DRSHYA_RULE}`;
 const INLINE_STYLE_MESSAGE = `Inline style: only custom properties ('--progress': '40%') may be set inline; everything else is a utility. ${DRSHYA_RULE}`;
 const INNER_HTML_MESSAGE = `dangerouslySetInnerHTML is forbidden: page-derived text is untrusted and React escaping is the only renderer (plan_ui.md §3, §7). ${DRSHYA_RULE}`;
 
@@ -161,6 +171,11 @@ export const DRSHYA_STYLE_SELECTORS = [
   {
     selector: `TemplateElement[value.raw=/${ARBITRARY_COLOR_SOURCE}/i]`,
     message: ARBITRARY_COLOR_MESSAGE,
+  },
+  { selector: `Literal[value=/${CLEARED_UTILITY_SOURCE}/]`, message: CLEARED_UTILITY_MESSAGE },
+  {
+    selector: `TemplateElement[value.raw=/${CLEARED_UTILITY_SOURCE}/]`,
+    message: CLEARED_UTILITY_MESSAGE,
   },
   { selector: `Literal[value=/${HEX_COLOR_SOURCE}/i]`, message: COLOR_LITERAL_MESSAGE },
   { selector: `Literal[value=/${COLOR_FUNCTION_SOURCE}/i]`, message: COLOR_LITERAL_MESSAGE },

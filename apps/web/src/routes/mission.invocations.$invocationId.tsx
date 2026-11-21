@@ -84,7 +84,7 @@ export function MissionInvocationPage({
       invocation.error instanceof RpcCallError && invocation.error.reason === 'not_found';
     return (
       <div className="flex flex-col gap-3">
-        <h1 className="text-xl font-semibold text-ink">
+        <h1 className="text-title font-semibold text-ink">
           {notFound ? 'Nothing to follow' : 'Couldn’t load this run'}
         </h1>
         <p className="text-ink-2">

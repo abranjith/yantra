@@ -368,7 +368,7 @@ export function Composer(props: ComposerProps): ReactNode {
       : COMPOSER_MODES;
   return (
     <section aria-labelledby="composer-title" className="flex flex-col gap-4" data-part="composer">
-      <h1 id="composer-title" className="text-xl font-semibold text-ink">
+      <h1 id="composer-title" className="text-title font-semibold text-ink">
         Mission
       </h1>
       <Tabs

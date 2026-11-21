@@ -28,7 +28,7 @@ export function TopBar({ nav }: TopBarProps): ReactNode {
             <li key={entry.path}>
               <Link
                 to={entry.path}
-                className="rounded-chip px-2 py-1 text-sm text-ink-2 hover:text-ink focus-visible:outline-2 focus-visible:outline-accent"
+                className="rounded-chip px-2 py-1 text-caption text-ink-2 hover:text-ink focus-visible:outline-2 focus-visible:outline-accent"
                 activeProps={{ 'aria-current': 'page', className: 'text-ink' }}
                 activeOptions={{ exact: true }}
               >

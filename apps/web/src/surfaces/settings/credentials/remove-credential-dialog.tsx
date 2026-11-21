@@ -71,16 +71,16 @@ export function RemoveCredentialDialog({ row, onClose }: RemoveCredentialDialogP
     >
       {({ close }) => (
         <div className="flex flex-col gap-4">
-          <p className="text-sm text-ink">
+          <p className="text-caption text-ink">
             Remove <span className="type-engine">{row.key}</span> from the OS keychain?
           </p>
           {hasReferences ? (
             <div className="flex flex-col gap-3 rounded-card border border-rule bg-sunken p-3">
-              <p className="text-sm font-medium text-ink">
+              <p className="text-caption font-medium text-ink">
                 This credential is referenced by {row.referenced_by.length}{' '}
                 {row.referenced_by.length === 1 ? 'configuration entry' : 'configuration entries'}:
               </p>
-              <ul className="list-disc space-y-1 pl-5 text-sm text-ink-2">
+              <ul className="list-disc space-y-1 pl-5 text-caption text-ink-2">
                 {row.referenced_by.map((item) => (
                   <li key={`${item.kind}:${item.id}`}>
                     <span>
@@ -100,7 +100,7 @@ export function RemoveCredentialDialog({ row, onClose }: RemoveCredentialDialogP
             </div>
           ) : null}
           {submitError === null ? null : (
-            <p role="alert" className="text-sm text-signal-failed-ink">
+            <p role="alert" className="text-caption text-signal-failed-ink">
               {submitError}
             </p>
           )}

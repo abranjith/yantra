@@ -47,7 +47,7 @@ function Region({
 }): ReactNode {
   return (
     <section aria-labelledby={id} data-region={id} className="flex flex-col gap-2">
-      <h2 id={id} className="text-lg font-semibold text-ink">
+      <h2 id={id} className="text-lead font-semibold text-ink">
         {heading}
       </h2>
       {children}

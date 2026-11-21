@@ -27,7 +27,7 @@ export function PossibleOrphansPanel(): ReactNode {
     <section
       aria-labelledby="health-possible-orphans-heading"
       data-testid="health-possible-orphans"
-      className="flex flex-col gap-3 rounded-card border border-rule bg-surface p-4 text-sm"
+      className="flex flex-col gap-3 rounded-card border border-rule bg-surface p-4 text-caption"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 id="health-possible-orphans-heading" className="font-medium text-ink">
@@ -43,7 +43,7 @@ export function PossibleOrphansPanel(): ReactNode {
           {query.isFetching ? 'Checking…' : 'Check again'}
         </Button>
       </div>
-      <p className="text-xs text-ink-2">
+      <p className="text-micro text-ink-2">
         Yantra could not confirm this process belongs to the run, so it was not stopped.
       </p>
       <ul className="flex flex-col gap-2">
@@ -51,7 +51,7 @@ export function PossibleOrphansPanel(): ReactNode {
           <li
             key={`${orphan.run_id}:${String(orphan.pid)}:${orphan.recorded_at}`}
             data-testid={`possible-orphan-${orphan.run_id}-${String(orphan.pid)}`}
-            className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-rule bg-sunken p-3 text-xs"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-rule bg-sunken p-3 text-micro"
           >
             <div className="flex flex-wrap items-center gap-3">
               <RouterLink

@@ -201,6 +201,60 @@ describe('@no-llm Drshya lint boundary rules', () => {
       ).toEqual([expect.stringContaining('Raw palette utility')]);
     }, 60_000);
 
+    it.each([
+      'text-sm',
+      'text-xs',
+      'text-base',
+      'text-lg',
+      'text-xl',
+      'text-3xl',
+      'hover:text-sm',
+      'md:rounded-lg',
+      'rounded-t-lg',
+      'rounded-2xl',
+      'shadow-md',
+      'shadow-inner',
+      'font-serif',
+      'ease-in-out',
+      'animate-spin',
+      'text-sm/6',
+    ])(
+      'rejects the cleared default %s, which compiles to nothing (REV-008)',
+      async (utility) => {
+        expect(
+          await lintSnippet(
+            'apps/web/src/in-memory-probe.ts',
+            `export const cls = 'p-2 ${utility} text-ink';`,
+          ),
+        ).toEqual([
+          expect.stringContaining('Default Tailwind utility in a namespace Drshya clears'),
+        ]);
+      },
+      60_000,
+    );
+
+    it('rejects a cleared default inside a template literal (REV-008)', async () => {
+      expect(
+        await lintSnippet(
+          'packages/ui/src/in-memory-probe.ts',
+          'export const cls = (x: string) => `${x} text-lg`;',
+        ),
+      ).toEqual([expect.stringContaining('Default Tailwind utility in a namespace Drshya clears')]);
+    }, 60_000);
+
+    it('accepts every Drshya step and static value in the cleared namespaces (REV-008)', async () => {
+      const steps = [
+        'text-micro text-caption text-body text-lead text-title text-headline text-display',
+        'text-ink text-ink-2 text-accent',
+        'rounded-chip rounded-control rounded-frame rounded-full rounded-none',
+        'shadow-glass shadow-none ease-standard font-sans font-mono type-engine',
+        'context-sm subtext-lg',
+      ].join(' ');
+      expect(
+        await lintSnippet('apps/web/src/in-memory-probe.ts', `export const cls = '${steps}';`),
+      ).toEqual([]);
+    }, 60_000);
+
     it('applies the same rules to apps/web source', async () => {
       expect(
         await lintSnippet(
