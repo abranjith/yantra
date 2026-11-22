@@ -1,18 +1,19 @@
 // @no-llm
 /**
- * The worker's app-launch path (FEAT-065 TASK-015): claim first, find the
- * owned run, record the exit; a refused claim does nothing at all.
+ * The worker's app-launch path (FEAT-065 TASK-015): claim first, record the
+ * run this process claims (announced in-process, REV-011), record the exit;
+ * a refused claim does nothing at all.
  */
 
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { FileInvocationStore, resetPathCache, type ProcessIdentity } from '@yantra/core';
-import type { InvocationRecordInput, WorkerLaunch } from '@yantra/protocol';
+import type { InvocationRecordInput, RunLease, WorkerLaunch } from '@yantra/protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { claimInvocation, findOwnedRun, invocationLifecycle } from '../../src/ui/worker-claim.js';
+import { claimInvocation, invocationLifecycle, ownedBy } from '../../src/ui/worker-claim.js';
 import { runWorker } from '../../src/worker/entry.js';
 
 const CWD = process.platform === 'win32' ? 'C:\\work' : '/work';
@@ -50,29 +51,40 @@ function launch(): WorkerLaunch {
   };
 }
 
-function writeLease(
+function leaseOf(
   runId: string,
   owner: ProcessIdentity,
   claimedAt = new Date().toISOString(),
-): void {
-  mkdirSync(join(runs, runId), { recursive: true });
-  writeFileSync(
-    join(runs, runId, 'lease.json'),
-    JSON.stringify({
-      schema_version: 1,
-      run_id: runId,
-      owner: { pid: owner.pid, start_token: owner.startToken },
-      origin: 'worker',
-      execution_class: 'run',
-      command: ['research'],
-      socket: { kind: 'unix', address: `/home/u/.yantra/run/${'a'.repeat(24)}.sock` },
-      run_token: TOKEN,
-      channel_version: 1,
-      yantra_version: '0.0.1',
-      log_seq_at_claim: 0,
-      claimed_at: claimedAt,
-    }),
-  );
+): RunLease {
+  return {
+    schema_version: 1,
+    run_id: runId,
+    owner: { pid: owner.pid, start_token: owner.startToken },
+    origin: 'worker',
+    execution_class: 'run',
+    command: ['research'],
+    socket: { kind: 'unix', address: `/home/u/.yantra/run/${'a'.repeat(24)}.sock` },
+    run_token: TOKEN,
+    channel_version: 1,
+    yantra_version: '0.0.1',
+    log_seq_at_claim: 0,
+    claimed_at: claimedAt,
+  } as RunLease;
+}
+
+/** Stands in for core's in-process claim notice. */
+class Claims {
+  private readonly listeners = new Set<(lease: RunLease) => void>();
+  public readonly subscribe = (listener: (lease: RunLease) => void): (() => void) => {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  };
+  public announce(lease: RunLease): void {
+    for (const listener of [...this.listeners]) listener(lease);
+  }
+  public get count(): number {
+    return this.listeners.size;
+  }
 }
 
 beforeEach(() => {
@@ -92,7 +104,7 @@ afterEach(() => {
 });
 
 describe('claimInvocation', () => {
-  const deps = () => ({ store, identity: () => Promise.resolve(ME), runsRoot: runs });
+  const deps = () => ({ store, identity: () => Promise.resolve(ME) });
 
   it('leaves a plain FEAT-064 launch (no record) ungated', async () => {
     expect(await claimInvocation(launch(), deps())).toBe('not_app_launch');
@@ -130,7 +142,6 @@ describe('a refused claim', () => {
     const lifecycle = invocationLifecycle({
       store,
       identity: () => Promise.resolve(ME),
-      runsRoot: runs,
     });
 
     // Act
@@ -146,50 +157,52 @@ describe('a refused claim', () => {
     expect(code).toBe(0);
     expect(run).not.toHaveBeenCalled();
     expect((await store.get(ID))?.state).toBe('discarded');
-    expect(await findOwnedRun(runs, ME, 0)).toBeNull();
+    expect(existsSync(runs)).toBe(false);
   });
 });
 
-describe('findOwnedRun', () => {
-  it('finds the run whose lease this process owns', async () => {
-    writeLease('20261111T100000Z-other-0001', { pid: 1, startToken: 'x' });
-    writeLease('20261111T100000Z-mine-0002', ME);
-    expect(await findOwnedRun(runs, ME, Date.now() - 5_000)).toBe('20261111T100000Z-mine-0002');
+describe('ownedBy', () => {
+  it('matches a lease this process claimed after it started', () => {
+    expect(ownedBy(leaseOf('20261111T100000Z-mine-0002', ME), ME, Date.now() - 5_000)).toBe(true);
   });
 
-  it('ignores a lease with the same PID but another start token (PID reuse)', async () => {
-    writeLease('20261111T100000Z-reused-0003', { pid: ME.pid, startToken: 'older' });
-    expect(await findOwnedRun(runs, ME, 0)).toBeNull();
+  it('rejects another process', () => {
+    expect(ownedBy(leaseOf('r', { pid: 1, startToken: 'x' }), ME, 0)).toBe(false);
   });
 
-  it('ignores a lease claimed before this worker started', async () => {
-    writeLease('20261111T100000Z-old-0004', ME, '2020-01-01T00:00:00.000Z');
-    expect(await findOwnedRun(runs, ME, Date.now())).toBeNull();
+  it('rejects the same PID with another start token (PID reuse)', () => {
+    expect(ownedBy(leaseOf('r', { pid: ME.pid, startToken: 'older' }), ME, 0)).toBe(false);
+  });
+
+  it('rejects a lease claimed before this worker started', () => {
+    expect(ownedBy(leaseOf('r', ME, '2020-01-01T00:00:00.000Z'), ME, Date.now())).toBe(false);
   });
 });
 
 describe('the lifecycle', () => {
-  it('marks the invocation running with its run once the lease exists, then finishes it', async () => {
-    // Arrange
-    await store.create(record());
+  async function claimedLifecycle(executionClass: 'run' | 'mutate' = 'run') {
+    await store.create({ ...record(), execution_class: executionClass });
     await store.reserve(ID, () => null);
-    await store.markSpawning(ID);
+    if (executionClass === 'run') await store.markSpawning(ID);
+    const claims = new Claims();
     const lifecycle = invocationLifecycle({
       store,
       identity: () => Promise.resolve(ME),
-      runsRoot: runs,
-      pollMs: 20,
+      onLeaseClaimed: claims.subscribe,
     });
-
-    // Act: the gate claims; the command creates its run; it completes.
     expect(await lifecycle.gate(launch())).toBe(true);
-    writeLease('20261111T100000Z-research-0005', ME);
+    return { claims, lifecycle };
+  }
+
+  it('marks the invocation running with the run it claims, then finishes it', async () => {
+    const { claims, lifecycle } = await claimedLifecycle();
+
+    claims.announce(leaseOf('20261111T100000Z-research-0005', ME));
     await vi.waitFor(async () => {
       expect((await store.get(ID))?.state).toBe('running');
     });
     await lifecycle.finish(2);
 
-    // Assert
     expect(await store.get(ID)).toMatchObject({
       state: 'finished',
       run_id: '20261111T100000Z-research-0005',
@@ -197,16 +210,52 @@ describe('the lifecycle', () => {
     });
   });
 
-  it('finishes a mutate command that never creates a run from claimed', async () => {
-    await store.create({ ...record(), execution_class: 'mutate' });
-    await store.reserve(ID, () => null);
+  it("ignores another process's lease and records only the first run this one claims", async () => {
+    const { claims, lifecycle } = await claimedLifecycle();
+
+    claims.announce(leaseOf('20261111T100000Z-other-0001', { pid: 1, startToken: 'x' }));
+    claims.announce(leaseOf('20261111T100000Z-mine-0002', ME));
+    claims.announce(leaseOf('20261111T100000Z-nested-0003', ME));
+    await lifecycle.finish(0);
+
+    expect(await store.get(ID)).toMatchObject({
+      state: 'finished',
+      run_id: '20261111T100000Z-mine-0002',
+    });
+    expect(claims.count).toBe(0);
+  });
+
+  it('records the run of a command that finishes immediately after claiming it', async () => {
+    const { claims, lifecycle } = await claimedLifecycle();
+
+    claims.announce(leaseOf('20261111T100000Z-fast-0006', ME));
+    await lifecycle.finish(0);
+
+    expect(await store.get(ID)).toMatchObject({
+      state: 'finished',
+      run_id: '20261111T100000Z-fast-0006',
+    });
+  });
+
+  it('finishes a mutate command that never creates a run from claimed, and stops listening', async () => {
+    const { claims, lifecycle } = await claimedLifecycle('mutate');
+    expect(claims.count).toBe(1);
+
+    await lifecycle.finish(0);
+
+    expect(await store.get(ID)).toMatchObject({ state: 'finished', run_id: null });
+    expect(claims.count).toBe(0);
+  });
+
+  it('never listens for a plain launch with no invocation record', async () => {
+    const claims = new Claims();
     const lifecycle = invocationLifecycle({
       store,
       identity: () => Promise.resolve(ME),
-      runsRoot: runs,
+      onLeaseClaimed: claims.subscribe,
     });
-    await lifecycle.gate(launch());
+    expect(await lifecycle.gate(launch())).toBe(true);
+    expect(claims.count).toBe(0);
     await lifecycle.finish(0);
-    expect(await store.get(ID)).toMatchObject({ state: 'finished', run_id: null });
   });
 });

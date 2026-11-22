@@ -17,7 +17,7 @@
  * {@link ClaimRefusedError}, so a late worker exits with no side effects.
  */
 
-import { mkdir, readdir, readFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
@@ -73,6 +73,24 @@ export const ACTIVE_STATES: ReadonlySet<InvocationState> = new Set([
 
 /** Run invocations allowed to hold a slot at once. */
 export const RUN_SLOTS = 2;
+
+/**
+ * States {@link FileInvocationStore.prune} may remove: done, with nothing left
+ * for the user to decide. `never_started`, `start_unknown` and `needs_review`
+ * still wait on the user and are always kept.
+ */
+export const PRUNABLE_STATES: ReadonlySet<InvocationState> = new Set(['finished', 'discarded']);
+
+/** How many finished or discarded records {@link FileInvocationStore.prune} keeps. */
+export const PRUNE_KEEP_LATEST = 200;
+
+/** How long a finished or discarded record is kept at most (7 days). */
+export const PRUNE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+export interface PruneOptions {
+  readonly keepLatest?: number;
+  readonly maxAgeMs?: number;
+}
 
 /** True when `from → to` is in the table. */
 export function canTransition(from: InvocationState, to: InvocationState): boolean {
@@ -207,6 +225,32 @@ export class FileInvocationStore {
       .filter((id) => /^[A-Za-z0-9_-]{16,64}$/u.test(id));
     const records = await Promise.all(ids.map((id) => this.get(id)));
     return records.filter((record): record is InvocationRecord => record !== null).sort(fifo);
+  }
+
+  /**
+   * Removes finished and discarded records, with their results, beyond the
+   * newest `keepLatest` or older than `maxAgeMs` (REV-007), so every scan of
+   * the directory stays bounded by active work plus a short history. Returns
+   * the removed invocation IDs.
+   */
+  public async prune(options: PruneOptions = {}): Promise<string[]> {
+    const keepLatest = options.keepLatest ?? PRUNE_KEEP_LATEST;
+    const cutoff = this.now().getTime() - (options.maxAgeMs ?? PRUNE_MAX_AGE_MS);
+    return this.withLock(async () => {
+      const done = (await this.list())
+        .filter((record) => PRUNABLE_STATES.has(record.state))
+        .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+      const removed = done.filter(
+        (record, index) => index >= keepLatest || Date.parse(record.updated_at) < cutoff,
+      );
+      for (const record of removed) {
+        // The result first: a record without its result reads as unfinished
+        // work to nobody, while a stray result is never listed.
+        await rm(this.resultPathOf(record.invocation_id), { force: true });
+        await rm(this.pathOf(record.invocation_id), { force: true });
+      }
+      return removed.map((record) => record.invocation_id);
+    });
   }
 
   /**

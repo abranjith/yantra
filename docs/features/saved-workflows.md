@@ -66,7 +66,7 @@ The YAML schema also accepts `call_workflow`, but its executor handler is curren
 
 ### Confirmations and safety
 
-Only `navigate`, `click`, `fill`, and `fill_element` may set `requires_confirmation: true`. An interactive direct replay prompts before the step and defaults to denial. `--json`, piped/non-TTY execution, and other unattended callers have no interactive gateway and fail closed with a human-handoff outcome rather than executing the step.
+Only `navigate`, `click`, `fill`, and `fill_element` may set `requires_confirmation: true`. Saving a workflow keeps a flagged step's consent fields by writing it in canonical form (see [Create or edit workflow YAML](#create-or-edit-workflow-yaml)). An interactive direct replay prompts before the step and defaults to denial. `--json`, piped/non-TTY execution, and other unattended callers have no interactive gateway and fail closed with a human-handoff outcome rather than executing the step.
 
 Replay also applies workflow scopes, host blocklisting, configured robots policy, and rate limits. A `read-only-data` scope permits only `extract`, `wait_for`, and `llm_summarize`; lint and execution preflight reject mutating steps in that scope. Yantra does not bypass bot detection or CAPTCHA challenges.
 
@@ -138,7 +138,24 @@ _locators:
       value: body
 ```
 
-`scope: null` inherits the workflow's `security_class`. Short forms are available for simple `navigate`, `click`, `fill`, and visible `wait_for` steps, but canonical form is clearer when adding scope, submission, timeout, or confirmation metadata.
+`scope: null` inherits the workflow's `security_class`. Short forms such as `navigate: <url>`, `click: <locator>`, `fill: { to: <locator>, value: <value> }`, and `wait_for: <locator>` are available for simple `navigate`, `click`, `fill`, and visible `wait_for` steps. A short form has no room for scope, submission, timeout, or confirmation metadata, so when Yantra saves a workflow it uses short form only for steps that carry none of those, and writes every other step in canonical form with its `verb` and all of its fields.
+
+In particular, a step that sets `requires_confirmation: true`, `confirmation_description`, `expected_cost`, or `consequence` is always saved in canonical form, so its consent gate survives the save and reload:
+
+```yaml
+- id: s4
+  verb: click
+  scope: null
+  locator: Place order
+  requires_confirmation: true
+  confirmation_description: Place the order
+  expected_cost:
+    amount: 12.5
+    currency: USD
+  consequence: irreversible
+```
+
+Field order in a saved file can differ from this example. Workflows saved before this behavior could store a flagged `navigate`, `click`, or `fill` step in short form, which dropped its consent fields: that step loads back unflagged and runs without asking. To restore the gate, rewrite such a step in canonical form with its consent fields, then lint the file again.
 
 Validate the exact file you edited:
 

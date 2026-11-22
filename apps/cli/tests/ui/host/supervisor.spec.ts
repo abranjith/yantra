@@ -281,6 +281,45 @@ describe('queue.*', () => {
     ]);
   });
 
+  it('lists only items still in the queue, never finished or discarded ones (REV-007)', async () => {
+    const done = await supervisor.invoke(invocation(['research'], ['a']), DISPLAYED);
+    await store.claim(done.invocation_id, { pid: 1, startToken: 'w' });
+    await store.finish(done.invocation_id, { exitCode: 0 });
+    const dropped = await supervisor.invoke(invocation(['research'], ['b']), DISPLAYED);
+    const waiting = await supervisor.invoke(invocation(['research'], ['c']), DISPLAYED);
+    const third = await supervisor.invoke(invocation(['research'], ['d']), DISPLAYED);
+    await call('queue.discard', { invocation_id: third.invocation_id });
+
+    const { items } = (await call('queue.list', {})) as {
+      items: { invocation_id: string; state: string }[];
+    };
+
+    expect(items.map((item) => item.invocation_id)).toEqual([
+      dropped.invocation_id,
+      waiting.invocation_id,
+    ]);
+  });
+
+  it('prunes finished records when it starts, and stops pruning when it stops (REV-007)', async () => {
+    const prune = vi.spyOn(store, 'prune').mockResolvedValue([]);
+    const looped = make({ dequeueMs: 60_000, pruneMs: 20 });
+
+    looped.start();
+    await vi.waitFor(() => {
+      expect(prune.mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
+    looped.stopLoop();
+    const calls = prune.mock.calls.length;
+    await new Promise((resolve) => setTimeout(resolve, 60));
+
+    expect(prune.mock.calls.length).toBe(calls);
+  });
+
+  it('keeps running when a prune fails', async () => {
+    vi.spyOn(store, 'prune').mockRejectedValue(new Error('disk'));
+    await expect(supervisor.prune()).resolves.toBeUndefined();
+  });
+
   it('reads one invocation with its queue position (FEAT-067)', async () => {
     await supervisor.invoke(invocation(['research'], ['a']), DISPLAYED);
     await supervisor.invoke(invocation(['research'], ['b']), DISPLAYED);

@@ -122,9 +122,17 @@ Yantra requires a confirmation immediately before:
 
 An attended, non-JSON TTY displays the action, host, summary, and consequence, then asks `Allow this action? [y/N]`. Only `y` or `yes` grants it; an empty answer denies. The wait is bounded by `--confirm-timeout` and the run's remaining wall-clock budget.
 
-Denial, timeout, missing consent wiring, `--json`, or a non-TTY live agent run fails closed: the protected operation is not executed. The confirmation protocol records only `user_interactive`, `user_cli_confirm`, or `timeout` as decision provenance; there is no agent decision type.
+Denial, timeout, missing consent wiring, `--json`, or a non-TTY live agent run fails closed: the protected operation is not executed. The confirmation protocol records only `user_interactive`, `user_cli_confirm`, `user_app`, or `timeout` as decision provenance; there is no agent decision type.
+
+**One decider per request.** While a run is live — `run`, `resume`, `do`, `ask`, or `research`, started in a terminal or by the app — the run's own process is the only thing that decides its consent request. `yantra confirm` and the app do not write a decision themselves; they send the answer to that process over the run's authenticated local socket, and it records the one decision. Each request is decided exactly once: a second answer gets `already decided`, and nothing is appended.
+
+- **Provenance comes from the connection.** The run stamps `decided_by` from who is connected, not from what the message says: an answer relayed by the app host is `user_app`, and one from `yantra confirm` is `user_cli_confirm`. A message that claims a different provenance, or an answer from any other kind of client, is refused and the request stays pending.
+- **An unreachable owner decides nothing.** If the run may still be alive but its process cannot be reached, does not answer in time, or does not accept answers, nothing is recorded. `yantra confirm` exits `3` with "no parked claim was written", and the app reports that the run's owner did not answer and nothing was decided. Try again, or open the run in the app to answer it there.
+- **Parked decisions only for ownerless runs.** A parked decision is written only when the run has no lease or its owning process is dead, and only for the request you answered. If that request is no longer the one waiting, for example because a stale Inbox card points at an older request, the answer is reported as stale and the newer request is left alone.
 
 Scheduled work uses pause-and-notify rather than auto-confirmation. For a genuinely parked run, `yantra confirm <run-id> grant|deny` appends the human decision. Continuing execution is a separate resume or daemon-poll step; the command itself does not execute the protected action.
+
+**Saved workflows keep their consent flags.** A saved `navigate`, `click`, or `fill` step that carries `requires_confirmation`, `confirmation_description`, `expected_cost`, or `consequence` is always written in the full (canonical) YAML step form, because the one-line shorthand has no room for those fields. Before this fix, saving such a step wrote it as shorthand and silently dropped those fields, so the step later ran without asking. **If you saved a workflow with flagged steps before this fix, open its YAML and add `requires_confirmation` (and any description, cost, or consequence) back to those steps.**
 
 ### Engine-enforced no-submit
 
@@ -260,6 +268,8 @@ affected."
 
 The app's Mission composer (see [Mission](app-mission.md)) never shows a secret-input option, so credentials never become command-line arguments of an app-started run. An option's source shows an environment variable by name, never its value. **Run again** warns before repeating a run that changed, or may have changed, things on websites (for example a submitted form) and lists why. **Resume** past a consent refusal needs an explicit acknowledgement, which adds `--force` to the shown command.
 
+When `yantra ui` opens the app window, the one-time launch code never appears in the browser's command line, where other users of the computer could read it on Linux and macOS. The browser is pointed at a one-shot bootstrap page, written owner-only (`0600` in a `0700` directory under the data directory), that forwards it to the app; old pages are removed after 2 minutes. `yantra ui --print` still prints the URL with its code, because you asked for it.
+
 ### Credentials in the Yantra app
 
 **Settings → Credentials** (`/settings/credentials`) manages OS keychain credentials through the app host without exposing stored values or placing secrets in worker process arguments:
@@ -386,9 +396,13 @@ cumulative 15-minute ceiling and ends the run as a handoff rather than
 silently approving the action.
 
 For a live run, `confirm` sends the answer through the authenticated owner
-socket and reports the step, action, and host. If the owner is unreachable or
-channel-incompatible it exits 3 without writing a parked claim. For a parked
-run, `confirm` creates one exclusive, step-bound decision claim:
+socket, and the run itself records it; the command reports the step, action,
+and host (`Decided (live run, step …)`). This works the same for a workflow
+`run` or `resume` as for `do`, `ask`, and `research`. If the owner may still be
+alive but is unreachable, silent, or cannot accept answers, `confirm` exits 3
+with "no parked claim was written" and nothing is decided. Only when the run
+has no lease or its owner is dead does `confirm` create one exclusive,
+step-bound decision claim:
 
 ```bash
 yantra confirm <run-id> grant
@@ -482,7 +496,7 @@ The focused verification for this document passed 249 tests across 19 files, plu
 - URL provenance gates the agentic `web_fetch` and `browser_navigate` tools only. The deterministic `ask --no-llm` and `research --no-llm` pipelines fetch the URLs their own search returns and are not provenance gated.
 - Provenance attests that a page offered a URL, not that the URL is safe or relevant. A discovered link is still subject to URL policy and the ethics gate, and its content is untrusted data like any other page.
 - A link the sanitizer would alter, for example one whose path contains a masked user value, is withheld rather than offered, so it cannot be followed even when the page plainly links to it.
-- Heuristic confirmation covers named protected clicks, stored-secret fills, and explicitly flagged workflow steps. It cannot infer every consequential action from arbitrary site wording. Mark critical workflow actions with `requires_confirmation`.
+- Heuristic confirmation covers named protected clicks, stored-secret fills, and explicitly flagged workflow steps. It cannot infer every consequential action from arbitrary site wording. Mark critical workflow actions with `requires_confirmation`. Workflows saved before flagged steps were kept in canonical form have lost those flags and run those steps without asking until you add them back.
 - Engine-enforced no-submit recognizes native submit controls with a form owner and names in the protected-action lexicon. A control that submits only through page script, such as a `div` with `role="button"` and an unrelated name, is not recognized as submit-class.
 - Non-interactive live agent confirmations fail closed rather than creating a generally resumable pending prompt. `yantra confirm` answers live owners through the run socket and uses the parked claim path only after ownership is absent or dead; recording a parked grant is separate from resuming or polling the run.
 - The run directory and raw provider session are sensitive local data. Restrictive permissions are best-effort on Windows. `yantra audit` intentionally avoids the raw session, but anyone with filesystem access can open it. Treat debug/process logs as sensitive too; model-visible error genericization is not a guarantee about every local diagnostic sink.

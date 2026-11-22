@@ -156,7 +156,7 @@ export function ArtifactPage({
       >
         Back to the run
       </RouterLink>
-      <h1 className="type-engine text-xl text-ink">{path}</h1>
+      <h1 className="type-engine text-title text-ink">{path}</h1>
       {result.isError ? (
         <p className="text-signal-failed-ink">{result.error.message}</p>
       ) : result.data === undefined ? (

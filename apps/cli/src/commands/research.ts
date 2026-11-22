@@ -571,6 +571,8 @@ async function runAgenticResearch(
       receipt,
       signal: context.signal,
       ...(context.liveView === undefined ? {} : { liveView: context.liveView }),
+      // A worker starts unattended; the app host's attendance drives it (REV-006).
+      ...(context.surface === 'worker' ? { initialAttendance: 0 } : {}),
       model: agent.model,
       ...(agent.thinkingSource === undefined ? {} : { thinkingSource: agent.thinkingSource }),
       auth: agent.auth,

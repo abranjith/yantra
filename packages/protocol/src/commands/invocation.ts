@@ -25,6 +25,11 @@ export function isAbsoluteCwd(path: string): boolean {
  * Workers are spawned shell-free from `{path, argv}`; formatting exists only
  * for display and Copy.
  */
+/** Command paths are at most this many segments (the registry's deepest is 3). */
+export const INVOCATION_PATH_MAX = 8;
+/** An invocation carries at most this many argv tokens (REV-013). */
+export const INVOCATION_ARGV_MAX = 1024;
+
 export const CommandInvocation = z
   .object({
     invocation_id: z
@@ -34,8 +39,12 @@ export const CommandInvocation = z
     path: z
       .array(z.string().min(1))
       .nonempty()
+      .max(INVOCATION_PATH_MAX)
       .describe('Canonical command path, aliases resolved (e.g. ["do"] for "discover").'),
-    argv: z.array(z.string()).describe('Tokens after the path, exactly as given, in order.'),
+    argv: z
+      .array(z.string())
+      .max(INVOCATION_ARGV_MAX)
+      .describe('Tokens after the path, exactly as given, in order.'),
     cwd: z
       .string()
       .refine(isAbsoluteCwd, 'cwd must be an absolute path')

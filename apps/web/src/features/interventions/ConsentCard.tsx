@@ -27,13 +27,13 @@ export function ConsentCard({
   };
 
   return (
-    <article className="flex max-w-2xl flex-col gap-4 rounded-card border border-rule bg-surface p-5">
+    <article className="flex max-w-2xl flex-col gap-4 rounded-frame border border-rule bg-surface p-5">
       <div>
-        <p className="text-xs uppercase tracking-wide text-ink-3">
+        <p className="text-micro uppercase tracking-wide text-ink-3">
           {request.action_kind} on {request.host}
         </p>
-        <h2 className="mt-1 text-lg font-semibold text-ink">{request.description}</h2>
-        <p className="mt-2 text-sm text-ink-2">Consequence: {request.consequence}</p>
+        <h2 className="mt-1 text-lead font-semibold text-ink">{request.description}</h2>
+        <p className="mt-2 text-caption text-ink-2">Consequence: {request.consequence}</p>
       </div>
       {response === null ? (
         <GuardedSwitch
@@ -44,7 +44,7 @@ export function ConsentCard({
           pendingResponse={pending}
         />
       ) : (
-        <p role="status" className="text-sm text-ink-2">
+        <p role="status" className="text-caption text-ink-2">
           {decisionMessage(response)}
         </p>
       )}

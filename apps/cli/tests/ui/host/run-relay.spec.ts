@@ -289,3 +289,83 @@ describe('attachment', () => {
     expect(create).toHaveBeenCalledTimes(1);
   });
 });
+
+/** A client that also hears the owner's direct replies. */
+class AnsweringClient extends FakeClient {
+  private readonly serverListeners = new Set<(message: unknown) => void>();
+
+  public onServerMessage(listener: (message: unknown) => void): () => void {
+    this.serverListeners.add(listener);
+    return () => this.serverListeners.delete(listener);
+  }
+
+  public reply(message: unknown): void {
+    for (const listener of this.serverListeners) listener(message);
+  }
+
+  public get listening(): number {
+    return this.serverListeners.size;
+  }
+}
+
+describe('answering a live intervention (REV-001)', () => {
+  const accepted = {
+    status: 'accepted',
+    decision: {
+      confirmation_id: '01J00000000000000000000001',
+      decision: 'granted',
+      decided_at: '2026-11-21T10:00:00.000Z',
+      decided_by: 'user_app',
+    },
+  };
+
+  it('is not_attached when no window follows the run, and sends nothing', async () => {
+    const client = new AnsweringClient();
+    const relay = makeRelay(new FakeLog(), client);
+
+    await expect(relay.answerIntervention(RUN, 'i1', 'granted')).resolves.toBe('not_attached');
+    expect(client.sent).toEqual([]);
+  });
+
+  it("returns the owner's response for that intervention and ignores others", async () => {
+    const client = new AnsweringClient();
+    const relay = makeRelay(new FakeLog(), client);
+    await relay.follow(connection(1).value, RUN, 1);
+    await settle();
+
+    const answer = relay.answerIntervention(RUN, 'i1', 'granted');
+    client.reply({ type: 'intervention.response', intervention_id: 'other', response: accepted });
+    client.reply({ type: 'intervention.response', intervention_id: 'i1', response: accepted });
+
+    await expect(answer).resolves.toEqual(accepted);
+    expect(client.sent).toContainEqual({
+      type: 'intervention.answer',
+      intervention_id: 'i1',
+      decision: 'granted',
+      decided_by: 'user_app',
+    });
+    expect(client.listening).toBe(0);
+  });
+
+  it('is no_response when the attached owner stays silent', async () => {
+    const client = new AnsweringClient();
+    const relay = makeRelay(new FakeLog(), client);
+    await relay.follow(connection(1).value, RUN, 1);
+    await settle();
+
+    await expect(relay.answerIntervention(RUN, 'i1', 'denied', 20)).resolves.toBe('no_response');
+    expect(client.listening).toBe(0);
+  });
+
+  it('is no_response when the owner replies with a malformed response', async () => {
+    const client = new AnsweringClient();
+    const relay = makeRelay(new FakeLog(), client);
+    await relay.follow(connection(1).value, RUN, 1);
+    await settle();
+
+    const answer = relay.answerIntervention(RUN, 'i1', 'granted');
+    client.reply({ type: 'intervention.response', intervention_id: 'i1', response: { nope: 1 } });
+
+    await expect(answer).resolves.toBe('no_response');
+  });
+});

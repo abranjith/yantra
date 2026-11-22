@@ -20,7 +20,7 @@ export function InstallationResetTrigger(): ReactNode {
       <Button variant="secondary">Run setup again</Button>
       <Dialog role="alertdialog" title="Run setup again">
         {({ close }) => (
-          <div className="flex flex-col gap-4 text-sm">
+          <div className="flex flex-col gap-4 text-caption">
             <p className="text-ink-2">
               Existing <code className="type-engine">config.yaml</code> and{' '}
               <code className="type-engine">profile.yaml</code> files will be backed up before new

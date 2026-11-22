@@ -15,11 +15,15 @@ export {
   ACTIVE_STATES,
   FileInvocationStore,
   INVOCATION_TRANSITIONS,
+  PRUNABLE_STATES,
+  PRUNE_KEEP_LATEST,
+  PRUNE_MAX_AGE_MS,
   RUN_SLOTS,
   canTransition,
   capResultEnvelope,
   fifo,
   type InvocationStoreOptions,
+  type PruneOptions,
   type ReserveOutcome,
 } from './invocation-store.js';
 export {

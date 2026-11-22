@@ -146,19 +146,19 @@ export function QuestionStep({
   if (section === 'storage') {
     return (
       <div hidden={!active} className={active ? 'flex flex-col gap-4' : 'hidden'}>
-        <div className="rounded-card border border-rule bg-surface p-4 text-sm">
+        <div className="rounded-frame border border-rule bg-surface p-4 text-caption">
           <p className="font-medium text-ink">Current data directory</p>
           <p className="type-engine mt-1 text-ink">
             {status?.data_dir.effective ?? '~/.yantra/data'}
           </p>
-          <p className="mt-1 text-xs text-ink-2">
+          <p className="mt-1 text-micro text-ink-2">
             Source: {status?.data_dir.source ?? 'default'}
             {status?.data_dir.configured !== null && status?.data_dir.configured !== undefined
               ? ` (configured: ${status.data_dir.configured})`
               : ''}
           </p>
         </div>
-        <div className="rounded-card border border-rule bg-sunken p-4 text-sm text-ink-2">
+        <div className="rounded-frame border border-rule bg-sunken p-4 text-caption text-ink-2">
           <p className="font-medium text-ink">
             Storage location cannot be changed while the app is running.
           </p>

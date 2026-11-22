@@ -24,6 +24,7 @@ import {
   EmptyParams,
   HostHelloParams,
   HostHelloResult,
+  JSON_RPC_BATCH_MAX,
   JsonRpcRequest,
   MAX_APP_RPC_MESSAGE_BYTES,
   SessionCodeResult,
@@ -367,6 +368,17 @@ export class RpcServer {
     if (Array.isArray(json)) {
       if (json.length === 0) {
         return errorResponse(null, new RpcError('invalid_request', 'The batch is empty.'));
+      }
+      // Bounded so one message cannot fan out into unbounded concurrent work (REV-013).
+      if (json.length > JSON_RPC_BATCH_MAX) {
+        return errorResponse(
+          null,
+          new RpcError(
+            'invalid_request',
+            `The batch has ${json.length} requests; at most ${JSON_RPC_BATCH_MAX} are allowed.`,
+            'Send fewer requests per batch.',
+          ),
+        );
       }
       const replies = await Promise.all(json.map((item) => this.dispatchOne(item, connection)));
       const kept = replies.filter((reply): reply is JsonRpcResponse => reply !== null);

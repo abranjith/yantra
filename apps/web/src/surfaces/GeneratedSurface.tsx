@@ -34,7 +34,7 @@ export function GeneratedSurface({
         </p>
       ))}
       {focus !== undefined ? (
-        <p className="rounded-card border border-rule bg-surface px-3 py-2 text-xs text-ink-2">
+        <p className="rounded-frame border border-rule bg-surface px-3 py-2 text-micro text-ink-2">
           Focused setting: <span className="type-engine text-ink">{focus}</span>
         </p>
       ) : null}

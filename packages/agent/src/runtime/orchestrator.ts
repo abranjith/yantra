@@ -52,6 +52,10 @@ import {
   createConfirmationStore,
   InterventionAuthority,
   InterventionLog,
+  serveInterventionsOnRunSocket,
+  NeedsYouNotifier,
+  SinkNotifier,
+  type NeedsYouNotifierSink,
   UnattendedCeilingClock,
   recordRunEndInterventions,
   createKeychainProvider,
@@ -369,6 +373,14 @@ export interface AgenticTaskRequest {
    * `--json`, and scheduled surfaces.
    */
   readonly interactive?: boolean;
+  /**
+   * Attendance before the app host reports any (D5). Defaults to 1 for an
+   * interactive connector and 0 otherwise. A worker passes 0: a window may
+   * attach later, and the host's `attendance` messages drive it from there,
+   * so an unwatched worker run accrues the unattended ceiling and raises the
+   * "needs you" notification (REV-006).
+   */
+  readonly initialAttendance?: number;
   readonly connector: AgentTaskConnector;
   /** Resolved report template; absent preserves the historical Brief path. */
   readonly template?: ActiveReportTemplate;
@@ -527,6 +539,12 @@ export async function defaultEnvironmentLeaves(
 
 /** Injectable boundaries for hermetic lifecycle/chaos tests. */
 export interface AgenticTaskDependencies {
+  /**
+   * Delivers the best-effort "needs you" desktop notification while a consent
+   * waits unattended (D9, FEAT-068 TASK-011). Defaults to `SinkNotifier`;
+   * null disables it.
+   */
+  readonly needsYouNotifier?: NeedsYouNotifierSink | null;
   readonly runStore?: AgenticRunStore;
   readonly sanitizer?: PayloadSanitizer;
   /**
@@ -704,6 +722,7 @@ export async function runAgenticTask(
   let session: AgentSession | undefined;
   let recorder: RunRecorder | undefined;
   let unsubscribe: (() => void) | undefined;
+  let needsYou: NeedsYouNotifier | null = null;
   let events: EventBus | undefined;
   let latestRunResult: AgentRunResult | undefined;
   let executionState: ExecutionState | undefined;
@@ -750,7 +769,9 @@ export async function runAgenticTask(
     const runBudget = budgetTracker;
     const actionPhase = new ActionPhase();
     const interventionCeiling = new UnattendedCeilingClock({ now: () => Date.now() });
-    interventionCeiling.setAttendance(request.connector.interactive ? 1 : 0);
+    interventionCeiling.setAttendance(
+      request.initialAttendance ?? (request.connector.interactive ? 1 : 0),
+    );
     const interventionAuthority = new InterventionAuthority({
       runId: created.runId,
       log: new InterventionLog(join(created.runDir, 'interventions.jsonl')),
@@ -766,55 +787,20 @@ export async function runAgenticTask(
     if (ownership !== undefined && request.liveView !== undefined) {
       serveLiveViewOnRunSocket(ownership, request.liveView);
     }
-    ownership?.registerChannelHandler('attendance', 'interventions', (message, connection) => {
-      const count =
-        typeof message.count === 'number' && Number.isInteger(message.count) ? message.count : null;
-      if (count === null || count < 0) {
-        connection.send({ type: 'error', code: 'bad_request', message: 'attendance' });
-        return;
-      }
-      void interventionAuthority.setAttendance(count);
-    });
-    ownership?.registerChannelHandler(
-      'intervention.answer',
-      'interventions',
-      (message, connection) => {
-        const interventionId =
-          typeof message.intervention_id === 'string' ? message.intervention_id : null;
-        const decision =
-          message.decision === 'granted' || message.decision === 'denied' ? message.decision : null;
-        const decidedBy =
-          message.decided_by === 'user_app' || message.decided_by === 'user_cli_confirm'
-            ? message.decided_by
-            : null;
-        if (interventionId === null || decision === null || decidedBy === null) {
-          connection.send({ type: 'error', code: 'bad_request', message: 'intervention.answer' });
-          return;
-        }
-        void interventionAuthority
-          .answer({
-            interventionId,
-            decision,
-            decidedBy,
-          })
-          .then(
-            (response) => {
-              connection.send({
-                type: 'intervention.response',
-                intervention_id: interventionId,
-                response,
-              });
-            },
-            () => {
-              connection.send({
-                type: 'error',
-                code: 'bad_request',
-                message: 'intervention.answer',
-              });
-            },
-          );
-      },
-    );
+    if (ownership !== undefined) serveInterventionsOnRunSocket(ownership, interventionAuthority);
+    const needsYouSink =
+      dependencies.needsYouNotifier === undefined
+        ? new SinkNotifier()
+        : dependencies.needsYouNotifier;
+    needsYou =
+      needsYouSink === null
+        ? null
+        : new NeedsYouNotifier({
+            authority: interventionAuthority,
+            notifier: needsYouSink,
+            runId: created.runId,
+            subject: request.profile?.command ?? 'do',
+          });
     const confirmationBridge = new ConfirmationBridge({
       connector: request.connector,
       timeoutMs: budgetsConfig.confirmationWaitMs,
@@ -1092,6 +1078,7 @@ export async function runAgenticTask(
   } finally {
     executionState?.dispose();
     unsubscribe?.();
+    needsYou?.close();
     if (!startupFinalized) {
       await captureTeardown(() => environment?.browserController.teardown(), teardownErrors);
       // The background page pool closes after the task browser and before

@@ -128,7 +128,7 @@ export function SetCredentialDialog({
             }}
           />
           {submitError === null ? null : (
-            <p role="alert" className="text-sm text-signal-failed-ink">
+            <p role="alert" className="text-caption text-signal-failed-ink">
               {submitError}
             </p>
           )}

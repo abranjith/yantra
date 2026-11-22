@@ -33,6 +33,16 @@ export {
   type AuthorityConnectorGatewayOptions,
   type ConfirmationAnswer,
 } from './authority-connector-gateway.js';
+export {
+  INTERVENTIONS_CAPABILITY,
+  isRunBindable,
+  RunInterventions,
+  serveInterventionsOnRunSocket,
+  type InterventionChannelHost,
+  type RunBindableGateway,
+  type RunInterventionBinding,
+  type RunInterventionsOptions,
+} from './run-interventions.js';
 export { InterventionLog, appendInterventionLogEntry } from './intervention-log.js';
 export {
   NeedsYouNotifier,

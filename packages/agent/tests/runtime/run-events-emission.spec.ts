@@ -28,6 +28,7 @@ import type { AgentProgressEvent, AgentTaskConnector } from '../../src/runtime/c
 import {
   runAgenticTask,
   type AgenticRunEnvironment,
+  type AgenticTaskDependencies,
   type AgenticTaskRequest,
 } from '../../src/runtime/orchestrator.js';
 import { exitCodeForAgenticOutcome, taskOutcomeOf } from '../../src/runtime/outcome.js';
@@ -68,6 +69,10 @@ interface Fixture {
   readonly runEvents?: RunEventStream;
   readonly signal?: AbortSignal;
   readonly onServices?: (services: RunServices) => void;
+  readonly interactive?: boolean;
+  readonly initialAttendance?: number;
+  readonly answer?: 'granted' | 'denied';
+  readonly needsYouNotifier?: AgenticTaskDependencies['needsYouNotifier'];
 }
 
 async function run(fixture: Fixture) {
@@ -79,11 +84,11 @@ async function run(fixture: Fixture) {
   const events: AgentProgressEvent[] = [];
   const warnings: string[] = [];
   const connector: AgentTaskConnector = {
-    interactive: false,
+    interactive: fixture.interactive ?? false,
     emitAgentEvent: (e) => events.push(e),
     emitAgentWarning: (w) => warnings.push(w),
     renderAgentOutcome: () => undefined,
-    requestConfirmation: () => Promise.resolve('denied'),
+    requestConfirmation: () => Promise.resolve(fixture.answer ?? 'denied'),
   };
   const environment: AgenticRunEnvironment = {
     browserController: { teardown: () => Promise.resolve() } as Pick<
@@ -119,8 +124,12 @@ async function run(fixture: Fixture) {
     connector,
     ...(fixture.runEvents ? { runEvents: fixture.runEvents } : {}),
     ...(fixture.signal ? { signal: fixture.signal } : {}),
+    ...(fixture.initialAttendance === undefined
+      ? {}
+      : { initialAttendance: fixture.initialAttendance }),
   };
   const outcome = await runAgenticTask(request, {
+    needsYouNotifier: fixture.needsYouNotifier === undefined ? null : fixture.needsYouNotifier,
     runStore: new LocalRunStore(root),
     sanitizer: new DefaultSanitizer(),
     now: () => new Date(time),
@@ -336,6 +345,61 @@ describe('@no-llm agentic run-events.jsonl', () => {
         decided_by: 'timeout',
       }),
     ]);
+  });
+
+  describe('the needs-you notification (REV-006)', () => {
+    const consent: ConfirmationRequest = {
+      confirmation_id: '01J00000000000000000000000',
+      run_id: 'run',
+      step_id: 'click-1',
+      action_kind: 'click',
+      host: 'shop.example',
+      description: 'Place the order',
+      expected_cost: null,
+      consequence: 'irreversible',
+      requested_at: new Date(BASE).toISOString(),
+      timeout_ms: 30_000,
+    };
+
+    async function consentRun(initialAttendance: number | undefined) {
+      let services: RunServices | undefined;
+      const notifyWithAttempts = vi.fn(() => Promise.resolve());
+      const { outcome, records } = await run({
+        interactive: true,
+        answer: 'granted',
+        ...(initialAttendance === undefined ? {} : { initialAttendance }),
+        needsYouNotifier: { notifyWithAttempts },
+        onServices: (s) => {
+          services = s;
+        },
+        script: () => ({
+          onRun: async (_prompt, index) => {
+            if (index === 0) await services!.confirmation!.gateway.request(consent);
+          },
+        }),
+      });
+      return { outcome, records, notifyWithAttempts };
+    }
+
+    it('is attempted once for an agentic consent raised while nobody attends', async () => {
+      const { outcome, notifyWithAttempts } = await consentRun(0);
+
+      expect(notifyWithAttempts).toHaveBeenCalledTimes(1);
+      expect(notifyWithAttempts).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: 'confirmation_needed',
+          run_id: outcome.runId,
+          title: 'Yantra: "do" needs your confirmation',
+        }),
+        'desktop',
+        { interventionId: consent.confirmation_id, runId: outcome.runId },
+      );
+    });
+
+    it('is not attempted while an attended terminal run waits', async () => {
+      const { notifyWithAttempts } = await consentRun(undefined);
+      expect(notifyWithAttempts).not.toHaveBeenCalled();
+    });
   });
 
   it('a startup failure before the run exists writes no log and still throws its error', async () => {

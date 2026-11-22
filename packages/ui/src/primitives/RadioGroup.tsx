@@ -80,9 +80,9 @@ export function Radio({ children, description, className, ...props }: RadioProps
             {isSelected ? <span className="size-2 rounded-full bg-on-accent" /> : null}
           </span>
           <span className="flex flex-col gap-0.5">
-            <span className="text-sm leading-5">{children}</span>
+            <span className="text-caption leading-5">{children}</span>
             {description === undefined ? null : (
-              <span className="text-xs text-ink-2">{description}</span>
+              <span className="text-micro text-ink-2">{description}</span>
             )}
           </span>
         </>

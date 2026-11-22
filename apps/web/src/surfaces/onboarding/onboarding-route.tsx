@@ -192,7 +192,7 @@ export function OnboardingSurface({ initialReset = false }: OnboardingSurfacePro
           >
             Setup complete
           </h1>
-          <p className="mt-1 text-sm text-ink-2">
+          <p className="mt-1 text-caption text-ink-2">
             Yantra wrote your configuration and is ready to use.
           </p>
         </header>
@@ -209,7 +209,7 @@ export function OnboardingSurface({ initialReset = false }: OnboardingSurfacePro
     <section className="mx-auto flex max-w-3xl flex-col gap-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-ink-2">
+          <p className="text-micro font-medium uppercase tracking-wide text-ink-2">
             Step {stepIndex + 1} of {stepCount}
           </p>
           <h1
@@ -219,7 +219,7 @@ export function OnboardingSurface({ initialReset = false }: OnboardingSurfacePro
           >
             {currentStep.title}
           </h1>
-          <p className="mt-1 text-sm text-ink-2">{currentStep.description}</p>
+          <p className="mt-1 text-caption text-ink-2">{currentStep.description}</p>
         </div>
         <Button variant="secondary" onPress={handleNotNow}>
           Not now
@@ -229,13 +229,13 @@ export function OnboardingSurface({ initialReset = false }: OnboardingSurfacePro
       {resetMode ? (
         <p
           role="status"
-          className="rounded-chip border border-rule bg-sunken px-3 py-2 text-xs text-ink-2"
+          className="rounded-chip border border-rule bg-sunken px-3 py-2 text-micro text-ink-2"
         >
           Reset mode: existing configuration files will be backed up before writing.
         </p>
       ) : null}
 
-      <div className="rounded-card border border-rule bg-surface p-5">
+      <div className="rounded-frame border border-rule bg-surface p-5">
         {(['model', 'search', 'storage', 'context'] as const).map((section) => (
           <QuestionStep
             key={section}
@@ -252,7 +252,7 @@ export function OnboardingSurface({ initialReset = false }: OnboardingSurfacePro
         ))}
 
         {currentStep.id === 'review' ? (
-          <div className="flex flex-col gap-4 text-sm">
+          <div className="flex flex-col gap-4 text-caption">
             <dl className="grid gap-2.5 sm:grid-cols-[12rem_1fr]">
               <dt className="text-ink-2">Model provider</dt>
               <dd className="type-engine text-ink">{providerLabel}</dd>
@@ -338,7 +338,7 @@ export function OnboardingSurface({ initialReset = false }: OnboardingSurfacePro
       {submitError !== null ? (
         <div
           role="alert"
-          className="rounded-card border border-rule bg-surface p-4 text-sm text-signal-failed-ink"
+          className="rounded-frame border border-rule bg-surface p-4 text-caption text-signal-failed-ink"
         >
           <p className="font-medium">{submitError.message}</p>
           {submitError.remediation !== undefined &&
