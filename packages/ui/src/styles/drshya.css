@@ -60,6 +60,32 @@
   }
 }
 
+/* Acting pulses the ring; needs-you pulses the core, fast (REV-012, brainstorm §Motion). */
+@utility bindu-ring-pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: drshya-bindu-ring 1.2s ease-out infinite;
+}
+
+@keyframes drshya-bindu-ring {
+  60% {
+    opacity: 0.4;
+    transform: scale(0.82);
+  }
+}
+
+@utility bindu-core-pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: drshya-bindu-core 0.7s ease-in-out infinite;
+}
+
+@keyframes drshya-bindu-core {
+  50% {
+    transform: scale(1.5);
+  }
+}
+
 /* Three voices (brainstorm rule 3): the user in plain sans, the agent in italic, the engine in mono. */
 @utility type-label {
   font-family: var(--font-sans);

@@ -6,7 +6,14 @@
 import { act, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { BINDU_LABELS, BINDU_STATES, Bindu } from '../../src/instruments/bindu.js';
+import {
+  BINDU_LABELS,
+  BINDU_MOTION,
+  BINDU_SHAPES,
+  BINDU_STATES,
+  Bindu,
+  type BinduState,
+} from '../../src/instruments/bindu.js';
 import { setMatchMedia } from '../support/match-media.js';
 
 describe('Bindu', () => {
@@ -48,19 +55,63 @@ describe('Bindu', () => {
     expect(screen.getByRole('img', { name }).dataset.state).toBe(state);
   });
 
-  it('breathes while thinking or acting', () => {
-    const { container } = render(
-      <>
-        <Bindu state="thinking" />
-        <Bindu state="acting" />
-        <Bindu state="fulfilled" />
-      </>,
-    );
-    const classes = [...container.querySelectorAll('[data-state]')].map((node) =>
-      node.className.includes('bindu-pulse'),
-    );
-    expect(classes).toEqual([true, true, false]);
+  /** What a sighted user sees with color and motion removed. */
+  function silhouette(state: BinduState): string {
+    const { container } = render(<Bindu state={state} />);
+    const svg = container.querySelector('svg')!;
+    const core = svg.querySelector('[data-part="core"]');
+    return JSON.stringify({
+      core: core?.getAttribute('r') ?? null,
+      ring: svg.querySelector('[data-part="ring"]')?.getAttribute('stroke-width'),
+      frame: svg.querySelector('[data-part="frame"]')?.getAttribute('fill'),
+    });
+  }
+
+  it.each([
+    ['shell', ['idle', 'live', 'attention']],
+    ['engine', ['thinking', 'acting', 'needs_you', 'fulfilled']],
+  ] as const)(
+    'gives every %s state its own shape, so none depends on color (REV-012)',
+    (_context, states) => {
+      const shapes = states.map((state) => silhouette(state));
+      expect(new Set(shapes).size).toBe(states.length);
+    },
+  );
+
+  it('draws idle hollow, needs-you with a large core and fulfilled solid', () => {
+    expect(JSON.parse(silhouette('idle'))).toMatchObject({ core: null, frame: 'none' });
+    expect(JSON.parse(silhouette('needs_you'))).toMatchObject({ core: '3' });
+    expect(JSON.parse(silhouette('fulfilled'))).toMatchObject({ frame: 'currentColor' });
+    expect(BINDU_SHAPES.acting.ring).toBe('heavy');
   });
+
+  it.each([
+    ['thinking', 'breathe'],
+    ['acting', 'ring'],
+    ['needs_you', 'core'],
+  ] as const)('gives %s its own motion (%s)', (state, motion) => {
+    const { container } = render(<Bindu state={state} />);
+    const mark = container.firstElementChild as HTMLElement;
+    expect(mark.dataset.motion).toBe(motion);
+    expect(mark.className.includes('bindu-pulse')).toBe(motion === 'breathe');
+    expect(container.querySelector('.bindu-ring-pulse')?.getAttribute('data-part') ?? null).toBe(
+      motion === 'ring' ? 'ring' : null,
+    );
+    expect(container.querySelector('.bindu-core-pulse')?.getAttribute('data-part') ?? null).toBe(
+      motion === 'core' ? 'core' : null,
+    );
+  });
+
+  it.each(BINDU_STATES.filter((state) => BINDU_MOTION[state] === null))(
+    'keeps %s still',
+    (state) => {
+      const { container } = render(<Bindu state={state} />);
+      expect((container.firstElementChild as HTMLElement).dataset.motion).toBeUndefined();
+      expect(
+        container.querySelector('.bindu-pulse, .bindu-ring-pulse, .bindu-core-pulse'),
+      ).toBeNull();
+    },
+  );
 
   it('applies no animation class under reduced motion', () => {
     setMatchMedia({ 'prefers-reduced-motion: reduce': true });
@@ -68,22 +119,29 @@ describe('Bindu', () => {
       <>
         <Bindu state="thinking" />
         <Bindu state="acting" />
+        <Bindu state="needs_you" />
       </>,
     );
-    for (const node of container.querySelectorAll('[data-state]')) {
-      expect(node.className).not.toContain('bindu-pulse');
+    expect(
+      container.querySelector('.bindu-pulse, .bindu-ring-pulse, .bindu-core-pulse'),
+    ).toBeNull();
+    for (const node of container.querySelectorAll<HTMLElement>('[data-state]')) {
+      expect(node.dataset.motion).toBeUndefined();
     }
   });
 
-  it('stops breathing when reduced motion turns on', () => {
+  it('stops moving when reduced motion turns on, keeping its shape', () => {
     const { container } = render(<Bindu state="acting" />);
-    expect(container.firstElementChild?.className).toContain('bindu-pulse');
+    expect(container.querySelector('.bindu-ring-pulse')).not.toBeNull();
 
     act(() => {
       setMatchMedia({ 'prefers-reduced-motion: reduce': true });
     });
 
-    expect(container.firstElementChild?.className).not.toContain('bindu-pulse');
+    expect(container.querySelector('.bindu-ring-pulse')).toBeNull();
+    expect(container.querySelector('[data-part="ring"]')?.getAttribute('stroke-width')).toBe(
+      String(BINDU_SHAPES.acting.ring === 'heavy' ? 1.75 * 1.75 : 1.75),
+    );
   });
 
   it('names another outcome through its label', () => {
