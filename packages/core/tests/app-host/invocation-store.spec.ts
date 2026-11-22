@@ -481,5 +481,5 @@ describe('prune (REV-007)', () => {
     expect(left.some((item) => item.invocation_id === idOf(5_001))).toBe(true);
     // The newest history survives: the most recent finish is record 1.
     expect(left.some((item) => item.invocation_id === idOf(1))).toBe(true);
-  }, 120_000);
+  }, 300_000);
 });

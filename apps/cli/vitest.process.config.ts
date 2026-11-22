@@ -13,5 +13,8 @@ export default defineConfig({
     include: PROCESS_SUITES.map((glob) => `${glob}/*.spec.ts`.replace('/**/', '/')),
     globals: false,
     fileParallelism: false,
+    // Each case spawns real `yantra` processes (about 3 s each on a slow Windows host),
+    // so the 5 s default cannot hold two of them.
+    testTimeout: 30_000,
   },
 });

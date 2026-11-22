@@ -2,7 +2,7 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import importPlugin from 'eslint-plugin-import';
-import vitestPlugin from 'eslint-plugin-vitest';
+import vitestPlugin from '@vitest/eslint-plugin';
 import prettierConfig from 'eslint-config-prettier';
 
 const CORE_BOUNDARY_MESSAGE =
@@ -293,6 +293,12 @@ export default tseslint.config(
       ...vitestPlugin.configs.recommended.rules,
       // Property-based tests often assert via fc.assert(...) without direct expect() calls.
       'vitest/expect-expect': 'off',
+      // @vitest/eslint-plugin (the successor of eslint-plugin-vitest, REV-014) adds these to
+      // its recommended set; the suites predate them (537 conditional expects narrowing
+      // discriminated results). The toolchain move keeps the prior rule set; adopting them
+      // is a separate cleanup.
+      'vitest/no-conditional-expect': 'off',
+      'vitest/prefer-called-exactly-once-with': 'off',
     },
   },
 
@@ -566,7 +572,7 @@ export default tseslint.config(
 
   {
     ...tseslint.configs.disableTypeChecked,
-    files: ['eslint.config.js', 'vitest.workspace.ts'],
+    files: ['eslint.config.js', 'vitest.config.ts'],
     rules: {
       ...tseslint.configs.disableTypeChecked.rules,
       'import/no-default-export': 'off',

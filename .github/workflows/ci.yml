@@ -192,7 +192,7 @@ jobs:
         working-directory: packages/core
         run: >-
           xvfb-run -a pnpm exec vitest run
-          --maxWorkers=2 --minWorkers=1
+          --maxWorkers=2
           tests/browser/migration-harness.spec.ts tests/browser/integration.spec.ts
           tests/browser/agent-controller.spec.ts tests/browser/agent-popup-policy.spec.ts
           tests/browser/set-of-marks.spec.ts tests/discovery/composed-handles.spec.ts
@@ -208,7 +208,7 @@ jobs:
         working-directory: packages/core
         run: >-
           pnpm exec vitest run
-          --maxWorkers=2 --minWorkers=1
+          --maxWorkers=2
           tests/browser/migration-harness.spec.ts tests/browser/integration.spec.ts
           tests/browser/agent-controller.spec.ts tests/browser/agent-popup-policy.spec.ts
           tests/browser/set-of-marks.spec.ts tests/discovery/composed-handles.spec.ts

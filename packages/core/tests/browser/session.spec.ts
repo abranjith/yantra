@@ -12,7 +12,10 @@ import type { Logger, ProfileStore, ResolvedProfile } from '../../src/browser/ty
 import type { ResourceLease } from '../../src/locks/resource-lock.js';
 
 vi.mock('../../src/locator/injected-host.js', () => ({
-  PuppeteerInjectedScriptHost: vi.fn().mockImplementation(() => ({})),
+  // Vitest 4: a mock called with `new` must be a function or class, not an arrow.
+  PuppeteerInjectedScriptHost: vi.fn(function PuppeteerInjectedScriptHost() {
+    return {};
+  }),
 }));
 
 function installation(

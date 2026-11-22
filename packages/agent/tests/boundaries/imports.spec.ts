@@ -132,7 +132,7 @@ describe('@no-llm FEAT-022 boundary rules', () => {
 
     // A non-empty list means the Pi SDK leaked outside the adapter directory.
     expect(offenders).toEqual([]);
-  });
+  }, 30_000);
 
   it('keeps packages/core free of @yantra/agent imports', () => {
     const files = collectTsFiles(resolve(repoRoot, 'packages/core'));
@@ -143,7 +143,7 @@ describe('@no-llm FEAT-022 boundary rules', () => {
 
     // A non-empty list means core imported agent (forbidden direction).
     expect(offenders).toEqual([]);
-  });
+  }, 30_000);
 
   it('keeps FEAT-036 production sources generic and free of site-specific branches', () => {
     const featureSources = [

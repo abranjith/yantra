@@ -11,7 +11,6 @@ export default defineConfig({
     // Run files serially so lint cannot starve a browser scenario of memory or CPU;
     // each scenario retains its own behavioral deadline.
     fileParallelism: false,
-    minWorkers: 1,
     maxWorkers: 1,
     testTimeout: 15_000,
     hookTimeout: 15_000,
