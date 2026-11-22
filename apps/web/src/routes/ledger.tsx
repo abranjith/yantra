@@ -282,7 +282,7 @@ function FilterBar({
 function ActiveRegion({ runs }: { readonly runs: ReturnType<typeof useRunLedger>['active'] }) {
   return (
     <section aria-labelledby="ledger-active" className="flex flex-col gap-2">
-      <h2 id="ledger-active" className="text-lg font-semibold text-ink">
+      <h2 id="ledger-active" className="text-lead font-semibold text-ink">
         Active
       </h2>
       {runs.length === 0 ? (
@@ -336,7 +336,7 @@ export function LedgerView({
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-xl font-semibold text-ink">Ledger</h1>
+      <h1 className="text-title font-semibold text-ink">Ledger</h1>
       <div role="status" aria-live="polite" className="sr-only">
         {announcement}
       </div>
@@ -354,7 +354,7 @@ export function LedgerView({
       ) : null}
       <ActiveRegion runs={ledger.active} />
       <section aria-labelledby="ledger-history" className="flex flex-col gap-2">
-        <h2 id="ledger-history" className="text-lg font-semibold text-ink">
+        <h2 id="ledger-history" className="text-lead font-semibold text-ink">
           History
         </h2>
         {ledger.isError && ledger.data === undefined ? (

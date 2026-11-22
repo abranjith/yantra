@@ -4,7 +4,7 @@
  * `auth`, limits, the dispatcher and the build-ID handshake.
  */
 
-import { HostHelloResult } from '@yantra/protocol';
+import { HostHelloResult, JSON_RPC_BATCH_MAX } from '@yantra/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
@@ -322,6 +322,33 @@ describe('dispatcher', () => {
     const next = socket.next();
     socket.send([]);
     expect(await next).toMatchObject({ error: { code: -32600 } });
+  });
+
+  it('answers a batch of exactly the limit item by item (REV-013)', async () => {
+    const next = socket.next();
+    socket.send(
+      Array.from({ length: JSON_RPC_BATCH_MAX }, (_, index) => ({
+        jsonrpc: '2.0',
+        method: 'test.echo',
+        params: { value: String(index) },
+        id: index + 1,
+      })),
+    );
+    expect(await next).toHaveLength(JSON_RPC_BATCH_MAX);
+  });
+
+  it('refuses a batch over the limit with one -32600 and runs none of it (REV-013)', async () => {
+    const next = socket.next();
+    socket.send(
+      Array.from({ length: JSON_RPC_BATCH_MAX + 1 }, (_, index) => ({
+        jsonrpc: '2.0',
+        method: 'test.echo',
+        params: { value: String(index) },
+        id: index + 1,
+      })),
+    );
+    expect(await next).toMatchObject({ id: null, error: { code: -32600 } });
+    await expect(socket.next(200)).rejects.toThrow('no message');
   });
 
   it('sends nothing for a notification', async () => {

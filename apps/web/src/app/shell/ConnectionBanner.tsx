@@ -50,7 +50,9 @@ export function ConnectionBanner({ store, now = Date.now }: ConnectionBannerProp
       aria-live="polite"
       data-status={state.status}
       className={
-        message === '' ? 'sr-only' : 'border-b border-rule bg-sunken px-4 py-2 text-sm text-ink-2'
+        message === ''
+          ? 'sr-only'
+          : 'border-b border-rule bg-sunken px-4 py-2 text-caption text-ink-2'
       }
     >
       {message}

@@ -36,7 +36,7 @@ export function editorialMarkIsInformative(findings: readonly KeyFinding[]): boo
 
 function SectionHeading({ id, children }: { readonly id: string; readonly children: ReactNode }) {
   return (
-    <h2 id={id} className="text-lg font-semibold text-ink">
+    <h2 id={id} className="text-lead font-semibold text-ink">
       {children}
     </h2>
   );

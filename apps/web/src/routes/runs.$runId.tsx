@@ -47,7 +47,7 @@ function RunHeader({ view }: { readonly view: RunResultView }): ReactNode {
       <h1
         tabIndex={-1}
         data-focus-target="run-heading"
-        className="vt-run-goal text-xl font-semibold text-ink"
+        className="vt-run-goal text-title font-semibold text-ink"
       >
         {view.title}
       </h1>
@@ -192,7 +192,7 @@ export function RunPage({
     const notFound = result.error instanceof RpcCallError && result.error.reason === 'not_found';
     return (
       <div className="flex flex-col gap-3">
-        <h1 className="text-xl font-semibold text-ink">
+        <h1 className="text-title font-semibold text-ink">
           {notFound ? 'Run not found' : 'Couldn’t load this run'}
         </h1>
         <p className="text-ink-2">

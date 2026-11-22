@@ -114,4 +114,106 @@ describe('@no-llm ParkedDecisionService', () => {
       await rm(runDir, { recursive: true, force: true });
     }
   });
+  describe('expected confirmation id (REV-001)', () => {
+    it('decides the pending request when its id matches', async () => {
+      const { runDir, store } = await fixture();
+      try {
+        const response = await new ParkedDecisionService().decideParked({
+          runDir,
+          runId: 'run-1',
+          decision: 'granted',
+          decidedBy: 'user_app',
+          confirmationId: request.confirmation_id,
+        });
+        expect(response.status).toBe('accepted');
+        expect((await store.readAll()).filter((entry) => entry.kind === 'decision')).toHaveLength(
+          1,
+        );
+      } finally {
+        await rm(runDir, { recursive: true, force: true });
+      }
+    });
+
+    it('returns stale unknown_id and writes nothing for an id the run never raised', async () => {
+      const { runDir, store } = await fixture();
+      try {
+        const response = await new ParkedDecisionService().decideParked({
+          runDir,
+          runId: 'run-1',
+          decision: 'granted',
+          decidedBy: 'user_app',
+          confirmationId: '01J000000000000000000000ZZ',
+        });
+        expect(response).toEqual({ status: 'stale', reason: 'unknown_id' });
+        expect((await store.readAll()).filter((entry) => entry.kind === 'decision')).toHaveLength(
+          0,
+        );
+        await expect(readdir(join(runDir, 'decisions'))).rejects.toThrow();
+      } finally {
+        await rm(runDir, { recursive: true, force: true });
+      }
+    });
+
+    it('does not decide a newer pending request when a stale card answers an older one', async () => {
+      const { runDir, store } = await fixture();
+      try {
+        const service = new ParkedDecisionService();
+        await service.decideParked({
+          runDir,
+          runId: 'run-1',
+          decision: 'denied',
+          decidedBy: 'user_cli_confirm',
+          now: '2026-11-03T12:01:00.000Z',
+        });
+        const newer = { ...request, confirmation_id: '01J00000000000000000000020' };
+        await store.appendRequest(newer);
+
+        const response = await service.decideParked({
+          runDir,
+          runId: 'run-1',
+          decision: 'granted',
+          decidedBy: 'user_app',
+          confirmationId: request.confirmation_id,
+        });
+
+        expect(response).toMatchObject({ status: 'already_decided', decision: 'denied' });
+        expect(await store.findPending('run-1')).toMatchObject({
+          confirmation_id: newer.confirmation_id,
+        });
+        expect(await readdir(join(runDir, 'decisions'))).toEqual([
+          `${request.confirmation_id}.json`,
+        ]);
+      } finally {
+        await rm(runDir, { recursive: true, force: true });
+      }
+    });
+
+    it('returns stale not_waiting for a raised request that has no decision and is not pending', async () => {
+      const { runDir, store } = await fixture();
+      try {
+        const newer = { ...request, confirmation_id: '01J00000000000000000000030' };
+        await store.appendRequest(newer);
+        const pending = await store.findPending('run-1');
+        const other =
+          pending?.confirmation_id === newer.confirmation_id
+            ? request.confirmation_id
+            : newer.confirmation_id;
+
+        const response = await new ParkedDecisionService().decideParked({
+          runDir,
+          runId: 'run-1',
+          decision: 'granted',
+          decidedBy: 'user_app',
+          confirmationId: other,
+        });
+
+        expect(response).toEqual({ status: 'stale', reason: 'not_waiting' });
+        expect((await store.readAll()).filter((entry) => entry.kind === 'decision')).toHaveLength(
+          0,
+        );
+      } finally {
+        await rm(runDir, { recursive: true, force: true });
+      }
+    });
+  });
 });

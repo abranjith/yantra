@@ -37,12 +37,17 @@ export const JsonRpcId = z
 export type JsonRpcId = z.infer<typeof JsonRpcId>;
 
 /** A JSON-RPC 2.0 request (with `id`) or notification (without). */
+/** Positional params are refused per method; the envelope still bounds them (REV-013). */
+export const JSON_RPC_PARAMS_ARRAY_MAX = 64;
+/** The most requests one JSON-RPC batch may carry (REV-013). */
+export const JSON_RPC_BATCH_MAX = 32;
+
 export const JsonRpcRequest = z
   .object({
     jsonrpc: z.literal('2.0'),
     method: z.string().min(1).describe('Method name, e.g. `host.hello` or `read.list`.'),
     params: z
-      .union([z.record(z.unknown()), z.array(z.unknown())])
+      .union([z.record(z.unknown()), z.array(z.unknown()).max(JSON_RPC_PARAMS_ARRAY_MAX)])
       .optional()
       .describe('By-name (object) parameters; by-position arrays are refused per method.'),
     id: JsonRpcId.optional().describe('Absent for a notification, which gets no response.'),

@@ -18,13 +18,16 @@
 import { appendFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { ParkedDecisionService, dataDir, runsRoot } from '@yantra/core';
+import { dataDir, runsRoot } from '@yantra/core';
 import { DecisionResponse, EmptyParams, generateUlid, NotificationAttempt } from '@yantra/protocol';
 import type { DecisionResponse as DecisionResponseType } from '@yantra/protocol';
 import { z } from 'zod';
 
+import { decideIntervention } from '../../interventions/decide-intervention.js';
+
 import { SILENT_HOST_LOGGER, type HostLogger } from './host.js';
-import type { RpcConnection, RpcMethodRegistry } from './rpc-server.js';
+import { RpcError, type RpcConnection, type RpcMethodRegistry } from './rpc-server.js';
+import type { RelayAnswer } from './run-relay.js';
 
 /** How long a heartbeat keeps a window attending. */
 export const ATTENDANCE_TTL_MS = 30_000;
@@ -42,11 +45,14 @@ export interface AttendanceDeps {
   readonly broadcast: (count: number) => void;
   /** Sends the count to one worker that just attached. */
   readonly sendTo: (runId: string, count: number) => void;
+  /** Answers through the host's own attachment to the run, when it has one. */
   readonly answerLive?: (
     runId: string,
     interventionId: string,
     decision: 'granted' | 'denied',
-  ) => Promise<DecisionResponseType | null>;
+  ) => Promise<RelayAnswer>;
+  /** Answers a run the host is not attached to (default: {@link decideIntervention}). */
+  readonly decide?: typeof decideIntervention;
   readonly now?: () => number;
   readonly logger?: HostLogger;
 }
@@ -149,6 +155,34 @@ export class Attendance {
     await appendFile(path, `${JSON.stringify(attempted)}\n${JSON.stringify(outcome)}\n`, 'utf8');
   }
 
+  /**
+   * One answer from a window (plan D12, review REV-001). The live owner
+   * decides whenever it might be alive: through this host's attachment, or
+   * through a one-off run-socket connection when the host is not attached. A
+   * parked claim is written only for a run with no live owner, and only for
+   * the request the user answered. A live owner that cannot be reached, or
+   * does not reply, is an error and leaves nothing decided.
+   */
+  private async answer(
+    runId: string,
+    interventionId: string,
+    decision: 'granted' | 'denied',
+  ): Promise<DecisionResponseType> {
+    const relayed =
+      (await this.deps.answerLive?.(runId, interventionId, decision)) ?? 'not_attached';
+    if (relayed === 'no_response') throw ownerUnreachable();
+    if (relayed !== 'not_attached') return relayed;
+    const outcome = await (this.deps.decide ?? decideIntervention)({
+      runDir: join(runsRoot(), runId),
+      runId,
+      confirmationId: interventionId,
+      decision,
+      decidedBy: 'user_app',
+    });
+    if (outcome.kind === 'owner_unreachable') throw ownerUnreachable();
+    return outcome.response;
+  }
+
   /** Registers `interventions.subscribe`, live answers, and heartbeats. */
   public register(methods: RpcMethodRegistry): void {
     methods
@@ -161,16 +195,8 @@ export class Attendance {
           })
           .strict(),
         result: DecisionResponse,
-        handler: async ({ run_id: runId, intervention_id: interventionId, decision }) => {
-          const live = await this.deps.answerLive?.(runId, interventionId, decision);
-          if (live !== null && live !== undefined) return live;
-          return new ParkedDecisionService().decideParked({
-            runDir: join(runsRoot(), runId),
-            runId,
-            decision,
-            decidedBy: 'user_app',
-          });
-        },
+        handler: ({ run_id: runId, intervention_id: interventionId, decision }) =>
+          this.answer(runId, interventionId, decision),
       })
       .register('interventions.subscribe', {
         params: EmptyParams,
@@ -200,4 +226,13 @@ export class Attendance {
         },
       });
   }
+}
+
+function ownerUnreachable(): RpcError {
+  return new RpcError(
+    'busy',
+    'The run is still live, but its owner did not answer. Nothing was decided.',
+    'Try again, or open the run to answer it there.',
+    'owner_unreachable',
+  );
 }

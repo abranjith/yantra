@@ -108,6 +108,9 @@ interface Attachment {
   dispose: (() => void)[];
 }
 
+/** What a relayed answer produced; see {@link RunRelay.answerIntervention}. */
+export type RelayAnswer = DecisionResponseType | 'not_attached' | 'no_response';
+
 /** See the module comment. */
 export class RunRelay {
   private readonly runs = new Map<string, Attachment>();
@@ -292,21 +295,28 @@ export class RunRelay {
     this.runs.get(runId)?.client?.send(message);
   }
 
-  /** Answers one live intervention and waits for the authority response. */
+  /**
+   * Answers one live intervention through this host's attachment and waits
+   * for the authority response. `not_attached` means the host holds no
+   * attachment for the run (the caller must find the owner another way);
+   * `no_response` means the attached owner did not answer in time, so the
+   * request may still be live and nothing else may decide it.
+   */
   public answerIntervention(
     runId: string,
     interventionId: string,
     decision: 'granted' | 'denied',
-  ): Promise<DecisionResponseType | null> {
+    timeoutMs = 5_000,
+  ): Promise<RelayAnswer> {
     const client = this.runs.get(runId)?.client;
     const onServerMessage = client?.onServerMessage?.bind(client);
     if (client === null || client === undefined || onServerMessage === undefined)
-      return Promise.resolve(null);
+      return Promise.resolve('not_attached');
     const liveClient = client;
     return new Promise((resolve) => {
       let settled = false;
       let dispose = (): void => undefined;
-      const finish = (value: DecisionResponseType | null): void => {
+      const finish = (value: RelayAnswer): void => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
@@ -319,9 +329,9 @@ export class RunRelay {
         if (record.type !== 'intervention.response' || record.intervention_id !== interventionId)
           return;
         const parsed = DecisionResponse.safeParse(record.response);
-        finish(parsed.success ? parsed.data : null);
+        finish(parsed.success ? parsed.data : 'no_response');
       });
-      const timer = setTimeout(() => finish(null), 5_000);
+      const timer = setTimeout(() => finish('no_response'), timeoutMs);
       liveClient.send({
         type: 'intervention.answer',
         intervention_id: interventionId,

@@ -220,3 +220,70 @@ describe('emitWorkflow', () => {
     });
   });
 });
+
+describe('consent survives a save (found during REV-009)', () => {
+  const base = {
+    version: 1,
+    name: 'consent-round-trip',
+    description: null,
+    security_class: 'public',
+    recorded_with: null,
+    params: {},
+    secrets: [],
+    cookies: 'none',
+    outputs: [],
+    outputs_unredacted: false,
+    _unrecorded_frames: [],
+    _locators: { Buy: [{ kind: 'css', value: '#buy' }], Card: [{ kind: 'css', value: '#card' }] },
+  };
+  const flagged = {
+    scope: null,
+    requires_confirmation: true,
+    confirmation_description: 'Place the order',
+    expected_cost: { amount: 12.5, currency: 'USD' },
+    consequence: 'irreversible',
+  };
+
+  it.each([
+    ['navigate', { verb: 'navigate', url: 'https://shop.example/checkout' }],
+    ['click', { verb: 'click', locator: 'Buy' }],
+    ['fill', { verb: 'fill', locator: 'Card', value: 'x', submit: false }],
+  ])('keeps a flagged %s step flagged through emit and parse', (_verb, body) => {
+    const workflow = {
+      ...base,
+      steps: [{ id: 's1', ...flagged, ...body }],
+    } as unknown as WorkflowFile;
+
+    const { yaml } = emitWorkflow(workflow);
+    const reparsed = parseWorkflowYaml(yaml);
+
+    expect(reparsed.isOk).toBe(true);
+    if (reparsed.isOk) {
+      expect(reparsed.value.steps[0]).toMatchObject({
+        requires_confirmation: true,
+        confirmation_description: 'Place the order',
+        expected_cost: { amount: 12.5, currency: 'USD' },
+        consequence: 'irreversible',
+      });
+    }
+  });
+
+  it('still writes an unflagged navigate as shorthand', () => {
+    const workflow = {
+      ...base,
+      steps: [
+        {
+          id: 's1',
+          scope: null,
+          requires_confirmation: false,
+          confirmation_description: null,
+          expected_cost: null,
+          consequence: null,
+          verb: 'navigate',
+          url: 'https://shop.example/',
+        },
+      ],
+    } as unknown as WorkflowFile;
+    expect(emitWorkflow(workflow).yaml).toContain('navigate: https://shop.example/');
+  });
+});

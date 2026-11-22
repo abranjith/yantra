@@ -14,6 +14,7 @@ import {
   FileBrowserOwnershipRecorder,
   type BrowserOwnershipRecorder,
 } from './browser-ownership-recorder.js';
+import { announceRunLeaseClaimed } from './claim-events.js';
 import { FINISH_DRAIN_MS } from './constants.js';
 import {
   claimLease,
@@ -178,6 +179,7 @@ export class RunOwnershipSession {
       await channel.close(0).catch(() => undefined);
       throw error;
     }
+    announceRunLeaseClaimed(lease);
     return new RunOwnershipSession(
       options.runDir,
       lease,

@@ -118,7 +118,7 @@ function LineDetail({
   const viewed = viewLine(line, path);
   return (
     <section aria-label={`Line ${String(n + 1)}`} className="flex flex-col gap-2">
-      <h2 className="text-lg font-semibold text-ink">Line {n + 1}</h2>
+      <h2 className="text-lead font-semibold text-ink">Line {n + 1}</h2>
       {viewed.truncatedBytes > 0 ? (
         <p className="text-ink-2">
           This line is cut at 16 KiB; {formatBytes(viewed.truncatedBytes)} more are in the file.

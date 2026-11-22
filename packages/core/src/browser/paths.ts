@@ -113,6 +113,14 @@ export function hostLogPath(): string {
   return join(uiRoot(), 'host.log');
 }
 
+/**
+ * Owner-only directory of one-shot app window bootstrap pages (REV-004): the
+ * launch code reaches the window through a file here, never through argv.
+ */
+export function uiWindowBootstrapRoot(): string {
+  return join(uiRoot(), 'window');
+}
+
 /** The dedicated Chrome/Edge user-data directory of the app window (never an automation profile). */
 export function uiChromeProfilePath(): string {
   return join(uiRoot(), 'chrome-profile');

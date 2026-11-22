@@ -23,6 +23,7 @@ export {
   FileBrowserOwnershipRecorder,
   type BrowserOwnershipRecorder,
 } from './browser-ownership-recorder.js';
+export { onRunLeaseClaimed } from './claim-events.js';
 export {
   RunOwnershipSession,
   type ClaimRunLease,

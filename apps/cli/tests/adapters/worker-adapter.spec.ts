@@ -1,5 +1,10 @@
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { isRunBindable, resetPathCache, runsRoot } from '@yantra/core';
 import { createInvocationId, type CommandInvocation } from '@yantra/protocol';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { InMemoryChannel } from '../../src/adapters/worker/in-memory-channel.js';
 import { runWorkerInvocation } from '../../src/adapters/worker/worker-adapter.js';
@@ -159,5 +164,58 @@ describe('@no-llm worker adapter', () => {
         .exit_code,
     ).toBe(0);
     expect(channel.diagnostics).toContain('cancel_unsupported');
+  });
+});
+
+describe('@no-llm worker consent (REV-002, REV-015)', () => {
+  it('is bindable to its run and, unattended, ends at the request deadline without prompting', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'yw-'));
+    vi.stubEnv('YANTRA_HOME', home);
+    resetPathCache();
+    try {
+      const runId = '20261121T100000Z-shop-0000abcd';
+      await mkdir(join(runsRoot(), runId), { recursive: true });
+      const channel = new InMemoryChannel({ attended: false });
+      let outcome: unknown = null;
+      let elapsed = 0;
+      let bindable = false;
+      const result = await runWorkerInvocation(
+        invocation(),
+        channel,
+        {},
+        {
+          handlers: {
+            research: async (_a, _o, _c, context) => {
+              const gateway = context!.gateways.confirmation(true);
+              bindable = isRunBindable(gateway);
+              const started = Date.now();
+              outcome = await gateway!.request({
+                confirmation_id: '01J00000000000000000000001',
+                run_id: runId,
+                step_id: 'step-1',
+                action_kind: 'click',
+                host: 'shop.example',
+                description: 'Place the order',
+                expected_cost: null,
+                consequence: 'irreversible',
+                requested_at: new Date().toISOString(),
+                timeout_ms: 200,
+              });
+              elapsed = Date.now() - started;
+            },
+          },
+        },
+      );
+
+      expect(result).toMatchObject({ type: 'result', exit_code: 0 });
+      expect(bindable).toBe(true);
+      expect(outcome).toMatchObject({ decision: 'timed_out' });
+      expect(elapsed).toBeLessThan(5_000);
+      expect(channel.confirmations).toHaveLength(0);
+    } finally {
+      vi.unstubAllEnvs();
+      resetPathCache();
+      await rm(home, { recursive: true, force: true });
+    }
   });
 });

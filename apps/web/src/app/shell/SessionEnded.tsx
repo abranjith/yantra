@@ -7,11 +7,11 @@ import type { ReactNode } from 'react';
 export function SessionEnded({ detail }: { readonly detail?: string }): ReactNode {
   return (
     <main className="mx-auto flex max-w-xl flex-col gap-3 px-6 py-16 text-ink">
-      <h1 className="text-xl font-semibold">Session ended</h1>
+      <h1 className="text-title font-semibold">Session ended</h1>
       <p className="text-ink-2">
         Run <code className="font-mono text-ink">yantra ui</code> to reopen the Yantra app.
       </p>
-      {detail === undefined ? null : <p className="text-sm text-ink-3">{detail}</p>}
+      {detail === undefined ? null : <p className="text-caption text-ink-3">{detail}</p>}
     </main>
   );
 }

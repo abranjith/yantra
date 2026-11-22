@@ -4,10 +4,19 @@
  * with a fresh heartbeat counts, and workers always get the current count.
  */
 
-import { describe, expect, it } from 'vitest';
+import { join } from 'node:path';
 
-import { ATTENDANCE_TTL_MS, Attendance } from '../../../src/ui/host/attendance.js';
+import { runsRoot } from '@yantra/core';
+import type { DecisionResponse } from '@yantra/protocol';
+import { describe, expect, it, vi } from 'vitest';
+
 import {
+  ATTENDANCE_TTL_MS,
+  Attendance,
+  type AttendanceDeps,
+} from '../../../src/ui/host/attendance.js';
+import {
+  RpcError,
   RpcMethodRegistry,
   type RpcCallContext,
   type RpcConnection,
@@ -157,5 +166,91 @@ describe('interventions', () => {
       ],
     ]);
     expect(b.sent).toEqual([]);
+  });
+});
+
+describe('intervention.answer (REV-001)', () => {
+  const RUN_ID = '20261121T100000Z-shop-0000abcd';
+  const ID = '01J00000000000000000000001';
+  const accepted: DecisionResponse = {
+    status: 'accepted',
+    decision: {
+      confirmation_id: ID,
+      decision: 'granted',
+      decided_at: '2026-11-21T10:00:00.000Z',
+      decided_by: 'user_app',
+    },
+  };
+
+  function answering(
+    answerLive: AttendanceDeps['answerLive'],
+    decide: AttendanceDeps['decide'] = vi.fn(),
+  ) {
+    const attendance = new Attendance({
+      broadcast: () => undefined,
+      sendTo: () => undefined,
+      ...(answerLive === undefined ? {} : { answerLive }),
+      decide,
+    });
+    const methods = new RpcMethodRegistry();
+    attendance.register(methods);
+    const conn = connection(1).value;
+    const answer = (decision: 'granted' | 'denied' = 'granted') =>
+      methods
+        .get('intervention.answer')!
+        .handler({ run_id: RUN_ID, intervention_id: ID, decision }, {
+          windowId: conn.windowId,
+          connection: conn,
+        } as RpcCallContext);
+    return { answer, decide };
+  }
+
+  it("returns the attached owner's response and never touches the parked path", async () => {
+    const env = answering(() => Promise.resolve(accepted));
+    await expect(env.answer()).resolves.toEqual(accepted);
+    expect(env.decide).not.toHaveBeenCalled();
+  });
+
+  it('fails with owner_unreachable when the attached owner does not reply, deciding nothing', async () => {
+    const env = answering(() => Promise.resolve('no_response'));
+    const failure = env.answer();
+    await expect(failure).rejects.toBeInstanceOf(RpcError);
+    await expect(failure).rejects.toMatchObject({ data: { code: 'owner_unreachable' } });
+    expect(env.decide).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['not attached', () => Promise.resolve('not_attached' as const)],
+    ['without a relay', undefined],
+  ])(
+    'when %s, decides through the shared path for exactly the answered request',
+    async (_label, answerLive) => {
+      const decide = vi.fn(() =>
+        Promise.resolve({ kind: 'decided' as const, case: 'parked' as const, response: accepted }),
+      );
+      const env = answering(answerLive, decide);
+
+      await expect(env.answer('denied')).resolves.toEqual(accepted);
+
+      expect(decide).toHaveBeenCalledTimes(1);
+      expect(decide).toHaveBeenCalledWith({
+        runDir: join(runsRoot(), RUN_ID),
+        runId: RUN_ID,
+        confirmationId: ID,
+        decision: 'denied',
+        decidedBy: 'user_app',
+      });
+    },
+  );
+
+  it('fails with owner_unreachable when an unattached live owner cannot be reached', async () => {
+    const decide = vi.fn(() =>
+      Promise.resolve({ kind: 'owner_unreachable' as const, reason: 'unreachable' as const }),
+    );
+    const env = answering(() => Promise.resolve('not_attached'), decide);
+    await expect(env.answer()).rejects.toMatchObject({
+      code: -32002,
+      data: { code: 'owner_unreachable' },
+    });
   });
 });

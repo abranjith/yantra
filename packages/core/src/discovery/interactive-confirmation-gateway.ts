@@ -14,19 +14,16 @@
  * the CLI flag layer) documents that nothing can ever be auto-approved here.
  */
 
-import { join } from 'node:path';
-
 import type { ConfirmationDecision, ConfirmationRequest } from '@yantra/protocol';
 import prompts from 'prompts';
 
-import { runsRoot } from '../browser/paths.js';
 import type { ConfirmationGateway } from '../executor/confirmation-gateway.js';
 import {
   AuthorityConnectorConfirmationGateway,
-  InterventionAuthority,
-  InterventionLog,
-  UnattendedCeilingClock,
+  RunInterventions,
   type InterventionAuthority as InterventionAuthorityType,
+  type RunBindableGateway,
+  type RunInterventionBinding,
 } from '../interventions/index.js';
 
 /** Minimal stdout sink so tests can capture the rendered consent card. */
@@ -48,11 +45,12 @@ export interface InteractiveConfirmationGatewayOptions {
  * A non-TTY / declined prompt (including Ctrl+C, which `prompts` resolves as
  * `undefined`) is treated as **denied** — fail-closed, never fail-open.
  */
-export class InteractiveConfirmationGateway implements ConfirmationGateway {
+export class InteractiveConfirmationGateway implements ConfirmationGateway, RunBindableGateway {
   private readonly sink: ConsentRenderSink;
   private readonly promptFn: typeof prompts;
   private readonly suppliedAuthority: InterventionAuthorityType | null;
-  private readonly authorities = new Map<string, InterventionAuthorityType>();
+  // A person is at the prompt, so attendance starts at 1 (D5).
+  private readonly runs = new RunInterventions({ initialAttendance: 1 });
 
   public constructor(opts: InteractiveConfirmationGatewayOptions = {}) {
     this.sink = opts.sink ?? { write: (text: string) => process.stdout.write(text) };
@@ -98,21 +96,17 @@ export class InteractiveConfirmationGateway implements ConfirmationGateway {
     };
   }
 
+  /**
+   * Binds the run's authority to its socket and event log, so `yantra
+   * confirm` and the app can answer a terminal run too (REV-002). A supplied
+   * authority belongs to its owner, which binds it itself.
+   */
+  public attachRun(runId: string, binding: RunInterventionBinding): void {
+    if (this.suppliedAuthority === null) this.runs.attachRun(runId, binding);
+  }
+
   private authorityFor(request: ConfirmationRequest): InterventionAuthorityType | null {
-    if (this.suppliedAuthority !== null) return this.suppliedAuthority;
-    const existing = this.authorities.get(request.run_id);
-    if (existing !== undefined) return existing;
-    const ceiling = new UnattendedCeilingClock({ now: Date.now });
-    ceiling.setAttendance(1);
-    const authority = new InterventionAuthority({
-      runId: request.run_id,
-      log: new InterventionLog(join(runsRoot(), request.run_id, 'interventions.jsonl')),
-      events: { publish: () => undefined, flush: () => Promise.resolve() },
-      clock: { now: () => new Date().toISOString() },
-      ceiling,
-    });
-    this.authorities.set(request.run_id, authority);
-    return authority;
+    return this.suppliedAuthority ?? this.runs.authorityFor(request.run_id);
   }
 }
 

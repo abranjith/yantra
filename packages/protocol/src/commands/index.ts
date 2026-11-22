@@ -9,6 +9,8 @@
 export {
   AdapterId,
   ArgumentSpec,
+  BOUNDED_JSON_ARRAY_MAX,
+  BoundedJsonValue,
   CommandEntry,
   CommandRegistry,
   Condition,
@@ -60,6 +62,8 @@ export {
 export { OPTION_GROUP_INPUTS } from './groups.js';
 export {
   CommandInvocation,
+  INVOCATION_ARGV_MAX,
+  INVOCATION_PATH_MAX,
   ParseErrorCode,
   createInvocationId,
   isAbsoluteCwd,

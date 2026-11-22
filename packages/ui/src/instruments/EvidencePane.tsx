@@ -69,7 +69,11 @@ export function EvidencePane({
       }}
     >
       <div className="flex items-start justify-between gap-2">
-        <h2 ref={headingRef} tabIndex={-1} className="text-lg font-semibold text-ink outline-none">
+        <h2
+          ref={headingRef}
+          tabIndex={-1}
+          className="text-lead font-semibold text-ink outline-none"
+        >
           {heading}
         </h2>
         <Button

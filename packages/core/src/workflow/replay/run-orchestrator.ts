@@ -39,6 +39,7 @@ import type {
   Sanitizer,
 } from '../../executor/types.js';
 import { writeFileAtomic } from '../../fs/atomic-write.js';
+import { isRunBindable } from '../../interventions/run-interventions.js';
 import type { LiveViewHub } from '../../live-view/live-view-hub.js';
 import type { ReplayTaskPage } from '../../live-view/replay-task-page.js';
 import { serveLiveViewOnRunSocket } from '../../live-view/run-socket.js';
@@ -278,6 +279,7 @@ export class RunOrchestrator {
       await this.openRunEvents(runEvents, runId, runDir, manifest);
       this.opts.runStore.ownership?.(runId)?.attachEvents(runEvents);
       this.serveLiveView(runId);
+      this.attachInterventions(runId);
       try {
         return await this.runAfterOpen({
           request,
@@ -540,6 +542,7 @@ export class RunOrchestrator {
       await this.openRunEvents(runEvents, runId, runDir, manifest);
       this.opts.runStore.ownership?.(runId)?.attachEvents(runEvents);
       this.serveLiveView(runId);
+      this.attachInterventions(runId);
       try {
         return await this.resumeAfterOpen(runId, point, runEvents);
       } catch (error) {
@@ -680,6 +683,20 @@ export class RunOrchestrator {
     if (ownership !== undefined && this.opts.liveView) {
       serveLiveViewOnRunSocket(ownership, this.opts.liveView);
     }
+  }
+
+  /**
+   * Binds the consent gateway's authority to this run's socket (REV-002), so
+   * the app and `yantra confirm` can answer a live workflow consent and the
+   * host's attendance reaches the D5 ceiling. Events are not bound: the
+   * execution context already records `intervention_raised`/`resolved`
+   * through `RecordingConfirmationGateway` (FEAT-063).
+   */
+  private attachInterventions(runId: string): void {
+    const gateway = this.opts.confirmationGateway;
+    const ownership = this.opts.runStore.ownership?.(runId);
+    if (!isRunBindable(gateway) || ownership === undefined) return;
+    gateway.attachRun(runId, { channel: ownership });
   }
 
   /** Attaches the executor's page to the live view, when the caller passed one. */

@@ -48,7 +48,12 @@ const VersionRange = z
   .strict()
   .describe('An inclusive range of channel versions.');
 
-const Capabilities = z.array(z.string().min(1)).describe('Capability names.');
+/** The most capability names one hello may carry (REV-013). */
+export const CHANNEL_CAPABILITIES_MAX = 32;
+const Capabilities = z
+  .array(z.string().min(1).max(64))
+  .max(CHANNEL_CAPABILITIES_MAX)
+  .describe('Capability names.');
 
 /**
  * A run event as carried on the channel. A kind this executable knows must

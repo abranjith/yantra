@@ -50,7 +50,7 @@ export function CredentialsSurface({ initialKey }: CredentialsSurfaceProps): Rea
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-display font-semibold text-ink">Credentials</h1>
-          <p className="mt-1 text-sm text-ink-2">
+          <p className="mt-1 text-caption text-ink-2">
             Secrets are write-only and stored in your OS keychain. Stored values can never be viewed
             in the app.
           </p>
@@ -69,7 +69,7 @@ export function CredentialsSurface({ initialKey }: CredentialsSurfaceProps): Rea
       {query.isError ? (
         <p
           role="alert"
-          className="rounded-card border border-rule bg-surface p-4 text-sm text-signal-failed-ink"
+          className="rounded-frame border border-rule bg-surface p-4 text-caption text-signal-failed-ink"
         >
           {query.error instanceof Error ? query.error.message : 'Failed to load credentials.'}
         </p>
@@ -78,7 +78,7 @@ export function CredentialsSurface({ initialKey }: CredentialsSurfaceProps): Rea
       {data !== undefined && !available ? (
         <div
           role="alert"
-          className="rounded-card border border-rule bg-surface p-4 text-sm text-ink"
+          className="rounded-frame border border-rule bg-surface p-4 text-caption text-ink"
         >
           <p className="font-medium">OS keychain unavailable</p>
           <p className="mt-1 text-ink-2">
@@ -87,15 +87,15 @@ export function CredentialsSurface({ initialKey }: CredentialsSurfaceProps): Rea
         </div>
       ) : null}
 
-      {query.isLoading ? <p className="text-sm text-ink-2">Loading credentials…</p> : null}
+      {query.isLoading ? <p className="text-caption text-ink-2">Loading credentials…</p> : null}
 
       {data?.rows.length === 0 ? (
-        <p className="text-sm text-ink-2">No credentials configured or stored yet.</p>
+        <p className="text-caption text-ink-2">No credentials configured or stored yet.</p>
       ) : null}
 
       {data !== undefined && data.rows.length > 0 ? (
-        <div className="overflow-x-auto rounded-card border border-rule bg-surface">
-          <table className="w-full border-collapse text-left text-sm">
+        <div className="overflow-x-auto rounded-frame border border-rule bg-surface">
+          <table className="w-full border-collapse text-left text-caption">
             <thead>
               <tr className="border-b border-rule text-ink-2">
                 <th scope="col" className="px-4 py-3 font-medium">
@@ -119,7 +119,7 @@ export function CredentialsSurface({ initialKey }: CredentialsSurfaceProps): Rea
                     {row.key}
                   </th>
                   <td className="px-4 py-3">
-                    <span className="type-engine rounded-chip bg-sunken px-2 py-0.5 text-xs text-ink">
+                    <span className="type-engine rounded-chip bg-sunken px-2 py-0.5 text-micro text-ink">
                       {row.source}
                     </span>
                   </td>
@@ -136,7 +136,7 @@ export function CredentialsSurface({ initialKey }: CredentialsSurfaceProps): Rea
                             <span className="text-ink">
                               {item.kind} {item.id}
                             </span>
-                            <span className="type-engine text-xs text-ink-2">
+                            <span className="type-engine text-micro text-ink-2">
                               {item.ref.kind === 'secret'
                                 ? `\${secret:${item.ref.key}}`
                                 : `\${env:${item.ref.name}}`}

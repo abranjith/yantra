@@ -11,7 +11,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { ok, type RunLease, type WorkflowFile } from '@yantra/protocol';
+import { ok, type DecisionResponse, type RunLease, type WorkflowFile } from '@yantra/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type {
@@ -20,7 +20,16 @@ import type {
   BrowserSession,
   Page,
 } from '../../src/browser/types.js';
+import {
+  ConfirmationStore,
+  type ConfirmationGateway,
+} from '../../src/executor/confirmation-gateway.js';
 import type { FetchedDoc, SearchResult } from '../../src/extraction/types.js';
+import { AuthorityConnectorConfirmationGateway } from '../../src/interventions/authority-connector-gateway.js';
+import {
+  INTERVENTIONS_CAPABILITY,
+  RunInterventions,
+} from '../../src/interventions/run-interventions.js';
 import { FollowUpQueryGenerator } from '../../src/research/query-gen.js';
 import { ResearchLoop } from '../../src/research/research-loop.js';
 import { RunChannelClient, type CancelAck } from '../../src/run-channel/client.js';
@@ -57,7 +66,7 @@ async function tempRoot(): Promise<string> {
   return root;
 }
 
-function workflow(steps: number): WorkflowFile {
+function workflow(steps: number, confirmStep: number | null = null): WorkflowFile {
   return {
     version: 1,
     name: 'fixture',
@@ -71,8 +80,8 @@ function workflow(steps: number): WorkflowFile {
       id: `s${i + 1}`,
       verb: 'navigate' as const,
       scope: null,
-      requires_confirmation: false,
-      confirmation_description: null,
+      requires_confirmation: i + 1 === confirmStep,
+      confirmation_description: i + 1 === confirmStep ? 'Place the order' : null,
       expected_cost: null,
       consequence: null,
       url: `https://example.com/${i + 1}`,
@@ -120,6 +129,9 @@ interface ReplayHooks {
   /** Runs inside the first navigation, while the run is live. */
   readonly duringStep?: (runDir: string) => Promise<void>;
   readonly failOn?: string;
+  /** The 1-based step that requires confirmation, if any. */
+  readonly confirmStep?: number;
+  readonly confirmationGateway?: ConfirmationGateway;
 }
 
 function replaySetup(root: string, hooks: ReplayHooks = {}) {
@@ -162,13 +174,16 @@ function replaySetup(root: string, hooks: ReplayHooks = {}) {
   };
   const orchestrator = new RunOrchestrator({
     workflowStore: {
-      load: () => Promise.resolve(ok(workflow(2))),
+      load: () => Promise.resolve(ok(workflow(2, hooks.confirmStep ?? null))),
     } as unknown as WorkflowStore,
     runStore,
     browserProvider: provider,
     keychain: {} as never,
     ethicsGate: { check: () => Promise.resolve() },
     logger: silent,
+    ...(hooks.confirmationGateway === undefined
+      ? {}
+      : { confirmationGateway: hooks.confirmationGateway }),
   });
   return { orchestrator, runStore, launches };
 }
@@ -285,6 +300,106 @@ describe('@no-llm workflow replay is owned', () => {
 });
 
 const FIXED = '2026-06-15T00:00:00.000Z';
+
+/**
+ * Answers the run's first pending consent over its socket, as `yantra
+ * confirm` and the app host do, once the run raises it.
+ */
+async function answerLive(
+  runDir: string,
+  decision: 'granted' | 'denied',
+): Promise<DecisionResponse | null> {
+  const store = new ConfirmationStore(join(runDir, 'confirmations.jsonl'));
+  const deadline = Date.now() + 10_000;
+  let pending = null;
+  while (pending === null) {
+    if (Date.now() > deadline) throw new Error('no consent was raised');
+    pending = (await store.readAll()).find((entry) => entry.kind === 'request')?.data ?? null;
+    if (pending === null) await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  const read = await readLease(runDir);
+  if (read.kind !== 'lease') throw new Error('no lease');
+  const client = new RunChannelClient({
+    clientKind: 'cli',
+    runDir,
+    logger: silent,
+    capabilities: [INTERVENTIONS_CAPABILITY],
+  });
+  try {
+    const connected = await client.connect(read.lease);
+    expect(connected.state).toBe('attached');
+    const id = pending.confirmation_id;
+    const response = new Promise<DecisionResponse | null>((resolve) => {
+      client.onServerMessage((message) => {
+        if (message.type === 'intervention.response' && message.intervention_id === id)
+          resolve(message.response as DecisionResponse);
+      });
+      setTimeout(() => resolve(null), 5_000);
+    });
+    client.send({
+      type: 'intervention.answer',
+      intervention_id: id,
+      decision,
+      decided_by: 'user_cli_confirm',
+    });
+    return await response;
+  } finally {
+    client.close();
+  }
+}
+
+/** A worker-like gateway: no prompt of its own; only the run socket answers. */
+function socketOnlyGateway(root: string): AuthorityConnectorConfirmationGateway {
+  const runs = new RunInterventions({ initialAttendance: 0, runsRoot: () => root });
+  return new AuthorityConnectorConfirmationGateway({
+    authority: (request) => runs.authorityFor(request.run_id),
+    runs,
+    answer: (_request, signal) =>
+      new Promise((resolve) => signal.addEventListener('abort', () => resolve('denied'))),
+  });
+}
+
+describe('@no-llm live workflow consent (REV-002)', () => {
+  it.each([
+    ['granted', 'success'],
+    ['denied', 'aborted'],
+  ] as const)(
+    'a %s answer over the run socket decides the waiting step once',
+    async (decision, kind) => {
+      const root = await tempRoot();
+      let answered: Promise<DecisionResponse | null> = Promise.resolve(null);
+      const { orchestrator } = replaySetup(root, {
+        confirmStep: 2,
+        confirmationGateway: socketOnlyGateway(root),
+        duringStep: (runDir) => {
+          answered = answerLive(runDir, decision);
+          return Promise.resolve();
+        },
+      });
+
+      const outcome = await orchestrator.run(request);
+
+      expect(await answered).toMatchObject({
+        status: 'accepted',
+        decision: { decision, decided_by: 'user_cli_confirm' },
+      });
+      expect(outcome.kind).toBe(kind);
+      const runDir = join(root, outcome.runId);
+      const decisions = (
+        await new ConfirmationStore(join(runDir, 'confirmations.jsonl')).readAll()
+      ).filter((entry) => entry.kind === 'decision');
+      expect(decisions).toHaveLength(1);
+      expect(decisions[0]?.data).toMatchObject({ decision, decided_by: 'user_cli_confirm' });
+      const resolved = readFileSync(join(runDir, 'interventions.jsonl'), 'utf8')
+        .split('\n')
+        .filter((line) => line.includes('"entry":"resolved"'));
+      expect(resolved).toHaveLength(1);
+      const events = readFileSync(join(runDir, RUN_EVENTS_FILENAME), 'utf8');
+      expect(events.match(/"kind":"intervention_raised"/gu)).toHaveLength(1);
+      expect(events.match(/"kind":"intervention_resolved"/gu)).toHaveLength(1);
+    },
+  );
+});
 
 function researchLoop(root: string, onSearch: (runDir: string) => Promise<void>) {
   const finishes: Snapshot[] = [];

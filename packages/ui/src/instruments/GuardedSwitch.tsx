@@ -72,9 +72,9 @@ export function GuardedSwitch({
 
   return (
     <section className="flex flex-col gap-3" aria-label={`Confirmation: ${actionLabel}`}>
-      <p className="text-sm text-ink-2">{actionLabel}</p>
-      <p className="text-sm text-ink-2">{consequence}</p>
-      <p className="text-xs text-ink-3" aria-live="polite">
+      <p className="text-caption text-ink-2">{actionLabel}</p>
+      <p className="text-caption text-ink-2">{consequence}</p>
+      <p className="text-micro text-ink-3" aria-live="polite">
         {remaining === null
           ? 'No time limit while you are here'
           : remaining === 0
@@ -88,7 +88,7 @@ export function GuardedSwitch({
             type="button"
             disabled={disabled || pendingResponse || submitting || remaining === 0}
             className={cn(
-              'relative inline-flex items-center gap-2 overflow-hidden rounded-chip border border-accent px-4 py-2 text-sm text-ink',
+              'relative inline-flex items-center gap-2 overflow-hidden rounded-chip border border-accent px-4 py-2 text-caption text-ink',
               'focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-50',
             )}
             onPointerDown={(event) => {
@@ -113,7 +113,7 @@ export function GuardedSwitch({
           <button
             type="button"
             disabled={disabled || pendingResponse || submitting}
-            className="rounded-chip border border-rule px-4 py-2 text-sm text-ink focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-50"
+            className="rounded-chip border border-rule px-4 py-2 text-caption text-ink focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-50"
             onClick={() => decide('denied')}
           >
             Deny
@@ -121,28 +121,28 @@ export function GuardedSwitch({
         </div>
       ) : (
         <div
-          className="flex gap-2 rounded-card border border-rule p-3"
+          className="flex gap-2 rounded-frame border border-rule p-3"
           role="group"
           aria-label="Review approval"
         >
           <button
             ref={denyRef}
             type="button"
-            className="rounded-chip border border-rule px-4 py-2 text-sm text-ink focus-visible:outline-2 focus-visible:outline-accent"
+            className="rounded-chip border border-rule px-4 py-2 text-caption text-ink focus-visible:outline-2 focus-visible:outline-accent"
             onClick={() => decide('denied')}
           >
             Deny
           </button>
           <button
             type="button"
-            className="rounded-chip border border-accent px-4 py-2 text-sm text-ink focus-visible:outline-2 focus-visible:outline-accent"
+            className="rounded-chip border border-accent px-4 py-2 text-caption text-ink focus-visible:outline-2 focus-visible:outline-accent"
             onClick={() => decide('granted')}
           >
             Approve
           </button>
           <button
             type="button"
-            className="text-sm text-ink-3"
+            className="text-caption text-ink-3"
             onClick={() => {
               setReview(false);
               openerRef.current?.focus();

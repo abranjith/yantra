@@ -190,6 +190,7 @@ function TypeShapeMotionSheet(): ReactNode {
           <span
             aria-hidden="true"
             data-banned-radius
+            // eslint-disable-next-line no-restricted-syntax -- the one deliberate demonstration that a cleared default compiles to nothing (REV-008).
             className="block size-12 rounded-2xl border border-rule-strong bg-sunken"
           />
           <span className="type-engine text-ink-2">2xl (none)</span>

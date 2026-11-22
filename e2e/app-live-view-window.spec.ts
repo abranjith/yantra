@@ -320,6 +320,8 @@ describe('@no-llm live browser view in a real app window', () => {
     // Arrange: a real host, the app page instrumented before its scripts run.
     const opened = openUi();
     const page = await browser.newPage();
+    // A desktop window: the cockpit floats its rails beside the page from lg up.
+    await page.setViewport({ width: 1440, height: 900 });
     await page.evaluateOnNewDocument(instrument);
     await page.goto(opened.url);
     await page.waitForSelector('[role="status"][data-status="connected"]', { timeout: 20_000 });
@@ -344,6 +346,38 @@ describe('@no-llm live browser view in a real app window', () => {
           { cause: error },
         );
       });
+
+    // REV-003: the live page is visible. The cockpit's clear centre shows the
+    // canvas itself, not a panel, and is a real share of the frame.
+    const centre = await page.evaluate(() => {
+      const window_ = document.querySelector('[data-slot="viewport-window"]');
+      const cockpit = document.querySelector('[data-part="cockpit"]');
+      if (window_ === null || cockpit === null) return null;
+      const box = window_.getBoundingClientRect();
+      const frame = cockpit.getBoundingClientRect();
+      const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+      const owner = hit?.closest('[data-part],[data-slot],[data-panel],[data-instrument]');
+      return {
+        topmost: hit?.closest('[data-instrument="browser-viewport"]') !== null && hit !== null,
+        tag: hit?.tagName ?? null,
+        // Names what covers the centre when the assertion fails.
+        owner:
+          owner === null || owner === undefined
+            ? null
+            : [...owner.attributes]
+                .filter((attribute) => attribute.name.startsWith('data-'))
+                .map((attribute) => `${attribute.name}=${attribute.value}`)
+                .join(' '),
+        share: (box.width * box.height) / (frame.width * frame.height),
+        width: box.width,
+        height: box.height,
+      };
+    });
+    expect(centre).toMatchObject({ topmost: true, tag: 'CANVAS' });
+    // At 1440 x 900 the clear centre is about 620 x 370 px, a fifth of the frame or more.
+    expect(centre!.share).toBeGreaterThan(0.2);
+    expect(centre!.width).toBeGreaterThan(560);
+    expect(centre!.height).toBeGreaterThan(320);
 
     // The password fill: the view must go protected.
     await page.waitForSelector('[data-instrument="browser-viewport"][data-state="protected"]', {

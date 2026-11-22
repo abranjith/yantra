@@ -922,8 +922,12 @@ yantra ui --print --json
 The command reuses a running, ready host for the current data directory, or
 starts one in the background and waits up to 10 seconds for it. It then asks
 the host for a single-use launch code, valid for 60 seconds, and builds the URL
-`http://127.0.0.1:<port>/#code=<code>`. On success it prints
-`Opened the Yantra app in <browser>.` and exits without waiting for the window.
+`http://127.0.0.1:<port>/#code=<code>`. The window does not receive that URL
+on its command line, where other local users could read the code: it opens a
+one-shot bootstrap page, readable only by you, under `<data-dir>/ui/window/`
+that redirects to the URL and is removed once the code expires. On success it
+prints `Opened the Yantra app in <browser>.` and exits without waiting for the
+window.
 
 `--print` prints the URL and opens nothing; open it yourself in a browser on the
 same computer within 60 seconds. Each run issues a new code. `--json` writes one
@@ -1091,17 +1095,37 @@ seconds, skips missed startup occurrences, prevents overlap per schedule, and
 does not install itself as an operating-system login service. Every scheduled
 run is zero-LLM.
 
-The only scheduling confirmation policy is `pause-and-notify`. Resolve a
-genuinely parked run out of band:
+The only scheduling confirmation policy is `pause-and-notify`. Answer a pending
+confirmation out of band, for a parked scheduled run or for a live run waiting
+on consent:
 
 ```console
 yantra confirm <run-id> grant
 yantra confirm <run-id> deny
+yantra confirm <run-id> grant --json
 ```
 
-Granting records one exclusive parked-decision claim; the daemon resumes the
-parked run on a later poll. A concurrent answer reports that the request was
-already decided, and the claim is bound to the approved run step. It never
+When the run is still live (a `run`, `resume`, `do`, `ask`, or `research` run,
+started from a terminal or from the app, including saved-workflow consents),
+`yantra confirm` answers the run's own process over its run socket and prints
+`Decided (live run, step <step-id>, <action> on <host>): granted` (or
+`denied`). The run acts on the answer without waiting for a daemon poll.
+
+A parked claim is written only when the run has no live owner, meaning no lease
+or a dead owner process, and only for the pending request. It prints
+`Decided (parked run): granted`; the daemon resumes the parked run on a later
+poll. `--json` writes `runId`, `decision`, `request`, `case` (`live` or
+`parked`), and `response`.
+
+If the run's owner may still be alive but cannot be reached, or its channel is
+incompatible, nothing is written, and the command exits `3` with:
+
+```text
+The live run owner could not be reached or its channel is incompatible; no parked claim was written.
+```
+
+A concurrent answer reports `Already decided by <who> at <time>` and exits `1`;
+a run with no pending confirmation also exits `1`. The command never
 auto-confirms. See [Scheduling and the Local Daemon](features/scheduling.md).
 
 ## Diagnostics and run inspection

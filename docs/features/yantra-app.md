@@ -16,7 +16,11 @@ both go away.
 
 The window has a top bar with the Yantra status mark and links to **Mission**
 (the app's start page; see [Mission](app-mission.md)), the **Ledger**, and the
-**Inbox**, plus a connection banner. Its run screens are the **Ledger**
+**Inbox**, plus a connection banner. While any Inbox item is open, on whatever
+page you are, the **Inbox** link carries a badge with the open count (its
+accessible name reads, for example, "Inbox 2 items need you"), and the status
+mark turns Rani, named "Yantra status: 2 items need you". With nothing open,
+the badge is gone and the mark shows its usual state. Its run screens are the **Ledger**
 (every run), the **Run result** of one run, its **Audit**, and bounded
 **file viewers**. These screens only read: they show any run Yantra recorded,
 whether it came from the terminal, the scheduler daemon or the app. The queue,
@@ -31,6 +35,15 @@ assistive approval opens an untimed review with **Deny** focused by default.
 Answers are relayed through the authenticated host and recorded as `user_app`.
 Pending consent items cannot be dismissed; informational handoffs can be.
 
+**Who decides.** An answer from the Inbox or the cockpit goes to the run's own
+worker whenever that run may still be running, the same path
+`yantra confirm` uses. If the host cannot reach a run that may still be
+running, or its owner does not reply, nothing is recorded and the app reports:
+"The run is still live, but its owner did not answer. Nothing was decided."
+with "Try again, or open the run to answer it there." Only a run that has
+stopped (no lease, or a dead owner) gets a parked decision, and only for the
+exact request you answered: a stale card can never decide a newer request.
+
 ## What It Does
 
 ### Opens one app host per data directory
@@ -43,6 +56,12 @@ Pending consent items cannot be dismissed; informational handoffs can be.
 - `yantra ui` asks the host for a **launch code** and builds the URL
   `http://127.0.0.1:<port>/#code=<code>`. A launch code works once, for 60
   seconds. The port is chosen fresh each time a host starts.
+- The URL is never passed on the browser's command line. `yantra ui` writes a
+  one-shot bootstrap page, `launch-<random>.html`, readable only by you, in the
+  owner-only folder `<data-dir>/ui/window`, and opens that page. The page
+  redirects at once to the URL. Each page is deleted after 2 minutes, and
+  older leftovers are swept on every launch. No page is written when no
+  browser is found.
 - The window removes the code from its address before it does anything else.
   It then exchanges the code for a session (see
   [Privacy and security](#privacy-and-security)).
@@ -65,7 +84,8 @@ Pending consent items cannot be dismissed; informational handoffs can be.
 3. **The browser Yantra uses for its own runs**, as `yantra browser` resolves
    it.
 
-Whichever browser is chosen gets the same arguments: `--app=<url>`,
+Whichever browser is chosen gets the same arguments:
+`--app=file:///<data-dir>/ui/window/launch-<random>.html` (the bootstrap page),
 `--user-data-dir=<data-dir>/ui/chrome-profile`, `--no-first-run` and
 `--no-default-browser-check`. The window therefore uses its own profile,
 separate from your everyday browsing profile and from every automation
@@ -560,6 +580,10 @@ steps:
   first in line and its slot is free.
 - The queue is kept on disk. It survives the window closing and the host
   restarting.
+- The queue lists only items still in it. Finished and discarded items are
+  pruned when the host starts and every hour: the newest 200 are kept, and
+  none older than 7 days. Items that still wait on you (**never started**,
+  start unknown, **needs review**) are never pruned.
 
 ### Asks for review when something changed while queued
 
@@ -643,6 +667,9 @@ A window counts as **attending** only if all three of these hold:
 - it has checked in within the last 30 seconds. The app checks in every 10
   seconds.
 
+Every open app window does both on every page, not only on the Inbox, so a
+window showing the Ledger or Mission counts too.
+
 The host sends the number of attending windows to every run it is following.
 It sends the number when it changes, when it starts following a run, and every
 10 seconds.
@@ -650,6 +677,11 @@ It sends the number when it changes, when it starts following a run, and every
 **With no window, the count is 0.** A long-running host or a full queue never
 counts as someone watching. The host logs only changes in the count. What a run
 does with the count is the run's own behavior.
+
+**App-launched agentic runs start unattended.** An `ask`, `research` or `do`
+started from the app begins with a count of 0. If it needs you and no window
+attends it, it raises the desktop "needs you" notification. Runs started in a
+terminal keep their usual starting count.
 
 Windows that asked for interventions are also sent each followed run's
 `intervention_raised` and `intervention_resolved` events.
@@ -802,6 +834,7 @@ They move with the data directory.
 | `launch/`                 | The files the host hands to workers                                                            |
 | `slots.lock`              | The lock every queue change happens under                                                      |
 | `chrome-profile/`         | The app window's own browser profile                                                           |
+| `window/`                 | Owner-only one-shot bootstrap pages that open the window; each is removed after 2 minutes      |
 
 ## Configuration and Permissions
 
@@ -835,6 +868,11 @@ The host is built for a single user on a single computer.
   - an `HttpOnly; SameSite=Strict` cookie;
   - a per-window capability that exists only in the page's memory, never in
     storage, the URL or a cookie.
+
+  The launch code never appears in the browser's process arguments, which
+  other local users can read on some systems; the window opens through an
+  owner-only bootstrap page instead (see
+  [Opens one app host per data directory](#opens-one-app-host-per-data-directory)).
 
   A cookie from one window combined with another window's capability is
   refused. A capability ends 5 minutes after its window's last connection
@@ -886,10 +924,12 @@ The host is built for a single user on a single computer.
 - **Browser discovery is limited** to the locations listed above. A Chrome or
   Edge installed elsewhere is not found. Use `yantra ui --print` and open the
   URL yourself.
-- **The launch code is visible in the browser's process arguments**
-  (`--app=<url>`). On some systems other local users can read those arguments.
-  The code is single-use, lasts 60 seconds, and is spent as soon as the window
-  first loads.
+- **`--print` shows the launch code.** The URL it prints carries the code, so
+  anything that captures your terminal output sees it. The code is single-use,
+  lasts 60 seconds, and is spent as soon as a window first loads it.
+- **Attendance reaches only followed runs.** The host sends the count only to
+  runs it is following, so a run you watch only through the Inbox still counts
+  as unattended and may raise a desktop notification.
 - **The run screens only read.** They cannot start, stop, review or resume
   runs, and there is no live screen for following a run yet. The host's queue,
   review, run following and attendance have no screens of their own in this

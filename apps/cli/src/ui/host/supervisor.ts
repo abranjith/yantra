@@ -30,6 +30,7 @@ import {
   type FileInvocationStore,
   NodeProcessLivenessProbe,
   NodeProcessTreeTerminator,
+  PRUNABLE_STATES,
   invocationResultPath,
   runsRoot,
   stopRun,
@@ -103,7 +104,12 @@ export interface SupervisorDeps {
   readonly sleep?: (ms: number) => Promise<void>;
   readonly cancelGraceMs?: number;
   readonly dequeueMs?: number;
+  /** How often finished records are pruned (default hourly; REV-007). */
+  readonly pruneMs?: number;
 }
+
+/** How often the supervisor prunes finished and discarded records. */
+export const PRUNE_MS = 60 * 60 * 1000;
 
 /** What `command.invoke` returns. */
 export type InvokeResult = InvocationSummary;
@@ -116,6 +122,7 @@ export class Supervisor {
   private readonly terminator: ProcessTreeTerminator;
   private readonly sleep: (ms: number) => Promise<void>;
   private timer: NodeJS.Timeout | null = null;
+  private pruneTimer: NodeJS.Timeout | null = null;
   private dequeuing: Promise<void> | null = null;
   private again = false;
   private readonly announcedResults = new Set<string>();
@@ -135,11 +142,37 @@ export class Supervisor {
       void this.dequeue();
     }, this.deps.dequeueMs ?? DEQUEUE_MS);
     this.timer.unref();
+    if (this.pruneTimer === null) {
+      void this.prune();
+      this.pruneTimer = setInterval(() => {
+        void this.prune();
+      }, this.deps.pruneMs ?? PRUNE_MS);
+      this.pruneTimer.unref();
+    }
   }
 
   public stopLoop(): void {
     if (this.timer !== null) clearInterval(this.timer);
     this.timer = null;
+    if (this.pruneTimer !== null) clearInterval(this.pruneTimer);
+    this.pruneTimer = null;
+  }
+
+  /** Removes old finished and discarded records; never fails the host (REV-007). */
+  public async prune(): Promise<void> {
+    try {
+      const removed = await this.deps.store.prune();
+      for (const id of removed) {
+        this.announcedResults.delete(id);
+        this.announcedStates.delete(id);
+      }
+      if (removed.length > 0) this.logger.info({ count: removed.length }, 'invocations pruned');
+    } catch (error) {
+      this.logger.warn(
+        { error_class: error instanceof Error ? error.name : 'unknown' },
+        'invocation prune failed',
+      );
+    }
   }
 
   /** Registers `command.*`, `queue.*` and `read.invocation`. */
@@ -440,22 +473,31 @@ export class Supervisor {
     };
   }
 
+  /** Every item still in the queue: finished and discarded ones are not (REV-007). */
   private async summaries(): Promise<InvokeResult[]> {
     const records = await this.deps.store.list();
     let position = 0;
-    return records.map((record) => {
-      const waiting = record.state === 'queued' && record.execution_class !== 'mutate';
-      if (waiting) position += 1;
-      return this.summary(record, waiting ? position : undefined);
-    });
+    return records
+      .map((record) => {
+        const waiting = isWaiting(record);
+        if (waiting) position += 1;
+        return { record, summary: this.summary(record, waiting ? position : undefined) };
+      })
+      .filter(({ record }) => !PRUNABLE_STATES.has(record.state))
+      .map(({ summary }) => summary);
   }
 
   /** The latest summary of `record`, with its queue position while queued. */
   private async current(record: InvocationRecord): Promise<InvokeResult> {
-    const latest = (await this.summaries()).find(
-      (item) => item.invocation_id === record.invocation_id,
-    );
-    return latest ?? this.summary(record);
+    // Only a waiting item has a position; anything else reads just itself.
+    const fresh = (await this.deps.store.get(record.invocation_id)) ?? record;
+    if (!isWaiting(fresh)) return this.summary(fresh);
+    const records = await this.deps.store.list();
+    const position =
+      records.filter(isWaiting).findIndex((item) => item.invocation_id === record.invocation_id) +
+      1;
+    const latest = records.find((item) => item.invocation_id === record.invocation_id) ?? record;
+    return this.summary(latest, isWaiting(latest) && position > 0 ? position : undefined);
   }
 
   private async require(id: string): Promise<InvocationRecord> {
@@ -463,4 +505,9 @@ export class Supervisor {
     if (record === null) throw new RpcError('not_found', `There is no queued item ${id}.`);
     return record;
   }
+}
+
+/** A queued item that waits for a slot (mutate commands never wait). */
+function isWaiting(record: InvocationRecord): boolean {
+  return record.state === 'queued' && record.execution_class !== 'mutate';
 }
