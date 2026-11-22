@@ -1571,7 +1571,10 @@ processes. Everything on it uses one framing grammar, implemented in
 
 Each run epoch is owned through `src/run-ownership/`. `RunOwnershipSession.open` starts the run
 socket first, then claims `lease.json` naming that socket and its token, so a client that reads the
-lease always finds a listener. The lease is published once by `link` and never rewritten; browsers
+lease always finds a listener. Each claimed lease is also announced in-process
+(`announceRunLeaseClaimed`, `claim-events.ts`), so code in the same process can learn its run
+through `onRunLeaseClaimed` without scanning run directories. The lease is published once by `link`
+and never rewritten; browsers
 the run launches are appended to `owned-browsers.jsonl` by a `BrowserOwnershipRecorder` threaded
 through `BrowserRuntimeOptions` → `LocalBrowserProvider` → `launchResolvedChrome`, for every
 ownership kind. Owner liveness is a creation-identity check (`ProcessLivenessProbe`): a signal-0
@@ -1649,6 +1652,18 @@ runDir))`; a `subscribe` that arrives earlier waits for it. On `subscribe {from_
 - **Close.** `close(drainMs)` stops accepting, ends every connection, waits up to 1 s for them to
   close, destroys any left, and only then does `finish()` release the lease, so an attached client
   receives the run's terminal event.
+- **Interventions.** `serveInterventionsOnRunSocket` (`src/interventions/run-interventions.ts`)
+  registers `attendance {count}` and `intervention.answer` under the `interventions` capability,
+  and every run owner calls it: the agent orchestrator for its `InterventionAuthority`, and the
+  replay `RunOrchestrator` (`run`, `resume`), the terminal `InteractiveConfirmationGateway` and the
+  worker adapter through `RunInterventions`, which keeps one authority per run and binds it when
+  the owner's gateway receives `attachRun`. Each answer goes through `authority.answer`, so a
+  request is decided exactly once, and the reply is `intervention.response`. `decided_by` comes
+  from the authenticated connection's client kind (`host` is `user_app`, `cli` is
+  `user_cli_confirm`); a message claiming any other value, or from another client kind, gets
+  `error{bad_request}`. A terminal starts at attendance 1; a worker, including an agentic worker
+  run (`initialAttendance: 0`), starts at 0 and the host's `attendance` messages drive it. The
+  agent orchestrator and the worker adapter attach a `NeedsYouNotifier` to each authority.
 - **Logging.** `channel_attached` and `channel_detached` carry the client kind, negotiated version
   and duration. The token and the socket address are never logged.
 
@@ -3219,7 +3234,7 @@ the three processes (host, worker, window) can die without losing run data.
 flowchart LR
   UiCmd["yantra ui"] -->|probe host.lock, spawn host detached| HostProc
   UiCmd -->|control socket: hello with token, launch_code.issue| HostProc
-  UiCmd -->|open app window, launch code in URL fragment| Window
+  UiCmd -->|open app window at an owner-only bootstrap page| Window
   Window["App window, apps/web"] -->|"POST /session, GET assets and /a/ URLs"| HostProc
   Window -->|"/rpc WebSocket, JSON-RPC 2.0"| HostProc
   subgraph HostProc["App host, dist/ui-host.js, 127.0.0.1 only"]
@@ -3243,8 +3258,13 @@ then connects to the host's control socket, presents the lock's `control_token`,
 single-use launch code and builds `http://127.0.0.1:<port>/#code=<code>`. `--print` prints that URL;
 otherwise `openAppWindow` (`src/ui/window-launcher.ts`) starts the first of system Google Chrome
 (never Chrome for Testing), Microsoft Edge, then the resolved Yantra browser, detached and unref'd,
-with `--app=<url>`, its own `--user-data-dir` under `<data-dir>/ui/chrome-profile`,
+with `--app=<bootstrap page>`, its own `--user-data-dir` under `<data-dir>/ui/chrome-profile`,
 `--no-first-run` and `--no-default-browser-check`, and never a remote-debugging or automation flag.
+The launch code never appears in the browser's command line, which other local users can read on
+Linux and macOS: the window opens a one-shot `file://` bootstrap page (`launch-<random>.html`,
+`0600` in a `0700` `<data-dir>/ui/window` directory) that only redirects to the host URL with the
+code in its fragment. Each launch first removes pages older than 120 s, and each page is removed
+again once its code has expired.
 `--json` emits `UiOpenResult {schemaVersion, url, port, hostPid, reused}` in either mode. Exit 3
 covers an unverifiable or unreadable lock (`unknown` is never reclaimed), a host that exits before
 `ready` (the cause comes from `host-start-failure.json` when that host recorded one, else the
@@ -3295,7 +3315,8 @@ serves only an extension allowlist. Refusals are counted and logged by reason an
 **Sessions** (`sessions.ts`). A window proves itself in three steps, and only SHA-256 digests of
 codes, cookies and capabilities are kept, in host memory:
 
-1. A launch code (256 bits, single use, 60 s) reaches the window in the URL fragment;
+1. A launch code (256 bits, single use, 60 s) reaches the window in the URL fragment, through
+   the bootstrap page's redirect;
    `take-launch-code.ts` removes it from the URL before any other module runs.
 2. `POST /session {code}` (exact Origin) exchanges it for a `window_capability`, held in page
    memory only, and an `HttpOnly; SameSite=Strict` `yantra_session` cookie. Cookies ignore ports
@@ -3312,8 +3333,16 @@ the same `POST /session` path for a new capability of the same window, revoking 
 **RPC** (`rpc-server.ts`). `GET /rpc` upgrades only with the exact Host and Origin and a live session
 cookie (otherwise a raw 403 and the socket is destroyed). The first message must be `auth
 {window_capability}` matching the cookie's window within 5 s, or the socket closes with 4401 and no
-reply. Messages over 1 MiB and binary frames close the socket. Every request is validated against
-its method's Zod params schema from `@yantra/protocol`, and every result against its result schema.
+reply. Messages over 1 MiB and binary frames close the socket. A JSON-RPC batch carries at most 32
+requests (`JSON_RPC_BATCH_MAX`; more is `invalid_request`), so one message cannot fan out into
+unbounded concurrent work. Every request is validated against its method's Zod params schema from
+`@yantra/protocol`, and every result against its result schema. Every array a window or run-socket
+client can send is bounded in those schemas: positional params (64), invocation path (8) and argv
+(1,024), `displayed_effective` settings and content identities (512 each), arrays inside a
+setting's JSON value (`BoundedJsonValue`, 256), and hello capabilities (32 names of at most 64
+characters). `packages/protocol/tests/input-bounds.spec.ts` checks each limit, and
+`apps/cli/tests/ui/host/rpc-bounds.spec.ts` walks the fully assembled method registry so a new
+method's params cannot carry an unbounded array.
 The server pings every 15 s, terminates a socket that misses two pongs, and closes an expired
 window's sockets with 4401. A new socket receives `host.build`, and `host.hello` returns the build
 ID, channel and Yantra versions and server time; the page reloads itself when the build IDs differ,
@@ -3332,7 +3361,7 @@ are:
 | `command.invoke`, `command.cancel`, `queue.list`, `queue.start`, `queue.discard` | `supervisor.ts`    | Launch ownership, below. Notifications `invocation.changed` and `invocation.result` go to every connected window.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `queue.resolve_review`                                                           | `drift-review.ts`  | Starts a `needs_review` item with the current values, pins the submitted values as explicit flags (only when every difference is a pinnable flag and no content changed), or discards it.                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `run.subscribe`, `run.unsubscribe`                                               | `run-relay.ts`     | Live run events, below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `interventions.subscribe`, `attendance.heartbeat`                                | `attendance.ts`    | Attendance, below, and `intervention.event` for attached runs' `intervention_raised` and `intervention_resolved`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `interventions.subscribe`, `attendance.heartbeat`, `intervention.answer`         | `attendance.ts`    | Attendance and consent answers, below, and `intervention.event` for attached runs' `intervention_raised` and `intervention_resolved`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 **Launch ownership** (`supervisor.ts`, `packages/core/src/app-host/invocation-store.ts`, plan D4,
 D11). `command.invoke {invocation, displayed_effective}` re-parses the invocation through the
@@ -3393,8 +3422,9 @@ stateDiagram-v2
   and the worker exits 0 having done nothing. A launch with no record is a plain FEAT-064 launch.
 - **Run discovery by lease ownership.** Run IDs are minted inside each pipeline, so the host does
   not pre-allocate one except for `resume`, whose `run_id` is the existing run. The claimed worker
-  polls `runs/*/lease.json` every 250 ms for the lease whose owner is its own creation identity
-  (claimed no earlier than 1 s before the claim) and records it with `markRunning(id, run_id)`;
+  listens for the in-process lease-claim notice (`onRunLeaseClaimed`); the first lease whose owner
+  is its own creation identity (claimed no earlier than 1 s before the claim) is the invocation's
+  run, nested runs opened later are not, and it records it with `markRunning(id, run_id)`;
   `command.invoke` reports `run_id: null` until then. After the command, the worker's result sink
   has written `<id>.result.json`, and `finish` records the exit code. The supervisor announces each
   result once as `invocation.result`.
@@ -3408,6 +3438,11 @@ stateDiagram-v2
   `start_unknown` one only with `acknowledge_duplicate_risk: true` (otherwise `needs_confirmation`),
   which the record keeps. The guarantee is deduplicated launching, not exactly-once website effects
   after an arbitrary worker crash.
+- **Pruning.** `FileInvocationStore.prune` removes, under `slots.lock`, `finished` and `discarded`
+  records (result file first) beyond the newest 200 or older than 7 days; `never_started`,
+  `start_unknown` and `needs_review` wait on the user and are always kept. The supervisor prunes
+  when its loop starts at host start and then hourly, and a failed prune is logged, never fatal.
+  `queue.list` returns only items still in the queue, never finished or discarded history.
 
 **Host-start recovery** (`recovery.ts`, `packages/core/src/app-host/invocation-recovery.ts`) runs
 after `markReady` and before the dequeue loop, with the scan under `slots.lock`, so a late worker's
@@ -3435,8 +3470,44 @@ and is never aborted; an owner silent for 30 s yields `not_responding` (logged o
 `recovered`. A window attends only while it has a live authenticated socket, has called
 `interventions.subscribe`, and sent `attendance.heartbeat` within 30 s; zero windows means a count
 of 0 whatever the queue holds. The host sends `attendance {count}` over the run socket to each
-attached worker when the count changes, when a worker attaches, and every 10 s; what a worker does
-with it belongs to FEAT-068.
+attached worker when the count changes, when a worker attaches, and every 10 s; the worker's
+intervention authority uses it for the unattended ceiling (D5).
+
+**Consent answers** (`attendance.ts`, `run-relay.ts`, `src/interventions/decide-intervention.ts`,
+plan D12). The app's `intervention.answer {run_id, intervention_id, decision}` and `yantra confirm`
+share one live-first decision path, so a request is never decided twice. The run's live owner is
+the only decision authority. A parked claim (`ParkedDecisionService`,
+`packages/core/src/interventions/parked-decision.ts`, an exclusive `decisions/<id>.json`) is written
+only when the run has no lease or its owner is verifiably dead, and only for the answered
+confirmation ID; a different pending request reads as `stale`, and one already decided as
+`already_decided`.
+
+```mermaid
+flowchart TD
+  App["intervention.answer from a window"] --> Relay{"RunRelay.answerIntervention"}
+  Relay -->|response| Done[Return the owner's DecisionResponse]
+  Relay -->|no_response in 5 s| Busy["RPC error busy, owner_unreachable"]
+  Relay -->|not_attached| Decide["decideIntervention, decided_by user_app"]
+  Confirm["yantra confirm run grant or deny"] --> Decide2["decideIntervention, decided_by user_cli_confirm"]
+  Decide --> Lease{"lease and owner verdict"}
+  Decide2 --> Lease
+  Lease -->|live owner| Socket["one-off RunChannelClient: intervention.answer"]
+  Lease -->|unknown owner| Unreach[owner_unreachable]
+  Lease -->|no lease or dead owner| Parked["ParkedDecisionService.decideParked for that confirmation ID"]
+  Socket -->|intervention.response| Done
+  Socket -->|unreachable, incompatible or no interventions capability| Unreach
+  Parked --> Done
+  Unreach -->|app| Busy
+  Unreach -->|confirm| Exit3[exit 3, nothing written]
+```
+
+`RunRelay.answerIntervention` answers through the host's own attachment and returns the owner's
+response, `not_attached` (the host holds no attachment for the run) or `no_response` (the attached
+owner did not reply in 5 s, so the request may still be live). Only `not_attached` falls through to
+`decideIntervention`, which reads the lease and the owner's creation-identity verdict and, for a
+live owner, connects once with client kind `host` (app) or `cli` (`yantra confirm`) and the
+`interventions` capability. An owner that might be alive but cannot be asked leaves nothing
+decided: the app gets RPC error `busy` with reason `owner_unreachable`, and `yantra confirm` exits 3.
 
 **Idle exit and logging.** With no window connected and no invocation `queued`, `reserved` or
 `spawning`, a 10-minute timer runs (checked every 5 s) and a connection or new invocation cancels
@@ -3680,7 +3751,19 @@ embedded into the CLI as `dist/web`, and it talks only to the host that served i
   than by color alone; FEAT-065 renders `idle`), navigation from an append-only
   registry (`app/nav-registry.ts`; a feature registers its entry with its route: FEAT-065 Home,
   FEAT-066 the Ledger at `/runs`), a polite connection banner, and the "Session ended" view shown
-  when no session can be opened.
+  when no session can be opened. `AppShell` mounts one `InterventionsProvider`
+  (`features/interventions/interventions-context.tsx`) per window: its `InterventionsStore` calls
+  `interventions.subscribe`, sends `attendance.heartbeat` every 10 s on every page, refreshes
+  `inbox.list` on each `intervention.event`, and answers through `intervention.answer`. The top
+  bar's Inbox badge reads its open-item count, and the Bindu turns Rani while that count is above
+  zero (`topBarBindu`); the Inbox page answers through the same store.
+- **Cockpit** (`features/cockpit/CockpitLayout.tsx`). A fixed-height frame whose backdrop, the
+  live browser view, fills all of it; the top bar and status banner sit across the top, the
+  Understood and Engine panels are side rails that scroll on their own, Command runs along the
+  bottom, and the centre (`data-slot="viewport-window"`) stays clear so the page the run acts on
+  remains visible. Below the `lg` breakpoint the view is an in-flow, fixed-height viewport under
+  the top bar and the panels stack beneath it. The backdrop is hidden from assistive technology;
+  the Engine panel carries its text alternative.
 - **Data** (FEAT-066). `main.tsx` provides a `DeferredRpc` (`host/app-rpc.tsx`) through
   `RpcProvider` before the session opens. Each request waits until the socket is connected, and
   subscriptions are replayed after every reconnect, so a page can mount and query at once. React
@@ -3711,7 +3794,9 @@ embedded into the CLI as `dist/web`, and it talks only to the host that served i
 suites. `e2e/` depends on
 the production workspaces to exercise CLI flows, deterministic research, scheduling, real-Chrome
 browser actions, agent orchestration, workflow promotion/replay, golden Briefs, task fidelity, and
-compatibility boundaries. Vitest remains the common test runner across every workspace. Managed-browser
+compatibility boundaries. Vitest 4 remains the common test runner across every workspace; the root
+`vitest.config.ts` lists the workspaces as `test.projects` (protocol, core, agent, test-helpers,
+ui, cli and e2e), replacing the removed `vitest.workspace.ts`. Managed-browser
 exclusion is the one contract that cannot be demonstrated with mocked asynchronous functions,
 because the guarantee is about two operating-system processes racing for the same files, so a
 standalone fixture script takes a real claim in a real child process and holds it while the parent
@@ -4354,7 +4439,8 @@ sequenceDiagram
   U->>H: probe host.lock, spawn detached if absent, wait for ready
   U->>H: control socket hello with control_token, launch_code.issue
   H-->>U: single-use code, 60 s
-  U->>W: open app window at 127.0.0.1 with the code in the fragment
+  U->>W: open app window at an owner-only bootstrap page
+  W->>W: redirect to 127.0.0.1 with the code in the fragment
   W->>H: POST /session with the code, exact Origin
   H-->>W: window_capability and HttpOnly SameSite=Strict cookie
   W->>H: GET /rpc upgrade with cookie, then auth with the capability
@@ -4602,7 +4688,9 @@ sources, and workflow and template SHA-256 identities), the nullable `run_id`, `
 `result` (`exit_code`, `finished_at`, optional reason). Its `<invocation_id>.result.json` is
 FEAT-064's `WorkerResult`, written once by the worker. `launch/` holds the owner-only worker launch
 files, `host.log` (and `host.log.1`) the host's log, `host-start-failure.json` the last start
-failure, and `chrome-profile/` the app window's own browser profile. Relationships are by value: an
+failure, `chrome-profile/` the app window's own browser profile, and `window/` the short-lived
+`launch-*.html` bootstrap pages. Finished and discarded records are pruned to the newest 200 within
+7 days. Relationships are by value: an
 invocation names at most one run directory through `run_id`, whose `lease.json` stays the arbiter
 of ownership, and has at most one result file. Launch codes, resume codes, window sessions and the
 artifact-URL signing key exist only in host memory and die with the host. `profile.yaml` gains the
@@ -5074,7 +5162,8 @@ update` is the only surface that contacts a version server, and only when a huma
 - **Loopback is not a trust boundary** (D18). Any page in any browser on the machine can reach a
   `127.0.0.1` port, and cookies are not isolated by port, so the host requires the exact `Host` and
   `Origin`, a single-use launch code that only the terminal can obtain (through a token-gated
-  control socket), and a per-window capability held in page memory beside the cookie. Artifact
+  control socket) and that never appears in a browser command line (an owner-only bootstrap page
+  carries it), and a per-window capability held in page memory beside the cookie. Artifact
   URLs are window-bound HMACs with a per-start key, and the log redacts every credential-like value.
   The cost is that a window cannot simply be bookmarked or reopened: a reload resumes only through a
   rotating code in that tab's `sessionStorage`, and a lost session sends the user back to

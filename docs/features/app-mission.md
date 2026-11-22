@@ -64,8 +64,28 @@ recorded events in order with no gaps or repeats. That holds when it
 reconnects and when you reload the page. Any run can be opened this way,
 including runs started in a terminal or by the scheduler.
 
-- **Top bar:** the status mark (thinking, acting, needs you, fulfilled), the
-  mode, the goal, elapsed time, budget gauges and **Stop**.
+On a wide window (Tailwind's `lg` breakpoint and up), the cockpit is a
+fixed-height frame with the live page filling it from edge to edge. The top
+bar and the status line run across the top, **Understood** and **Engine** sit
+as rails on the left and right and scroll on their own, and **Command** runs
+along the bottom. The centre is left clear, so the page the run is acting on
+stays visible. On a narrower window, the live page is a fixed-height view
+under the top bar, and the panels stack below it.
+
+- **Top bar:** the mode, the goal, elapsed time, budget gauges and **Stop**.
+  While the cockpit is open, the status mark (the Bindu) in the app's top bar
+  follows the run. Each state has its own shape, so it reads without color:
+  - **thinking** (and starting): a small core; it breathes slowly;
+  - **acting**: a heavier ring; the ring pulses;
+  - **needs you** (a question for you, or a start that needs your decision):
+    a large core; the core pulses quickly;
+  - **fulfilled**: a solid mark;
+  - any other ending: a hollow mark, named with the outcome (for example
+    `Engine: partial`).
+
+  With reduced motion, the shapes stay and the motion stops. Screen readers
+  hear the state's name (for example `Engine: acting`).
+
 - **Understood:** the task contract Yantra derived (type, conditions, gaps), a
   ring showing how much of it is met, and the requirements as they are met.
 - **Engine:** the run timeline. Events with no instrument of their own are
@@ -77,8 +97,8 @@ including runs started in a terminal or by the scheduler.
 
 ### Watches the task page live
 
-Behind the panels, the cockpit shows the page the run is driving, live, at
-up to about 10 frames per second. The glass panels stay readable over any
+Behind the panels (above them on a narrow window), the cockpit shows the page
+the run is driving, live, at up to about 10 frames per second. The glass panels stay readable over any
 page. Under the timeline, **Live view** gives the same information as text:
 the site, the page title, and a link to the step-by-step timeline. Use it
 when you cannot or would rather not watch the pixels.
