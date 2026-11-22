@@ -151,7 +151,7 @@ describe('the Inbox in the top bar (REV-005)', () => {
     await renderWithInbox(() => 2);
 
     const nav = screen.getByRole('navigation', { name: 'Main' });
-    const inbox = await within(nav).findByRole('link', { name: 'Inbox, 2 items need you' });
+    const inbox = await within(nav).findByRole('link', { name: 'Inbox 2 items need you' });
     expect(inbox.querySelector('[data-inbox-badge]')?.textContent).toBe('2');
     const bindu = screen.getByRole('img', { name: 'Yantra status: 2 items need you' });
     expect(bindu.getAttribute('data-state')).toBe('attention');
@@ -172,7 +172,7 @@ describe('the Inbox in the top bar (REV-005)', () => {
   it('updates the badge when an intervention event arrives', async () => {
     let open = 1;
     const rpc = await renderWithInbox(() => open);
-    await screen.findByRole('link', { name: 'Inbox, 1 item needs you' });
+    await screen.findByRole('link', { name: 'Inbox 1 item needs you' });
 
     open = 0;
     await act(async () => {

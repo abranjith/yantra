@@ -7,7 +7,9 @@ type ShorthandVerb = 'navigate' | 'click' | 'fill' | 'wait_for';
  * Falls back to canonical form if shorthand would lose information.
  */
 export function toShortForm(step: WorkflowStep): Record<string, unknown> {
-  if (step.scope !== null) {
+  // Shorthand has no room for consent: a flagged step written as shorthand
+  // would load back unflagged and run without asking (found during REV-009).
+  if (step.scope !== null || carriesConsent(step)) {
     return stepToCanonical(step);
   }
 
@@ -39,6 +41,24 @@ export function toShortForm(step: WorkflowStep): Record<string, unknown> {
 
 function stepToCanonical(step: WorkflowStep): Record<string, unknown> {
   return step;
+}
+
+/** True when any consent field differs from its default, so shorthand would drop it. */
+function carriesConsent(step: WorkflowStep): boolean {
+  // Not every verb has every field, and callers may build steps without them:
+  // absent and null both mean "unset".
+  const consent = step as {
+    readonly requires_confirmation?: boolean;
+    readonly confirmation_description?: unknown;
+    readonly expected_cost?: unknown;
+    readonly consequence?: unknown;
+  };
+  return (
+    consent.requires_confirmation === true ||
+    consent.confirmation_description != null ||
+    consent.expected_cost != null ||
+    consent.consequence != null
+  );
 }
 
 /**

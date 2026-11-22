@@ -12,7 +12,12 @@ export const INBOX_PATH = '/inbox';
 
 /** What `count` open Inbox items read as, e.g. "2 items need you". */
 export function openItemsLabel(count: number): string {
-  return `${count} item${count === 1 ? '' : 's'} need${count === 1 ? 's' : ''} you`;
+  return `${count} ${openItemsTail(count)}`;
+}
+
+/** The words after the count: "item needs you" or "items need you". */
+export function openItemsTail(count: number): string {
+  return count === 1 ? 'item needs you' : 'items need you';
 }
 
 /**
@@ -51,20 +56,20 @@ export function TopBar({ nav }: TopBarProps): ReactNode {
                 className="rounded-chip px-2 py-1 text-caption text-ink-2 hover:text-ink focus-visible:outline-2 focus-visible:outline-accent"
                 activeProps={{ 'aria-current': 'page', className: 'text-ink' }}
                 activeOptions={{ exact: true }}
-                {...(entry.path === INBOX_PATH && openItems > 0
-                  ? { 'aria-label': `${entry.label}, ${openItemsLabel(openItems)}` }
-                  : {})}
               >
                 {entry.label}
                 {entry.path === INBOX_PATH && openItems > 0 ? (
+                  // The name is the visible text plus a spoken tail ("Inbox 2 items
+                  // need you"), so it always contains what is shown (WCAG 2.5.3).
                   <>
+                    {' '}
                     <span
-                      aria-hidden="true"
                       data-inbox-badge
-                      className="ml-1.5 inline-flex min-w-5 items-center justify-center rounded-full border border-signal-needs-you bg-surface px-1.5 type-engine text-micro text-signal-needs-you-ink"
+                      className="ml-1 inline-flex min-w-5 items-center justify-center rounded-full border border-signal-needs-you bg-surface px-1.5 type-engine text-micro text-signal-needs-you-ink"
                     >
                       {openItems}
                     </span>
+                    <span className="sr-only"> {openItemsTail(openItems)}</span>
                   </>
                 ) : null}
               </Link>
