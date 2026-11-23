@@ -1,12 +1,12 @@
 # Yantra
 
-Yantra is a local-first command-line platform for public-web research, governed browser automation, and deterministic saved workflows. It combines model-assisted work with application-enforced boundaries for consent, secrets, outbound access, budgets, validation, and local audit records.
+Yantra is a local-first platform for public-web research, governed browser automation, and deterministic saved workflows. It provides a CLI and a browser-based app, with application-enforced boundaries for consent, secrets, outbound access, budgets, validation, and local audit records.
 
 Yantra is intentionally focused on browser and web tasks. It is not a general desktop, shell, filesystem, or code-execution agent.
 
 ## Current status
 
-This repository is a private, unpublished `0.0.1` pnpm workspace. There is no verified npm, Homebrew, Scoop, or standalone-binary distribution, and the source checkout does not link a global `yantra` executable. Run the built CLI through `node apps/cli/dist/bin.js`.
+This repository is a private, unpublished `0.0.1` pnpm workspace. Build and run both apps from a source checkout.
 
 ## Repository workspaces
 
@@ -18,16 +18,35 @@ This repository is a private, unpublished `0.0.1` pnpm workspace. There is no ve
 - `@yantra/test-helpers` supplies shared fixtures and no-LLM/provider test-tag plumbing.
 - `@yantra/cli` is the executable composition root for commands, configuration, output rendering, and exit-code mapping.
 
-## Install and start from source
+## Build and run from source
 
-Prerequisites are Node.js 24.15.0 or newer and pnpm 11.1.0. Browser tasks and saved-workflow replay require a compatible Chrome or Chromium installation. Yantra can use a discovered external browser or, on a supported host, install a Yantra-owned Chrome for Testing Stable build after explicit consent. Installing the workspace dependencies never downloads a browser, and ordinary startup and tasks never check for browser updates; the fixed Chrome for Testing fixture used by migration tests remains test-only.
+Use Node.js 24.15.0 or newer and pnpm 11.1.0. The commands work from the repository root on Windows (PowerShell), Linux (Bash), and macOS (zsh). See the [platform setup instructions](docs/quickstart.md#prepare-the-checkout).
 
 ```console
 pnpm install --frozen-lockfile
-pnpm build
-node apps/cli/dist/bin.js --help
-node apps/cli/dist/bin.js init --provider none --yes
 ```
+
+### CLI app
+
+```console
+pnpm exec turbo run build --filter=@yantra/cli
+node apps/cli/dist/bin.js --help
+```
+
+See the [CLI quickstart and smoke test](docs/quickstart.md#cli-app) and [CLI automated tests](docs/usage.md#cli-app-build-and-tests).
+
+### UI app
+
+```console
+pnpm exec turbo run build --filter=@yantra/cli
+node apps/cli/dist/bin.js ui
+```
+
+The CLI build includes the UI assets, and `ui` opens the local app in Chrome, Edge, or the browser Yantra resolves for its runs. See the [UI quickstart and smoke test](docs/quickstart.md#ui-app) and [UI automated tests](docs/usage.md#ui-app-build-and-tests).
+
+### Browser tasks and configuration
+
+Browser tasks and saved-workflow replay require a compatible Chrome or Chromium installation. Yantra can use a discovered external browser or, on a supported host, install a Yantra-owned Chrome for Testing Stable build after explicit consent.
 
 If Yantra cannot discover a compatible external browser, review the destination and approximate 200 MB download notice, then prepare the managed browser interactively:
 
@@ -87,8 +106,8 @@ Yantra honors robots policy, blocklists, rate limits, CAPTCHAs, and bot walls; i
 ### Guides
 
 - [Architecture](docs/architecture.md) — components, data flows, persistence, and design decisions.
-- [Quickstart](docs/quickstart.md) — source installation, the first deterministic task, and opening the app.
-- [Usage](docs/usage.md) — complete CLI, configuration, artifacts, and exit-code guide.
+- [Quickstart](docs/quickstart.md) — source setup and local smoke tests for both apps.
+- [Usage](docs/usage.md) — local build and automated tests, commands, configuration, and run artifacts.
 
 ### Features
 

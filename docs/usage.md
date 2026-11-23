@@ -2,20 +2,102 @@
 
 # Usage
 
-Yantra is a local-first command-line application for public-web research,
-governed browser tasks, and deterministic saved workflows. This guide assumes
-the source build described in the [quickstart](quickstart.md).
+Yantra has a CLI and a browser-based UI for public-web research, governed
+browser tasks, and deterministic saved workflows. Follow the
+[CLI app build and tests](#cli-app-build-and-tests) or the
+[UI app build and tests](#ui-app-build-and-tests) from a source checkout.
+The build and test commands are shared across Windows, Linux, and macOS. See
+[checkout setup](quickstart.md#prepare-the-checkout) for the shell and tool
+setup for your OS.
 
-The current source workspace does not install a global binary. In the examples
-below, replace `yantra` with `node apps/cli/dist/bin.js` when running from the
-repository root. Use live help as the option source of truth:
+## CLI app build and tests
+
+After [installing the workspace dependencies](quickstart.md#prepare-the-checkout),
+build the CLI from the repository root and check that it prints help.
 
 ```console
+pnpm exec turbo run build --filter=@yantra/cli
 node apps/cli/dist/bin.js --help
+```
+
+The Turbo target builds the CLI and its dependencies in order. Rebuild after
+changing the CLI or a workspace library so tests and commands use current
+output. Throughout this guide, `yantra` is shorthand for
+`node apps/cli/dist/bin.js` from the repository root. Use `--help` on any
+command to see its available options.
+
+```console
 node apps/cli/dist/bin.js ask --help
 node apps/cli/dist/bin.js browser install --help
 node apps/cli/dist/bin.js daemon start --help
 ```
+
+For a local smoke test, [use a fresh Yantra home](quickstart.md#use-a-fresh-home-for-smoke-tests)
+and run `init --provider none --yes`, `config validate`, and `list runs --limit 5`
+through that entry point. Expect a valid config and `No items.` for the run list.
+Run `doctor` for a broader environment check.
+
+Run the CLI workspace suite after building. It includes command tests and
+tests that spawn the built CLI, host, and workers as separate processes.
+
+```console
+pnpm --filter @yantra/cli test
+```
+
+## UI app build and tests
+
+After [installing the workspace dependencies](quickstart.md#prepare-the-checkout),
+build and open the UI from the repository root.
+
+```console
+pnpm exec turbo run build --filter=@yantra/cli
+node apps/cli/dist/bin.js ui
+```
+
+The build compiles the Vite frontend into `apps/web/dist` and copies it into
+`apps/cli/dist/web`. Use `ui` to test the connected app because it starts the local
+host that serves the assets, creates the browser session, and handles UI requests.
+For a frontend asset build by itself, use
+`pnpm exec turbo run build --filter=@yantra/web`. After editing the UI, rebuild
+the CLI target to refresh the assets it serves. If a host for the same data
+directory is still running, close its windows and let it exit after 10 idle
+minutes before relaunching. A fresh `YANTRA_HOME` with the default data path
+lets you test the new build immediately in a separate host.
+
+Follow the [manual UI smoke test](quickstart.md#test-the-ui-locally) to check
+onboarding, Mission, and the Ledger. After building, run the frontend component
+tests in jsdom.
+
+```console
+pnpm --filter @yantra/web test
+```
+
+### Browser setup by OS
+
+Use a desktop browser for the manual UI check. For the automated smoke test,
+install Google Chrome where Yantra can discover it. See the
+[Google Chrome download](https://www.google.com/chrome/).
+
+| OS      | Browser discovery for the smoke test                                                              |
+| ------- | ------------------------------------------------------------------------------------------------- |
+| Windows | Use the Chrome installer so Yantra can find it in the registry or its standard install directory. |
+| Linux   | Use `google-chrome`, `google-chrome-stable`, `chromium`, or `chromium-browser` on `PATH`.         |
+| macOS   | Place `Google Chrome.app` in `/Applications` or `~/Applications`.                                 |
+
+The automated smoke test covers the built UI, local host, and browser session
+together. It runs Chrome headlessly and can run on Linux without a desktop
+session. Run it from the repository root on any of the three OSes.
+
+```console
+pnpm --filter @yantra/e2e exec vitest run app-host.spec.ts
+```
+
+This smoke test uses a temporary Yantra home and checks the connection, page
+reload, and accessibility without model or search credentials. If the host
+times out during startup while other suites are running, let them finish and
+rerun this check on its own.
+See [Open the Yantra app](#open-the-yantra-app) for launch options and session
+behavior.
 
 ## First-run setup
 

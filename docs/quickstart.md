@@ -2,202 +2,138 @@
 
 # Quickstart
 
-Yantra is currently a private, unpublished `0.0.1` workspace. There is no
-verified npm, Homebrew, Scoop, or standalone-binary installation route yet. Run
-it from a source checkout.
+Run Yantra from a source checkout on Windows, Linux, or macOS. Use the
+[CLI](#cli-app) for terminal commands or the [UI](#ui-app) for a browser-based
+app window. Either path can be tested locally without model or search
+credentials.
 
-## Prerequisites
+## Prepare the checkout
 
-- Node.js 24.15.0 or newer. The repository pins 24.15.0 in `.nvmrc`.
-- pnpm 11.1.0, as declared by the root `packageManager` field.
-- A compatible Chrome or Chromium installation for browser tasks and
-  saved-workflow replay. Yantra can use a discovered external browser or install
-  a Yantra-owned Chrome for Testing Stable build on a supported host.
-- Internet access for web search, fetching, and remote model providers.
+Use Node.js 24.15.0 or newer and pnpm 11.1.0. The checkout pins Node.js 24.15.0
+in `.nvmrc`. Choose the Node.js download for your OS and CPU architecture.
+See the [Node.js 24.15.0 downloads](https://nodejs.org/en/download/archive/v24.15.0).
 
-Deterministic local inspection commands do not require Chrome, network access,
-or a model credential. `yantra doctor` reports which optional capabilities are
-available.
+| OS      | Terminal to use   | Node.js setup                                                                                              |
+| ------- | ----------------- | ---------------------------------------------------------------------------------------------------------- |
+| Windows | PowerShell        | Run the Windows `.msi` installer.                                                                          |
+| Linux   | Bash              | Use a Node version manager, or extract the Linux archive to a writable directory and add `bin/` to `PATH`. |
+| macOS   | Terminal with zsh | Run the macOS `.pkg` installer.                                                                            |
 
-Installing workspace dependencies does not download Chrome. A managed browser
-download happens only after `yantra browser install` receives consent or you
-accept an interactive first-run offer. Yantra never checks for browser updates on
-its own: `yantra browser update` is the only command that asks whether a newer
-browser exists, and `yantra browser update --dry-run` answers that question
-without downloading anything.
-
-## Install and build from source
-
-From the repository root:
+If you need pnpm, install the pinned pnpm tool after installing Node.js.
+See [pnpm installation](https://pnpm.io/installation#using-npm).
 
 ```console
+npm install --global pnpm@11.1.0
+```
+
+Open a terminal at the repository root, check the tool versions, and install
+the workspace dependencies. These commands, and the CLI and UI build and test
+commands below, are the same on all three platforms.
+
+```console
+node --version
+pnpm --version
 pnpm install --frozen-lockfile
-pnpm build
+```
+
+On Windows, if PowerShell blocks the `npm.ps1` or `pnpm.ps1` script, use
+`npm.cmd` or `pnpm.cmd` in the corresponding commands.
+
+### Use a fresh home for smoke tests
+
+Both apps default to `~/.yantra` for configuration and run data. To start with
+fresh settings and an empty run history, run the block for your OS in the
+terminal you will use to run the app. Keep the same `YANTRA_HOME` to share
+state between the CLI and UI. Rerun the block to test first-run UI onboarding
+after CLI setup.
+
+**Windows (PowerShell)**
+
+```powershell
+Remove-Item Env:YANTRA_DATA_DIR, Env:YANTRA_CACHE_DIR -ErrorAction SilentlyContinue
+$env:YANTRA_HOME = Join-Path ([IO.Path]::GetTempPath()) ("yantra-smoke-" + [guid]::NewGuid().ToString("N"))
+```
+
+**Linux (Bash) and macOS (zsh)**
+
+```bash
+unset YANTRA_DATA_DIR YANTRA_CACHE_DIR
+export YANTRA_HOME="$(mktemp -d "${TMPDIR:-/tmp}/yantra-smoke.XXXXXX")"
+```
+
+## CLI app
+
+### Build and run the CLI
+
+```console
+pnpm exec turbo run build --filter=@yantra/cli
 node apps/cli/dist/bin.js --help
 ```
 
-The build creates `apps/cli/dist/bin.js`. The source workspace does not link a
-global `yantra` binary, so use `node apps/cli/dist/bin.js` while working from the
-checkout. The shorter `yantra` spelling used elsewhere in the documentation
-means that same built entrypoint once a future distribution supplies the
-executable.
+Turbo builds the CLI and its workspace dependencies. The second command prints
+the command list from `apps/cli/dist/bin.js`. The usage guide abbreviates this
+entry point as `yantra`.
 
-## Initialize Yantra
-
-The CLI and app onboarding can use the same setup service, with each interface
-collecting its own answers. Terminal setup retains the prompts, files, and
-credential handling described below.
-
-For an interactive first run, use:
-
-```console
-node apps/cli/dist/bin.js init
-```
-
-On a TTY, Yantra asks for an Anthropic, Ollama, or no-model setup; the credential
-source; model ID; an optional search provider key (`tavily`, `brave`, or
-`skip`), stored in the OS keychain as `<provider>.api_key`; data directory; and
-the existing sensitive-context grants.
-Anthropic defaults to `claude-opus-4-7` with an
-`${env:ANTHROPIC_API_KEY}` reference. Ollama defaults to `llama3.1:8b` at
-`http://localhost:11434` and does not store a credential.
-
-For a prompt-free local setup, initialize with no model:
+### Test the CLI locally
 
 ```console
 node apps/cli/dist/bin.js init --provider none --yes
-```
-
-`--yes`, `--json`, and non-TTY input skip the model and storage wizard. Without
-`--provider`, those modes select `none`; with `--provider anthropic` or
-`--provider ollama`, they write that provider's defaults. Supplying `--provider`
-also skips the model/storage wizard on a TTY, though a newly written profile may
-still ask its sensitive-context questions unless `--yes` or `--json` is used.
-
-Initialization creates `<home>/config.yaml` and, when it is absent,
-`<home>/profile.yaml`. A normal rerun changes nothing. `init --reset` first moves
-the existing config to a timestamped `.bak` file, then rewrites the config and
-profile, so use it only when replacement is intended. Screenshot assistance is
-not enabled by `init`: `context.screenshots` remains `false` until explicitly
-granted through `yantra prefs set`.
-
-## Prepare a browser runtime
-
-Skip this step if Yantra can discover a compatible external Chrome or Chromium.
-Otherwise, after initialization has established the data directory, install the
-current Chrome for Testing Stable build on a supported host with at least 750
-MiB free:
-
-```console
-node apps/cli/dist/bin.js browser install
-```
-
-Review the destination and approximate 200 MB download notice, then accept the
-terminal prompt. Linux and macOS need `unzip`; Windows needs `tar.exe`,
-`powershell.exe`, or `pwsh.exe`. The browser is stored below the resolved Yantra
-data directory, and external Chrome installations are never changed. See
-[Managed browser installation](usage.md#install-a-managed-browser) for
-non-interactive and JSON use, output streams, retries, and first-run offers.
-
-## Know where Yantra stores data
-
-Yantra uses the same layout on Windows, macOS, and Linux:
-
-| State                                | Default               | Override                                   |
-| ------------------------------------ | --------------------- | ------------------------------------------ |
-| Yantra home                          | `~/.yantra`           | `YANTRA_HOME`                              |
-| Installation config                  | `<home>/config.yaml`  | With `YANTRA_HOME`                         |
-| Personal profile                     | `<home>/profile.yaml` | With `YANTRA_HOME`                         |
-| Data, runs, workflows, and templates | `<home>/data`         | `YANTRA_DATA_DIR`, then `paths.data_dir`   |
-| Cache                                | `<home>/cache`        | `YANTRA_CACHE_DIR`, then `paths.cache_dir` |
-
-XDG, `%APPDATA%`, and `%LOCALAPPDATA%` do not select Yantra-owned locations.
-There is no legacy-layout migration command. Inspect the effective paths and
-their source labels instead of guessing:
-
-```console
-node apps/cli/dist/bin.js config path
 node apps/cli/dist/bin.js config validate
-```
-
-## Add a model or credential later
-
-The registry is managed through `yantra model`; do not edit the generated
-`<data>/pi/models.json` file. For example, register and select an existing
-Ollama server:
-
-```console
-node apps/cli/dist/bin.js model add llama3.1:8b --provider ollama --base-url http://localhost:11434
-node apps/cli/dist/bin.js model default llama3.1:8b
-node apps/cli/dist/bin.js model list
-```
-
-For a hosted model, choose an environment reference:
-
-```console
-node apps/cli/dist/bin.js model add claude-opus-4-7 --provider anthropic --api-key-ref '${env:ANTHROPIC_API_KEY}'
-```
-
-Or store the value through an echo-disabled keychain prompt and reference that
-account. Never put the literal credential in the command:
-
-```console
-node apps/cli/dist/bin.js secret set anthropic.api_key
-node apps/cli/dist/bin.js model add claude-opus-4-7 --provider anthropic --api-key-ref '${secret:anthropic.api_key}'
-```
-
-Quote references so a shell does not expand `$`. See the
-[usage guide](usage.md#configuration-storage-models-and-credentials) for the
-full config, model, secret, and relocation workflows.
-
-## Run the smallest useful task
-
-Check the local environment without contacting a model provider:
-
-```console
-node apps/cli/dist/bin.js doctor
-```
-
-Warnings, including a missing model credential, do not make offline or
-deterministic use unavailable. Without a search key, the `search.provider`
-check warns that runs will use a scraped provider and names the
-`yantra secret set` command that adds a key.
-
-The following command uses the keyless DuckDuckGo search path and local
-synthesis. It requires internet access, contacts public sites, and writes a run
-directory, but it does not open a model session:
-
-```console
-node apps/cli/dist/bin.js ask "what is Yantra's current public release status?" --no-llm --search-provider duckduckgo
-```
-
-Search results vary with the live web. Yantra reports blocked, timed-out, or
-unreadable pages as notices and never attempts to evade a CAPTCHA or bot wall.
-
-Useful next checks are local and read-only:
-
-```console
 node apps/cli/dist/bin.js list runs --limit 5
-node apps/cli/dist/bin.js profile
-node apps/cli/dist/bin.js open --print
 ```
 
-`open --print` resolves the latest run's Brief path without launching an
-application.
-
-## Open the app
-
-To use Yantra in its own window instead of the terminal, run:
+On a fresh home, `init` writes `config.yaml` and `profile.yaml`, `config validate`
+reports a valid configuration, and `list runs` prints `No items.` These checks
+run without Chrome or network access. Run the CLI's automated tests after the
+build.
 
 ```console
+pnpm --filter @yantra/cli test
+```
+
+For interactive setup or your first web task, see [First-run setup](usage.md#first-run-setup),
+[Choose and check a browser](usage.md#choose-and-check-a-browser), and
+[Ask](usage.md#ask).
+
+## UI app
+
+### Build and open the UI
+
+Use the same build target for the UI. It builds `apps/web/dist` and embeds it in
+`apps/cli/dist/web`, where the local app host serves it. If you just built the
+CLI, you can go straight to the second command.
+
+```console
+pnpm exec turbo run build --filter=@yantra/cli
 node apps/cli/dist/bin.js ui
 ```
 
-This starts a local app host on `127.0.0.1` if one is not running and opens the
-window in Google Chrome or Microsoft Edge, otherwise in the browser Yantra uses
-for its runs. If none is found, the command prints the URL for you to open
-yourself and exits `3`; `ui --print` always just prints it. See
-[Open the Yantra app](usage.md#open-the-yantra-app).
+Yantra starts a host on `127.0.0.1` and opens the app in a local browser window.
+For the manual check, run it from a desktop session with Chrome or another
+supported browser. See [browser setup by OS](usage.md#browser-setup-by-os).
+Use `--print` to choose a browser yourself.
 
-For browser tasks, workflows, scheduling, all artifact choices, and the
-complete command surface, continue to the [usage guide](usage.md).
+```console
+node apps/cli/dist/bin.js ui --print
+```
+
+Open the printed URL on the same computer within 60 seconds. Rerun `ui --print`
+to get a fresh URL if it expires.
+
+### Test the UI locally
+
+1. In a fresh home, verify that **Onboarding** opens. Choose **Not now** to
+   continue to **Mission** without entering credentials. If you initialized the
+   same home with the CLI, the app opens on **Mission** directly.
+2. Open **Ledger**. A fresh home shows **No runs yet.** A shared home lists any
+   runs you already saved with the CLI or UI.
+3. Reload the page and verify that the Ledger is still accessible.
+
+Run the UI component tests after the build.
+
+```console
+pnpm --filter @yantra/web test
+```
+
+See [UI app build and tests](usage.md#ui-app-build-and-tests) for the real-Chrome
+smoke test and how to pick up UI changes after a rebuild.
