@@ -1,152 +1,186 @@
 import { findLeaf } from '@yantra/protocol/commands';
-import {
-  Button,
-  Dialog,
-  Disclosure,
-  DisclosurePanel,
-  DisclosureTrigger,
-  Table,
-  type TableColumn,
-} from '@yantra/ui';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Button, Dialog, DialogTrigger, EventInspector, Table, type TableColumn } from '@yantra/ui';
+import { useMemo, useState, type ReactNode } from 'react';
 
-import { useRpc } from '../host/app-rpc.js';
+import type { RowAction, SurfaceRead } from '../surfaces/definitions.js';
 
 import { GeneratedForm } from './GeneratedForm.js';
-import { deriveColumns, resolvePointer, rowsFromEnvelope, type SchemaLike } from './table-model.js';
-
-export interface GeneratedTableRowAction {
-  readonly command: string;
-  readonly label: string;
-  readonly bind: Readonly<Record<string, string>>;
-}
+import {
+  deriveColumns,
+  resolvePointer,
+  rowsOf,
+  tableShape,
+  type SchemaLike,
+} from './table-model.js';
+import { useDocument } from './use-document.js';
 
 export interface GeneratedTableProps {
-  readonly method: string;
+  readonly read: SurfaceRead;
   readonly schema: SchemaLike;
-  readonly args?: readonly string[];
-  readonly options?: Readonly<Record<string, string | boolean>>;
-  readonly title: string;
-  readonly rowActions?: readonly GeneratedTableRowAction[];
   readonly cwd?: string;
 }
 
-function cell(value: unknown, nested: boolean): ReactNode {
-  if (nested)
-    return (
-      <Disclosure>
-        <DisclosureTrigger>Show</DisclosureTrigger>
-        <DisclosurePanel>
-          <pre className="type-engine whitespace-pre-wrap">{JSON.stringify(value, null, 2)}</pre>
-        </DisclosurePanel>
-      </Disclosure>
-    );
-  return value === null || value === undefined
-    ? '—'
-    : typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
-      ? String(value)
-      : JSON.stringify(value);
+type Row = Record<string, unknown>;
+
+/** The Drshya table's fixed row height; the header uses it too. */
+const ROW_HEIGHT = 40;
+/** Rows shown before the table scrolls. */
+const MAX_VISIBLE_ROWS = 12;
+
+function isScalar(value: unknown): value is string | number | boolean {
+  return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
 }
 
-export function GeneratedTable({
-  method,
-  schema,
-  args = [],
-  options = {},
-  title,
-  rowActions = [],
-  cwd = '/',
-}: GeneratedTableProps): ReactNode {
-  const rpc = useRpc();
-  const [rows, setRows] = useState<Record<string, unknown>[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [state, setState] = useState<'loading' | 'idle' | 'error' | 'exhausted'>('loading');
-  const [action, setAction] = useState<{
-    readonly definition: GeneratedTableRowAction;
-    readonly row: Record<string, unknown>;
-  } | null>(null);
-  const columns = useMemo<TableColumn<Record<string, unknown>>[]>(
-    () => [
-      ...deriveColumns(schema).map((column, index) => ({
-        id: column.id,
-        header: column.label,
-        isRowHeader: index === 0,
-        cell: (row: Record<string, unknown>) => cell(row[column.id], column.nested),
-      })),
-      ...(rowActions.length === 0
-        ? []
-        : [
-            {
-              id: 'actions',
-              header: 'Actions',
-              cell: (row: Record<string, unknown>) => (
-                <span className="flex gap-2">
-                  {rowActions.map((definition) => (
-                    <Button
-                      key={definition.command}
-                      size="sm"
-                      variant="secondary"
-                      onPress={() => setAction({ definition, row })}
-                    >
-                      {definition.label}
-                    </Button>
-                  ))}
-                </span>
-              ),
-            },
-          ]),
-    ],
-    [schema, rowActions],
+function Empty(): ReactNode {
+  return <span className="text-ink-3">—</span>;
+}
+
+/** One cell: text for scalars and lists of scalars, a "Show" dialog for anything nested. */
+function CellValue({
+  value,
+  label,
+}: {
+  readonly value: unknown;
+  readonly label: string;
+}): ReactNode {
+  if (value === null || value === undefined || value === '') return <Empty />;
+  const text = isScalar(value)
+    ? String(value)
+    : Array.isArray(value) && value.every(isScalar)
+      ? value.join(', ')
+      : null;
+  if (text !== null) {
+    return text === '' ? (
+      <Empty />
+    ) : (
+      <span className="min-w-0 truncate" title={text}>
+        {text}
+      </span>
+    );
+  }
+  return (
+    <DialogTrigger>
+      <Button size="sm" variant="quiet">
+        Show
+      </Button>
+      <Dialog title={label}>
+        <EventInspector value={value} label={label} />
+      </Dialog>
+    </DialogTrigger>
   );
-  const load = async (next?: string): Promise<void> => {
-    setState('loading');
-    try {
-      const result = await rpc.request<{ value: unknown; next_cursor: string | null }>(method, {
-        args,
-        options,
-        ...(next === undefined ? {} : { cursor: next }),
-      });
-      const parsed = rowsFromEnvelope(result.value).map((row) =>
-        row !== null && typeof row === 'object' ? (row as Record<string, unknown>) : { value: row },
-      );
-      setRows((current) => (next === undefined ? parsed : [...current, ...parsed]));
-      setCursor(result.next_cursor);
-      setState(result.next_cursor === null ? 'exhausted' : 'idle');
-    } catch {
-      setState('error');
-    }
-  };
-  useEffect(() => {
-    void load();
-  }, [method, JSON.stringify(args), JSON.stringify(options)]);
-  if (state === 'loading' && rows.length === 0) return <p role="status">Loading {title}…</p>;
-  if (state === 'error' && rows.length === 0) return <p role="alert">Couldn’t load {title}.</p>;
+}
+
+/** The prefilled form for a row action, or why it cannot open. */
+function RowActionForm({
+  definition,
+  row,
+  cwd,
+}: {
+  readonly definition: RowAction;
+  readonly row: Row;
+  readonly cwd: string;
+}): ReactNode {
+  const command = findLeaf(definition.command.split(' '));
+  if (command === undefined) return <p role="alert">{definition.command} is not a command.</p>;
+  try {
+    const initial = Object.fromEntries(
+      Object.entries(definition.bind).map(([field, pointer]) => [
+        field,
+        String(resolvePointer(row, pointer)),
+      ]),
+    );
+    return <GeneratedForm command={command} cwd={cwd} initialValues={initial} />;
+  } catch (error) {
+    return (
+      <p role="alert">
+        This row has no value for {definition.label}:{' '}
+        {error instanceof Error ? error.message : String(error)}
+      </p>
+    );
+  }
+}
+
+/**
+ * A command's `--json` rows as a Drshya table (FEAT-070). Columns come from
+ * the row schema; row actions open the command's form prefilled from the row.
+ */
+export function GeneratedTable({ read, schema, cwd = '/' }: GeneratedTableProps): ReactNode {
+  const shape = useMemo(() => tableShape(schema), [schema]);
+  const state = useDocument(read, schema);
+  const [action, setAction] = useState<{
+    readonly definition: RowAction;
+    readonly row: Row;
+  } | null>(null);
+  const rowActions = read.rowActions ?? [];
+
+  if (state.status === 'loading') {
+    return (
+      <p role="status" className="text-ink-2">
+        Loading…
+      </p>
+    );
+  }
+  if (state.status === 'failed') {
+    return (
+      <p role="alert" className="text-signal-failed-ink">
+        Couldn’t load {read.title.toLowerCase()}. {state.message}
+      </p>
+    );
+  }
+  const rows = rowsOf(state.document, shape);
+  if (rows.length === 0) {
+    return (
+      <p className="rounded-control border border-rule bg-surface px-4 py-3 text-ink-2">
+        None yet.
+      </p>
+    );
+  }
+  const keys = new Map(rows.map((row, index) => [row, String(index)]));
+  const columns: TableColumn<Row>[] = [
+    ...deriveColumns(shape, rows).map((column, index) => ({
+      id: column.id,
+      header: column.label,
+      ...(column.description === undefined ? {} : { description: column.description }),
+      isRowHeader: index === 0,
+      cell: (row: Row) => <CellValue value={row[column.id]} label={column.label} />,
+    })),
+    ...(rowActions.length === 0
+      ? []
+      : [
+          {
+            id: '__row-actions',
+            header: 'Actions',
+            cell: (row: Row) => (
+              <span className="flex gap-2">
+                {rowActions.map((definition) => (
+                  <Button
+                    key={definition.command}
+                    size="sm"
+                    variant="secondary"
+                    onPress={() => {
+                      setAction({ definition, row });
+                    }}
+                  >
+                    {definition.label}
+                  </Button>
+                ))}
+              </span>
+            ),
+          },
+        ]),
+  ];
+  const visible = Math.min(rows.length, MAX_VISIBLE_ROWS);
   return (
     <>
       <Table
-        aria-label={title}
-        columns={
-          columns.length === 0
-            ? [
-                {
-                  id: 'value',
-                  header: 'Value',
-                  isRowHeader: true,
-                  cell: (row) => cell(row.value, false),
-                },
-              ]
-            : columns
-        }
+        aria-label={read.title}
+        columns={columns}
         rows={rows}
-        getRowKey={(row) => {
-          const key = row.id ?? row.name ?? row.key;
-          return typeof key === 'string' || typeof key === 'number'
-            ? String(key)
-            : String(rows.indexOf(row));
-        }}
-        emptyState={`No ${title.toLowerCase()}.`}
-        loadState={state}
-        {...(cursor === null ? {} : { onLoadMore: () => void load(cursor) })}
+        getRowKey={(row) => keys.get(row) ?? ''}
+        emptyState="None yet."
+        rowHeight={ROW_HEIGHT}
+        // The header row and the visible rows, plus the 1px border top and bottom.
+        height={`${String((visible + 1) * ROW_HEIGHT + 2)}px`}
       />
       {action === null ? null : (
         <Dialog
@@ -156,17 +190,7 @@ export function GeneratedTable({
             if (!open) setAction(null);
           }}
         >
-          {(() => {
-            const command = findLeaf(action.definition.command.split(' '));
-            if (command === undefined) return <p>Command unavailable.</p>;
-            const initial = Object.fromEntries(
-              Object.entries(action.definition.bind).map(([field, pointer]) => [
-                field,
-                String(resolvePointer(action.row, pointer)),
-              ]),
-            );
-            return <GeneratedForm command={command} cwd={cwd} initialValues={initial} />;
-          })()}
+          <RowActionForm definition={action.definition} row={action.row} cwd={cwd} />
         </Dialog>
       )}
     </>

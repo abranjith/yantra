@@ -1,7 +1,7 @@
 import { findLeaf } from '@yantra/protocol/commands';
 import { APP_READ_SCHEMAS } from '@yantra/protocol/parity';
 
-import type { SchemaLike } from '../generated/table-model.js';
+import { tableShape, type SchemaLike } from '../generated/table-model.js';
 
 export type SurfaceId =
   | 'installation'
@@ -18,18 +18,30 @@ export type SurfaceId =
   | 'health'
   | 'credentials'
   | 'onboarding';
-export interface SurfaceRead {
-  readonly command: string;
-  readonly method: string;
-  readonly args?: readonly string[];
-  readonly view: 'table' | 'record' | 'text';
-  readonly schema: keyof typeof APP_READ_SCHEMAS;
-}
+
+/** A row action: a command whose form opens prefilled from the row through `bind` pointers. */
 export interface RowAction {
   readonly command: string;
   readonly label: string;
+  /** Form field → JSON pointer into the row. */
   readonly bind: Readonly<Record<string, string>>;
 }
+
+/** One read a surface shows: a table of rows, or a record. */
+export interface SurfaceRead {
+  /** The CLI command, as typed after `yantra`. */
+  readonly command: string;
+  /** What the section shows, in words. */
+  readonly title: string;
+  readonly method: string;
+  /** Positional arguments the host does not already add. */
+  readonly args?: readonly string[];
+  readonly view: 'table' | 'record';
+  readonly schema: keyof typeof APP_READ_SCHEMAS;
+  /** Actions on this read's rows; a record has none. */
+  readonly rowActions?: readonly RowAction[];
+}
+
 export interface SurfaceDefinition {
   readonly id: SurfaceId;
   readonly route: string;
@@ -37,12 +49,12 @@ export interface SurfaceDefinition {
   readonly group: 'settings' | 'library' | 'system';
   readonly reads: readonly SurfaceRead[];
   readonly actions: readonly string[];
-  readonly rowActions: readonly RowAction[];
   readonly notes?: readonly string[];
 }
 
 const CONFIG_PATH = {
   command: 'config path',
+  title: 'Storage locations',
   method: 'read.config.path',
   view: 'table',
   schema: 'ConfigPathResult',
@@ -57,22 +69,21 @@ export const SURFACE_DEFINITIONS: readonly SurfaceDefinition[] = [
       CONFIG_PATH,
       {
         command: 'config list',
+        title: 'config.yaml',
         method: 'read.config.list',
         view: 'record',
         schema: 'ConfigListResult',
       },
       {
         command: 'config validate',
+        title: 'Validation',
         method: 'read.config.validate',
         view: 'record',
         schema: 'ConfigValidateResult',
       },
     ],
-    actions: ['config set', 'config unset'],
-    rowActions: [
-      { command: 'config get', label: 'Get', bind: { key: '/name' } },
-      { command: 'config unset', label: 'Unset', bind: { key: '/name' } },
-    ],
+    // Storage locations are not config keys, so get and unset are page actions, not row actions.
+    actions: ['config get', 'config set', 'config unset'],
   },
   {
     id: 'preferences',
@@ -81,16 +92,22 @@ export const SURFACE_DEFINITIONS: readonly SurfaceDefinition[] = [
     group: 'settings',
     reads: [
       {
+        // The host's reader already adds the `list` action.
         command: 'prefs list',
+        title: 'Stored preferences',
         method: 'read.prefs.list',
-        args: ['list'],
         view: 'table',
         schema: 'PrefsResult',
       },
-      { command: 'profile', method: 'read.profile', view: 'record', schema: 'ProfileResult' },
+      {
+        command: 'profile',
+        title: 'Effective profile',
+        method: 'read.profile',
+        view: 'table',
+        schema: 'ProfileResult',
+      },
     ],
     actions: ['prefs'],
-    rowActions: [],
   },
   {
     id: 'models',
@@ -100,16 +117,17 @@ export const SURFACE_DEFINITIONS: readonly SurfaceDefinition[] = [
     reads: [
       {
         command: 'model list',
+        title: 'Registered models',
         method: 'read.model.list',
         view: 'table',
         schema: 'ModelListResult',
+        rowActions: [
+          { command: 'model rm', label: 'Remove', bind: { id: '/id' } },
+          { command: 'model default', label: 'Use by default', bind: { id: '/id' } },
+        ],
       },
     ],
     actions: ['model add'],
-    rowActions: [
-      { command: 'model rm', label: 'Remove', bind: { id: '/id' } },
-      { command: 'model default', label: 'Use by default', bind: { id: '/id' } },
-    ],
   },
   {
     id: 'browser',
@@ -119,13 +137,13 @@ export const SURFACE_DEFINITIONS: readonly SurfaceDefinition[] = [
     reads: [
       {
         command: 'browser list',
+        title: 'Browsers',
         method: 'read.browser.list',
         view: 'record',
         schema: 'BrowserListResult',
       },
     ],
     actions: ['browser use', 'browser check', 'browser install', 'browser update'],
-    rowActions: [],
   },
   {
     id: 'sites',
@@ -135,13 +153,14 @@ export const SURFACE_DEFINITIONS: readonly SurfaceDefinition[] = [
     reads: [
       {
         command: 'sites list',
+        title: 'Ranked sites',
         method: 'read.sites.list',
         view: 'table',
         schema: 'SitesListResult',
+        rowActions: [{ command: 'sites remove', label: 'Remove', bind: { domain: '/domain' } }],
       },
     ],
     actions: ['sites add'],
-    rowActions: [{ command: 'sites remove', label: 'Remove', bind: { domain: '/domain' } }],
   },
   {
     id: 'data',
@@ -150,7 +169,6 @@ export const SURFACE_DEFINITIONS: readonly SurfaceDefinition[] = [
     group: 'settings',
     reads: [CONFIG_PATH],
     actions: [],
-    rowActions: [],
     notes: ['Close the app.', 'Run yantra config data-dir <path>.', 'Run yantra ui.'],
   },
   {
@@ -161,14 +179,17 @@ export const SURFACE_DEFINITIONS: readonly SurfaceDefinition[] = [
     reads: [
       {
         command: 'list workflows',
+        title: 'Saved workflows',
         method: 'read.list',
         args: ['workflows'],
         view: 'table',
         schema: 'ListResult',
+        rowActions: [
+          { command: 'schedule', label: 'Schedule', bind: { 'workflow-name': '/name' } },
+        ],
       },
     ],
     actions: ['lint'],
-    rowActions: [{ command: 'schedule', label: 'Schedule', bind: { 'workflow-name': '/name' } }],
   },
   {
     id: 'templates',
@@ -178,13 +199,14 @@ export const SURFACE_DEFINITIONS: readonly SurfaceDefinition[] = [
     reads: [
       {
         command: 'template list',
+        title: 'Saved templates',
         method: 'read.template.list',
         view: 'table',
         schema: 'TemplateListResult',
+        rowActions: [{ command: 'template remove', label: 'Remove', bind: { name: '/name' } }],
       },
     ],
     actions: ['template new', 'template lint', 'template save'],
-    rowActions: [{ command: 'template remove', label: 'Remove', bind: { name: '/name' } }],
   },
   {
     id: 'schedules',
@@ -192,19 +214,32 @@ export const SURFACE_DEFINITIONS: readonly SurfaceDefinition[] = [
     title: 'Schedules',
     group: 'library',
     reads: [
-      { command: 'schedules', method: 'read.schedules', view: 'table', schema: 'SchedulesResult' },
+      {
+        command: 'schedules',
+        title: 'Registered schedules',
+        method: 'read.schedules',
+        view: 'table',
+        schema: 'SchedulesResult',
+        rowActions: [{ command: 'unschedule', label: 'Unschedule', bind: { id: '/id' } }],
+      },
     ],
     actions: ['schedule'],
-    rowActions: [{ command: 'unschedule', label: 'Unschedule', bind: { id: '/id' } }],
   },
   {
     id: 'usage',
     route: '/usage',
     title: 'Usage',
     group: 'system',
-    reads: [{ command: 'usage', method: 'read.usage', view: 'table', schema: 'UsageResult' }],
+    reads: [
+      {
+        command: 'usage',
+        title: 'Tasks and cost by day',
+        method: 'read.usage',
+        view: 'table',
+        schema: 'UsageResult',
+      },
+    ],
     actions: [],
-    rowActions: [],
   },
   {
     id: 'daemon',
@@ -214,13 +249,13 @@ export const SURFACE_DEFINITIONS: readonly SurfaceDefinition[] = [
     reads: [
       {
         command: 'daemon status',
+        title: 'Status',
         method: 'read.daemon.status',
         view: 'record',
         schema: 'DaemonStatusResult',
       },
     ],
     actions: [],
-    rowActions: [],
   },
   {
     id: 'onboarding',
@@ -229,7 +264,6 @@ export const SURFACE_DEFINITIONS: readonly SurfaceDefinition[] = [
     group: 'system',
     reads: [],
     actions: [],
-    rowActions: [],
     notes: ['Arrives with onboarding and Health (FEAT-071).'],
   },
   {
@@ -239,7 +273,6 @@ export const SURFACE_DEFINITIONS: readonly SurfaceDefinition[] = [
     group: 'system',
     reads: [],
     actions: [],
-    rowActions: [],
     notes: ['Arrives with onboarding and Health (FEAT-071).'],
   },
   {
@@ -249,7 +282,6 @@ export const SURFACE_DEFINITIONS: readonly SurfaceDefinition[] = [
     group: 'settings',
     reads: [],
     actions: [],
-    rowActions: [],
     notes: ['Arrives with onboarding and Health (FEAT-071).'],
   },
 ];
@@ -262,6 +294,12 @@ export function surfaceById(id: SurfaceId): SurfaceDefinition {
 export function schemaFor(read: SurfaceRead): SchemaLike {
   return APP_READ_SCHEMAS[read.schema];
 }
+
+/** Every row action on a surface, across its reads. */
+export function surfaceRowActions(definition: SurfaceDefinition): readonly RowAction[] {
+  return definition.reads.flatMap((read) => read.rowActions ?? []);
+}
+
 export function assertDefinitions(
   definitions: readonly SurfaceDefinition[] = SURFACE_DEFINITIONS,
 ): void {
@@ -277,10 +315,14 @@ export function assertDefinitions(
       if (command?.execution.default !== 'read')
         throw new Error(`${read.command} is not a read command`);
       if (command.json.schema === null) throw new Error(`${read.command} has no JSON schema`);
+      // A table read must have one row array; tableShape throws otherwise.
+      if (read.view === 'table') tableShape(schemaFor(read));
+      if (read.view === 'record' && (read.rowActions?.length ?? 0) > 0)
+        throw new Error(`${read.command} is a record and cannot have row actions`);
     }
     for (const command of [
       ...definition.actions,
-      ...definition.rowActions.map((item) => item.command),
+      ...surfaceRowActions(definition).map((item) => item.command),
     ])
       if (findLeaf(command.split(' ')) === undefined) throw new Error(`Unknown command ${command}`);
   }

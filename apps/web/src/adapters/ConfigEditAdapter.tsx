@@ -2,12 +2,18 @@ import { createInvocationId } from '@yantra/protocol/commands';
 import { Button, Dialog, DialogTrigger, TextField } from '@yantra/ui';
 import { useEffect, useState, type ReactNode } from 'react';
 
+import { readDocument, readFailure } from '../generated/read-document.js';
 import { useRpc } from '../host/app-rpc.js';
 
 interface ConfigListDocument {
   readonly config?: unknown;
 }
 
+/**
+ * The raw config.yaml editor (`config edit`). Saving replaces config.yaml with
+ * the text, so Save stays disabled until the current config has loaded: an
+ * editor that opened empty would save an empty config over the real one.
+ */
 export function ConfigEditAdapter({
   cwd,
   defaultOpen = false,
@@ -20,13 +26,24 @@ export function ConfigEditAdapter({
   const [problem, setProblem] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   useEffect(() => {
     let active = true;
-    void rpc.request('read.config.list', {}).then((document) => {
-      if (!active) return;
-      const config = (document as ConfigListDocument).config;
-      setText(JSON.stringify(config ?? {}, null, 2));
-    });
+    void readDocument(rpc, { method: 'read.config.list' }).then(
+      (document) => {
+        if (!active) return;
+        const config = (document as ConfigListDocument | null)?.config;
+        if (config === undefined) {
+          setProblem('yantra config list returned no config, so there is nothing safe to edit.');
+          return;
+        }
+        setText(JSON.stringify(config, null, 2));
+        setLoaded(true);
+      },
+      (error: unknown) => {
+        if (active) setProblem(`Couldn’t load config.yaml. ${readFailure(error)}`);
+      },
+    );
     return () => {
       active = false;
     };
@@ -68,7 +85,7 @@ export function ConfigEditAdapter({
           />
           {problem === null ? null : <p role="alert">{problem}</p>}
           {saved ? <p role="status">Saved and validated.</p> : null}
-          <Button isDisabled={busy || text.trim() === ''} onPress={() => void save()}>
+          <Button isDisabled={busy || !loaded || text.trim() === ''} onPress={() => void save()}>
             Save and validate
           </Button>
         </div>

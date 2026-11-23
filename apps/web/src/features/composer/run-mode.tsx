@@ -5,10 +5,11 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
-import type { ListResult, WorkflowParams } from '@yantra/protocol';
+import type { WorkflowParams } from '@yantra/protocol';
 import { ComboBox, TextField } from '@yantra/ui';
 import { useEffect, type Key, type ReactNode } from 'react';
 
+import { listWorkflows } from '../../generated/read-document.js';
 import { useRpc } from '../../host/app-rpc.js';
 
 import type { ComposerValues, WorkflowParamValue } from './composer-model.js';
@@ -18,10 +19,10 @@ export function useWorkflowNames(): readonly string[] {
   const rpc = useRpc();
   const result = useQuery({
     queryKey: ['workflows'],
-    queryFn: () => rpc.request<{ value: ListResult }>('read.list', { args: ['workflows'] }),
+    queryFn: () => listWorkflows(rpc),
     staleTime: 30_000,
   });
-  return (result.data?.value.items ?? []).flatMap((item) =>
+  return (result.data?.items ?? []).flatMap((item) =>
     item.kind === 'workflow' ? [item.name] : [],
   );
 }

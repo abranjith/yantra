@@ -3,7 +3,7 @@ import { RUN_ARTIFACT_REGISTRY } from '@yantra/protocol/parity';
 import type { RunEventKind } from '@yantra/protocol/parity';
 
 import { EVENT_ROUTES } from '../features/live/event-routes.js';
-import { SURFACE_DEFINITIONS } from '../surfaces/definitions.js';
+import { SURFACE_DEFINITIONS, surfaceRowActions } from '../surfaces/definitions.js';
 
 import type { OptionParity, ParityManifest, ParityTarget } from './types.js';
 
@@ -42,7 +42,7 @@ for (const surface of SURFACE_DEFINITIONS) {
       surface.id,
     );
   for (const command of surface.actions) generated.set(command, surface.id);
-  for (const action of surface.rowActions) generated.set(action.command, surface.id);
+  for (const action of surfaceRowActions(surface)) generated.set(action.command, surface.id);
 }
 
 function commandTarget(path: string): ParityTarget {

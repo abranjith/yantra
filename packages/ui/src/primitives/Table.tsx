@@ -27,7 +27,10 @@ import { Button } from './Button.js';
 
 export interface TableColumn<T> {
   readonly id: string;
+  /** One line; a longer label is cut with an ellipsis and shown whole on hover. */
   readonly header: string;
+  /** What the column holds, shown on hover after the header. */
+  readonly description?: string;
   readonly cell: (row: T) => ReactNode;
   /** Exactly one column names each row for assistive technology. */
   readonly isRowHeader?: boolean;
@@ -171,7 +174,17 @@ export function Table<T extends object>(props: TableProps<T>): ReactNode {
                   ),
                 })}
               >
-                {column.header}
+                {/* The heading row has a fixed height, so the label stays on one line. */}
+                <span
+                  className="min-w-0 truncate"
+                  title={
+                    column.description === undefined
+                      ? column.header
+                      : `${column.header}: ${column.description}`
+                  }
+                >
+                  {column.header}
+                </span>
               </Column>
             )}
           </TableHeader>

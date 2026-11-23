@@ -8,50 +8,57 @@ import { composerArgv } from '../../../src/features/composer/composer-model.js';
 import { Composer, type ComposerSubmission } from '../../../src/features/composer/Composer.js';
 import { mergeParams } from '../../../src/features/composer/run-mode.js';
 import { RpcProvider } from '../../../src/host/app-rpc.js';
+import { workflowListAnswer } from '../../support/cli-documents.js';
 import { FakeRpc } from '../../support/fake-rpc.js';
 
 const HOME = process.platform === 'win32' ? 'C:\\Users\\u' : '/home/u';
 
 function host(readiness: ProviderReadiness): FakeRpc {
-  return new FakeRpc()
-    .answer('read.mission_context', { home: HOME, platform: process.platform })
-    .answer('read.template.list', { schema: null, value: { items: [] }, next_cursor: null })
-    .answer('read.effective_options', (params) => ({ path: params.path, mode: 'llm', options: [] }))
-    .answer('read.provider_readiness', readiness)
-    .answer('read.list', {
-      schema: 'ListResult',
-      value: {
-        schemaVersion: '0.2',
-        kind: 'list',
-        items: [
-          {
-            kind: 'workflow',
-            name: 'nightly',
-            stepCount: 3,
-            securityClass: 'public',
-            modifiedAt: '2026-11-01',
-          },
-          {
-            kind: 'workflow',
-            name: 'prices',
-            stepCount: 5,
-            securityClass: 'public',
-            modifiedAt: '2026-11-02',
-          },
-        ],
-      },
-      next_cursor: null,
-    })
-    .answer('read.workflow_params', (params) => ({
-      name: params.name,
-      params:
-        params.name === 'nightly'
-          ? [
-              { key: 'city', type: 'string', required: true, example: 'Pune' },
-              { key: 'limit', type: 'number', required: false, example: null },
-            ]
-          : [],
-    }));
+  return (
+    new FakeRpc()
+      .answer('read.mission_context', { home: HOME, platform: process.platform })
+      .answer('read.template.list', { schema: null, value: { items: [] }, next_cursor: null })
+      .answer('read.effective_options', (params) => ({
+        path: params.path,
+        mode: 'llm',
+        options: [],
+      }))
+      .answer('read.provider_readiness', readiness)
+      // read.list takes `{target: 'workflows'}` and answers with the bare document.
+      .answer(
+        'read.list',
+        workflowListAnswer({
+          schemaVersion: '0.2',
+          kind: 'list',
+          items: [
+            {
+              kind: 'workflow',
+              name: 'nightly',
+              stepCount: 3,
+              securityClass: 'public',
+              modifiedAt: '2026-11-01',
+            },
+            {
+              kind: 'workflow',
+              name: 'prices',
+              stepCount: 5,
+              securityClass: 'public',
+              modifiedAt: '2026-11-02',
+            },
+          ],
+        }),
+      )
+      .answer('read.workflow_params', (params) => ({
+        name: params.name,
+        params:
+          params.name === 'nightly'
+            ? [
+                { key: 'city', type: 'string', required: true, example: 'Pune' },
+                { key: 'limit', type: 'number', required: false, example: null },
+              ]
+            : [],
+      }))
+  );
 }
 
 function renderComposer(

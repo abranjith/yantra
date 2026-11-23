@@ -8,7 +8,7 @@ import {
   type FormField,
   type FormValues,
 } from '../../src/generated/form-model.js';
-import { SURFACE_DEFINITIONS } from '../../src/surfaces/definitions.js';
+import { SURFACE_DEFINITIONS, surfaceRowActions } from '../../src/surfaces/definitions.js';
 
 function sample(field: FormField): FormValues[string] {
   if (!field.takesValue) return true;
@@ -39,7 +39,7 @@ const generatedPaths = [
   ...new Set([
     ...SURFACE_DEFINITIONS.flatMap((surface) => [
       ...surface.actions,
-      ...surface.rowActions.map((action) => action.command),
+      ...surfaceRowActions(surface).map((action) => action.command),
     ]),
     'doctor',
   ]),

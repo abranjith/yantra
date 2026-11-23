@@ -11,6 +11,7 @@ import { RpcProvider } from '../../../src/host/app-rpc.js';
 import { RpcCallError } from '../../../src/host/rpc-client.js';
 import { resetOnboardingDismissal } from '../../../src/surfaces/onboarding/session-dismissal.js';
 import { expectNoAxeViolations } from '../../support/axe.js';
+import { cliDocument, readAnswer } from '../../support/cli-documents.js';
 import { FakeRpc } from '../../support/fake-rpc.js';
 import {
   installIntersectionObserver,
@@ -392,9 +393,18 @@ describe('@no-llm OnboardingSurface', () => {
     const user = userEvent.setup();
     const rpc = new FakeRpc();
     rpc.answer('read.onboarding_status', makeStatus({ config_exists: true }));
-    rpc.answer('read.config.list', { config: {} });
-    rpc.answer('read.config.path', { paths: [] });
-    rpc.answer('read.config.validate', { valid: true, issues: [] });
+    rpc.answer(
+      'read.config.list',
+      readAnswer('ConfigListResult', cliDocument('config.list.action')),
+    );
+    rpc.answer(
+      'read.config.path',
+      readAnswer('ConfigPathResult', cliDocument('config.path.action')),
+    );
+    rpc.answer(
+      'read.config.validate',
+      readAnswer('ConfigValidateResult', cliDocument('config.validate.action')),
+    );
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     });
