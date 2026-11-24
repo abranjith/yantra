@@ -13,6 +13,10 @@ import { focusRing, tv } from '../lib/cn.js';
  * Variants spend color on meaning: `primary` is the one place to act (Ion),
  * `secondary` is a plain control, `quiet` sits in toolbars. There is no
  * decorative color variant.
+ *
+ * `secondary` draws a `rule-strong` outline, as in Interface Study 01. Its
+ * visible label is what identifies it, so it does not need the 3:1
+ * `field-edge` boundary a text field needs (WCAG 1.4.11).
  */
 export const buttonStyles = tv({
   extend: focusRing,
@@ -21,7 +25,7 @@ export const buttonStyles = tv({
     variant: {
       primary:
         'border-transparent bg-accent text-on-accent hover:bg-accent-ink pressed:bg-accent-ink',
-      secondary: 'border-field-edge bg-surface text-ink hover:bg-sunken pressed:bg-sunken',
+      secondary: 'border-rule-strong bg-transparent text-ink hover:bg-sunken pressed:bg-sunken',
       quiet:
         'border-transparent bg-transparent text-ink-2 hover:bg-sunken hover:text-ink pressed:bg-sunken',
     },

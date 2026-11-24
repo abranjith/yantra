@@ -210,7 +210,8 @@ export function Table<T extends object>(props: TableProps<T>): ReactNode {
                       className={focusRing({
                         className: cn(
                           CELL,
-                          column.voice === 'engine' && 'type-engine',
+                          // Mono runs wide, so the engine voice is set a step smaller.
+                          column.voice === 'engine' && 'type-engine text-caption',
                           column.align === 'end' && 'justify-end',
                           '-outline-offset-2',
                         ),

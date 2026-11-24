@@ -14,9 +14,17 @@ uses the same handler and arguments a terminal would. Each command starts at
 most once. A run keeps going and keeps its data if the window, the host or
 both go away.
 
-The window has a top bar with the Yantra status mark and links to **Mission**
-(the app's start page; see [Mission](app-mission.md)), the **Ledger**, and the
-**Inbox**, plus a connection banner. While any Inbox item is open, on whatever
+The window has a top bar with the Yantra wordmark and four destinations:
+**Mission** (the app's start page; see [Mission](app-mission.md)), the
+**Ledger**, the **Library** (Workflows, Templates and Schedules, as tabs) and the
+**Inbox**. After them come **Type a command** (the command palette, also
+Ctrl+K or Cmd+K), the status mark with its state in a word ("Idle", "Acting",
+"Needs you"), and **Settings**. Settings pages share a side menu in three
+groups: **Setup** (Installation, Models, Credentials, Browser, Sites, Data),
+**You** (Preferences) and **System** (Health, Usage, Daemon). A connection
+banner sits under the bar. The app is arranged by how it is used rather than
+by the command tree; every command is still reachable from a page or the
+palette. While any Inbox item is open, on whatever
 page you are, the **Inbox** link carries a badge with the open count (its
 accessible name reads, for example, "Inbox 2 items need you"), and the status
 mark turns Rani, named "Yantra status: 2 items need you". With nothing open,

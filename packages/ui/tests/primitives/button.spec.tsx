@@ -98,7 +98,9 @@ describe('@no-llm Drshya Button', () => {
     render(<Button>Run</Button>);
 
     const className = screen.getByRole('button', { name: 'Run' }).className;
-    expect(className).toContain('bg-surface');
+    // Interface Study 01: a quiet outline, not the 3:1 field edge a text field needs.
+    expect(className).toContain('border-rule-strong');
+    expect(className).toContain('bg-transparent');
     expect(className).toContain('h-10');
     expect(className).toContain('rounded-control');
   });

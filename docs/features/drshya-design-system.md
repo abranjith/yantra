@@ -29,21 +29,24 @@ hand.
 
 | Tier      | Where it lives                                | How it reaches CSS                                                                            | Who uses it                     |
 | --------- | --------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------- |
-| Primitive | `palette.ts`: 13 fog steps, Ion, four signals | Plain custom properties on `:root` (`--drshya-fog-05`, `--drshya-ion-fill`), never utilities  | Only the semantic map           |
+| Primitive | `palette.ts`: 15 fog steps, Ion, four signals | Plain custom properties on `:root` (`--drshya-fog-05`, `--drshya-ion-fill`), never utilities  | Only the semantic map           |
 | Semantic  | `semantic.ts`: `SEMANTIC_COLORS`              | Tailwind `@theme` (`--color-surface`), which generates utilities (`bg-surface`, `text-ink-2`) | Components                      |
 | Component | `drshya.css` and the generated `:root` block  | Plain properties (`--glass-alpha`, `--dialog-scrim`)                                          | Single components and utilities |
 
-The fog ramp is 13 cool neutrals at hue 255 that are the same in both themes:
+The fog ramp is 13 cool neutrals at hue 255 that are the same in both themes, plus two dark steps
+Interface Study 01 uses: `fog-85`, the dark hairline, and `fog-100`, the dark well that sits below
+the page:
 
-| Step   | OKLCH             | Step   | OKLCH             |
-| ------ | ----------------- | ------ | ----------------- |
-| fog-00 | `0.994 0.002 255` | fog-60 | `0.53 0.011 255`  |
-| fog-05 | `0.975 0.004 255` | fog-70 | `0.42 0.011 255`  |
-| fog-10 | `0.952 0.005 255` | fog-80 | `0.31 0.01 255`   |
-| fog-20 | `0.915 0.006 255` | fog-90 | `0.22 0.009 255`  |
-| fog-30 | `0.862 0.007 255` | fog-95 | `0.165 0.008 255` |
-| fog-40 | `0.76 0.009 255`  | fog-99 | `0.125 0.007 255` |
-| fog-50 | `0.64 0.01 255`   |        |                   |
+| Step   | OKLCH             | Step    | OKLCH             |
+| ------ | ----------------- | ------- | ----------------- |
+| fog-00 | `0.994 0.002 255` | fog-60  | `0.53 0.011 255`  |
+| fog-05 | `0.975 0.004 255` | fog-70  | `0.42 0.011 255`  |
+| fog-10 | `0.952 0.005 255` | fog-80  | `0.31 0.01 255`   |
+| fog-20 | `0.915 0.006 255` | fog-85  | `0.255 0.01 255`  |
+| fog-30 | `0.862 0.007 255` | fog-90  | `0.22 0.009 255`  |
+| fog-40 | `0.76 0.009 255`  | fog-95  | `0.165 0.008 255` |
+| fog-50 | `0.64 0.01 255`   | fog-99  | `0.125 0.007 255` |
+|        |                   | fog-100 | `0.105 0.006 255` |
 
 The semantic tier is a closed list of 23 names. Each maps to one primitive per theme:
 
@@ -51,11 +54,11 @@ The semantic tier is a closed list of 23 names. Each maps to one primitive per t
 | ---------------------- | ------------------------- | ----------------------- | ----------------------------------------------------- |
 | `bg`                   | fog-05                    | fog-99                  | Page background                                       |
 | `surface`              | fog-00                    | fog-95                  | Paper that content sits on                            |
-| `sunken`               | fog-10                    | fog-99                  | Inputs, table headers, hover fills                    |
+| `sunken`               | fog-10                    | fog-100                 | Inputs, table headers, hover fills                    |
 | `ink`                  | fog-95                    | fog-05                  | Primary text                                          |
 | `ink-2`                | fog-70                    | fog-40                  | Secondary text, the agent voice                       |
 | `ink-3`                | fog-60                    | fog-50                  | Tertiary and disabled text (solid surfaces only)      |
-| `rule`, `rule-strong`  | fog-20, fog-30            | fog-90, fog-80          | Dividers and stronger borders                         |
+| `rule`, `rule-strong`  | fog-20, fog-30            | fog-85, fog-80          | Dividers and stronger borders                         |
 | `field-edge`           | fog-60                    | fog-50                  | The 3:1 boundary of a form control                    |
 | `accent`               | Ion fill `0.54 0.097 218` | Ion fill `0.8 0.14 218` | Primary fills and the focus ring                      |
 | `on-accent`            | `1 0 0` (white)           | `0.18 0.03 230`         | Text on `accent`                                      |
@@ -190,13 +193,16 @@ Mono with its width axis. `font-sans` is `"Archivo Variable", system-ui, sans-se
 
 The three voices, plus a label and display style, are utilities:
 
-| Utility        | Voice or use                | Style                                                                    |
-| -------------- | --------------------------- | ------------------------------------------------------------------------ |
-| `type-body`    | The person, plain text      | Sans, 100% width, weight 400                                             |
-| `type-agent`   | The agent                   | Sans italic, `ink-2` color                                               |
-| `type-engine`  | The engine: IDs, URLs, refs | Mono at 87.5% width, tabular numbers                                     |
-| `type-label`   | Labels and tab lists        | Sans at 125% width, weight 650, uppercase, 0.08em tracking, `micro` size |
-| `type-display` | Large figures               | Sans at 112.5% width, weight 650, `display` size, tabular numbers        |
+| Utility         | Voice or use                | Style                                                                    |
+| --------------- | --------------------------- | ------------------------------------------------------------------------ |
+| `type-body`     | The person, plain text      | Sans, 100% width, weight 400                                             |
+| `type-agent`    | The agent                   | Sans italic, `ink-2` color                                               |
+| `type-engine`   | The engine: IDs, URLs, refs | Mono at 87.5% width, tabular numbers                                     |
+| `type-label`    | Labels and tab lists        | Sans at 125% width, weight 650, uppercase, 0.08em tracking, `micro` size |
+| `type-display`  | Large figures               | Sans at 112.5% width, weight 650, `display` size, tabular numbers        |
+| `type-headline` | Page titles                 | Sans at 112.5% width, weight 650, `headline` size, -0.015em tracking     |
+| `type-section`  | Section titles in a page    | Sans at 112.5% width, weight 650, `lead` size                            |
+| `type-wordmark` | The YANTRA wordmark         | Sans at 125% width, weight 700, uppercase, 0.16em tracking, `body` size  |
 
 | Text size  | Size                                 | Line height |
 | ---------- | ------------------------------------ | ----------- |
@@ -324,7 +330,9 @@ shared ring recipe.
 Variants spend color on meaning, and there is no decorative color variant:
 
 - `primary`: the one place to act, an `accent` fill with `on-accent` text;
-- `secondary` (default): a plain control on `surface` with a `field-edge` border;
+- `secondary` (default): a plain control with no fill and a `rule-strong` outline. Its visible
+  label identifies it, so it does not take the 3:1 `field-edge` boundary a text field needs
+  (WCAG 1.4.11);
 - `quiet`: `ink-2` text with no fill, for toolbars.
 
 Sizes are `sm` and `md` (default). An optional `icon` takes a registry name. A button with no

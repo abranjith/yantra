@@ -50,11 +50,12 @@ export interface SemanticMapping {
 export const SEMANTIC_COLORS = {
   bg: { light: 'fog-05', dark: 'fog-99' },
   surface: { light: 'fog-00', dark: 'fog-95' },
-  sunken: { light: 'fog-10', dark: 'fog-99' },
+  // Dark wells sit below the page (fog-100), as in Interface Study 01.
+  sunken: { light: 'fog-10', dark: 'fog-100' },
   ink: { light: 'fog-95', dark: 'fog-05' },
   'ink-2': { light: 'fog-70', dark: 'fog-40' },
   'ink-3': { light: 'fog-60', dark: 'fog-50' },
-  rule: { light: 'fog-20', dark: 'fog-90' },
+  rule: { light: 'fog-20', dark: 'fog-85' },
   'rule-strong': { light: 'fog-30', dark: 'fog-80' },
   'field-edge': { light: 'fog-60', dark: 'fog-50' },
   accent: { light: 'ion-fill', dark: 'ion-fill' },

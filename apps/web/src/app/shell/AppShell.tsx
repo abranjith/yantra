@@ -3,44 +3,42 @@ import { useState, type ReactNode } from 'react';
 
 import { InterventionsProvider } from '../../features/interventions/interventions-context.js';
 import { useConnection, type ConnectionStore } from '../../host/connection-store.js';
-import { CommandPalette } from '../../palette/CommandPalette.js';
-import { navRegistry, type NavRegistry } from '../nav-registry.js';
 
 import { BinduProvider, BinduStore } from './bindu-store.js';
 import { ConnectionBanner } from './ConnectionBanner.js';
+import { SectionFrame } from './SectionFrame.js';
 import { SessionEnded } from './SessionEnded.js';
 import { AppToasts } from './toasts.js';
 import { TopBar } from './TopBar.js';
 
 export interface AppShellProps {
   readonly store?: ConnectionStore;
-  readonly nav?: NavRegistry;
   /** The routed page; defaults to the router outlet. */
   readonly children?: ReactNode;
 }
 
-/** The app frame: top bar, connection banner and the routed page. */
-export function AppShell({ store, nav = navRegistry, children }: AppShellProps): ReactNode {
+/** The app frame: top bar, connection banner and the routed page in its section's frame. */
+export function AppShell({ store, children }: AppShellProps): ReactNode {
   const state = useConnection(store);
   const [bindu] = useState(() => new BinduStore());
+  const ended = state.status === 'session_ended' || state.status === 'incompatible';
   return (
     <BinduProvider store={bindu}>
       <InterventionsProvider>
         <AppToasts>
           <div className="flex min-h-screen flex-col bg-bg text-ink">
-            <TopBar nav={nav.entries()} />
+            <TopBar live={!ended} />
             <ConnectionBanner {...(store === undefined ? {} : { store })} />
-            {state.status === 'session_ended' || state.status === 'incompatible' ? (
+            {ended ? (
               <SessionEnded
                 {...(state.status === 'incompatible'
                   ? { detail: `The running app is Yantra ${state.hostVersion}.` }
                   : {})}
               />
             ) : (
-              <>
-                <CommandPalette />
-                <main className="flex-1 px-6 py-8">{children ?? <Outlet />}</main>
-              </>
+              <main className="flex-1">
+                <SectionFrame>{children ?? <Outlet />}</SectionFrame>
+              </main>
             )}
           </div>
         </AppToasts>

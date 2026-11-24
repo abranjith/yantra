@@ -1,6 +1,5 @@
 import { createRoute } from '@tanstack/react-router';
 
-import { navRegistry } from '../app/nav-registry.js';
 import { rootRoute } from '../app/root-route.js';
 import { surfaceById, type SurfaceId } from '../surfaces/definitions.js';
 import { GeneratedSurface } from '../surfaces/GeneratedSurface.js';
@@ -17,14 +16,8 @@ export interface BrowserSearch {
   readonly intent?: 'install' | undefined;
 }
 
-function registerNav(path: string, label: string): void {
-  if (!navRegistry.entries().some((entry) => entry.path === path))
-    navRegistry.register({ path, label });
-}
-
 function route(id: SurfaceId, path: string) {
   const definition = surfaceById(id);
-  registerNav(path, definition.title);
   return createRoute({
     getParentRoute: () => rootRoute,
     path,
@@ -37,7 +30,6 @@ function InstallationRouteView() {
   return <GeneratedSurface definition={surfaceById('installation')} initialMode={mode} />;
 }
 
-registerNav('/settings/installation', surfaceById('installation').title);
 export const installationRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings/installation',
@@ -52,7 +44,6 @@ function PreferencesRouteView() {
   return <GeneratedSurface definition={surfaceById('preferences')} focus={focus} />;
 }
 
-registerNav('/settings/preferences', surfaceById('preferences').title);
 export const preferencesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings/preferences',
@@ -69,7 +60,6 @@ function BrowserRouteView() {
   return <GeneratedSurface definition={surfaceById('browser')} intent={intent} />;
 }
 
-registerNav('/settings/browser', surfaceById('browser').title);
 export const browserRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings/browser',

@@ -1,8 +1,8 @@
 import { createRoute } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 
-import { navRegistry } from '../app/nav-registry.js';
 import { rootRoute } from '../app/root-route.js';
+import { PageHeader } from '../app/shell/PageHeader.js';
 import { ConsentCard } from '../features/interventions/ConsentCard.js';
 import { useInterventions } from '../features/interventions/interventions-context.js';
 import { useInterventionsStore } from '../features/interventions/interventions-store.js';
@@ -14,14 +14,16 @@ function InboxPage(): ReactNode {
   const state = useInterventionsStore(store);
 
   return (
-    <section className="mx-auto flex max-w-4xl flex-col gap-6">
-      <header>
-        <p className="text-micro uppercase tracking-wide text-ink-3">Inbox</p>
-        <h1 className="text-headline font-semibold text-ink">Needs your attention</h1>
-        <p className="mt-2 text-caption text-ink-2" aria-live="polite">
-          {state.count} item{state.count === 1 ? '' : 's'}
-        </p>
-      </header>
+    <section className="flex max-w-4xl flex-col gap-6">
+      <PageHeader
+        eyebrow="Inbox"
+        title="Needs your attention"
+        aside={
+          <p className="type-engine text-caption text-ink-3" aria-live="polite">
+            {state.count} item{state.count === 1 ? '' : 's'}
+          </p>
+        }
+      />
       {state.error !== null ? <p role="alert">{state.error}</p> : null}
       {state.loading && state.items.length === 0 ? <p>Loading…</p> : null}
       {!state.loading && state.items.length === 0 ? <p>No items need your attention.</p> : null}
@@ -66,6 +68,3 @@ export const inboxRoute = createRoute({
   path: '/inbox',
   component: InboxPage,
 });
-
-if (!navRegistry.entries().some((entry) => entry.path === '/inbox'))
-  navRegistry.register({ path: '/inbox', label: 'Inbox' });

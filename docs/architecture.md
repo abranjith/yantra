@@ -3748,9 +3748,12 @@ embedded into the CLI as `dist/web`, and it talks only to the host that served i
   The two keys are ordinary `profile.yaml` preferences owned by `yantra prefs`.
 - **Shell.** `app/shell/` has the top bar with the Bindu (Drshya's status instrument,
   `src/instruments/bindu.tsx`: `idle`, `live` or `attention`, named in its accessible label rather
-  than by color alone; FEAT-065 renders `idle`), navigation from an append-only
-  registry (`app/nav-registry.ts`; a feature registers its entry with its route: FEAT-065 Home,
-  FEAT-066 the Ledger at `/runs`), a polite connection banner, and the "Session ended" view shown
+  than by color alone; FEAT-065 renders `idle`) with its state in a word, navigation from one
+  static model (`app/navigation.ts`: four top-bar sections, Library tabs and the grouped Settings
+  menu; `shell.spec.tsx` checks that every linked path is a route and every route is linked or
+  listed in `UNLISTED_PATHS`), `SectionFrame`, which frames each page for its section (the
+  full-width cockpit, the centred page column, Library tabs, or the Settings side menu),
+  `PageHeader`, the header every page shares, a polite connection banner, and the "Session ended" view shown
   when no session can be opened. `AppShell` mounts one `InterventionsProvider`
   (`features/interventions/interventions-context.tsx`) per window: its `InterventionsStore` calls
   `interventions.subscribe`, sends `attendance.heartbeat` every 10 s on every page, refreshes

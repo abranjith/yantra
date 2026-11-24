@@ -27,6 +27,17 @@ export interface RowAction {
   readonly bind: Readonly<Record<string, string>>;
 }
 
+/**
+ * A page action: a command's form, opened from a button with a plain-word
+ * label. The button shows the exact `yantra …` command on hover.
+ */
+export interface SurfaceAction {
+  readonly command: string;
+  readonly label: string;
+  /** The page's one main action, drawn in Ion. */
+  readonly primary?: boolean;
+}
+
 /** One read a surface shows: a table of rows, or a record. */
 export interface SurfaceRead {
   /** The CLI command, as typed after `yantra`. */
@@ -40,15 +51,19 @@ export interface SurfaceRead {
   readonly schema: keyof typeof APP_READ_SCHEMAS;
   /** Actions on this read's rows; a record has none. */
   readonly rowActions?: readonly RowAction[];
+  /** Columns set in the engine's mono voice: ids, paths, keys, cron. */
+  readonly engine?: readonly string[];
 }
 
 export interface SurfaceDefinition {
   readonly id: SurfaceId;
   readonly route: string;
   readonly title: string;
+  /** What the page is for, in one sentence. */
+  readonly description?: string;
   readonly group: 'settings' | 'library' | 'system';
   readonly reads: readonly SurfaceRead[];
-  readonly actions: readonly string[];
+  readonly actions: readonly SurfaceAction[];
   readonly notes?: readonly string[];
 }
 
@@ -58,12 +73,15 @@ const CONFIG_PATH = {
   method: 'read.config.path',
   view: 'table',
   schema: 'ConfigPathResult',
+  engine: ['path'],
 } as const;
 export const SURFACE_DEFINITIONS: readonly SurfaceDefinition[] = [
   {
     id: 'installation',
     route: '/settings/installation',
     title: 'Installation',
+    description:
+      'What is installed on this machine: where Yantra keeps its files, and the settings in config.yaml.',
     group: 'settings',
     reads: [
       CONFIG_PATH,
@@ -82,13 +100,19 @@ export const SURFACE_DEFINITIONS: readonly SurfaceDefinition[] = [
         schema: 'ConfigValidateResult',
       },
     ],
-    // Storage locations are not config keys, so get and unset are page actions, not row actions.
-    actions: ['config get', 'config set', 'config unset'],
+    // Storage locations are not config keys, so these are page actions, not row actions.
+    actions: [
+      { command: 'config set', label: 'Set a value', primary: true },
+      { command: 'config get', label: 'Look up a value' },
+      { command: 'config unset', label: 'Remove a value' },
+    ],
   },
   {
     id: 'preferences',
     route: '/settings/preferences',
     title: 'Preferences',
+    description:
+      'How you like runs to behave: the model, budgets, timeouts and what context Yantra may use.',
     group: 'settings',
     reads: [
       {
@@ -98,6 +122,7 @@ export const SURFACE_DEFINITIONS: readonly SurfaceDefinition[] = [
         method: 'read.prefs.list',
         view: 'table',
         schema: 'PrefsResult',
+        engine: ['key', 'value'],
       },
       {
         command: 'profile',
@@ -105,14 +130,16 @@ export const SURFACE_DEFINITIONS: readonly SurfaceDefinition[] = [
         method: 'read.profile',
         view: 'table',
         schema: 'ProfileResult',
+        engine: ['key', 'value'],
       },
     ],
-    actions: ['prefs'],
+    actions: [{ command: 'prefs', label: 'Change a preference', primary: true }],
   },
   {
     id: 'models',
     route: '/settings/models',
     title: 'Models',
+    description: 'The models Yantra can use, and which one runs by default.',
     group: 'settings',
     reads: [
       {
@@ -121,18 +148,20 @@ export const SURFACE_DEFINITIONS: readonly SurfaceDefinition[] = [
         method: 'read.model.list',
         view: 'table',
         schema: 'ModelListResult',
+        engine: ['id'],
         rowActions: [
-          { command: 'model rm', label: 'Remove', bind: { id: '/id' } },
           { command: 'model default', label: 'Use by default', bind: { id: '/id' } },
+          { command: 'model rm', label: 'Remove', bind: { id: '/id' } },
         ],
       },
     ],
-    actions: ['model add'],
+    actions: [{ command: 'model add', label: 'Add a model', primary: true }],
   },
   {
     id: 'browser',
     route: '/settings/browser',
     title: 'Browser',
+    description: 'The Chrome that Yantra drives: which one it uses, and the copy it manages.',
     group: 'settings',
     reads: [
       {
@@ -143,12 +172,19 @@ export const SURFACE_DEFINITIONS: readonly SurfaceDefinition[] = [
         schema: 'BrowserListResult',
       },
     ],
-    actions: ['browser use', 'browser check', 'browser install', 'browser update'],
+    actions: [
+      { command: 'browser use', label: 'Choose a browser', primary: true },
+      { command: 'browser check', label: 'Check compatibility' },
+      { command: 'browser install', label: 'Install Chrome for Testing' },
+      { command: 'browser update', label: 'Update the managed browser' },
+    ],
   },
   {
     id: 'sites',
     route: '/settings/sites',
     title: 'Sites',
+    description:
+      'How Yantra ranks the sites it reads. Research runs rank them; you can add your own.',
     group: 'settings',
     reads: [
       {
@@ -157,15 +193,18 @@ export const SURFACE_DEFINITIONS: readonly SurfaceDefinition[] = [
         method: 'read.sites.list',
         view: 'table',
         schema: 'SitesListResult',
+        engine: ['domain'],
         rowActions: [{ command: 'sites remove', label: 'Remove', bind: { domain: '/domain' } }],
       },
     ],
-    actions: ['sites add'],
+    actions: [{ command: 'sites add', label: 'Add a site', primary: true }],
   },
   {
     id: 'data',
     route: '/settings/data',
     title: 'Data',
+    description:
+      'Where runs, workflows and templates are kept. Only the data and cache folders can move.',
     group: 'settings',
     reads: [CONFIG_PATH],
     actions: [],
@@ -175,6 +214,8 @@ export const SURFACE_DEFINITIONS: readonly SurfaceDefinition[] = [
     id: 'workflows',
     route: '/workflows',
     title: 'Workflows',
+    description:
+      'A saved workflow replays a recorded task step by step. A model never steers a replay.',
     group: 'library',
     reads: [
       {
@@ -184,17 +225,19 @@ export const SURFACE_DEFINITIONS: readonly SurfaceDefinition[] = [
         args: ['workflows'],
         view: 'table',
         schema: 'ListResult',
+        engine: ['name'],
         rowActions: [
           { command: 'schedule', label: 'Schedule', bind: { 'workflow-name': '/name' } },
         ],
       },
     ],
-    actions: ['lint'],
+    actions: [{ command: 'lint', label: 'Check a workflow file' }],
   },
   {
     id: 'templates',
     route: '/templates',
     title: 'Templates',
+    description: 'Report templates shape a run’s document: its sections, tables and guidance.',
     group: 'library',
     reads: [
       {
@@ -203,15 +246,21 @@ export const SURFACE_DEFINITIONS: readonly SurfaceDefinition[] = [
         method: 'read.template.list',
         view: 'table',
         schema: 'TemplateListResult',
+        engine: ['name', 'path'],
         rowActions: [{ command: 'template remove', label: 'Remove', bind: { name: '/name' } }],
       },
     ],
-    actions: ['template new', 'template lint', 'template save'],
+    actions: [
+      { command: 'template new', label: 'New template', primary: true },
+      { command: 'template save', label: 'Save a template file' },
+      { command: 'template lint', label: 'Check a template' },
+    ],
   },
   {
     id: 'schedules',
     route: '/schedules',
     title: 'Schedules',
+    description: 'Saved workflows that run on their own, on a cron schedule, without a model.',
     group: 'library',
     reads: [
       {
@@ -220,15 +269,17 @@ export const SURFACE_DEFINITIONS: readonly SurfaceDefinition[] = [
         method: 'read.schedules',
         view: 'table',
         schema: 'SchedulesResult',
+        engine: ['id', 'workflowName', 'cronExpr'],
         rowActions: [{ command: 'unschedule', label: 'Unschedule', bind: { id: '/id' } }],
       },
     ],
-    actions: ['schedule'],
+    actions: [{ command: 'schedule', label: 'Schedule a workflow', primary: true }],
   },
   {
     id: 'usage',
     route: '/usage',
     title: 'Usage',
+    description: 'How many tasks ran each day, and what they cost.',
     group: 'system',
     reads: [
       {
@@ -237,6 +288,7 @@ export const SURFACE_DEFINITIONS: readonly SurfaceDefinition[] = [
         method: 'read.usage',
         view: 'table',
         schema: 'UsageResult',
+        engine: ['day', 'taskCount', 'totalCostUsd'],
       },
     ],
     actions: [],
@@ -245,6 +297,7 @@ export const SURFACE_DEFINITIONS: readonly SurfaceDefinition[] = [
     id: 'daemon',
     route: '/daemon',
     title: 'Daemon',
+    description: 'The background scheduler that fires your schedules. It never uses a model.',
     group: 'system',
     reads: [
       {
@@ -320,8 +373,10 @@ export function assertDefinitions(
       if (read.view === 'record' && (read.rowActions?.length ?? 0) > 0)
         throw new Error(`${read.command} is a record and cannot have row actions`);
     }
+    if (definition.actions.filter((action) => action.primary === true).length > 1)
+      throw new Error(`${definition.id} has more than one primary action`);
     for (const command of [
-      ...definition.actions,
+      ...definition.actions.map((action) => action.command),
       ...surfaceRowActions(definition).map((item) => item.command),
     ])
       if (findLeaf(command.split(' ')) === undefined) throw new Error(`Unknown command ${command}`);

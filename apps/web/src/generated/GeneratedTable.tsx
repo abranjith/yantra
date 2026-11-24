@@ -141,6 +141,7 @@ export function GeneratedTable({ read, schema, cwd = '/' }: GeneratedTableProps)
       id: column.id,
       header: column.label,
       ...(column.description === undefined ? {} : { description: column.description }),
+      ...(read.engine?.includes(column.id) === true ? { voice: 'engine' as const } : {}),
       isRowHeader: index === 0,
       cell: (row: Row) => <CellValue value={row[column.id]} label={column.label} />,
     })),

@@ -64,7 +64,8 @@ function Harness({
   return (
     <TickClockProvider value={clock}>
       <BinduProvider store={store}>
-        <TopBar nav={[]} />
+        {/* No router here: the bar shows the wordmark and the Bindu only. */}
+        <TopBar live={false} />
         {children}
       </BinduProvider>
     </TickClockProvider>

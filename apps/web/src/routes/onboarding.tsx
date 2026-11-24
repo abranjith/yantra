@@ -1,7 +1,6 @@
 import { createRoute } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 
-import { navRegistry } from '../app/nav-registry.js';
 import { rootRoute } from '../app/root-route.js';
 import { OnboardingSurface } from '../surfaces/onboarding/onboarding-route.js';
 
@@ -22,7 +21,3 @@ export const onboardingRoute = createRoute({
   }),
   component: OnboardingRouteView,
 });
-
-if (!navRegistry.entries().some((entry) => entry.path === '/onboarding')) {
-  navRegistry.register({ path: '/onboarding', label: 'Onboarding' });
-}

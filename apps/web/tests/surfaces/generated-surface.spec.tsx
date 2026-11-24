@@ -7,7 +7,7 @@
  * and "—" in every cell; these tests render what a person sees.
  */
 
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 
@@ -62,12 +62,32 @@ describe('@no-llm Installation', () => {
     expect(within(validation).queryByText(/Schema version/u)).toBeNull();
   });
 
-  it('offers get, set and unset as page actions', async () => {
+  it('offers set, look up and remove in plain words, with one primary action', async () => {
     await renderAt('/settings/installation', installationHost());
 
-    for (const name of ['config get', 'config set', 'config unset']) {
+    for (const name of ['Set a value', 'Look up a value', 'Remove a value']) {
       expect(await screen.findByRole('button', { name })).toBeDefined();
     }
+    expect(screen.getByRole('heading', { level: 1, name: 'Installation' })).toBeDefined();
+    expect(screen.getByText('Settings · Setup')).toBeDefined();
+  });
+
+  it('shows the exact command an action runs on focus, and opens its form on press', async () => {
+    const user = userEvent.setup();
+    await renderAt('/settings/installation', installationHost());
+    const button = await screen.findByRole('button', { name: 'Set a value' });
+
+    // Keyboard focus opens a tooltip at once (hover waits, and jsdom has no real pointer).
+    await user.keyboard('{Shift}');
+    act(() => {
+      button.focus();
+    });
+    const tooltip = await screen.findByRole('tooltip');
+    expect(tooltip.textContent).toBe('yantra config set <key> <value>');
+    await user.keyboard('{Escape}');
+
+    await user.click(button);
+    expect(await screen.findByRole('dialog', { name: 'Set a value' })).toBeDefined();
   });
 
   it('says why a read failed, with the host’s remediation', async () => {

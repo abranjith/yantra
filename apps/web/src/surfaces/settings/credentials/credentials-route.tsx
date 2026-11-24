@@ -3,6 +3,7 @@ import type { CredentialListResult, CredentialRow } from '@yantra/protocol';
 import { Button, ProtectedValue } from '@yantra/ui';
 import { useEffect, useState, type ReactNode } from 'react';
 
+import { PageHeader } from '../../../app/shell/PageHeader.js';
 import { useRpc } from '../../../host/app-rpc.js';
 
 import { RemoveCredentialDialog } from './remove-credential-dialog.js';
@@ -46,25 +47,23 @@ export function CredentialsSurface({ initialKey }: CredentialsSurfaceProps): Rea
   }
 
   return (
-    <section className="mx-auto flex max-w-4xl flex-col gap-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-display font-semibold text-ink">Credentials</h1>
-          <p className="mt-1 text-caption text-ink-2">
-            Secrets are write-only and stored in your OS keychain. Stored values can never be viewed
-            in the app.
-          </p>
-        </div>
-        <Button
-          variant="primary"
-          isDisabled={!available}
-          onPress={() => {
-            openSet(undefined);
-          }}
-        >
-          Set credential
-        </Button>
-      </header>
+    <section className="flex max-w-4xl flex-col gap-6">
+      <PageHeader
+        title="Credentials"
+        path="/settings/credentials"
+        description="Secrets are write-only and stored in your OS keychain. Stored values can never be viewed in the app."
+        actions={
+          <Button
+            variant="primary"
+            isDisabled={!available}
+            onPress={() => {
+              openSet(undefined);
+            }}
+          >
+            Set credential
+          </Button>
+        }
+      />
 
       {query.isError ? (
         <p

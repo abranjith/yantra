@@ -97,6 +97,36 @@
   line-height: var(--text-micro--line-height);
 }
 
+/* The YANTRA wordmark: the expanded width, wide tracking (Interface Study 01). */
+@utility type-wordmark {
+  font-family: var(--font-sans);
+  font-stretch: 125%;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: var(--text-body);
+  line-height: 1;
+}
+
+/* A page title. */
+@utility type-headline {
+  font-family: var(--font-sans);
+  font-stretch: 112.5%;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  font-size: var(--text-headline);
+  line-height: var(--text-headline--line-height);
+}
+
+/* A section title inside a page. */
+@utility type-section {
+  font-family: var(--font-sans);
+  font-stretch: 112.5%;
+  font-weight: 650;
+  font-size: var(--text-lead);
+  line-height: var(--text-lead--line-height);
+}
+
 @utility type-display {
   font-family: var(--font-sans);
   font-stretch: 112.5%;

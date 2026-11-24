@@ -41,7 +41,7 @@ for (const surface of SURFACE_DEFINITIONS) {
           : read.command,
       surface.id,
     );
-  for (const command of surface.actions) generated.set(command, surface.id);
+  for (const action of surface.actions) generated.set(action.command, surface.id);
   for (const action of surfaceRowActions(surface)) generated.set(action.command, surface.id);
 }
 

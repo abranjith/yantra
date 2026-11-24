@@ -15,7 +15,7 @@ Yantra’s app exposes the registered CLI surface without maintaining a second, 
 
 ## How to Use It
 
-Open the Yantra app and choose a generated destination from the main navigation. Use the action buttons above a table to open a generated command form, review its CLI twin, and submit it.
+Open the Yantra app and choose a generated page: **Library** (Workflows, Templates, Schedules) in the top bar, or a page in the **Settings** side menu. Each page has a short description and its actions as plain-word buttons (for example **Set a value** on Installation); hovering or focusing a button shows the exact `yantra …` command it runs. A button opens the command's generated form, where you review its CLI twin and submit it. Each section on the page names the command it reads, such as `yantra config path`; a table shows its rows, and a single record shows as a label/value list.
 
 To use the palette, press **Ctrl+K** on Windows/Linux or **Cmd+K** on macOS, then type either a complete command such as `yantra sites add example.com` or the command without the leading executable. Read commands (`doctor`, `list`, …), `init`, and `secret list`/`secret rm` navigate to their app surface; `secret set <key>` opens **Settings → Credentials** with `<key>` prefilled and refuses any positional `[value]` with the CLI's argv-refusal message; mutation commands (including `doctor --agent-smoke`) are submitted through the normal command invocation RPC. Dangerous commands require a second confirmation.
 

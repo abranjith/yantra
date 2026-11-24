@@ -1,6 +1,5 @@
 import { createRoute } from '@tanstack/react-router';
 
-import { navRegistry } from '../app/nav-registry.js';
 import { rootRoute } from '../app/root-route.js';
 import { CredentialsSurface } from '../surfaces/settings/credentials/credentials-route.js';
 
@@ -21,6 +20,3 @@ export const credentialsRoute = createRoute({
   }),
   component: CredentialsRouteView,
 });
-
-if (!navRegistry.entries().some((entry) => entry.path === '/settings/credentials'))
-  navRegistry.register({ path: '/settings/credentials', label: 'Credentials' });

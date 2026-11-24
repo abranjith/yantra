@@ -34,7 +34,7 @@ export function recordEntries(body: unknown): [string, unknown][] {
 }
 
 /** Nested objects show as label/value lists this many levels down; deeper ones as a tree. */
-const LIST_DEPTH = 2;
+const LIST_DEPTH = 3;
 
 /** Label/value pairs; `depth` 0 is the record itself. */
 function RecordList({
@@ -80,6 +80,9 @@ function RecordValue({
   if (isScalar(value)) return <span className="break-all">{String(value)}</span>;
   if (Array.isArray(value) && value.length === 0) return <span className="text-ink-3">None</span>;
   if (Array.isArray(value) && value.every(isScalar)) return value.join(', ');
+  if (isPlainObject(value) && Object.keys(value).length === 0) {
+    return <span className="text-ink-3">None</span>;
+  }
   if (isPlainObject(value) && depth < LIST_DEPTH) {
     return <RecordList entries={Object.entries(value)} depth={depth + 1} />;
   }

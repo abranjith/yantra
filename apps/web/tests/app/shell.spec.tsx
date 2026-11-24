@@ -7,12 +7,17 @@
 import { act, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { NavRegistry, navRegistry } from '../../src/app/nav-registry.js';
+import { locate, navigationPaths, UNLISTED_PATHS } from '../../src/app/navigation.js';
+import { makeRouter } from '../../src/app/router.js';
 import { AppShell } from '../../src/app/shell/AppShell.js';
 import { ConnectionBanner, connectionMessage } from '../../src/app/shell/ConnectionBanner.js';
 import { openItemsLabel, topBarBindu } from '../../src/app/shell/TopBar.js';
 import { ConnectionStore } from '../../src/host/connection-store.js';
+import { cliDocument, readAnswer } from '../support/cli-documents.js';
 import { FakeRpc, renderAt } from '../support/fake-rpc.js';
+import { useFixedLayout } from '../support/layout.js';
+
+useFixedLayout(1200, 600);
 
 /** The app at `/` (Mission) over a host that answers the composer's reads. */
 async function renderApp() {
@@ -25,35 +30,86 @@ async function renderApp() {
 }
 
 describe('navigation', () => {
-  it('renders every registered route, including the generated surfaces', async () => {
+  it('shows four destinations, the command palette and Settings', async () => {
     await renderApp();
+
     const nav = screen.getByRole('navigation', { name: 'Main' });
     const links = within(nav).getAllByRole('link');
-    expect(links.map((link) => link.textContent)).toEqual(
-      navRegistry.entries().map((entry) => entry.label),
-    );
-    const entries = navRegistry.entries();
-    expect(entries).toContainEqual({ path: '/mission', label: 'Mission' });
-    expect(entries).toContainEqual({ path: '/runs', label: 'Ledger' });
-    expect(entries).toContainEqual({ path: '/settings/installation', label: 'Installation' });
-    expect(entries).toContainEqual({ path: '/workflows', label: 'Workflows' });
-    expect(entries).toContainEqual({ path: '/daemon', label: 'Daemon' });
-    expect(entries).toContainEqual({ path: '/inbox', label: 'Inbox' });
+    expect(links.map((link) => link.textContent)).toEqual([
+      'Mission',
+      'Ledger',
+      'Library',
+      'Inbox',
+    ]);
     expect(links[0]?.getAttribute('aria-current')).toBe('page');
+    expect(screen.getByRole('link', { name: 'Settings' }).getAttribute('aria-current')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Type a command' })).toBeTruthy();
   });
 
-  it('refuses to register one path twice', () => {
-    const registry = new NavRegistry();
-    registry.register({ path: '/runs', label: 'Runs' });
-    expect(() => {
-      registry.register({ path: '/runs', label: 'Again' });
-    }).toThrow(/already registered/u);
+  it('links only to real pages, and every page is linked or opened from elsewhere', () => {
+    const routes = Object.keys(makeRouter().routesByPath).filter((path) => path !== '/');
+
+    expect(navigationPaths().filter((path) => !routes.includes(path))).toEqual([]);
+    expect(
+      routes.filter((path) => !navigationPaths().includes(path) && !UNLISTED_PATHS.includes(path)),
+    ).toEqual([]);
   });
 
-  it('shows the product name and an idle Bindu', async () => {
+  it('places each page in its section', () => {
+    expect(locate('/')?.section.id).toBe('mission');
+    expect(locate('/mission/runs/r1')?.section.id).toBe('mission');
+    expect(locate('/runs/r1/audit')?.section.id).toBe('ledger');
+    expect(locate('/templates')?.section.id).toBe('library');
+    expect(locate('/settings/credentials')?.group?.label).toBe('Setup');
+    expect(locate('/health')?.group?.label).toBe('System');
+    expect(locate('/onboarding')).toBeNull();
+  });
+
+  it('marks Library current on every Library tab, and the tab inside it', async () => {
+    const rpc = new FakeRpc().answer(
+      'read.template.list',
+      readAnswer('TemplateListResult', cliDocument('template.list.action')),
+    );
+    await renderAt('/templates', rpc);
+
+    const main = screen.getByRole('navigation', { name: 'Main' });
+    expect(within(main).getByRole('link', { name: 'Library' }).getAttribute('aria-current')).toBe(
+      'page',
+    );
+    const tabs = screen.getByRole('navigation', { name: 'Library' });
+    expect(within(tabs).getByRole('link', { name: 'Templates' }).getAttribute('aria-current')).toBe(
+      'page',
+    );
+    expect(
+      within(tabs).getByRole('link', { name: 'Workflows' }).getAttribute('aria-current'),
+    ).toBeNull();
+  });
+
+  it('frames a Settings page with the grouped menu and names its group', async () => {
+    const rpc = new FakeRpc().answer(
+      'read.config.path',
+      readAnswer('ConfigPathResult', cliDocument('config.path.action')),
+    );
+    await renderAt('/settings/data', rpc);
+
+    expect(screen.getByRole('link', { name: 'Settings' }).getAttribute('aria-current')).toBe(
+      'page',
+    );
+    const menu = screen.getByRole('navigation', { name: 'Settings' });
+    expect(within(menu).getAllByRole('list')).toHaveLength(3);
+    expect(within(menu).getByText('System')).toBeTruthy();
+    expect(within(menu).getByRole('link', { name: 'Data' }).getAttribute('aria-current')).toBe(
+      'page',
+    );
+    expect(screen.getByRole('heading', { level: 1, name: 'Data' })).toBeTruthy();
+    expect(screen.getByText('Settings · Setup')).toBeTruthy();
+  });
+
+  it('shows the product name and an idle Bindu with its word', async () => {
     await renderApp();
     expect(screen.getByText('Yantra', { selector: 'span' })).toBeTruthy();
     expect(screen.getByRole('img', { name: 'Yantra status: idle' })).toBeTruthy();
+    expect(screen.getByText('Idle')).toBeTruthy();
   });
 });
 
@@ -113,7 +169,7 @@ describe('session ended', () => {
     const store = new ConnectionStore();
     store.set({ status: 'session_ended' });
     render(
-      <AppShell store={store} nav={new NavRegistry()}>
+      <AppShell store={store}>
         <p>page</p>
       </AppShell>,
     );
@@ -126,7 +182,7 @@ describe('session ended', () => {
     const store = new ConnectionStore();
     store.set({ status: 'incompatible', hostVersion: '2.0.0' });
     render(
-      <AppShell store={store} nav={new NavRegistry()}>
+      <AppShell store={store}>
         <p>page</p>
       </AppShell>,
     );

@@ -39,8 +39,11 @@ function themed<Name extends string>(name: Name, light: Oklch, dark: Oklch): Pri
 
 /**
  * Every primitive, in emission order. The fog ramp is thirteen cool neutrals
- * at hue 255; each signal has a graphic value and, where the light graphic
- * fails 4.5:1 as text, a darker `-ink` value (D2).
+ * at hue 255, plus two dark steps Interface Study 01 uses off the ramp:
+ * `fog-85`, the dark hairline (lighter than fog-90, so dividers read), and
+ * `fog-100`, the dark well (darker than the page, so table headers and inputs
+ * sink). Each signal has a graphic value and, where the light graphic fails
+ * 4.5:1 as text, a darker `-ink` value (D2).
  */
 export const PRIMITIVES = [
   fixed('fog-00', 0.994, 0.002, 255),
@@ -53,9 +56,11 @@ export const PRIMITIVES = [
   fixed('fog-60', 0.53, 0.011, 255),
   fixed('fog-70', 0.42, 0.011, 255),
   fixed('fog-80', 0.31, 0.01, 255),
+  fixed('fog-85', 0.255, 0.01, 255),
   fixed('fog-90', 0.22, 0.009, 255),
   fixed('fog-95', 0.165, 0.008, 255),
   fixed('fog-99', 0.125, 0.007, 255),
+  fixed('fog-100', 0.105, 0.006, 255),
   // Ion: two fills (deep with white text in light, bright with near-black
   // text in dark) and an ink for links and accent text.
   themed('ion-fill', oklch(0.54, 0.097, 218), oklch(0.8, 0.14, 218)),

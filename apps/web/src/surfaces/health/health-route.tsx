@@ -5,6 +5,7 @@ import { createInvocationId } from '@yantra/protocol/commands';
 import { Button, HealthCheck } from '@yantra/ui';
 import { useEffect, useState, type ReactNode } from 'react';
 
+import { PageHeader } from '../../app/shell/PageHeader.js';
 import { useRpc } from '../../host/app-rpc.js';
 
 import { AgentSmokePanel } from './agent-smoke-panel.js';
@@ -176,24 +177,27 @@ export function HealthSurface(): ReactNode {
   };
 
   return (
-    <section className="mx-auto flex max-w-4xl flex-col gap-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-display font-semibold text-ink">Health</h1>
-          <p className="mt-1 text-caption text-ink-2">
+    <section className="flex max-w-4xl flex-col gap-6">
+      <PageHeader
+        title="Health"
+        path="/health"
+        description={
+          <>
             Offline environment diagnostics from <span className="type-engine">yantra doctor</span>.
-          </p>
-        </div>
-        <Button
-          variant="secondary"
-          isDisabled={query.isLoading || rerun.isPending}
-          onPress={() => {
-            rerun.mutate();
-          }}
-        >
-          {rerun.isPending ? 'Re-running…' : 'Re-run checks'}
-        </Button>
-      </header>
+          </>
+        }
+        actions={
+          <Button
+            variant="secondary"
+            isDisabled={query.isLoading || rerun.isPending}
+            onPress={() => {
+              rerun.mutate();
+            }}
+          >
+            {rerun.isPending ? 'Re-running…' : 'Re-run checks'}
+          </Button>
+        }
+      />
 
       {error !== null && error !== undefined ? (
         <p

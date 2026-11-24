@@ -38,7 +38,7 @@ function requiredValues(fields: readonly FormField[]): FormValues {
 const generatedPaths = [
   ...new Set([
     ...SURFACE_DEFINITIONS.flatMap((surface) => [
-      ...surface.actions,
+      ...surface.actions.map((action) => action.command),
       ...surfaceRowActions(surface).map((action) => action.command),
     ]),
     'doctor',

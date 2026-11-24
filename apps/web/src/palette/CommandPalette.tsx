@@ -8,6 +8,17 @@ import { PARITY_MANIFEST } from '../parity/manifest.js';
 import { executePalette } from './execute.js';
 import { interpret, type PaletteOutcome } from './palette-model.js';
 
+/** The palette shortcut as this computer spells it. */
+function shortcutLabel(): string {
+  return typeof navigator !== 'undefined' && /Mac|iPhone|iPad/u.test(navigator.userAgent)
+    ? '⌘K'
+    : 'Ctrl K';
+}
+
+/**
+ * The command palette: the top bar's "Type a command" chip, or Ctrl/Cmd+K,
+ * opens it; it accepts the same syntax as the terminal.
+ */
 export function CommandPalette({
   platform = 'linux',
   onOutcome,
@@ -54,12 +65,21 @@ export function CommandPalette({
     <>
       <Button
         variant="secondary"
+        icon="action.command"
+        className="min-w-64 justify-start bg-sunken font-normal text-ink-3 hover:text-ink"
+        size="sm"
         onPress={() => {
           previous.current = document.activeElement as HTMLElement | null;
           setOpen(true);
         }}
       >
-        Command palette
+        <span className="flex-1 text-left">Type a command</span>
+        <kbd
+          aria-hidden="true"
+          className="rounded-chip border border-b-2 border-rule-strong bg-surface px-1.5 type-engine text-micro text-ink-2"
+        >
+          {shortcutLabel()}
+        </kbd>
       </Button>
       {open ? (
         <Dialog
