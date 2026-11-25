@@ -1,19 +1,37 @@
-import { createRoute } from '@tanstack/react-router';
+import { createRoute, useSearch } from '@tanstack/react-router';
+import type { ReactNode } from 'react';
 
 import { rootRoute } from '../app/root-route.js';
-import { surfaceById, type SurfaceId } from '../surfaces/definitions.js';
+import { surfaceById, type SurfaceDefinition, type SurfaceId } from '../surfaces/definitions.js';
 import { GeneratedSurface } from '../surfaces/GeneratedSurface.js';
 
-export interface InstallationSearch {
+/** `?do=<command>`: open that page action's form (the command palette links here). */
+export interface ActionSearch {
+  readonly do?: string | undefined;
+}
+
+export interface InstallationSearch extends ActionSearch {
   readonly mode?: 'raw' | undefined;
 }
 
-export interface PreferencesSearch {
+export interface PreferencesSearch extends ActionSearch {
   readonly focus?: string | undefined;
 }
 
-export interface BrowserSearch {
+export interface BrowserSearch extends ActionSearch {
   readonly intent?: 'install' | undefined;
+}
+
+const COMMAND = /^[a-z][a-z -]{0,63}$/u;
+
+/** Keeps `do` only when it names a command path. */
+export function actionSearch(search: Record<string, unknown>): ActionSearch {
+  return typeof search.do === 'string' && COMMAND.test(search.do) ? { do: search.do } : {};
+}
+
+function GeneratedRouteView({ definition }: { readonly definition: SurfaceDefinition }): ReactNode {
+  const search = useSearch({ strict: false });
+  return <GeneratedSurface definition={definition} openAction={search.do} />;
 }
 
 function route(id: SurfaceId, path: string) {
@@ -21,33 +39,44 @@ function route(id: SurfaceId, path: string) {
   return createRoute({
     getParentRoute: () => rootRoute,
     path,
-    component: () => <GeneratedSurface definition={definition} />,
+    validateSearch: actionSearch,
+    component: () => <GeneratedRouteView definition={definition} />,
   });
 }
 
 function InstallationRouteView() {
-  const { mode } = installationRoute.useSearch();
-  return <GeneratedSurface definition={surfaceById('installation')} initialMode={mode} />;
+  const { mode, do: action } = installationRoute.useSearch();
+  return (
+    <GeneratedSurface
+      definition={surfaceById('installation')}
+      initialMode={mode}
+      openAction={action}
+    />
+  );
 }
 
 export const installationRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings/installation',
   validateSearch: (search: Record<string, unknown>): InstallationSearch => ({
+    ...actionSearch(search),
     mode: search.mode === 'raw' ? 'raw' : undefined,
   }),
   component: InstallationRouteView,
 });
 
 function PreferencesRouteView() {
-  const { focus } = preferencesRoute.useSearch();
-  return <GeneratedSurface definition={surfaceById('preferences')} focus={focus} />;
+  const { focus, do: action } = preferencesRoute.useSearch();
+  return (
+    <GeneratedSurface definition={surfaceById('preferences')} focus={focus} openAction={action} />
+  );
 }
 
 export const preferencesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings/preferences',
   validateSearch: (search: Record<string, unknown>): PreferencesSearch => ({
+    ...actionSearch(search),
     focus: typeof search.focus === 'string' && search.focus.length > 0 ? search.focus : undefined,
   }),
   component: PreferencesRouteView,
@@ -56,14 +85,17 @@ export const preferencesRoute = createRoute({
 export const modelsRoute = route('models', '/settings/models');
 
 function BrowserRouteView() {
-  const { intent } = browserRoute.useSearch();
-  return <GeneratedSurface definition={surfaceById('browser')} intent={intent} />;
+  const { intent, do: action } = browserRoute.useSearch();
+  return (
+    <GeneratedSurface definition={surfaceById('browser')} intent={intent} openAction={action} />
+  );
 }
 
 export const browserRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings/browser',
   validateSearch: (search: Record<string, unknown>): BrowserSearch => ({
+    ...actionSearch(search),
     intent: search.intent === 'install' ? 'install' : undefined,
   }),
   component: BrowserRouteView,

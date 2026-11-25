@@ -38,7 +38,7 @@ export {
   type FieldChromeProps,
   type FieldLabelProps,
 } from './primitives/field.js';
-export { checkboxBoxStyles } from './primitives/Checkbox.js';
+export { checkboxBoxStyles, checkboxChipStyles } from './primitives/Checkbox.js';
 export { switchThumbStyles, switchTrackStyles } from './primitives/Switch.js';
 export { Option, optionStyles, popoverStyles } from './primitives/Popover.js';
 export { TOOLTIP_CLOSE_DELAY_MS, TOOLTIP_DELAY_MS } from './primitives/Tooltip.js';

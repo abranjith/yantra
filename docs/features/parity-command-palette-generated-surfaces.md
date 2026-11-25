@@ -9,7 +9,7 @@ Yantra’s app exposes the registered CLI surface without maintaining a second, 
 - Provides generated pages for installation, preferences, models, browser management, sites, data paths, workflows, templates, schedules, usage, and daemon control.
 - Derives form fields, defaults, choices, required values, option relationships, and command previews from the canonical registry.
 - Derives table columns from described output schemas and supports paged reads and bound row actions.
-- Opens a command palette with **Ctrl+K** or **Cmd+K**. It accepts Yantra CLI syntax for POSIX shells, PowerShell, and `cmd.exe` without evaluating shell input.
+- Opens a command palette from the top bar's **Search or type a command** button, or with **Ctrl+K** or **Cmd+K**. It searches pages, page actions and commands as you type, offers to Ask, Research or Do what you typed, and accepts Yantra CLI syntax for POSIX shells, PowerShell, and `cmd.exe` without evaluating shell input.
 - Refuses pipes, redirects, expansions, globs, multiline input, and unterminated quotes rather than guessing.
 - Keeps command, option, run-event, artifact, and app-surface coverage under parity tests, with zero remaining reserved commands (`init`, `doctor`, and `secret` are mapped to Onboarding, Health, and Credentials).
 
@@ -17,7 +17,18 @@ Yantra’s app exposes the registered CLI surface without maintaining a second, 
 
 Open the Yantra app and choose a generated page: **Library** (Workflows, Templates, Schedules) in the top bar, or a page in the **Settings** side menu. Each page has a short description and its actions as plain-word buttons (for example **Set a value** on Installation); hovering or focusing a button shows the exact `yantra …` command it runs. A button opens the command's generated form, where you review its CLI twin and submit it. Each section on the page names the command it reads, such as `yantra config path`; a table shows its rows, and a single record shows as a label/value list.
 
-To use the palette, press **Ctrl+K** on Windows/Linux or **Cmd+K** on macOS, then type either a complete command such as `yantra sites add example.com` or the command without the leading executable. Read commands (`doctor`, `list`, …), `init`, and `secret list`/`secret rm` navigate to their app surface; `secret set <key>` opens **Settings → Credentials** with `<key>` prefilled and refuses any positional `[value]` with the CLI's argv-refusal message; mutation commands (including `doctor --agent-smoke`) are submitted through the normal command invocation RPC. Dangerous commands require a second confirmation.
+To use the palette, select **Search or type a command** in the top bar, or press **Ctrl+K** on Windows/Linux or **Cmd+K** on macOS. With nothing typed it lists how to start (**Ask a question**, **Research a topic**, **Do a task on a website**, **Run a saved workflow**) and a few pages to go to. As you type it shows, in groups:
+
+- **Go to**: pages whose name or usual words match ("api key" finds Credentials, "doctor" finds Health);
+- **Actions**: page actions such as **Add a model**, which open that action's form on its page;
+- **Commands**: matching `yantra` commands with their arguments; choosing one fills it in so you can finish it;
+- **Start with this**: **Ask “…”**, **Research “…”** and **Do “…”** with your text, which open Mission in that mode with the goal filled in. When you type several words, this group comes first.
+
+Arrow keys choose and Enter opens; Escape clears the text, then closes.
+
+To run a command, type it with or without the leading `yantra`, for example `yantra sites add example.com`. The first result says what Enter will do, or what the command still needs ("Still needs <domain>"). Read commands (`doctor`, `list`, `show <run-id>`, …), `init`, and `secret list`/`secret rm` open their page; `secret set <key>` opens **Settings → Credentials** with `<key>` prefilled and refuses any positional `[value]` with the CLI's argv-refusal message. A run (`ask`, `research`, `do`, `run`, `resume`) starts and opens its live cockpit. Any other change (including `doctor --agent-smoke`) is submitted through the normal command invocation RPC and opens the page it changes. Dangerous commands need a second Enter.
+
+`ask`, `research` and `do` take everything after the command as one question, so you need no quotes: `yantra ask summarize today's stock market` runs as the question "summarize today's stock market", and its result reads **Ask “summarize today's stock market”**. (A terminal would refuse that line: the apostrophe opens a quote, and unquoted words are separate arguments. The run's **Command** panel shows the exact line a terminal needs.) Add an option such as `--depth 3` and the line is read exactly as typed. **Open in Mission first** opens the question in Mission instead, to review its options before it starts. If a line cannot run, Enter says why in plain words, for example "A quote is opened and never closed."
 
 The Installation page also provides a raw `config.yaml` editor. Edited text is supplied to the worker input collector and is not placed in command-line arguments. Browser and daemon lifecycle actions use dedicated adapters where a generic form is not sufficient.
 

@@ -3697,8 +3697,10 @@ the app (`createToastQueue()`) rather than a module singleton, and `Table` throw
 protocol types. FEAT-065 added the Bindu, and FEAT-066 adds the run-results set. Each takes data
 through props and fetches nothing itself.
 
-- `OutcomeBadge` prints the CLI's exact words: `${status} ${taskOutcome}`, as `yantra list` does,
-  with `interrupted` as a separate chip and a `LedgerDisplayedState` label for active runs.
+- `OutcomeBadge` prints the CLI's exact words by default: `${status} ${taskOutcome}`, as `yantra
+list` does, with `interrupted` as a separate chip and a `LedgerDisplayedState` label for active
+  runs. `wording="plain"` (the Ledger) says the outcome in one capitalized word, or the status word
+  when no outcome was recorded.
 - `SafeMarkdown` renders untrusted Markdown with `react-markdown` and `remark-gfm`. Raw HTML is
   skipped, links render only for absolute `http(s)` URLs as Drshya `Link`s, and images render as
   their alt text, so page-derived Markdown cannot trigger a request. Its `remarkCitations` plugin

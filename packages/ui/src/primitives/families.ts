@@ -22,6 +22,7 @@ export const PRIMITIVE_FAMILIES = {
   ComboBox: ['ComboBox'],
   Dialog: ['Dialog', 'DialogTrigger'],
   Menu: ['Menu', 'MenuTrigger', 'MenuItem', 'MenuSection', 'MenuSeparator', 'SubmenuTrigger'],
+  CommandMenu: ['CommandMenu', 'CommandMenuDialog'],
 } as const satisfies Readonly<Record<string, readonly string[]>>;
 
 export type PrimitiveFamily = keyof typeof PRIMITIVE_FAMILIES;

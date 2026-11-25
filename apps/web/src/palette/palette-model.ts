@@ -4,6 +4,8 @@ import {
   createInvocationId,
   expandOptions,
   parseInvocation,
+  quotePosix,
+  quotePowerShell,
   tokenizeCommandLine,
   type LeafEntry,
   type Shell,
@@ -80,6 +82,91 @@ export function suggestionsFor(
     .sort((a, b) => a.d - b.d || a.path.localeCompare(b.path))
     .slice(0, 3)
     .map((item) => item.path);
+}
+
+/**
+ * A run command whose one argument is free text: `ask <query>`,
+ * `research <topic>`, `do <goal>`. Everything typed after it is that text.
+ */
+export function isFreeTextCommand(entry: LeafEntry): boolean {
+  const [only, ...others] = entry.arguments;
+  return (
+    entry.execution.default === 'run' &&
+    only !== undefined &&
+    others.length === 0 &&
+    only.required &&
+    !only.variadic &&
+    only.input.kind === 'text'
+  );
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+}
+
+/**
+ * The free-text command `command` starts with, and the text typed after it
+ * (without one pair of quotes around it, or an opening quote never closed),
+ * or null when it is no such command or the text carries options.
+ */
+export function freeTextOf(
+  command: string,
+  registry: CommandRegistry = COMMAND_REGISTRY,
+): { readonly entry: LeafEntry; readonly text: string } | null {
+  const line = command.trim();
+  for (const entry of registry.commands) {
+    if (entry.kind !== 'leaf' || !isFreeTextCommand(entry)) continue;
+    const head = new RegExp(`^${entry.path.map(escapeRegExp).join('\\s+')}(?:\\s+|$)`, 'u');
+    if (!head.test(line)) continue;
+    let text = line.replace(head, '').trim();
+    // An option (`--depth 3`) means the person is writing a command line: leave it to them.
+    if (text.length === 0 || /(^|\s)-/u.test(text)) return null;
+    const paired = /^(["'])([\s\S]*)\1$/u.exec(text);
+    if (paired !== null) text = paired[2] ?? '';
+    else if (/^["']/u.test(text)) text = text.slice(1);
+    return text.trim().length === 0 ? null : { entry, text: text.trim() };
+  }
+  return null;
+}
+
+/** What the palette makes of a command line, and the exact line it would run. */
+export interface PaletteReading {
+  readonly outcome: PaletteOutcome;
+  /** The line shown and run, `yantra …`. */
+  readonly line: string;
+  /** Yantra quoted the free text itself, so the line differs from what was typed. */
+  readonly quoted: boolean;
+}
+
+/**
+ * Interprets `command` the way a terminal would, then forgives the one thing
+ * a person should not need to know about: quoting a question. When `yantra
+ * ask summarize today's stock market` does not parse (an apostrophe opens a
+ * quote; four words are four arguments; `?` is a glob), and the command
+ * takes one free-text argument, the rest of the line is quoted for the
+ * shell and read again.
+ */
+export function readCommand(
+  command: string,
+  shell: Shell,
+  registry: CommandRegistry = COMMAND_REGISTRY,
+  manifest: ParityManifest,
+): PaletteReading {
+  const outcome = interpret(command, shell, registry, manifest);
+  const typed = { outcome, line: `yantra ${command.trim()}`, quoted: false };
+  const unparsed =
+    outcome.state === 'refused_syntax' ||
+    (outcome.state === 'needs_input' &&
+      outcome.missing.some((message) => message.includes('too many arguments')));
+  if (!unparsed) return typed;
+  const free = freeTextOf(command, registry);
+  if (free === null) return typed;
+  const quote = shell === 'powershell' ? quotePowerShell : quotePosix;
+  const rebuilt = `${free.entry.path.join(' ')} ${quote(free.text)}`;
+  const retried = interpret(rebuilt, shell, registry, manifest);
+  return retried.state === 'ready'
+    ? { outcome: retried, line: `yantra ${rebuilt}`, quoted: true }
+    : typed;
 }
 
 export function interpret(

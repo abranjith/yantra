@@ -67,11 +67,11 @@ function rowHeaders(): string[] {
   const table = screen.getByRole('grid', { name: 'History' });
   return within(table)
     .getAllByRole('rowheader')
-    .map((cell) => cell.textContent ?? '');
+    .map((cell) => cell.querySelector('[data-part="goal"]')?.textContent ?? '');
 }
 
 describe('the Ledger', () => {
-  it('lists runs with the CLI outcome words and a run link per row', async () => {
+  it('lists runs with their outcome in a word, the goal over its run ID, and an Open link', async () => {
     const rpc = new FakeRpc().answer(
       'read.list',
       page([run(2), run(1, { taskOutcome: 'failed', status: 'failed' })]),
@@ -82,9 +82,16 @@ describe('the Ledger', () => {
     await waitFor(() => {
       expect(rowHeaders()).toEqual(['Goal 2', 'Goal 1']);
     });
-    expect(screen.getByText('completed fulfilled')).toBeTruthy();
-    expect(screen.getByText('failed failed')).toBeTruthy();
-    expect(screen.getAllByText('$0.12')).toHaveLength(2);
+    const table = screen.getByRole('grid', { name: 'History' });
+    expect(within(table).getByText('Fulfilled')).toBeTruthy();
+    expect(within(table).getByText('Failed')).toBeTruthy();
+    expect(within(table).getByText(run(2).runId)).toBeTruthy();
+    expect(within(table).getAllByText('$0.12')).toHaveLength(2);
+    expect(
+      within(table)
+        .getAllByRole('link', { name: 'Open' })
+        .map((link) => link.getAttribute('href')),
+    ).toEqual([`/runs/${run(2).runId}`, `/runs/${run(1).runId}`]);
     expect(rpc.paramsOf('read.list')[0]).toEqual({ target: 'runs', limit: 50 });
   });
 
@@ -142,7 +149,7 @@ describe('the Ledger', () => {
       mode: ['ask'],
       text: 'bank',
     });
-    expect(screen.getByRole('checkbox', { name: 'failed' })).toHaveProperty('checked', true);
+    expect(screen.getByRole('checkbox', { name: 'Failed' })).toHaveProperty('checked', true);
     expect(screen.getByRole('searchbox', { name: 'Search' })).toHaveProperty('value', 'bank');
     expect(screen.getByText('No runs match these filters.')).toBeTruthy();
   });
@@ -151,7 +158,7 @@ describe('the Ledger', () => {
     const rpc = new FakeRpc().answer('read.list', page([run(1)]));
     const { router } = await renderAt('/runs', rpc);
 
-    await userEvent.click(screen.getByRole('checkbox', { name: 'failed' }));
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Failed' }));
     await userEvent.type(screen.getByRole('searchbox', { name: 'Search' }), 'bank');
 
     await waitFor(() => {
@@ -196,7 +203,7 @@ describe('the Ledger', () => {
     expect(document.activeElement).toBe(search);
   });
 
-  it('shows active runs with their displayed state above History', async () => {
+  it('shows runs in progress with what they are doing, and sends a waiting run to the Inbox', async () => {
     const rpc = new FakeRpc().answer(
       'read.list',
       page([run(1)], {
@@ -211,11 +218,15 @@ describe('the Ledger', () => {
 
     await renderAt('/runs', rpc);
 
-    const active = await screen.findByRole('region', { name: 'Active' });
-    expect(within(active).getByText('waiting for you')).toBeTruthy();
+    const active = await screen.findByRole('region', { name: 'In progress' });
+    expect(within(active).getByText('Waiting for you · answer it in the Inbox')).toBeTruthy();
     expect(within(active).getByRole('link', { name: 'Goal 5' }).getAttribute('href')).toBe(
       `/runs/${run(5).runId}`,
     );
+    expect(within(active).getByRole('link', { name: 'Review' }).getAttribute('href')).toBe(
+      '/inbox',
+    );
+    expect(within(active).getByRole('img', { name: 'Run status: waiting for you' })).toBeTruthy();
   });
 
   it('says when it is showing runs from files and when the scan stopped early', async () => {

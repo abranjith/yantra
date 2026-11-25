@@ -17,7 +17,7 @@ both go away.
 The window has a top bar with the Yantra wordmark and four destinations:
 **Mission** (the app's start page; see [Mission](app-mission.md)), the
 **Ledger**, the **Library** (Workflows, Templates and Schedules, as tabs) and the
-**Inbox**. After them come **Type a command** (the command palette, also
+**Inbox**. After them come **Search or type a command** (the command palette, also
 Ctrl+K or Cmd+K), the status mark with its state in a word ("Idle", "Acting",
 "Needs you"), and **Settings**. Settings pages share a side menu in three
 groups: **Setup** (Installation, Models, Credentials, Browser, Sites, Data),
@@ -176,28 +176,37 @@ The **Ledger** (`/runs`, **Ledger** in the top bar) lists every run Yantra has
 recorded. It reads runs through the same function as `yantra list`, after the
 same reconciliation, so a run's words match what `yantra list` prints.
 
-- **Active** lists runs that have not ended. It is never paged. Each run shows
-  its displayed state instead of an outcome: `queued`, `starting`, `running`,
-  `waiting for you`, `needs review`, `start outcome unknown` or
-  `worker not responding`. A run whose manifest says it is running but whose
-  owner cannot be verified reads `status unknown`, never `running`. The region
-  reads "No runs in progress." when it is empty.
+- **In progress** lists runs that have not ended. It is never paged. Each run
+  shows its mode, its goal (a link to the run), what it is doing in words
+  (Queued, Starting, Running, "Waiting for you · answer it in the Inbox",
+  "Needs review · its settings changed since you started it", Start outcome
+  unknown or Worker not responding) and how long it has been running. A run
+  whose manifest says it is running but whose owner cannot be verified reads
+  Status unknown, never Running. A run waiting for you has a **Review** button
+  that opens the Inbox; any other has **Open**. The region reads "No runs in
+  progress." when it is empty.
 - **History** is a table of runs that ended, newest first, with the columns
-  Outcome, Title, Mode, Started, Duration, Cost and Run ID. It loads 50 runs at
-  a time as you scroll. Selecting a row opens its Run result.
-- **The Outcome column** prints the same words as `yantra list`: the status,
-  then the outcome when one was recorded (for example `succeeded fulfilled`).
-  `interrupted` appears as a separate chip. Each outcome also has an icon, so
-  color is never the only signal. A value a run did not record shows `—`.
+  Outcome, Goal, Mode, Started, Duration, Cost and Actions. The goal sits over
+  the run ID; a workflow run's goal is the workflow's name. Started reads the
+  way you would say it ("Today, 9:42 PM", "Yesterday, 4:30 PM", "Nov 20,
+  11:22 AM"), with the full time on hover. **Open**, or selecting the row,
+  opens the Run result; the **⋯** menu offers **Run again…**. The table grows
+  with its rows up to ten, then scrolls, loading 50 runs at a time.
+- **The Outcome column** says the outcome in one word: Fulfilled, Partial,
+  Handoff, Failed or Aborted. A run that recorded no outcome shows its status
+  word instead (for example Succeeded). Interrupted appears as a separate
+  chip. Each outcome also has an icon, so color is never the only signal. A
+  value a run did not record shows `—`. `yantra list` prints the same values in
+  its own form, for example `succeeded fulfilled`.
 
 **Filters.** You can narrow History by:
 
-| Filter  | Choices                                                                                                |
-| ------- | ------------------------------------------------------------------------------------------------------ |
-| Outcome | Any of `fulfilled`, `partial`, `handoff`, `failed`, `aborted` and **no outcome recorded** (older runs) |
-| Mode    | **Any mode**, or one of `ask`, `research`, `do`, `run`                                                 |
-| From/To | Calendar days, inclusive, in your time zone                                                            |
-| Search  | Text found in the run's goal or workflow name, or in its run ID (any case, at most 200 characters)     |
+| Filter  | Choices                                                                                            |
+| ------- | -------------------------------------------------------------------------------------------------- |
+| Outcome | Any of the chips Fulfilled, Partial, Handoff, Failed, Aborted and Not recorded (older runs)        |
+| Mode    | **Any mode**, or one of Ask, Research, Do, Run                                                     |
+| From/To | Calendar days, inclusive, in your time zone                                                        |
+| Search  | Text found in the run's goal or workflow name, or in its run ID (any case, at most 200 characters) |
 
 The filters are kept in the page's URL as `outcome` (comma-separated), `mode`,
 `since`, `until` and `q`. They are written a quarter of a second after you

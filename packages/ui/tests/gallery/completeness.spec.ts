@@ -14,8 +14,8 @@ describe('@no-llm Drshya gallery completeness', () => {
     expect(new Set(familyMembers).size).toBe(familyMembers.length);
   });
 
-  it('covers all 17 primitive families of the M1, M4, and onboarding catalogue', () => {
-    expect(Object.keys(PRIMITIVE_FAMILIES)).toHaveLength(17);
+  it('covers all 18 primitive families of the M1, M4, onboarding and palette catalogue', () => {
+    expect(Object.keys(PRIMITIVE_FAMILIES)).toHaveLength(18);
   });
 
   it('has exactly one gallery entry per primitive family', () => {

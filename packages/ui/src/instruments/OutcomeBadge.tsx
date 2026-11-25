@@ -99,6 +99,12 @@ export interface OutcomeBadgeProps {
   readonly executionState?: 'interrupted' | undefined;
   /** Set for a run that has not ended; it replaces the outcome text. */
   readonly displayedState?: LedgerDisplayedState | undefined;
+  /**
+   * `cli` (default) prints the segment `yantra list` prints ("completed
+   * fulfilled"); `plain` says the one word that matters, capitalized
+   * ("Fulfilled", or the status when no outcome was recorded).
+   */
+  readonly wording?: 'cli' | 'plain';
   readonly className?: string;
 }
 
@@ -107,14 +113,25 @@ export function outcomeText(status: string, taskOutcome: TaskOutcome | undefined
   return taskOutcome === undefined ? status : `${status} ${taskOutcome}`;
 }
 
+function capitalized(word: string): string {
+  return `${word.charAt(0).toUpperCase()}${word.slice(1)}`;
+}
+
+/** The plain badge text: the outcome word, else the status word, capitalized. */
+export function plainOutcomeText(status: string, taskOutcome: TaskOutcome | undefined): string {
+  return capitalized(taskOutcome ?? status);
+}
+
 /** See the module comment. */
 export function OutcomeBadge({
   status,
   taskOutcome,
   executionState,
   displayedState,
+  wording = 'cli',
   className,
 }: OutcomeBadgeProps): ReactNode {
+  const plain = wording === 'plain';
   const tone: Tone =
     displayedState !== undefined
       ? STATE_TONE[displayedState]
@@ -129,8 +146,12 @@ export function OutcomeBadge({
         : 'status.info';
   const text =
     displayedState !== undefined
-      ? DISPLAYED_STATE_LABELS[displayedState]
-      : outcomeText(status, taskOutcome);
+      ? plain
+        ? capitalized(DISPLAYED_STATE_LABELS[displayedState])
+        : DISPLAYED_STATE_LABELS[displayedState]
+      : plain
+        ? plainOutcomeText(status, taskOutcome)
+        : outcomeText(status, taskOutcome);
   return (
     <span className={cn('inline-flex items-center gap-1', className)}>
       <span
@@ -145,7 +166,7 @@ export function OutcomeBadge({
       {executionState === 'interrupted' ? (
         <span data-part="execution-state" className={outcomeBadgeStyles({ tone: 'caution' })}>
           <Icon name="status.info" size={16} />
-          <span data-part="text">interrupted</span>
+          <span data-part="text">{plain ? 'Interrupted' : 'interrupted'}</span>
         </span>
       ) : null}
     </span>

@@ -11,6 +11,7 @@
 
 import {
   AppWindow,
+  ArrowRight,
   Ban,
   Check,
   ChevronDown,
@@ -20,7 +21,9 @@ import {
   CircleX,
   Contrast,
   Copy,
+  CornerDownLeft,
   createLucideIcon,
+  Ellipsis,
   ExternalLink,
   EyeOff,
   Hand,
@@ -30,6 +33,7 @@ import {
   Pencil,
   Plus,
   RotateCw,
+  Search,
   Settings2,
   SquareTerminal,
   X,
@@ -61,6 +65,10 @@ export const ICON_NAMES = [
   'action.add',
   'action.edit',
   'action.command',
+  'action.more',
+  'action.search',
+  'action.go',
+  'action.enter',
   'nav.chevronDown',
   'nav.chevronRight',
   'nav.check',
@@ -112,6 +120,12 @@ export const ICON_REGISTRY = {
   'action.edit': lucide(Pencil),
   // The command palette: type a yantra command.
   'action.command': lucide(SquareTerminal),
+  'action.more': lucide(Ellipsis),
+  'action.search': lucide(Search),
+  // Go to a page.
+  'action.go': lucide(ArrowRight),
+  // The Enter key, in keyboard hints.
+  'action.enter': lucide(CornerDownLeft),
   'nav.chevronDown': lucide(ChevronDown),
   'nav.chevronRight': lucide(ChevronRight),
   'nav.check': lucide(Check),

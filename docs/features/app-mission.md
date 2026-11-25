@@ -210,6 +210,11 @@ skipped under reduced motion or Solid surfaces.
    the run result.
 5. To repeat it from a terminal, copy the command from the **Command** panel.
 
+You can also start from the command palette (**Search or type a command**, or
+Ctrl+K): type the question or goal and choose **Ask “…”**, **Research “…”** or
+**Do “…”**. Mission opens in that mode with the goal filled in
+(`/mission?mode=ask&goal=…`); nothing starts until you press **Start**.
+
 ## Inputs and Outputs
 
 - **Inputs:** a mode, its main input, and any registry options or workflow

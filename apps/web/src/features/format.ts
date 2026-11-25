@@ -16,6 +16,42 @@ export function formatTimestamp(iso: string | null | undefined): string {
   return Number.isNaN(time) ? iso : TIMESTAMP.format(new Date(time));
 }
 
+const TIME_OF_DAY = new Intl.DateTimeFormat(undefined, { timeStyle: 'short' });
+const DAY_AND_MONTH = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' });
+const DAY_MONTH_YEAR = new Intl.DateTimeFormat(undefined, {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
+
+function sameDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+/**
+ * When something happened, the way a person says it: `Today, 9:42 PM`,
+ * `Yesterday, 4:30 PM`, `Nov 20, 11:22 AM`, or with the year when it is not
+ * this year. {@link formatTimestamp} gives the full value.
+ */
+export function formatWhen(iso: string | null | undefined, now: Date = new Date()): string {
+  if (iso === null || iso === undefined || iso.length === 0) return NOT_RECORDED;
+  const time = Date.parse(iso);
+  if (Number.isNaN(time)) return iso;
+  const date = new Date(time);
+  const clock = TIME_OF_DAY.format(date);
+  if (sameDay(date, now)) return `Today, ${clock}`;
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (sameDay(date, yesterday)) return `Yesterday, ${clock}`;
+  return date.getFullYear() === now.getFullYear()
+    ? `${DAY_AND_MONTH.format(date)}, ${clock}`
+    : DAY_MONTH_YEAR.format(date);
+}
+
 /** A duration: `850 ms`, `12.4 s`, `3 min 5 s`. */
 export function formatDuration(ms: number | null | undefined): string {
   if (ms === null || ms === undefined || !Number.isFinite(ms) || ms < 0) return NOT_RECORDED;

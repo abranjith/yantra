@@ -12,6 +12,7 @@ import { ICON_NAMES, type IconName } from '../icons/registry.js';
 import { Button } from '../primitives/Button.js';
 import { Checkbox } from '../primitives/Checkbox.js';
 import { ComboBox } from '../primitives/ComboBox.js';
+import { CommandMenu, type CommandMenuSection } from '../primitives/CommandMenu.js';
 import { Dialog, DialogTrigger } from '../primitives/Dialog.js';
 import { Disclosure, DisclosurePanel, DisclosureTrigger } from '../primitives/Disclosure.js';
 import type { PrimitiveFamily } from '../primitives/families.js';
@@ -520,6 +521,81 @@ function CheckboxSheet(): ReactNode {
       <Checkbox isRequired isInvalid>
         I reviewed the consent terms (required)
       </Checkbox>
+      <div className="flex flex-wrap gap-2">
+        <Checkbox appearance="chip" defaultSelected>
+          Fulfilled
+        </Checkbox>
+        <Checkbox appearance="chip">Failed</Checkbox>
+        <Checkbox appearance="chip" isDisabled>
+          Aborted
+        </Checkbox>
+      </div>
+    </div>
+  );
+}
+
+const COMMAND_MENU_SECTIONS: readonly CommandMenuSection[] = [
+  {
+    id: 'start',
+    title: 'Start',
+    items: [
+      {
+        id: 'ask',
+        label: 'Ask a question',
+        description: 'A quick answer from web sources, with citations.',
+        icon: 'glyph.bindu',
+      },
+      {
+        id: 'research',
+        label: 'Research a topic',
+        description: 'A cited report built from several sources.',
+        icon: 'glyph.bindu',
+      },
+    ],
+  },
+  {
+    id: 'go',
+    title: 'Go to',
+    items: [
+      { id: 'ledger', label: 'Ledger', description: 'Every run, newest first.', icon: 'action.go' },
+      {
+        id: 'models',
+        label: 'Models',
+        icon: 'action.go',
+        hint: 'Settings · Setup',
+      },
+    ],
+  },
+  {
+    id: 'commands',
+    title: 'Commands',
+    items: [
+      {
+        id: 'sites-add',
+        label: 'yantra sites add <domain>',
+        description: 'Add or promote a user-curated domain',
+        icon: 'action.command',
+        voice: 'engine',
+      },
+    ],
+  },
+];
+
+/** The palette's menu, in place (the app opens it in a CommandMenuDialog). */
+function CommandMenuSheet(): ReactNode {
+  const [text, setText] = useState('');
+  return (
+    <div className="w-full max-w-160 rounded-frame border border-rule-strong bg-surface">
+      <CommandMenu
+        inputLabel="Search Yantra or type a command"
+        listLabel="Suggestions"
+        placeholder="Search pages and actions, or type a command"
+        inputValue={text}
+        onInputChange={setText}
+        sections={COMMAND_MENU_SECTIONS}
+        onAction={() => undefined}
+        emptyState="Nothing matches."
+      />
     </div>
   );
 }
@@ -901,6 +977,13 @@ export const GALLERY_ENTRIES: readonly GalleryEntry[] = [
     render: () => <MenuSheet />,
     interactive: true,
     overlays: true,
+  },
+  {
+    id: 'command-menu',
+    title: 'Command menu',
+    primitive: 'CommandMenu',
+    render: () => <CommandMenuSheet />,
+    interactive: true,
   },
   {
     id: 'table-large',

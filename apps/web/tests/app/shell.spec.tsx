@@ -43,7 +43,7 @@ describe('navigation', () => {
     ]);
     expect(links[0]?.getAttribute('aria-current')).toBe('page');
     expect(screen.getByRole('link', { name: 'Settings' }).getAttribute('aria-current')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Type a command' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Search or type a command' })).toBeTruthy();
   });
 
   it('links only to real pages, and every page is linked or opened from elsewhere', () => {

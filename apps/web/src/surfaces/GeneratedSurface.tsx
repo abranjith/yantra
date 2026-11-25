@@ -85,12 +85,15 @@ export function GeneratedSurface({
   initialMode,
   intent,
   focus,
+  openAction,
 }: {
   readonly definition: SurfaceDefinition;
   readonly cwd?: string;
   readonly initialMode?: 'raw' | undefined;
   readonly intent?: 'install' | undefined;
   readonly focus?: string | undefined;
+  /** The page action whose form opens at once (`?do=`, from the command palette). */
+  readonly openAction?: string | undefined;
 }): ReactNode {
   const installation = definition.id === 'installation';
   const actions = [
@@ -99,7 +102,10 @@ export function GeneratedSurface({
         key={action.command}
         action={action}
         cwd={cwd}
-        defaultOpen={intent === 'install' && action.command === 'browser install'}
+        defaultOpen={
+          action.command === openAction ||
+          (intent === 'install' && action.command === 'browser install')
+        }
       />
     )),
     ...(installation

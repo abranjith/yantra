@@ -5,7 +5,7 @@
 Drshya is Yantra's own design system. It ships as the `@yantra/ui` workspace package in
 `packages/ui`, and every screen of the coming Yantra app is meant to be built from it. It
 provides color, glass, type, shape and motion tokens on Tailwind CSS v4, one semantic icon
-registry, and 16 accessible primitive families on React Aria Components.
+registry, and 18 accessible primitive families on React Aria Components.
 
 Its value is that later app features cannot drift from the design language, from accessibility, or
 from the security rules, because the build, lint and a real-Chrome harness enforce them. A token
@@ -291,7 +291,7 @@ use only `circle`, `line`, `path` and `rect` elements; keep all geometry inside 
 area of the 24 px grid; draw with strokes, never fills; and use no literal religious iconography.
 The icon tests check the live area and the no-fill rule.
 
-### Provides 16 accessible primitive families
+### Provides 18 accessible primitive families
 
 Every primitive wraps a React Aria Components primitive, so keyboard, focus and screen-reader
 behavior come from React Aria. Drshya adds the styling and its own rules. Keyboard focus shows a
@@ -429,14 +429,15 @@ with the input the same way everywhere:
   invalid state is never color alone.
 
 `FieldLabel`, `FieldDescription`, `FieldErrorText` and `fieldInputStyles` are exported from the
-package root, for building other fields. They are not one of the 16 families.
+package root, for building other fields. They are not one of the 18 families.
 
 - **TextField**: single-line, or multi-line with `multiline`. `voice="engine"` sets the value in
   the mono voice.
 - **NumberField**: locale formatting, `minValue`, `maxValue` and `step` come from React Aria.
   Labeled "Decrease" and "Increase" buttons step the value.
 - **Checkbox**: when checked, an Ion fill with a check mark. When indeterminate, a dash, and
-  `aria-checked="mixed"`.
+  `aria-checked="mixed"`. `appearance="chip"` draws the whole label as a pill, for filters; selected
+  shows a check mark, an `ink` edge and bolder text, so it is never color alone.
 - **Switch**: when on, an Ion track, the thumb at the end and a check mark in the thumb. The thumb
   moves at `--duration-quick`, so reduced motion removes the movement.
 
@@ -484,6 +485,23 @@ between items. Enter fires `onAction` and closes the menu. Disabled items are sk
 - `MenuSection` groups items under a `title` header, and `MenuSeparator` draws a divider.
 - `SubmenuTrigger` nests a menu, and its item shows a chevron.
 
+#### CommandMenu
+
+`CommandMenu` is a search field over a grouped list, for the command palette. It is built on React
+Aria's `Autocomplete`: focus stays in the field while the arrow keys move through the list (virtual
+focus), and Enter fires `onAction` for the highlighted item. The first result is highlighted as you
+type.
+
+- The caller owns the results: it filters, ranks and passes non-empty `sections`, each with a
+  `title` and `items`.
+- An item has a `label`, and optionally a `description`, an `icon`, a right-aligned `hint` (where
+  it leads) and `voice="engine"` for a command line. Disabled items stay visible but cannot be
+  chosen.
+- The highlighted item shows the Enter glyph. `emptyState` shows when there are no sections.
+- `CommandMenuDialog` is its panel: anchored near the top of the window, solid `surface` over the
+  dialog scrim, with an `aria-label` and no visible title. Escape clears the field first, then
+  closes it.
+
 ### Runs under a strict CSP with no third-party requests
 
 Drshya is built to run under the app's Content-Security-Policy, `default-src 'self'`:
@@ -520,7 +538,7 @@ It has 23 entries:
 - `alert-dialog`, and `table-large` (10,000 rows).
 
 `tests/gallery/completeness.spec.ts` fails if a barrel export belongs to no family, or if any of
-the 16 families lacks exactly one gallery entry.
+the 18 families lacks exactly one gallery entry.
 
 `e2e/drshya-gallery.spec.ts` (`@no-llm`) runs every entry in four states: light and dark, each in
 Glass and Solid. It launches headless system Chrome at 1280×800 with an sRGB color profile, and

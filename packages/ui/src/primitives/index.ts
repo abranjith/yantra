@@ -38,6 +38,13 @@ export type { OptionProps, PopoverDialogProps, PopoverProps } from './Popover.js
 export { Select } from './Select.js';
 export type { ListOption, SelectProps } from './Select.js';
 export { ComboBox } from './ComboBox.js';
+export { CommandMenu, CommandMenuDialog } from './CommandMenu.js';
+export type {
+  CommandMenuDialogProps,
+  CommandMenuItem,
+  CommandMenuProps,
+  CommandMenuSection,
+} from './CommandMenu.js';
 export { Dialog, DialogTrigger } from './Dialog.js';
 export type { DialogProps, DialogTriggerProps } from './Dialog.js';
 export { Menu, MenuItem, MenuSection, MenuSeparator, MenuTrigger, SubmenuTrigger } from './Menu.js';
